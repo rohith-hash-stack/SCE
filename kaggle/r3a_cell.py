@@ -1,5 +1,6 @@
 # ============================================================
 # PRISM round R3a - the main run: 80 Family B tasks x 2 versions x seeds 42 and 1001 = 320 runs, turn cap 28.
+# Family B at alpha 0.05 (amendment R3-9): interim look at 40 tasks, p < 0.0031; final p < 0.0490.
 #
 # Order:
 #   1. token, then the code at the pinned commit, then the Qwen2.5 tokenizer (sha256-checked);
@@ -31,9 +32,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "3c26a9921dbb6f73c5ea8932e891b60ecff9a63b"
+CODE_COMMIT = "561fd10ffab451c2fe45c63334d7aa0069ef1531"
 CODE_TREES = {"src": "ca512abf03bdd0fceb8e07a85b9bb295ff5aa85e",
-              "harness": "400efaf3305fd08ad2e747485b8de24800253d82"}
+              "harness": "bd2d0e591bb077999a177bf64cec024bb7d593e1"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 SUMMARIZER = "qwen2.5-coder:14b-instruct-q8_0"   # the locked model
@@ -337,7 +338,7 @@ rc = module([os.path.join(SCE_DIR, TASKS), OUT, "--cache-py", f"{CACHE}/py", "--
             name="harness.experiments.r3.pilot_run")
 n_done, n_complete = progress()
 module([os.path.join(OUT, "r3a_analysis.json"), "--runs", OUT, "--tasks", os.path.join(SCE_DIR, TASKS),
-        "--seeds", *map(str, SEEDS), "--covariates", os.path.join(SCE_DIR, COVARIATES)], "r3a_analysis",
+        "--seeds", *map(str, SEEDS), "--covariates", os.path.join(SCE_DIR, COVARIATES), "--interim"], "r3a_analysis",
        name="harness.experiments.r3.analyze")
 open(os.path.join(OUT, "progress.json"), "w").write(json.dumps({
     "runs_done": n_done, "runs_total": N_TASKS * 2 * len(SEEDS), "tasks_complete": n_complete,
