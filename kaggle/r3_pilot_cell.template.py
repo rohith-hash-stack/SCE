@@ -288,7 +288,7 @@ def module(args, label, push_while=False, name="harness.experiments.change_histo
 print("\n[pilot] 20 runs: 10 tasks x PRISM, BASELINE; seed 42; turn cap 30; one process per run", flush=True)
 START = time.time()
 rc = module([os.path.join(SCE_DIR, PILOT_TASKS), OUT, "--cache-py", f"{CACHE}/py", "--cache-js", f"{CACHE}/js",
-             "--base-url", f"http://127.0.0.1:{PORTS[0]}", "--seed", str(SEED), "--turn-cap", str(TURN_CAP),
+             "--base-url", f"http://127.0.0.1:{PORTS[0]}", "--seeds", str(SEED), "--turn-cap", str(TURN_CAP),
              *[f"{n}={p}" for n, p in CLONES.items()]], "pilot", push_while=True,
             name="harness.experiments.r3.pilot_run")
 module([os.path.join(OUT, "pilot_analysis.json"), "--runs", OUT, "--tasks", os.path.join(SCE_DIR, PILOT_TASKS),
