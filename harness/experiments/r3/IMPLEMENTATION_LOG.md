@@ -539,3 +539,40 @@ whatever their share. svelte (8), rollup (6), prettier (5), and one of mypy and 
 - Pool for the gate: the 132 main-window candidates plus these 4 repositories' 60 (svelte 24, rollup 12,
   prettier 14, pydantic 10). Seed 5501, at most 10 per repository, the used rule, resuming from the 117 records
   already gated.
+
+## 2026-11-08: R3-8 week: gated counts. Family B reaches 80; deep tasks 18, scaling not run
+
+**Result: 18 gated Family B tasks with 2 or more changed callers, below the 30 that R3a's scaling test needs.**
+Under R3-8, as pre-committed: scaling is reported as "not run — insufficient depth variance after pool expansion".
+The threshold is unchanged.
+
+- Family B is frozen at its committed size of 80 (sha256 `ba4de9ae…`): Python 41, JS/TS 39, 16 repositories, 13
+  from used repositories (at most 40).
+- Callers, gated: 1: 62, 2: 13, 3-4: 3, 5+: 2. The 14 new tasks: svelte 9 (2 deep), pydantic 3 (1 deep),
+  prettier 2 (1 deep, 5+ callers), rollup 0.
+- The gate stopped at the 80th pass, on the first day. That is the week's end: the draw had no more room.
+- **The ceiling was 28.** With 66 tasks already gated, the target of 80 left room for 14 more, so at most 14 + 14
+  deep tasks. 30 could not be reached under the recorded rules. This was reported before the gate ran, and the gate
+  ran to 80 as recorded.
+
+Attrition among the 16 new candidates drawn: svelte 9 of 9, pydantic 3 of 3, prettier 2 of 3 (1 with no
+fail-to-pass test), rollup 0 of 1.
+- **rollup** cannot install here: its `wasm-pack` dev dependency downloads a binary from GitHub releases in a
+  postinstall script, and that request fails through this environment's proxy (the client sends a plain GET, which
+  the proxy refuses). Its tests also need a Rust native build per revision. Recorded as attrition, like vitest's
+  browser mode. Not fixed.
+- **svelte builder fix:** its tests are sample folders (`tests/<suite>/samples/<name>/`), run by the suite's
+  `test.ts`. The gate had no mapping for them, and a first run failed 17 of 21 svelte candidates with "no runnable
+  hidden test file". `gate.py` now maps a sample folder to its suite's runner (browser suites skipped), code
+  `037f27b6`. Only svelte and rollup candidates have sample folders, so the 117 earlier records are unaffected.
+  The first run's 44 records for the new repositories were discarded and every new candidate was re-gated on the
+  fixed code (the discarded file is kept in scratch).
+- **Disk:** the builders' download caches filled the disk during the re-gate (170 MB left). The gate was stopped,
+  the caches were cleared (they only hold downloaded packages), and the gate resumed. No record names ENOSPC, and a
+  full disk cannot make a candidate pass.
+- **Attrition bookkeeping fix:** on a resume that stops at `--want`, records after the stopping point in the new
+  order were not counted as drawn (`attrition_B.json` read 38 drawn). Fixed in `gate.py`; recomputed from the same
+  log, no new gating, task list byte-identical.
+
+The representativeness caveat of R3-8 stands. The interpretation must state that the added repositories were
+chosen partly on deep share. Family B's sample is still mostly 1-caller, which is representative of real change.

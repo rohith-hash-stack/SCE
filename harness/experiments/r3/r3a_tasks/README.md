@@ -5,8 +5,14 @@
 - Gate: seed 5501, target 80 per family, at most 10 per repository for Family B and 20 for Family N, and the used
   repositories at most half. Each family ran in its own process. Gate code: `5726b7ff` for the gating itself; the
   attrition counts were recomputed at the next commit (see `IMPLEMENTATION_LOG.md`, 2026-11-07).
-- **Not frozen.** Both task lists are `"status": "short"`. Nothing here is hash-committed. What R3a does with them
-  is open.
+- **Family B was expanded under amendment R3-8 (2026-11-08)** and is now `"status": "frozen"` at 80 (sha256 of the
+  task list `ba4de9ae…`). Family N stays `"short"` (23). Nothing here is hash-committed yet.
+  - Pool: the 132 main-window candidates plus 60 from svelte, rollup, prettier and pydantic (`screen/`). The same
+    seeded draw (5501) ran over the 192, resuming from the 117 records already gated; all 66 earlier passes stay.
+  - Gate code `037f27b6` (sample-folder tests mapped to their suite's runner, for svelte); the attrition count was
+    fixed at the next commit (records after the stopping point now count as drawn). Task list unchanged by that fix.
+  - Task ids are renumbered, since they follow the draw order over the larger pool. The 66-task outputs are kept as
+    `tasks_B.66.json` and `attrition_B.66.json`.
 
 Files: `yield.json`, `candidates_{B,N}.json` (mining); `gate_{B,N}.jsonl`, `attrition_{B,N}.json`,
 `tasks_{B,N}.json` (gate); `summary.json` (per repository: mined, drawn, passed, failure reasons, and for Family B
@@ -15,5 +21,7 @@ the changed-caller distribution, mined and gated).
 | | mined | drawn | passed | 1 caller | 2 | 3-4 | 5+ |
 |---|---|---|---|---|---|---|---|
 | Family B, mined | 132 | | | 102 | 21 | 7 | 2 |
-| Family B, gated | | 117 | **66** (Python 38, JS/TS 28) | 52 | 10 | 3 | 1 |
+| Family B, gated (main window) | | 117 | 66 (Python 38, JS/TS 28) | 52 | 10 | 3 | 1 |
+| Family B, mined (with R3-8) | 192 | | | 139 | 39 | 10 | 4 |
+| Family B, gated (with R3-8) | | 133 | **80** (Python 41, JS/TS 39) | 62 | 13 | 3 | 2 |
 | Family N | 28 | 28 | **23** (Python 15, JS/TS 8) | | | | |

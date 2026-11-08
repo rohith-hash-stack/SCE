@@ -319,6 +319,9 @@ def main(argv=None) -> int:
     json.dump({"family": fam, "seed": a.seed, "want": a.want, "per_repo": per_repo, "status": "frozen"
                if len(tasks) >= a.want else "short", "tasks_sha256": hashlib.sha256(body.encode()).hexdigest(),
                "tasks": tasks}, open(os.path.join(a.out, f"tasks_{fam}.json"), "w"), indent=1)
+    # every record in the log was drawn when it was gated: a resume that stops at `--want` before replaying the
+    # whole order (the R3-8 pool, 2026-11-08) must still count the records after the stopping point
+    drawn += [c for c in done if c not in set(drawn)]
     att = {}
     for repo in sorted({t["repo"] for t in cands}):
         recs = [done[c] for c in drawn if c in done and done[c]["repo"] == repo]
