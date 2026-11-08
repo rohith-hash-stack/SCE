@@ -627,3 +627,23 @@ Anchor check (bug 7, per task): 80 of 80 run, 79 pass (0 test callers, no error)
 whose anchor is not in the index at the start state: the stub defect above. The first run of the checker was
 OOM-killed at task 53 because it held every index in one process. It was resumed with one process per task. This
 is a flaw in the checker, not the product (R3 runs are already one process per run).
+
+## 2026-11-08: refill of the 80th slot, paused after 3 failures in a row (reported, per the user's rule)
+
+- Setup:
+  - The gate was resumed on a copy of `gate_B.jsonl` with two records changed: B-09's task replaced by its
+    repaired version, and B-29's marked failed, with the reason.
+  - Same command: seed 5501, want 80, per-repo cap 10, the existing `candidates_B.json`.
+  - It replays the 133 records and gates the next candidates in the draw order.
+- The next three drawn all failed:
+  - rollup fff335fb: install fails (the known `wasm-pack` postinstall behind the proxy);
+  - prettier 72cfa18a: no fail-to-pass test;
+  - rollup cb8f8153: install fails (same cause).
+- The gate was stopped by PID after the third failure, as the user instructed for 3 or more failures in a row.
+- 41 eligible candidates remain under the caps: svelte 15, prettier 10, rollup 9, pydantic 7.
+  - The next in order is svelte 220b526d.
+  - All 9 rollup candidates will fail for the same known cause.
+
+Also added (no gate or task change):
+- `pilot_run.py`: the pilot driver, one process per run;
+- `analyze --pilot`: criterion 7, "runs that hit 30-turn cap without done". The turn cap is flagged, not changed.

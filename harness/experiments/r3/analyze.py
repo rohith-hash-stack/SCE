@@ -344,6 +344,13 @@ def pilot_criteria(rows, tasks, gates_dir: str | None, runs_dir: str) -> dict:
                              "tasks": len(checks), "failing": [i for i, c in checks
                                                                if not (c.get("gold") is True and c.get("empty") is False)]}
     out["6_done_vs_stuck"] = {v: dict(Counter(r["outcome"] for r in rows if r["version"] == v)) for v in VERSIONS}
+    # flagged 2026-11-08 (the R3a dry run's gold scripts hit the cap; one edit per hunk): if pilot runs also reach
+    # the cap without done, the cap is recalibrated before R3a; if not, it stays
+    hit = [r for r in rows if r["outcome"] == "stuck"
+           or ((r.get("turns") or 0) >= TURN_CAP_MAX and r.get("turns") is not None and not r.get("done_called"))]
+    out["7_runs_hit_30_turn_cap_without_done"] = {
+        "runs": len(hit), "of": len(rows), "share": round(len(hit) / len(rows), 4) if rows else None,
+        "by_version": {v: sorted(r["run"] for r in hit if r["version"] == v) for v in VERSIONS}}
     return out
 
 
