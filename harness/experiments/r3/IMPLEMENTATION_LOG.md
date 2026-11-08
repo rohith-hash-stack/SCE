@@ -576,3 +576,49 @@ fail-to-pass test), rollup 0 of 1.
 
 The representativeness caveat of R3-8 stands. The interpretation must state that the added repositories were
 chosen partly on deep share. Family B's sample is still mostly 1-caller, which is representative of real change.
+
+## 2026-11-08: bug verification on the full R3a pool (before the hash-commit)
+
+Reasonable call, logged: the 11 fixed bugs map to these guards. Each was checked on the full R3a pool: the 16
+repositories, and the 80 tasks where the check is per task.
+
+1. Stale index / drift (R3-5): `tests/test_r3_equivalence.py::test_equivalence_e1_e3` (E1, E3), plus
+   `equivalence.py --rev` at the first task's parent in each of the 16 repositories. All pass.
+2. Parse gate: the same test (E2 a-e, E3), and the same 16-repository run. All pass.
+3. `read_file` tab separator: `tests/test_r3_shared_tools_edit.py` (3 tests), plus every gold edit in the
+   80-task dry run.
+4. `edit_file` whitespace hint: `tests/test_r3_shared_tools_edit.py` (4 tests).
+5. `edit_file` overlapping-match uniqueness: `test_overlapping_occurrences_are_not_unique`, plus the dry run (its
+   gold edits are widened until unique, overlaps included).
+6. Notice outside the 4,000-token cap: E2(a), all 16 repositories.
+7. Blast radius test-code leak (`include_tests=False`): 300 seeded production functions per repository (16/16,
+   0 listing test code), plus each of the 80 anchors at its own task's start state.
+8. jsbuild rebuild when the tree changed: `test_built_output_is_rebuilt_only_when_the_tree_changed`, plus the dry
+   run on the 8 JS repositories.
+9. `runner.score` start-snapshot base: the dry run on all 80 (PRISM gold resolved, BASELINE empty unresolved).
+10. Process-group kill: `tests/test_r3_run_group.py` (2 tests), plus the orphan scan after each of 177 dry-run
+    children: 0 orphans.
+11. Gate bookkeeping and mapping: `tests/test_r3_sample_runners.py`, plus the attrition recompute (byte-identical
+    task list).
+
+Found by the full-pool runs, beyond the 11:
+- **Scoring, r3a-B-71 (poetry):** 4 test ids carry the gate's worktree path (a test parametrized with an absolute
+  path), so they read as missing in any other worktree, and gold scored unresolved. `runner.id_status` now reads
+  the gate's worktree path in an id as the run's own (`a614b0b2`, `tests/test_r3_score_test_ids.py`). The task
+  list is unchanged. Gold now resolves.
+- **Dry-run script, r3a-B-12 (sqlglot):** the gold script crashed on a submodule bump. It now skips gitlinks
+  (`a614b0b2`). This is verification code, not product code.
+- **Turn cap in the dry run:** 15 gold scripts hit the 30-turn cap (4 pad calls plus one `edit_file` per hunk, up
+  to 70 turns). Rerun with no pad and `--turn-cap 120`, all 17 failed golds resolved. This is a property of the
+  one-edit-per-hunk replay, not a product bug. The agent can edit a file in fewer calls.
+- **Start state, r3a-B-09 (pydantic) and r3a-B-29 (h3):** the anchor gained overloads in the commit. The index
+  keeps a name's first declaration, so the start patch replaced the anchor with a bodiless overload signature (the
+  start state had no implementation). Fixed in `mine.start_patch_for` (`overload_group`, `e67e4033`,
+  `tests/test_r3_overload_start.py`). `repair_overloads.py` rebuilt both start patches and re-gated them:
+  - B-09 passes again: 50 fail-to-pass and 79 pass-to-pass, the same counts; gold resolved at F1 1.0; empty
+    unresolved.
+  - B-29 fails: no fail-to-pass test. All 28 of its old fail-to-pass tests passed once the body was restored.
+    They were failing only because the body was missing, so B-29 is not a valid task.
+
+Not hash-committed: the task list now differs from `ba4de9ae` (B-09's start patch, and B-29 out). How to refill
+the 80th slot goes to the user.
