@@ -647,3 +647,9 @@ is a flaw in the checker, not the product (R3 runs are already one process per r
 Also added (no gate or task change):
 - `pilot_run.py`: the pilot driver, one process per run;
 - `analyze --pilot`: criterion 7, "runs that hit 30-turn cap without done". The turn cap is flagged, not changed.
+
+**Refill stop rule, refined by the user (2026-11-08):** "The 3-in-a-row refill stop applies to new or unknown failure
+causes. Known attrition — rollup install failures, vitest browser mode, and any previously accepted repo-level
+incompatibility — is classified separately and does not trigger the stop. Only three consecutive failures from
+unclassified causes pause the refill for review." Under this rule the pause above came from 1 unclassified failure
+(prettier 72cfa18a) and 2 known ones (rollup). The refill resumed from svelte 220b526d.
