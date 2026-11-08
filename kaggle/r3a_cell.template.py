@@ -1,5 +1,6 @@
 # ============================================================
 # PRISM round R3a - the main run: 80 Family B tasks x 2 versions x seeds 42 and 1001 = 320 runs, turn cap 28.
+# Family B at alpha 0.05 (amendment R3-9): interim look at 40 tasks, p < 0.0031; final p < 0.0490.
 #
 # Order:
 #   1. token, then the code at the pinned commit, then the Qwen2.5 tokenizer (sha256-checked);
@@ -337,7 +338,7 @@ rc = module([os.path.join(SCE_DIR, TASKS), OUT, "--cache-py", f"{CACHE}/py", "--
             name="harness.experiments.r3.pilot_run")
 n_done, n_complete = progress()
 module([os.path.join(OUT, "r3a_analysis.json"), "--runs", OUT, "--tasks", os.path.join(SCE_DIR, TASKS),
-        "--seeds", *map(str, SEEDS), "--covariates", os.path.join(SCE_DIR, COVARIATES)], "r3a_analysis",
+        "--seeds", *map(str, SEEDS), "--covariates", os.path.join(SCE_DIR, COVARIATES), "--interim"], "r3a_analysis",
        name="harness.experiments.r3.analyze")
 open(os.path.join(OUT, "progress.json"), "w").write(json.dumps({
     "runs_done": n_done, "runs_total": N_TASKS * 2 * len(SEEDS), "tasks_complete": n_complete,

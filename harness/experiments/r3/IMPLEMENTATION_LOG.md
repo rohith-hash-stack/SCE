@@ -766,3 +766,12 @@ R3a's interpretation must make.
   - a resume repeats nothing;
   - the analysis reports per-seed outcomes and the diagnostics.
 - R3 unit suites: 48 passed, 1 skipped.
+
+## 2026-11-08: amendment R3-9 (Family B's α 0.05), before launch
+
+- Family N is dropped, so R3a's Holm family is Family B alone: α 0.05 (Reading B, the user's choice, agreed).
+- Boundaries, from the frozen spending function: interim p < 0.0031 (z 2.96) at 40 of 80 tasks; final p < 0.0490
+  (z 1.97).
+- `analyze.py`: the interim look and the final boundary were not wired before. They are now (`interim_look`,
+  `threshold`, `--interim`), and the R3a cell runs the look each session.
+- The cell is re-rendered on this commit.

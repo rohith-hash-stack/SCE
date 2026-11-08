@@ -68,6 +68,12 @@ INVALID_DEATHS = 0.20
 TURN_CAP_MAX = 30
 TURN_CAP_BUFFER = 5
 STRATA = {"B": ("1", "2-4", "5+"), "N": ("2", "3-4", "5+")}
+# Family B's local α (amendment R3-9, 2026-11-08): Family N is dropped to R3b, so R3a's Holm family is Family B
+# alone, and Holm over one hypothesis is α itself (0.05). Its sequential boundaries (R3-1 item 3, one interim look
+# at 40 of 80 tasks): interim p < 0.0031 (z 2.96), final p < 0.0490 (z 1.97).
+LOCAL_ALPHA = {"B": 0.05}
+INTERIM_TASKS = {"B": 40}
+PLANNED_TASKS = {"B": 80}
 
 
 # ------------------------------------------------------------------------------------------------ loading
@@ -239,11 +245,11 @@ def death_rate(rows, fam) -> float | None:
     return round(sum(r["outcome"] in ("error", "missing") for r in sel) / len(sel), 4) if sel else None
 
 
-def label(primary: dict, p_holm: float, invalid: bool) -> str:
+def label(primary: dict, p_holm: float, invalid: bool, threshold: float = ALPHA) -> str:
     if invalid:
         return "invalid"
     boot = primary.get("bootstrap") or {}
-    significant = p_holm < ALPHA and (boot.get("low", 0) > 0 or boot.get("high", 0) < 0)
+    significant = p_holm < threshold and (boot.get("low", 0) > 0 or boot.get("high", 0) < 0)
     if significant and primary["diff"] < 0:
         return "padding_better"
     if not significant:
@@ -367,6 +373,35 @@ def interim_boundaries(fraction: float, alpha: float) -> dict:
             "final_z": round(float(c2), 2), "final_p": round(float(2 * (1 - sps.norm.cdf(c2))), 4)}
 
 
+def threshold(fam: str) -> float:
+    """The final rejection threshold: the group-sequential final boundary for a family with an interim look (Family
+    B), else its local α."""
+    alpha = LOCAL_ALPHA.get(fam, ALPHA)
+    if fam in INTERIM_TASKS:
+        return interim_boundaries(INTERIM_TASKS[fam] / PLANNED_TASKS[fam], alpha)["final_p"]
+    return alpha
+
+
+def interim_look(rows, tasks, fam: str, seeds) -> dict:
+    """Amendment R3-1 item 3 (α from R3-9): the first INTERIM_TASKS tasks of the frozen order, all runs present.
+    Stop, in either direction, if the Wilcoxon p on per-task means is below the interim boundary; the label then
+    comes from the usual table at that boundary. The `invalid` checks run at the look. No futility stop."""
+    order = [t["id"] for t in tasks if t["family"] == fam][:INTERIM_TASKS[fam]]
+    sel = [r for r in rows if r["family"] == fam and r["task"] in set(order)]
+    missing = sorted({r["task"] for r in sel if r["outcome"] == "missing"})
+    if missing or len(order) < INTERIM_TASKS[fam]:
+        return {"ready": False, "tasks_missing_runs": missing}
+    b = interim_boundaries(len(order) / PLANNED_TASKS[fam], LOCAL_ALPHA.get(fam, ALPHA))
+    prim = compare(sel, fam, seeds)
+    z = float(sps.norm.ppf(1 - prim["p"] / 2)) if prim.get("p", 1.0) < 1 else 0.0
+    fa = family_analysis(sel, fam, seeds)
+    stop = prim["p"] < b["interim_p"]
+    lab = "invalid" if fa["invalid"] else (label(prim, prim["p"], False, b["interim_p"]) if stop else "continue")
+    return {"ready": True, "tasks": len(order), "boundaries": b, "primary": prim, "z": round(z, 2),
+            "stop": stop or bool(fa["invalid"]), "label": lab, "invalid": fa["invalid"],
+            "unstable": fa["unstable"], "per_seed": fa["per_seed"]}
+
+
 # ------------------------------------------------------------------------------------------------ pilot
 def turn_cap(rows) -> dict:
     turns = [r["turns"] for r in rows if r.get("turns") is not None]
@@ -427,7 +462,7 @@ def pilot_criteria(rows, tasks, gates_dir: str | None, runs_dir: str) -> dict:
 
 
 def analyze(runs_dir: str, task_paths: list[str], seeds: list[int], pilot: bool, gates_dir: str | None,
-            covariates_path: str | None = None) -> dict:
+            covariates_path: str | None = None, interim: bool = False) -> dict:
     tasks = load_tasks(task_paths)
     rows = load_runs(runs_dir, tasks, seeds)
     fams = sorted({t["family"] for t in tasks})
@@ -440,7 +475,10 @@ def analyze(runs_dir: str, task_paths: list[str], seeds: list[int], pilot: bool,
     for f in fams:
         e = res["families"][f]
         e["p_holm"] = holm.get(f)
-        e["label"] = label(e["primary"], holm[f], bool(e["invalid"])) if f in holm else None
+        e["threshold"] = threshold(f)
+        e["label"] = label(e["primary"], holm[f], bool(e["invalid"]), e["threshold"]) if f in holm else None
+    if interim:
+        res["interim"] = {f: interim_look(rows, tasks, f, seeds) for f in fams if f in INTERIM_TASKS}
     res["diagnostics"] = diagnostics(rows, json.load(open(covariates_path)) if covariates_path else None)
     if pilot:
         res["pilot"] = {"criteria": pilot_criteria(rows, tasks, gates_dir, runs_dir), "turn_cap": turn_cap(rows),
@@ -458,14 +496,17 @@ def main(argv=None) -> int:
     p.add_argument("--pilot", action="store_true")
     p.add_argument("--gates", default=None)
     p.add_argument("--covariates", default=None, help="covariates.py's output for the task list")
+    p.add_argument("--interim", action="store_true", help="the interim look (amendment R3-1 item 3)")
     a = p.parse_args(argv)
-    res = analyze(a.runs, a.tasks, a.seeds, a.pilot, a.gates, a.covariates)
+    res = analyze(a.runs, a.tasks, a.seeds, a.pilot, a.gates, a.covariates, a.interim)
     with open(a.out, "w") as fh:
         json.dump(res, fh, indent=1, default=str)
     brief = {"outcomes": res["outcomes"], "labels": {f: e["label"] for f, e in res["families"].items()},
              "diagnostics": {k: v for k, v in res["diagnostics"].items() if k != "looping_runs"}}
     if a.pilot:
         brief["pilot"] = res["pilot"]
+    if a.interim:
+        brief["interim"] = {f: {k: v for k, v in x.items() if k != "per_seed"} for f, x in res["interim"].items()}
     print(json.dumps(brief, indent=1, default=str))
     return 0
 
