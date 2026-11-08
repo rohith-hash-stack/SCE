@@ -678,3 +678,32 @@ unclassified causes pause the refill for review." Under this rule the pause abov
     78% one-caller.
   - `ba4de9ae` is superseded. Its files are kept with that suffix.
   - `summary.json`'s Family B section was recomputed from the new gate log (137 drawn).
+
+## 2026-11-08: pilot run on Kaggle (code `8ced8a58`, pilot tasks `fe934d16`; `reports/r3/pilot/`)
+
+20 runs (10 Family B pilot tasks × PRISM, BASELINE; seed 42; turn cap 30), one process per run. All exited 0 with
+no leftover processes. The JS smoke test passed. Harness checks only; no result is read for a decision.
+
+| Criterion | Result |
+|---|---|
+| 1. no harness error | **pass** (0 error, 0 missing) |
+| 2. valid tool calls | PRISM 108/108, BASELINE 112/112 (0 parse errors) |
+| 3. tests found and run, both languages | **pass**: JS 10/10 runs called `run_tests` (24 calls with results), Python 10/10 (34) |
+| 4. truncation and caps | PRISM: 20 outputs cut, 46 turns stubbed, 0 stuck, 3 budget. BASELINE: 4, 3, 0, 0 |
+| 5. scoring path (gold resolved, empty unresolved) | **pass**, 10/10 |
+| 6. done vs stuck | every run ended `done` except 3 PRISM budget stops; 0 stuck |
+| 7. runs that hit the 30-turn cap without done | **0 of 20** |
+
+- **Turn cap:** no pilot run reached 30 turns (max 25), so the flag raised by the dry run's gold scripts does not
+  recur. The pre-registered rule (R3-1 item 2, R3-2 item 3) computes p90 = 23, plus 5 = **28**; share at 30 = 0.
+  Whether R3a uses 28 (the rule) or 30 ("cap stays", the user's 2026-11-08 instruction) goes to the user. Nothing
+  is recorded as the cap yet.
+- **The 3 PRISM budget stops** (pilot-B-02, B-08, B-09) are the same pattern: from about turn 4, the model repeats one
+  identical cycle (`run_tests`, `prism_change_context`, `prism_blast_radius`, same arguments) with 0 edits. The run
+  ends at the token budget (~290k cumulative prompt tokens) at turns 23-25, before the turn cap.
+  - The tool outputs are sound: failing tests are listed, and the context and blast radius are correct.
+  - So this is agent behavior, not a harness fault.
+  - No BASELINE run repeats a cycle that way.
+  - The stubbing count (46) and outputs cut (20) come from these 3 runs.
+  - For loops like this, the budget binds before the cap.
+- Several runs in both versions call `done` after 2-5 turns with no edit. Recorded only.
