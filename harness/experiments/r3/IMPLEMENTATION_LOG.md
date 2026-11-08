@@ -653,3 +653,28 @@ causes. Known attrition — rollup install failures, vitest browser mode, and an
 incompatibility — is classified separately and does not trigger the stop. Only three consecutive failures from
 unclassified causes pause the refill for review." Under this rule the pause above came from 1 unclassified failure
 (prettier 72cfa18a) and 2 known ones (rollup). The refill resumed from svelte 220b526d.
+
+## 2026-11-08: refill landed; R3a task list hash-committed (`70a6aede…`)
+
+- **Refill:**
+  - Resumed gate: svelte 220b526d passed (the first candidate after the paused three). It is now r3a-B-26,
+    with 2 changed callers.
+  - Dry run: PRISM gold resolved in 24 turns, BASELINE empty unresolved, 0 orphans, same protocol as the other 79
+    (pad 4, cap 30).
+  - Anchor check: in the index, 4 callers, 0 test callers.
+- **B-09, repaired:**
+  - Dry run: gold resolved in 23 turns, empty unresolved, 0 orphans.
+  - Anchor check: passes.
+  - Blast radius lists 0 callers for `ModelPrivateAttr.get_default`, before and after the repair. The changed
+    caller, `init_private_attributes`, calls it through an attribute the call graph does not resolve. This is a
+    property of the product that R3a measures, not a defect. Recorded, not changed.
+- **B-09's definition change** (same id, corrected definition):
+  - The start patch and prompt now put the commit's overload group (2 `@overload` stubs plus the implementation)
+    in place of the parent's `get_default`.
+  - The fail-to-pass and pass-to-pass sets are the same counts (50 and 79), re-derived by `gate_one`.
+- **Hash-commit:**
+  - `r3a_tasks/tasks_B.json` (task-list sha256 `70a6aede…`, file sha256 `9d713867…`), recorded in
+    `r3a_tasks/R3A_TASKS_HASH.md` with the caveats: 80 Family B, 18 deep, scaling not run, Family N dropped, and
+    78% one-caller.
+  - `ba4de9ae` is superseded. Its files are kept with that suffix.
+  - `summary.json`'s Family B section was recomputed from the new gate log (137 drawn).
