@@ -1,6 +1,8 @@
 """R3-5 equivalence tests E1-E3 (Revision 1 as revised by Revision 2) on a real repository. No model.
 
-    python -m harness.experiments.r3.equivalence CLONE SCRATCH [OUT.json]
+    python -m harness.experiments.r3.equivalence CLONE SCRATCH [OUT.json] [--rev REV]
+
+`--rev` (default HEAD) runs at another revision, e.g. an R3a task's parent.
 
 The **live** side is one WorkingIndex + ToolLayer over a worktree the test edits, as the agent would.
 The **cold** side, for every snapshot, is an independent fresh worktree holding that snapshot's bytes, with its own
@@ -47,7 +49,7 @@ def _git(*a, cwd=None):
 class Side:
     """One worktree with its own WorkingIndex and ToolLayer."""
 
-    def __init__(self, clone: str, scratch: str, tag: str, files: dict[str, bytes] | None = None):
+    def __init__(self, clone: str, scratch: str, tag: str, files: dict[str, bytes] | None = None, rev: str = "HEAD"):
         from harness.experiments.r3.tools import ToolLayer
         from harness.experiments.r3.working_index import WorkingIndex
         self.clone = clone
@@ -55,7 +57,7 @@ class Side:
         for p in (self.work, self.shadow):
             shutil.rmtree(p, ignore_errors=True)
         _git("-C", clone, "worktree", "prune")
-        _git("-C", clone, "worktree", "add", "-q", "--detach", self.work, "HEAD")
+        _git("-C", clone, "worktree", "add", "-q", "--detach", self.work, rev)
         for rel, data in (files or {}).items():
             with open(os.path.join(self.work, rel), "wb") as fh:
                 fh.write(data)
@@ -140,17 +142,17 @@ def compare(live: dict, cold: dict) -> dict:
     return out
 
 
-def cold_answers(clone, scratch, p, files: dict[str, bytes], tag: str) -> dict:
-    side = Side(clone, scratch, tag, files)
+def cold_answers(clone, scratch, p, files: dict[str, bytes], tag: str, rev: str = "HEAD") -> dict:
+    side = Side(clone, scratch, tag, files, rev)
     try:
         return answers(side.layer, p)
     finally:
         side.close()
 
 
-def run(clone: str, scratch: str) -> dict:
-    res: dict = {"repo": os.path.basename(clone), "head": _git("-C", clone, "rev-parse", "HEAD").strip()}
-    live = Side(clone, scratch, "live")
+def run(clone: str, scratch: str, rev: str = "HEAD") -> dict:
+    res: dict = {"repo": os.path.basename(clone), "head": _git("-C", clone, "rev-parse", rev).strip()}
+    live = Side(clone, scratch, "live", rev=rev)
     try:
         p = pick(live)
         res["picked"] = p
@@ -160,7 +162,7 @@ def run(clone: str, scratch: str) -> dict:
         # E1
         live.write(p["file"], clean)
         a1 = answers(live.layer, p)
-        c1 = cold_answers(clone, scratch, p, {p["file"]: clean}, "cold-e1")
+        c1 = cold_answers(clone, scratch, p, {p["file"]: clean}, "cold-e1", rev)
         e1 = compare(a1, c1)
         res["E1"] = {"pass": all(e1.values()) and not any(v.startswith("⚠️") for v in a1.values()), "answers": e1}
         # E2
@@ -181,7 +183,7 @@ def run(clone: str, scratch: str) -> dict:
     finally:
         live.close()
     # E3, a fresh start: clean, broken, clean
-    live = Side(clone, scratch, "live3")
+    live = Side(clone, scratch, "live3", rev=rev)
     try:
         third = clean.replace(b"r3 equivalence probe", b"r3 equivalence probe, edit three")
         steps, cold = [("clean", clean), ("broken", broken), ("clean again", third)], {}
@@ -192,7 +194,7 @@ def run(clone: str, scratch: str) -> dict:
             shown = clean if label == "broken" else data
             key = sha12(shown)
             if key not in cold:
-                cold[key] = cold_answers(clone, scratch, p, {p["file"]: shown}, f"cold-e3-{i}")
+                cold[key] = cold_answers(clone, scratch, p, {p["file"]: shown}, f"cold-e3-{i}", rev)
             eq = compare(a, cold[key])
             has_notice = any(v.startswith("⚠️") for v in a.values())
             ok = all(eq.values()) and (has_notice == (label == "broken"))
@@ -210,8 +212,11 @@ def run(clone: str, scratch: str) -> dict:
 
 
 def main(argv=None) -> int:
-    args = argv if argv is not None else sys.argv[1:]
-    res = run(os.path.abspath(args[0]), os.path.abspath(args[1]))
+    args = list(argv if argv is not None else sys.argv[1:])
+    rev = "HEAD"
+    if "--rev" in args:
+        i = args.index("--rev"); rev = args[i + 1]; del args[i:i + 2]
+    res = run(os.path.abspath(args[0]), os.path.abspath(args[1]), rev)
     text = json.dumps(res, indent=1, default=str)
     if len(args) > 2:
         with open(args[2], "w") as fh:
