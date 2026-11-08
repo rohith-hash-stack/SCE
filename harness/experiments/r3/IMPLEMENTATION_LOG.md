@@ -526,3 +526,16 @@ Deep = 2 or more changed callers. Reference: 21% gated (14 of 66), 23% mined (30
 - The shares rest on 9 to 12 candidates each; pydantic is exactly at the threshold (4 of 10).
 - The screen ran the full main-window miner, so these candidates are the mining for the week. What remains is the
   gate.
+
+## 2026-11-08: R3-8 week: the 4 repositories chosen
+
+Decision (user, 2026-11-08): reading (a) of "chosen from the screen by deep candidates", the top 4 by deep count,
+whatever their share. svelte (8), rollup (6), prettier (5), and one of mypy and pydantic (4 each) by a seeded draw.
+- Tie-break: `random.Random(5501).choice(sorted(["mypy", "pydantic"]))` gives **pydantic**.
+- Pre-committed outcome wording: if gated deep tasks reach 30, the scaling test runs with a power note; if not,
+  scaling is reported as "not run — insufficient depth variance after pool expansion". No threshold changes.
+- The representativeness caveat of R3-8 stands. Deep tasks selected partly on deep share are not representative of
+  real code, and the results' interpretation must say so.
+- Pool for the gate: the 132 main-window candidates plus these 4 repositories' 60 (svelte 24, rollup 12,
+  prettier 14, pydantic 10). Seed 5501, at most 10 per repository, the used rule, resuming from the 117 records
+  already gated.
