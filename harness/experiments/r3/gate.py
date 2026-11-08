@@ -34,6 +34,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -72,9 +73,34 @@ def runnable_tests(env, task: dict) -> list[str]:
     snap = [snapshot_owner(f) for f in task["test_files"] if "__snapshots__/" in f and f.endswith(".snap")]
     files += [f for f in snap if f and f not in files and os.path.isfile(os.path.join(env.work, f))
               and (f in known or (named is not None and named.search(f)))]
+    files += [f for f in sample_runners(env, task["test_files"]) if f not in files]
     if files:
         return files
     return fixture_readers(env, task["test_files"])
+
+
+SAMPLE_DIR = re.compile(r"^(.*/)samples/[^/]+/")
+SAMPLE_RUNNERS = ("test.ts", "test.js", "test.mjs")
+
+
+def sample_runners(env, changed: list[str]) -> list[str]:
+    """When the tests are sample folders (svelte's `tests/runtime-runes/samples/<name>/_config.js`, added
+    2026-11-08 for amendment R3-8): the suite's runner file, `test.ts` (or `.js`, `.mjs`) in the folder that holds
+    `samples/`, when it exists and is not in a skipped folder. Browser suites stay out, as everywhere: a suite folder
+    whose name contains `browser` (svelte's `runtime-browser` runs in Playwright) is skipped too."""
+    from harness.experiments.r3.jsbuild import SKIP_DIRS
+    out = []
+    for f in changed:
+        m = SAMPLE_DIR.match(f)
+        if not m:
+            continue
+        for name in SAMPLE_RUNNERS:
+            r = m.group(1) + name
+            if r not in out and not SKIP_DIRS.search(r) and "browser" not in m.group(1).rstrip("/").rsplit("/", 1)[-1] \
+                    and os.path.isfile(os.path.join(env.work, r)):
+                out.append(r)
+                break
+    return out
 
 
 def snapshot_owner(path: str) -> str | None:
