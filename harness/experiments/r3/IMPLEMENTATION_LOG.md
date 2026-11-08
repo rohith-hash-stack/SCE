@@ -622,3 +622,8 @@ Found by the full-pool runs, beyond the 11:
 
 Not hash-committed: the task list now differs from `ba4de9ae` (B-09's start patch, and B-29 out). How to refill
 the 80th slot goes to the user.
+
+Anchor check (bug 7, per task): 80 of 80 run, 79 pass (0 test callers, no error). The one failure is r3a-B-29,
+whose anchor is not in the index at the start state: the stub defect above. The first run of the checker was
+OOM-killed at task 53 because it held every index in one process. It was resumed with one process per task. This
+is a flaw in the checker, not the product (R3 runs are already one process per run).
