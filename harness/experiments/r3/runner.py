@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,19 @@ TOKENIZER = os.environ.get("R3_TOKENIZER", "/home/user/models/qwen2-tokenizer/to
 
 def _git(*args, cwd=None, input_text=None, check=True):
     return subprocess.run(["git", *args], cwd=cwd, input=input_text, capture_output=True, text=True, check=check)
+
+
+# The gate's worktree (`tempfile.mkdtemp(prefix="r3gate_<family>_")` + "/w"). A test parametrized with an absolute
+# path records it in its id, which then names a directory that exists only during the gate (R3a: r3a-B-71).
+GATE_WORK = re.compile(r"/(?:[^/\[\]\s]+/)*?r3gate_\w+/w(?=/)")
+
+
+def id_status(tests: dict, test_id: str, work: str) -> str:
+    """The outcome of `test_id` in this run's results, with the gate's worktree path in the id read as `work`."""
+    if test_id in tests:
+        return tests[test_id]
+    here = os.path.abspath(work)
+    return tests.get(GATE_WORK.sub(lambda _m: here, test_id), "missing")
 
 
 def apply_patch(work: str, patch: str | None) -> None:
@@ -134,7 +148,7 @@ def score(task: dict, work: str, env, start_tree: str | None = None) -> dict:
         for f, ids in (task.get(group) or {}).items():
             r = env.run_test(f)
             for t in ids:
-                outcomes[f"{f}::{t}"] = (group, (r.get("tests") or {}).get(t, "missing"))
+                outcomes[f"{f}::{t}"] = (group, id_status(r.get("tests") or {}, t, work))
     res["tests"] = {k: v[1] for k, v in outcomes.items()}
     res["resolved"] = bool(outcomes) and all(s == "passed" for _g, s in outcomes.values())
     res["fail_to_pass_passed"] = sum(1 for g, s in outcomes.values() if g == "fail_to_pass" and s == "passed")

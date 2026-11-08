@@ -103,8 +103,10 @@ def pad_calls(task: dict, version: str, n: int) -> list[dict]:
 
 
 def gold_calls(task: dict, clone: str, version: str) -> list[dict]:
+    raw = _git("-C", clone, "diff", "--raw", "--no-renames", task["parent"], task["commit"]).stdout.split("\n")
+    gitlinks = {ln.split("\t", 1)[1] for ln in raw if "\t" in ln and "160000" in ln.split("\t", 1)[0].split()[:2]}
     files = [f for f in _git("-C", clone, "diff", "--name-only", "--no-renames", task["parent"], task["commit"])
-             .stdout.split("\n") if f and f not in set(task["test_files"])]
+             .stdout.split("\n") if f and f not in set(task["test_files"]) and f not in gitlinks]   # no submodule bumps
     before = start_contents(clone, task, files)
     calls = []
     if version == "PRISM":
