@@ -707,3 +707,37 @@ no leftover processes. The JS smoke test passed. Harness checks only; no result 
   - The stubbing count (46) and outputs cut (20) come from these 3 runs.
   - For loops like this, the budget binds before the cap.
 - Several runs in both versions call `done` after 2-5 turns with no edit. Recorded only.
+
+## 2026-11-08: decision after the pilot investigations — R3a proceeds as planned
+
+**Turn cap for R3a: 28** (dated line, recorded before any main-run call): the pre-registered rule (R3-1 item 2,
+R3-2 item 3) on the pilot's 20 runs gives p90 = 23, plus 5 = 28. Share at 30: 0.
+
+**No change to PRISM before R3a.** The descriptive caller-mismatch and unresolved-call block, and the D1/D2 fixes,
+are not applied. The user's rationale, verbatim:
+
+> "The pilot found that PRISM's tools take fixed symbol arguments — asking again returns an identical answer —
+> while baseline's tools take free arguments and return new content on each call. This causes structural repeats on
+> hard tasks. However, both arms failed the three looping tasks: the loop is how PRISM's failure looks, not why it
+> failed. Whether the loop suppresses PRISM's resolve rate on tasks it could otherwise solve is not measurable from
+> the 10-task pilot. R3a's 80 tasks will reveal this via the per-arm loop counter and the missing-function
+> covariate. If loops concentrate on baseline-resolved tasks (not both-failed), that's the finding to act on — and
+> R3a-fix (descriptive block + D1/D2) becomes a justified follow-up round."
+
+**Analysis additions** (analysis code, not rules; `analyze.py` `turn_flags` / `diagnostics`,
+`tests/test_r3_diagnostics.py`):
+1. **Looping runs per arm:** the same tool with the same arguments 3 or more times, with no applied edit between.
+2. **Early-done runs per arm:** `done` within 5 turns with no applied edit.
+3. **Missing-function property per task** (`covariates.py`, Python `ast` and JS/TS tree-sitter): the start patch's
+   added lines make a bare call to a name the start-state file neither defines nor imports.
+   - Results: pilot 3 of 10 (exactly B-02, B-08, B-09); R3a 13 of 80 (`r3a_tasks/covariates_B.json`).
+   - Every R3a flag was confirmed: the commit's own version of the file binds the name.
+4. **For each looping run, whether the other arm resolved the same task** (same seed, and either seed), plus the
+   split "PRISM loops on baseline-resolved tasks" vs "both failed". This is the diagnostic that tells "the loop is
+   how PRISM fails" from "the loop suppresses PRISM's score".
+
+On the pilot these give: loops PRISM 3, BASELINE 0; early done PRISM 4, BASELINE 3; PRISM loops on
+baseline-resolved tasks 0 of 3.
+
+**Interpretation:** the interface finding is recorded in `INTERPRETATION_NOTES.md`, which lists the statements
+R3a's interpretation must make.

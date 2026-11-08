@@ -100,13 +100,85 @@ def load_runs(runs_dir: str, tasks: list[dict], seeds: list[int]) -> list[dict]:
                                  "tree_resolved": bool(sc.get("resolved")), "file_f1": sc.get("file_f1"),
                                  "function_f1": sc.get("function_f1"), "parse_errors": r.get("parse_errors", 0),
                                  "run_tests_calls": calls.get("run_tests", 0), "outputs_cut": r.get("outputs_cut", 0),
-                                 "turns_stubbed": r.get("turns_stubbed", 0), "notice_turns": r.get("notice_turns", 0)})
+                                 "turns_stubbed": r.get("turns_stubbed", 0), "notice_turns": r.get("notice_turns", 0),
+                                 **turn_flags(os.path.join(runs_dir, rid + ".jsonl"), r)})
                 elif os.path.exists(err_p):
                     e = json.load(open(err_p))
                     rows.append({**base, "outcome": "error", "error_stage": e.get("stage"), "error": e.get("error")})
                 else:
                     rows.append({**base, "outcome": "missing"})
     return rows
+
+
+# ------------------------------------------------------------------------------------------------ diagnostics
+LOOP_REPEATS = 3          # the same tool with the same arguments this many times, no applied edit in between
+EARLY_DONE_TURNS = 5      # done within this many turns, with no applied edit
+
+
+def turn_flags(log_path: str, summary: dict) -> dict:
+    """Per run, from its turn log (decided 2026-11-08, after the pilot; `PILOT_LOOP_INVESTIGATION.md`):
+    - `looping`: some tool call (tool and arguments) made LOOP_REPEATS or more times with no applied edit between
+      (an applied edit is an `edit_file` whose output starts "edited");
+    - `early_done`: `done` within EARLY_DONE_TURNS turns with no applied edit;
+    - `applied_edits`: the number of applied edits."""
+    if not os.path.exists(log_path):
+        return {"looping": None, "early_done": None, "applied_edits": None}
+    seen, looping, edits = Counter(), False, 0
+    for ln in open(log_path):
+        t = json.loads(ln)
+        if not t.get("tool"):
+            continue
+        if t["tool"] == "edit_file" and (t.get("output_head") or "").startswith("edited"):
+            edits += 1
+            seen.clear()
+            continue
+        key = (t["tool"], json.dumps(t.get("args") or {}, sort_keys=True))
+        seen[key] += 1
+        looping = looping or seen[key] >= LOOP_REPEATS
+    early = summary.get("end") == "done" and (summary.get("turns") or 0) <= EARLY_DONE_TURNS and edits == 0
+    return {"looping": looping, "early_done": early, "applied_edits": edits}
+
+
+def diagnostics(rows: list[dict], covariates: dict | None) -> dict:
+    """Looping and early-done runs per arm, and for each looping run whether BASELINE resolved the same task (same
+    seed, and either seed). That tells "the loop is how PRISM fails" (BASELINE failed too) from "the loop suppresses
+    PRISM's score" (BASELINE resolved it). With the covariate file: the missing-function split."""
+    cov = (covariates or {}).get("tasks", {})
+    resolved = {(r["task"], r["version"], r["seed"]) for r in rows if r["outcome"] == "resolved"}
+    out = {"rule": {"looping": f"same tool and arguments {LOOP_REPEATS}+ times, no applied edit between",
+                    "early_done": f"done within {EARLY_DONE_TURNS} turns, no applied edit"}, "by_version": {}}
+    for v in VERSIONS:
+        sel = [r for r in rows if r["version"] == v and r.get("looping") is not None]
+        out["by_version"][v] = {"runs": len(sel), "looping": sum(r["looping"] for r in sel),
+                                "early_done": sum(r["early_done"] for r in sel)}
+    other = {"PRISM": "BASELINE", "BASELINE": "PRISM"}
+    loops = []
+    for r in rows:
+        if not r.get("looping"):
+            continue
+        o = other[r["version"]]
+        loops.append({"run": r["run"], "task": r["task"], "version": r["version"], "outcome": r["outcome"],
+                      f"{o.lower()}_resolved_same_seed": (r["task"], o, r["seed"]) in resolved,
+                      f"{o.lower()}_resolved_any_seed": any(k[0] == r["task"] and k[1] == o for k in resolved),
+                      "missing_function": (cov.get(r["task"]) or {}).get("missing_function")})
+    out["looping_runs"] = loops
+    pl = [x for x in loops if x["version"] == "PRISM"]
+    out["prism_loops_on_baseline_resolved_tasks"] = {
+        "same_seed": sum(x["baseline_resolved_same_seed"] for x in pl),
+        "both_failed_same_seed": sum(not x["baseline_resolved_same_seed"] for x in pl), "of": len(pl)}
+    if cov:
+        split = {}
+        for flag in (True, False):
+            for v in VERSIONS:
+                sel = [r for r in rows if r["version"] == v and (cov.get(r["task"]) or {}).get("missing_function") is flag
+                       and r["outcome"] != "missing"]
+                split[f"{v}/missing_function={flag}"] = {
+                    "runs": len(sel), "resolved": sum(r["outcome"] == "resolved" for r in sel),
+                    "looping": sum(bool(r.get("looping")) for r in sel),
+                    "early_done": sum(bool(r.get("early_done")) for r in sel)}
+        out["missing_function_split"] = split
+        out["missing_function_tasks"] = sum(1 for x in cov.values() if x.get("missing_function") is True)
+    return out
 
 
 # ------------------------------------------------------------------------------------------------ tables
@@ -354,7 +426,8 @@ def pilot_criteria(rows, tasks, gates_dir: str | None, runs_dir: str) -> dict:
     return out
 
 
-def analyze(runs_dir: str, task_paths: list[str], seeds: list[int], pilot: bool, gates_dir: str | None) -> dict:
+def analyze(runs_dir: str, task_paths: list[str], seeds: list[int], pilot: bool, gates_dir: str | None,
+            covariates_path: str | None = None) -> dict:
     tasks = load_tasks(task_paths)
     rows = load_runs(runs_dir, tasks, seeds)
     fams = sorted({t["family"] for t in tasks})
@@ -368,6 +441,7 @@ def analyze(runs_dir: str, task_paths: list[str], seeds: list[int], pilot: bool,
         e = res["families"][f]
         e["p_holm"] = holm.get(f)
         e["label"] = label(e["primary"], holm[f], bool(e["invalid"])) if f in holm else None
+    res["diagnostics"] = diagnostics(rows, json.load(open(covariates_path)) if covariates_path else None)
     if pilot:
         res["pilot"] = {"criteria": pilot_criteria(rows, tasks, gates_dir, runs_dir), "turn_cap": turn_cap(rows),
                         "note": "harness checks only; no result is read for a decision"}
@@ -383,11 +457,13 @@ def main(argv=None) -> int:
     p.add_argument("--seeds", nargs="+", type=int, default=[42, 1001])
     p.add_argument("--pilot", action="store_true")
     p.add_argument("--gates", default=None)
+    p.add_argument("--covariates", default=None, help="covariates.py's output for the task list")
     a = p.parse_args(argv)
-    res = analyze(a.runs, a.tasks, a.seeds, a.pilot, a.gates)
+    res = analyze(a.runs, a.tasks, a.seeds, a.pilot, a.gates, a.covariates)
     with open(a.out, "w") as fh:
         json.dump(res, fh, indent=1, default=str)
-    brief = {"outcomes": res["outcomes"], "labels": {f: e["label"] for f, e in res["families"].items()}}
+    brief = {"outcomes": res["outcomes"], "labels": {f: e["label"] for f, e in res["families"].items()},
+             "diagnostics": {k: v for k, v in res["diagnostics"].items() if k != "looping_runs"}}
     if a.pilot:
         brief["pilot"] = res["pilot"]
     print(json.dumps(brief, indent=1, default=str))
