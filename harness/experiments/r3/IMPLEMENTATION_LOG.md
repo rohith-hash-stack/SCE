@@ -741,3 +741,28 @@ baseline-resolved tasks 0 of 3.
 
 **Interpretation:** the interface finding is recorded in `INTERPRETATION_NOTES.md`, which lists the statements
 R3a's interpretation must make.
+
+## 2026-11-08: R3a cell built (`kaggle/r3a_cell.py`, code `3c26a992`)
+
+- **Pinned:**
+  - code `3c26a992`; the `src` tree is `ca512abf`, the same as the pilot, so PRISM is unchanged;
+  - task list `70a6aede…`;
+  - results in `reports/r3/r3a`.
+- **Runs:** 80 tasks × PRISM, BASELINE × seeds 42 and 1001 = 320 runs, turn cap 28, one process per run.
+  - Order: task by task in the frozen order, each seed, PRISM then BASELINE (amendment R3-1's interim look at 40
+    complete tasks).
+  - No run starts later than 45 minutes before the 11.5-hour session limit. The driver exits 3, and the cell says
+    to run again.
+  - Repositories and caches live under `/tmp/r3a`. The download caches are cleared below 6 GB free, never while an
+    installer runs.
+- **Per session:** `analyze` (with `covariates_B.json`) and `progress.json` (runs done, tasks complete, interim
+  reached).
+- **Errored runs** (`.error.json`, no score) are retried in the next session, as BUILD_PLAN's "a rerun skips
+  finished runs" says. Every attempt is still recorded in `pilot_runs.jsonl`, with its exit code, for the
+  infrastructure-deaths check.
+- **Tested here** with a stand-in model server on 2 R3a tasks × 2 seeds × 2 versions:
+  - the order is as above, with 0 leftover processes;
+  - a past deadline exits 3 before any run;
+  - a resume repeats nothing;
+  - the analysis reports per-seed outcomes and the diagnostics.
+- R3 unit suites: 48 passed, 1 skipped.
