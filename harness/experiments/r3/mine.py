@@ -206,12 +206,98 @@ def b_pass1(clone: str, commits: list[str]) -> tuple[list[dict], dict]:
     return out, counts
 
 
-def start_patch_for(clone: str, parent: str, path: str, old_code: str, new_code: str) -> str | None:
+PY_STUB = re.compile(r":\s*\.\.\.\s*$")
+
+
+def _is_stub(code: str, lang: str) -> bool:
+    """A declaration without a body: a Python `@overload` stub or a TypeScript overload signature."""
+    code = code.rstrip()
+    return bool(PY_STUB.search(code)) if lang == "python" else code.endswith(";") and "{" not in code
+
+
+def overload_group(after_text: str, code: str, lang: str, after: int = 0) -> str | None:
+    """When the developer's new code for a function is a bodiless overload signature (the index keeps a name's
+    first declaration), the whole overload group in the commit's file: every signature with its decorators, through
+    the implementation's end. None when `code` is not such a signature, or the group cannot be delimited.
+    `after`: where to start looking (a class's start, for a method)."""
+    if not _is_stub(code, lang):
+        return None
+    i = after_text.find(code.strip(), after)
+    if i < 0:
+        return None
+    lines = after_text.splitlines(keepends=True)
+    pos = after_text.count("\n", 0, i)                     # the line the first signature starts on
+    first = pos
+    if lang == "python":
+        while first > 0 and lines[first - 1].strip().startswith("@"):
+            first -= 1
+        indent = len(lines[pos]) - len(lines[pos].lstrip())
+        leaf = re.match(r"\s*(?:async\s+)?def\s+(\w+)", lines[pos])
+        if not leaf:
+            return None
+        k, impl = pos, None
+        while k < len(lines):                                # the next `def leaf` at this indent not under @overload
+            m = re.match(rf"(\s*)(?:async\s+)?def\s+{leaf.group(1)}\b", lines[k])
+            if m and len(m.group(1)) == indent and k > pos and not lines[k - 1].strip().startswith("@"):
+                impl = k
+                break
+            k += 1
+        if impl is None:
+            return None
+        end = impl + 1
+        while end < len(lines) and (not lines[end].strip() or len(lines[end]) - len(lines[end].lstrip()) > indent
+                                    or lines[end].lstrip().startswith((")", "]"))):
+            end += 1
+        while end > impl and not lines[end - 1].strip():
+            end -= 1
+    else:
+        k = pos
+        while k < len(lines) and _is_stub_line(lines, pos, k):
+            k += 1
+        depth, end, seen = 0, None, False
+        for j in range(k, len(lines)):                      # the implementation: its braces matched
+            for ch in lines[j]:
+                if ch == "{":
+                    depth, seen = depth + 1, True
+                elif ch == "}":
+                    depth -= 1
+            if seen and depth == 0:
+                end = j + 1
+                break
+        if end is None:
+            return None
+    return "".join(lines[first:end])
+
+
+def class_start(text: str, anchor: str) -> int:
+    """Where the anchor's enclosing class is declared in `text` (0 for a module-level function or no match)."""
+    parts = anchor.split(".")
+    if len(parts) < 2:
+        return 0
+    m = re.search(rf"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+{re.escape(parts[-2])}\b", text, re.M)
+    return m.start() if m else 0
+
+
+def _is_stub_line(lines: list[str], start: int, k: int) -> bool:
+    """Whether line `k` still belongs to the TypeScript signatures that begin at `start` (no body opened yet)."""
+    return "{" not in "".join(lines[start:k + 1])
+
+
+def start_patch_for(clone: str, parent: str, path: str, old_code: str, new_code: str,
+                    after_text: str | None = None, lang: str = "python", after: int = 0) -> str | None:
     """The parent's file with the anchor's code replaced by the developer's new code, as a patch; None when the old
-    code is not found exactly once or the file does not end in a newline."""
+    code is not found exactly once or the file does not end in a newline. A new code that is a bodiless overload
+    signature is widened to the commit's whole overload group (`overload_group`), given the commit's file."""
     text = (show(clone, parent, path) or b"").decode("utf8")
     if text.count(old_code) != 1 or not text.endswith("\n"):
         return None
+    if after_text is not None and _is_stub(new_code, lang):
+        group = overload_group(after_text, new_code, lang, after)
+        if group is None:
+            return None                                       # never a start state without the anchor's body
+        new_code = group if old_code[:1] in " \t" else group.lstrip(" \t")   # the old code's own indentation
+        if not old_code.endswith("\n"):
+            new_code = new_code.rstrip("\n")
     new_text = text.replace(old_code, new_code, 1)
     return "".join(difflib.unified_diff(text.splitlines(keepends=True), new_text.splitlines(keepends=True),
                                         f"a/{path}", f"b/{path}"))
@@ -253,7 +339,11 @@ def mine_b(name: str, clone: str, commits: list[str], scratch: str) -> tuple[lis
         if not tests:
             continue
         counts["test_change"] += 1
-        sp = start_patch_for(clone, meta["parent"], t["anchor_file"], t["anchor_old"], t["anchor_new"])
+        sp = start_patch_for(clone, meta["parent"], t["anchor_file"], t["anchor_old"], t["anchor_new"],
+                             after_text=(show(clone, t["commit"], t["anchor_file"]) or b"").decode("utf8"),
+                             lang=LANGUAGE.get(name, "python"),
+                             after=class_start((show(clone, t["commit"], t["anchor_file"]) or b"").decode("utf8"),
+                                               t["anchor"]))
         if not sp:
             continue
         counts["start_patch_ok"] += 1
