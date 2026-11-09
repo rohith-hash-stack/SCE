@@ -50,7 +50,7 @@
   clean skips when the package is missing.
 - **5: behaviour drift against recorded expectations.** These are real: they need a decision on intended or
   regression.
-  - `test_nlq_p0`: recorded search ranks and candidate counts differ, for example q12 172 → 185 candidates and
+  - `test_nlq_p0`: recorded search ranks and candidate counts differ, for example q12 (the test expects 185 candidates, the fixture has 172) and
     q15's ranks shifted by 1–2.
   - `test_nlq_p1`: proof states read `PROVED_WITH_WARNING` where `PROVED` was recorded.
 - **3: Kaggle-runner tests** (`test_kaggle_m4`, `test_m1_fixes`) exit with code 2. Same root, `transformers`.
