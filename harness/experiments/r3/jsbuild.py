@@ -178,6 +178,9 @@ def pnpm_version_for(d: dict, lockfile_text: str | None) -> str:
     return {5: "7", 6: "8", 9: "9"}.get(major, "10")
 
 
+#: The classic yarn installed for yarn projects (the version on the machine that gated R3a's tasks).
+YARN_CLASSIC = "1.22.22"
+
 #: Newer pnpm majors to try, in order, when the chosen one rejects a format-9.0 lockfile it cannot read.
 PNPM_FALLBACK = ("10", "11", "12")
 
@@ -304,6 +307,12 @@ class Env:
                     break
             self._installed = (rc, out)
         elif pm == "yarn":
+            # classic yarn, installed like pnpm (Kaggle has no yarn; the gate's machine had 1.22.22 on PATH). It
+            # runs a Berry project's own vendored release through `.yarnrc.yml`'s `yarnPath`, as it did at the gate.
+            try:
+                self.env["PATH"] = ensure_pm("yarn", YARN_CLASSIC, node_bin, self.cache) + os.pathsep + self.env["PATH"]
+            except RuntimeError as exc:
+                raise SetupError("missing_package", str(exc)) from exc
             self.pm_version = d.get("pm_version") or "1"
             cmd = ["yarn", "install", "--immutable"] if d.get("yarn_berry") else ["yarn", "install", "--frozen-lockfile"]
         else:

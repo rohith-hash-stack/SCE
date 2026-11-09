@@ -775,3 +775,23 @@ R3a's interpretation must make.
 - `analyze.py`: the interim look and the final boundary were not wired before. They are now (`interim_look`,
   `threshold`, `--interim`), and the R3a cell runs the look each session.
 - The cell is re-rendered on this commit.
+
+## 2026-11-09: R3a session 1 anomaly — prettier tasks could not install on Kaggle (fixed for the next session)
+
+- **What:** r3a-B-01 and r3a-B-02 (prettier) errored in 3 s on all 8 runs: `FileNotFoundError: 'yarn'`.
+  - Prettier is a yarn project (its own yarn 4.x, vendored in the repository). The machine that gated R3a's tasks
+    had classic yarn 1.22.22 on PATH, which runs the vendored release, so neither the gate nor the full-pool dry run
+    saw the gap. Kaggle has no yarn.
+  - Only prettier uses yarn among R3a's 16 repositories.
+- **Effect:**
+  - No result. These runs are `.error.json` with no score, so they are retried in the next session (BUILD_PLAN:
+    "a rerun skips finished runs").
+  - The 8 failed attempts stay in `pilot_runs.jsonl`.
+  - The interim look waits for them, because they are in the first 40 tasks.
+- **Fix** (`jsbuild.py`): the yarn branch installs classic yarn 1.22.22 into the builder's cache, as pnpm already is,
+  and puts it on PATH. This is the same yarn as the gate's machine.
+  - Builder code only: `src/` (PRISM) is unchanged, and the change affects only yarn projects (prettier).
+- **Checked here with yarn removed from PATH:** the prettier install smoke passes (its yarn 4.9.1 runs), and the
+  B-01 dry run gives gold resolved (F1 1.0) and empty unresolved.
+- **Next session:** use the re-rendered `kaggle/r3a_cell.py` (it pins the commit with the fix). The running session
+  continues with tasks 3 onward on the old code, which is unaffected.
