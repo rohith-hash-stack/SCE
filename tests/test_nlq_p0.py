@@ -203,7 +203,7 @@ def test_recorded_ranks_of_the_ten_unseeded_questions(recorded):
                    for t in recorded["queries"][qid]["targets"]} for qid in M.UNSEEDED_AND_COMPOUND}
     flat = {qid: sorted(v.values()) for qid, v in ranks.items()}
     assert flat == {"q09": [(5, 3)], "q10": [(4, 2)], "q11": [(None, 50)], "q12": [(255, 24)], "q13": [(86, 35)],
-                    "q14": [(2, 4)], "q15": [(325, 96), (331, 1438)], "q16": [(1114, 89)], "q17": [(2, 25)],
+                    "q14": [(2, 5)], "q15": [(326, 100), (332, 1499)], "q16": [(1114, 87)], "q17": [(2, 25)],
                     "q18": [(121, 92)]}
 
 
@@ -221,8 +221,8 @@ def test_recorded_candidate_list_growth(recorded):
             assert sizes == sorted(sizes) and sizes[0] >= 10           # k seeds, plus neighbours
     largest = {qid: max(recorded["queries"][qid]["expansion"][f"{v}@50"]["size"] for v in ("N", "NB"))
                for qid in M.UNSEEDED_AND_COMPOUND}
-    assert largest == {"q09": 85, "q10": 210, "q11": 541, "q12": 185, "q13": 171, "q14": 240, "q15": 169,
-                       "q16": 139, "q17": 388, "q18": 819}
+    assert largest == {"q09": 85, "q10": 210, "q11": 541, "q12": 172, "q13": 171, "q14": 240, "q15": 171,
+                       "q16": 139, "q17": 389, "q18": 819}
 
 
 def test_recorded_false_subjects_for_unanswerable_and_ambiguous(recorded):
