@@ -795,3 +795,17 @@ R3a's interpretation must make.
   B-01 dry run gives gold resolved (F1 1.0) and empty unresolved.
 - **Next session:** use the re-rendered `kaggle/r3a_cell.py` (it pins the commit with the fix). The running session
   continues with tasks 3 onward on the old code, which is unaffected.
+
+## 2026-11-09: roadmap decision (user): R4 multi-turn + loop-aware protocol; R5 double check; R6 cross-model; going live
+
+- **R4:** PRISM helps an LLM in multi-turn tasks, with a loop-aware protocol. Every PRISM fix or implementation is
+  done before R4 runs. Target problem: agents do not understand the surrounding, related code; they give improper
+  responses, and users have to re-verify. PRISM's graph holds those relationships.
+- **R5:** a double check of R4's result after R4. **R6:** cross-model verification once R5 holds.
+- **PRISM goes live after R5 or R6** (noted as asked).
+- Renumbering:
+  - the old R4 ("user query → plan") and the old R3b families are parked until after going live;
+  - the old R5 (cross-model) is now R6;
+  - the old R4's base+delta notes become a go-live prerequisite.
+- The plan, the build list (B1–B8), R4/R5/R6 designs, go-live prerequisites and the open decisions are in
+  `harness/experiments/ROADMAP_R4_R6.md`. Nothing built yet; R3a continues unchanged.
