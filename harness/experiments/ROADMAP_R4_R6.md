@@ -213,3 +213,126 @@ That spreads the GPU cost and gives early results. **Decision needed.**
 
 **What can start now without a decision:** A1–A3 (correctness), B2 (callee binding check) and B5 (post-edit check).
 Every option needs them.
+
+## Test hygiene per round (standing practice, adopted 2026-11-09)
+
+**The policy (user):** whenever a round clones a repository for its own execution, the repository's real-codebase
+test files run against it as a supplementary check. This applies to R4, R5, R6 and every later round; not to R3a,
+which runs unchanged.
+
+**What these tests prove, and what they do not:** they show that PRISM does not crash on real code, and that the
+real parsing and linking paths execute. They do **not** show that tool outputs are correct; the golden tests do
+that (`GOLDEN_TESTS_PLAN.md`). Both are needed, and neither substitutes for the other.
+
+### 1. Test → repository mapping (the 18 real-codebase test files)
+
+All 18 index one of four benchmark corpora, pinned by commit (`benchmarks/corpora/resolver.py`; checked out under
+`.benchmarks/corpora/`). Times and results are from 2026-11-09, run one file per process on this sandbox (4 CPUs),
+without coverage.
+
+| Test file | Tests | Corpus | Time | Result |
+|---|---|---|---|---|
+| `tests/benchmarks/test_harness_metrics.py` | 113 | django, express, fastapi, trpc | 310 s | 1 failed (§4) |
+| `tests/phase_c/test_traversal_layer.py` | 14 | django | 40 s | pass |
+| `tests/phase_d/test_causal_path.py` | 10 | django | 161 s | pass |
+| `tests/test_causal_path.py` | 8 | django | 196 s | pass |
+| `tests/test_corpora_resolver_subdir.py` | 3 | (resolver unit) | 3 s | pass |
+| `tests/test_feature_masks_cache_parity.py` | 3 | django | 131 s | pass (1 xpassed: a stale xfail marker) |
+| `tests/test_fuzzy_seed_suggestion.py` | 9 | django | 24 s | 1 failed (timing) |
+| `tests/test_index_cache_consistency.py` | 2 | django | 1,381 s | pass (1 xfailed) |
+| `tests/test_index_cache_decorated_parity.py` | 2 | django | 663 s | pass |
+| `tests/test_layer4_runner.py` | 54 | django, express | 23 s | pass |
+| `tests/test_mtime_invalidation.py` | 8 | django | 4 s | 1 failed (timing) |
+| `tests/test_prism_selection_regressions.py` | 22 | django | 110 s | pass |
+| `tests/test_smoke_corpus.py` | 6 | django, express, fastapi, trpc | 2 s | pass |
+| `tests/test_task_reachability.py` | 9 | django | 20 s | pass |
+| `tests/test_three_pass_integration.py` | 7 | fastapi | 49 s | pass |
+| `tests/test_two_pass_benchmark.py` | 31 | django | 60 s | pass |
+| `tests/test_two_pass_engine.py` | 12 | django | 60 s | pass |
+| `tests/test_two_pass_root_imports.py` | 13 | express | 13 s | 4 failed (environment: express's npm dependencies, e.g. `etag`, not installed) |
+| **Total** | | | **3,250 s (54 min)** | **7 failed** |
+
+**Which planned rounds use these corpora:** none.
+- R3a's 16 repositories (`r3a_tasks/tasks_B.json`) are aiohttp, execa, h3, litestar, nitro, packaging, poetry,
+  prettier, pydantic, scrapy, sqlglot, svelte, tornado, typer, unstorage and yarl. None is Django, FastAPI,
+  express or tRPC.
+- R4/R5/R6's repositories are not chosen yet. Unless a round mines one of the four corpora, **the policy as worded
+  runs none of the 18 files.**
+
+**So the policy has two parts, to serve its intent** ("the clone exists, so the coverage is free"):
+
+| Part | What runs | Against | Status |
+|---|---|---|---|
+| **A. Corpus suite** | the 18 files above | their own pinned corpora, fetched by the resolver | exists; runs once per PRISM code commit a round uses (it does not depend on the round's clones) |
+| **B. Round-repository smoke** | for every repository the round clones, at the round's own revisions: index build; each served tool once on 3 anchors from the round's tasks; the cross-feature invariants (callers agree; no "possible" rendered "certain"; no test code with `include_tests=False`; the live index after a scripted edit equals a cold build) | the round's clones | **to build**, alongside the golden tests' cross-feature tests (the same invariant code, parametrized over real clones) |
+
+### 2. Mechanics
+
+| Option | What breaks | What does not | Verdict |
+|---|---|---|---|
+| **Parallel to model runs** (CPU, while the GPU serves the model) | The round's own runs use the CPU too: `run_tests`, index builds, installs. Heavy indexing (Django: 2–3 GB RSS, 100% of a core) slows them, and can change test timeouts inside runs, i.e. **the measurement**. The suite's own timing tests fail under load (two of today's failures are wall-clock thresholds) | No GPU interference | **rejected** |
+| **Once per repository per session** (in the round's cell, on first clone) | It adds minutes to the start of every session, before model work, on the GPU clock | Isolation from runs (it finishes before they start) | acceptable for part B only, but it wastes GPU time |
+| **End of session** (in the round's stop margin) | Part A takes 54 minutes; the margin is 45. If the session hits its limit, the final push is at risk | It uses otherwise idle time | acceptable for part B only, and only if it fits the margin |
+| **A separate cell on the same revisions** (a CPU-only Kaggle notebook) | It cannot share the round's `/tmp` clones, so it re-clones the same URLs at the same revisions (minutes) | Full isolation from the measurement; no GPU quota used (CPU notebooks do not draw the weekly GPU allowance); can run any time during the round | **default** |
+
+**Default:**
+- one CPU-only hygiene cell per round, run once at the round's start, or whenever the round's pinned PRISM commit
+  changes;
+- it runs part A, and part B over every repository in the round's task list, at the task revisions;
+- it pushes a `hygiene/` report next to the round's results;
+- the round's GPU cell does not change.
+
+### 3. Failure policy
+
+- **Log, never interrupt.** A hygiene failure is recorded as a defect. The round continues: its protocol measures
+  PRISM, and these tests are hygiene.
+- **Categorize** each failure:
+  - **environment:** a missing package, tool, network or data;
+  - **real bug:** PRISM's behaviour is wrong;
+  - **drift:** a recorded expectation is out of date with an intended change.
+
+  Environment failures are noise. Real bugs are findings.
+- **Report at round end**, in a supplementary "Test hygiene during this round" section, never in the primary
+  results.
+- **Never pause a round** because one fires. If a failure makes the round's results uninterpretable (for example a
+  real bug in caller linking on a repository the round measures), the round's report says so plainly, but the
+  round is not stopped.
+
+### 4. Before the policy goes live: today's 7 failures and the 46 skips
+
+**The 4 "unexplained" failures from the first, interrupted run:**
+- The interruption was a **sandbox restart** (machine uptime reset), not PRISM. The first run's log was lost with
+  it.
+- The file-by-file rerun found 7 failures in all:
+  - 4 in `test_two_pass_root_imports.py`. This is environment: express's `node_modules` (`etag`) was never
+    installed, already listed in `BACKLOG.md`. They are almost certainly the first run's 4 (the same
+    four-in-a-row pattern).
+  - 2 wall-clock thresholds, which are noise: fuzzy matching 83 ms against a 50 ms target, a warm scan 102 ms
+    against 100 ms.
+  - 1 real behaviour change, `test_harness_metrics.py::test_all_four_existing_blast_seeds_pass_the_richness_screen`:
+    `django.db.models.query.QuerySet.get` now has 2 direct and 5 transitive callers. At `bc53e055`, where the
+    test was added, it had 34 and 8. The cause is being bisected (§4a).
+
+**The 46 skips:**
+
+| Group | Count | Under this policy |
+|---|---|---|
+| tiktoken encoding unavailable | 5 | fixed by tokenizer option (b), once the asset is committed |
+| Python package not installed (onnx, orjson ×4, ujson, httpx ×4, jinja2) | 11 | environment: the hygiene cell installs them, so **they run** |
+| external tool not installed (typescript-language-server ×9, aider-chat) | 10 | environment: the hygiene cell installs them, so **they run** |
+| `PRISM_LIVE_NETWORK_TESTS=1` live clone suites | 16 | can run in the hygiene cell (network), but they are heavy; **opt in per round** |
+| real gin clone absent | 1 | environment: runs if the cell clones it |
+| by design (R3 equivalence needs round clones; the live LLM judge needs a model call, out of scope; a data condition) | 3 | **stay skipped** |
+
+### 5. Cost for R4
+
+- **GPU sessions:** **0 added** under the default (a separate CPU-only cell).
+- **The hygiene cell, once per PRISM commit:**
+  - part A, about 54 minutes (measured, this sandbox; Kaggle's 4-CPU notebooks are comparable *(guess)*);
+  - part B, about 1–2 minutes per repository *(guess: a cold index build is 2–43 s measured, plus about 10 tool
+    calls at under 1 s each, plus the invariant checks)*, so about 20–35 minutes for 16 repositories;
+  - re-cloning, about 5 minutes;
+  - total, about **1.5 hours of CPU**, once per PRISM commit, not per session.
+- **If it ran inside the GPU cell instead:** part B alone is about 20–35 minutes per session, on the GPU clock.
+  That is about 5–8% of an 11.5-hour session. Part A does not fit the 45-minute stop margin. This is why the
+  separate cell is the default.
