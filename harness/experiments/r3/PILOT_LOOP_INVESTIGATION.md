@@ -176,6 +176,12 @@ pre-registered for parity (R3-1, R3-5), so this is out of scope for R3: an R4 ca
     example "calls `getMessage()`: not defined or imported in this file", in the digest and in section 5.
     - Render-only, low risk (output text only), about 2 hours.
     - It changes no pre-registered rule.
+  - **Correction (2026-11-09, `CONFIDENCE_DESIGN_STUDY.md` §0):** the break-check results quoted under D3 below
+    came from a probe that passed the current code as both old and new. The break check compares the anchor's
+    old code with its new code, and R3's index holds only the new code. With the old code from version control
+    (`git show HEAD:<file>`), B-08 gives the right "passes nothing for `isSync`" and B-09 the right "`traces` now
+    goes to `futures`". Only B-02's wrong statement is a real defect, an arrow-function parse bug in
+    `breaks.signature`.
   - **D3, not flagged:** the caller/signature mismatch. The existing break check is not usable as is: on the
     three start states it gave one wrong statement (B-02, "calls `async`, which is now named `getMessage`"), one
     empty result (B-08) and one half-right one (B-09, the right call, the wrong parameter named). Enabling it
