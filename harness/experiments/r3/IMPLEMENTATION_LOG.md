@@ -809,3 +809,22 @@ R3a's interpretation must make.
   - the old R4's base+delta notes become a go-live prerequisite.
 - The plan, the build list (B1–B8), R4/R5/R6 designs, go-live prerequisites and the open decisions are in
   `harness/experiments/ROADMAP_R4_R6.md`. Nothing built yet; R3a continues unchanged.
+
+## 2026-11-09: roadmap revised (user): R4 = final PRISM, every task type, touch-point workflow
+
+- Every task family (the old R3b: Family N, multi-function, refactor, delete, move, tests) and every PRISM leftover
+  is built before R4. Nothing is parked.
+- PRISM helps through the anchor's touch points, for any task type:
+  - check before writing for existing same-behaviour code;
+  - reuse existing nodes;
+  - after writing, check upstream use and downstream impact;
+  - update the anchor or downstream nodes as needed.
+- The plan is rewritten in `harness/experiments/ROADMAP_R4_R6.md`:
+  - the stages S1–S5;
+  - each task type's needs;
+  - the build list (A correctness, B new capabilities, C protocol, D families, E analysis);
+  - R4's pooled-primary design;
+  - scale (about 5–7 months to going live after R5);
+  - the open decisions.
+
+  Nothing built yet. R3a continues unchanged.

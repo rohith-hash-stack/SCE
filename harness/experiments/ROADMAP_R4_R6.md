@@ -1,176 +1,179 @@
-# Roadmap R4 → R6, and going live (adopted by the user, 2026-11-09; planning document, nothing built yet)
+# Roadmap R4 → R6, and going live (revised 2026-11-09 after the user's direction; a plan, nothing built yet)
 
-## The user's direction (recorded as given)
+## The user's direction (as given, 2026-11-09)
 
-- **R4:** PRISM helps an LLM in multi-turn tasks, with a loop-aware protocol. Any fix or implementation PRISM needs
-  is done **before** R4 runs.
-  - The problem R4 targets: coding agents do not understand the surrounding, related code (callers, callees,
-    dependents), so they give improper responses, and the user has to re-verify.
-  - PRISM already holds those relationships (the nodes and edges of its graph), so it should resolve this.
-- **R5:** a double-check, a verification run of R4's result, after R4.
-- **R6:** cross-model verification, once R5 holds.
-- **Going live:** PRISM goes live after R5 or R6. *(Noted in §6, and in `IMPLEMENTATION_LOG.md`.)*
+1. **R4 is the final PRISM.** Everything PRISM has left, including the task families earlier deferred to R3b, is
+   built and fixed **before** R4 runs. Nothing is parked.
+2. **Whatever the query or task type, the LLM should respond correctly with PRISM's help.**
+3. **PRISM helps by working through the anchor node's touch points**, whatever the task. For example, writing a new
+   function or method:
+   - **before writing:** check, inside and outside the function's scope, whether existing nodes or edges already
+     have the same behaviour;
+   - **while writing:** use existing nodes and edges inside the anchor;
+   - **after writing:** check that the nodes it uses are used correctly (upstream), and whether the nodes below it
+     are affected (downstream);
+   - **if anything is affected:** update the anchor, or the downstream nodes, as needed.
+4. **R5:** a double check of R4. **R6:** cross-model verification. **PRISM goes live after R5 or R6.**
 
-## Renumbering (this replaces the earlier assignments)
+Changes from the first version of this file: the "parked" list (§7 there) is gone. Every task family and leftover
+item is in R4's scope.
 
-| Earlier name | Source | Now |
-|---|---|---|
-| R4 = "user query → plan" | `r3/README.md` R3-1 item 7; R3-2 item 4; `r4/README.md` | **parked**, after going live (§7). The R4 name is reassigned |
-| R4 notes on base+delta divergence detection | `r4/README.md`; `AMENDMENT_R3-5.md` | **go-live prerequisite** (§6), not a research round |
-| R5 = cross-model | `r3/README.md` Decisions table "model"; R3-2 item 4 | **R6** |
-| R3b (Family N, refactor, delete, move, tests) | `r3/README.md` R3-1 item 6 | **unscheduled breadth track**, after going live (§7) |
-| "R4a/b/c" | `CONFIDENCE_DESIGN_STUDY.md` §7 | folded into R4's build (§2) |
-| "R4 plans to address" | `INTERPRETATION_NOTES.md` §4 | now correct as written: the new R4 is that round |
+## 1. The touch-point workflow, as PRISM stages
 
-`r3/README.md` and `r4/README.md` are not edited: the R3 README is hash-committed, and the old R4 file is history.
-This document is the current plan.
+One workflow for every task type. PRISM supplies a stage's facts; the agent decides and edits.
 
-## 1. What R4 claims, in measurable terms
-
-The agenda's problem has three parts, and R3's scoring already measures each:
-
-| The problem | Measured by | Where (already in the code) |
-|---|---|---|
-| The agent misses related code (a caller left unchanged) | **resolve rate** (the primary); file F1 against the developer's change | `runner.score`, `analyze.compare` |
-| The agent breaks related code (collateral damage) | **pass-to-pass tests broken** | `runner.score` (`pass_to_pass_broken`) |
-| The user has to re-verify (the agent says done, but it is not) | **unresolved after done** (a false "done"), and early done | `analyze` secondaries; `turn_flags` |
-| The agent gets stuck (loops) | **looping runs per arm** | `analyze.turn_flags` / `diagnostics` |
-
-**R4's primary claim** (same form as R3a's, for comparability):
-> With a loop-aware protocol applied to both arms, an agent with PRISM resolves more Family B tasks than the same
-> agent without PRISM. Per-task means over two seeds; Wilcoxon; α 0.05; +0.10 floor.
-
-**Pre-registered secondaries:**
-- fewer false "done" runs;
-- fewer pass-to-pass breaks;
-- fewer loops;
-- the missing-function split.
-
-## 2. What must be built before R4 runs
-
-Ordered by dependency. Costs are *guesses* unless marked.
-
-| # | Build | What it fixes (from the record) | Where in the code | Effort *(guess)* |
+| Stage | Question | Touch points | PRISM today | Gap |
 |---|---|---|---|---|
-| **B1** | **Correctness: D1**: a receiver-less call never resolves to a method; a scored winner among 2+ candidates is tentative | wrong facts (`CONFIDENCE_DESIGN_STUDY.md` §0–§1) | `src/prism/graph/concrete_builder.py` `_resolve_ambiguous_call`; `src/prism/summaries/digest.py` `_check_receiver` | 0.5 day |
-| **B2** | **Correctness: the break check** compares against the committed version (`git show HEAD:`); fix the arrow-function `signature()` parse | wrong, empty or half-right checks (§0) | `src/prism/impact/breaks.py`; `context.py` / `mcp/server.py` | 1 day |
-| **B3** | **Honest resolution, D2:** calls to names the file neither defines nor imports are listed ("not defined or imported here"; "exists in X, not imported") | silence on missing helpers: all three pilot loops | `digest.py` `_call`, `_unresolved_target`, renderer | 0.5 day |
-| **B4** | **The relational summary in `change_context`**: the closing block "What this means for the change": each caller whose call no longer fits, each missing callee | the agent does not see what the relationships imply; the core of the agenda | `src/prism/impact/context.py` `render` (from B2 and B3) | 0.5 day |
-| **B5** | **Post-edit verification, a new PRISM tool** (working name `prism_check_changes`, no arguments): after the agent's edits, every changed function (the working tree against `HEAD`) checked against its callers and callees. It reports calls that still do not fit, callers not yet updated, missing names, and which edits are consistent | the user having to re-verify: PRISM does that check. Its output changes as the tree changes, so it is **not identical on repeat**, and a re-query brings new information (the fixed-argument loop) | new tool over `WorkingIndex.refresh()` (the R3-5 live index, which already rebuilds after edits) + `BreakChecker` + B3; served in `harness/experiments/r3/tools.py` and `src/prism/mcp/server.py` | 2 days |
-| **B6** | **Loop-aware protocol, both arms** (a protocol change, pre-registered): (a) a repeated identical call gets a short notice ("you already made this call; its result is unchanged; the last test result was …"); (b) the last test result stays pinned in the window | the model repeating itself, and early done after a nil result | `harness/experiments/r3/loop.py` (`AgentRun.run`, window rule) | 1 day |
-| **B7** | **Readable tool formats:** blast radius as a hop list with code, without the XML envelope; `prism_ask` as a ranked list, not raw JSON | machine formats served to an agent (`PILOT_LOOP_INVESTIGATION.md` §4) | `harness/experiments/r3/tools.py` | 0.5 day |
-| **B8** | Analysis additions: the false-done rate and pass-to-pass breaks as named secondaries; a repeat-notice count per arm | measuring the agenda | `harness/experiments/r3/analyze.py` | 0.5 day |
+| **S1 Exists already?** (before writing) | Does code with this behaviour already exist? Inside the anchor's scope, and outside it | functions with the same purpose, signature or structure | `prism_ask` (lexical search, no model); `new_function_context` §3 "Helpers" (ranked by search over name, signature and purpose) | **No same-behaviour detection.** Search finds name and word matches, not "does the same thing" |
+| **S2 Reuse** (while writing) | Which existing nodes should the new code call, and how is code written here? | helpers, siblings, the class's methods, conventions | `new_function_context` (group, class, helpers, style); `change_context` §5–§6 for an existing anchor | ranking ignores the graph (what similar code calls) — minor |
+| **S3 Upstream check** (after writing) | Does the new or changed code use the nodes it calls correctly? | each callee: exists? imported? arguments bind to its signature? return value used the way it returns? its errors handled? | digest facts for callees (returns, raises), with certainty; section 5 "what it depends on" | **No callee binding check.** The break check binds *callers → anchor*, never *anchor → callees*. Plus D1 (wrong targets) and D2 (missing names silent) |
+| **S4 Downstream check** (after writing) | Which nodes below are affected? | direct and transitive callers; tests reaching it; import sites; overrides | blast radius (callers); break check (callers against the new signature); `testcontext` "tests that reach it" (not served as a tool) | the break check has no pre-change version in the agent setting (B2); **no import-site list** (needed for move, rename, delete); tests-that-reach not served |
+| **S5 Update and re-check** (repeat until clean) | After the agent's updates, is everything consistent? | every function changed so far (the working tree against `HEAD`) | the live index (`WorkingIndex.refresh()`, R3-5) rebuilds after edits | **no tool runs S3 + S4 over all changed functions** |
 
-**Verification before R4** (the same discipline as before R3a):
-- unit tests for B1–B8;
-- E1–E3 on all repositories, because B1 changes graph edges;
-- the blast-radius test-code check;
-- the dry run (gold resolves, empty does not) on all tasks;
-- offline renderings of B4 and B5 on the three pilot loop tasks, checked against the developer's fix;
-- an **R4 pilot**: the 10 pilot tasks × 2 arms under the new protocol, 20 runs, about 1.3 GPU-hours *(measured
-  pilot pace)*.
+S5 is also the answer to the loop finding. Its output depends on the current tree, so it changes after every edit.
+A re-check after a real update returns new information, unlike re-asking the fixed-argument context tools.
 
-**Total:** about **7 days of code** plus about **3–4 days of verification and the pilot** *(guess)*.
+## 2. Task types: what each needs
 
-**Parity check:**
-- B1–B5 and B7 change PRISM's tools only. That is the treatment, and the arms differ there by design.
-- B6 changes the loop for **both** arms identically.
-- B5 has no baseline counterpart, which is the point of R4. Baseline keeps `run_tests`, which also changes with the
-  tree, so both arms keep a "what is the state now?" tool.
+"Whatever task type" means a task family per type. Each family needs a PRISM entry point, a source of real tasks
+(mined commits), and an automatic oracle (how a run is scored).
 
-## 3. R4's design
+| Task type | PRISM entry stages | Tasks: source | Oracle (scoring) | Status |
+|---|---|---|---|---|
+| **Update callers of a changed function** (Family B) | S3, S4, S5 on the anchor | mined (`mine.py` B) | hidden tests: fail-to-pass and pass-to-pass | **ready** (R3a's 80) |
+| **Write a new function or method** (Family N) | S1, S2, then S3, S4, S5 | mined (`mine.py` N) | hidden tests | tools ready; **pool 23** (needs about 10–15 more repositories; `r3/pilot/README.md`) |
+| **Multi-function feature** | S1, S2 per new function, then S3–S5 across them | **no miner**: commits adding 2 or more production functions with tests | hidden tests | new miner |
+| **Refactor** (behaviour kept) | S4, S5 (every caller still fits; nothing else changes) | **no miner**: commits with no test change, or tests changed only mechanically *(guess)* | pass-to-pass only (no fail-to-pass), plus "the refactor is done": a structural check against the developer's change *(design needed)* | new miner + **new oracle** |
+| **Delete** | S4, S5 (every caller and import updated or removed) | **no miner**: commits removing a function | pass-to-pass, plus the symbol gone, plus no dangling references (the index answers that) | new miner + oracle |
+| **Move** (between files or modules) | S4 with **import sites**, then S5 | **no miner**: commits moving a definition | pass-to-pass, plus the symbol at its new path, plus old imports updated | new miner + **new PRISM tool** (import sites) |
+| **Write tests** | `testcontext` (target, callers, existing tests, conventions), then S5 | mined: commits adding tests for existing code | the written tests pass on the developer's code and **fail on the parent** (or on a seeded mutant) | `testcontext` exists, not served; new oracle. The suite's earlier test task was invalid through truncation (`reports/r1/REPORT.md`) |
+| **(Plain-language request → plan)** | S1 first (what exists), then the matching type | needs a task design (the developer's commit message as the request?) | as the matching type | **decision needed**: "whatever query type" may include it. It was the old R4 (`r4/README.md`) |
 
-- **Arms:**
-  - PRISM (B1–B7) + protocol, against BASELINE + protocol. Same model (Qwen2.5-Coder 14B q8), seeds 42 and 1001,
-    the turn cap from R4's pilot, the same budget.
-  - R3a (the old tools, the old protocol) is the reference for "what changed", as a cross-round comparison.
-- **Optional third arm,** to separate the tools' effect from the protocol's:
-  - PRISM-old + protocol, i.e. R3a's PRISM under R4's protocol.
-  - It costs +50% runs, but it makes it attributable which part helps.
-  - **Decision needed.**
-- **Tasks:** R4 is designed after R3a's result is read, so R3a's 80 tasks are no longer unseen.
-  - Two options. **Decision needed.**
-    - (a) **R4 on R3a's 80 tasks, labelled development.** The confirmation is R5 on fresh tasks, the R2 pattern
-      (development, then held-out).
-    - (b) R4 on fresh tasks too, which means two mining efforts.
-  - Option (a) matches "R5 = double-check".
-- **Size:** 80 tasks × 2 arms × 2 seeds = 320 runs, about 38 GPU-hours *(measured R3a pace: 428 s per run)*, about
-  4 Kaggle sessions. That is about 480 runs with the third arm.
-- **Interim look:** as R3-1, at 40 tasks, with R3-9's α 0.05 (interim p < 0.0031, final p < 0.0490).
+## 3. The build list (everything PRISM has left)
 
-## 4. R5: the double check
+PRISM never calls a model. Every new capability below is deterministic, from the index, the parse trees, the
+graph and git. Costs are *guesses*.
 
-- **What it verifies:** R4's primary, with the same frozen code, protocol, model, seeds, cap and analysis, on
-  **fresh held-out tasks** never used for design.
-- **The claim:** R4's result replicates. The same direction, and significant at α 0.05; or, if R4 was not shown,
-  R5 tests the same pre-registered hypothesis once more. No new hypothesis.
-- **Tasks:** Family B, mined the same way, from repositories not used in R3a or R4 (the held-out rule of R2).
-  About 80 tasks; about 16 repositories at 5–10 tasks each *(guess, from R3a's yield)*.
-  - The window starts after the R6 models' training cutoffs, so R6 can reuse R5's tasks (§5).
-- **Cost:**
-  - mining and gating 1–2 weeks *(guess)*;
-  - 320 runs, about 4 sessions;
-  - no new code (frozen).
-- **R5 also measures** cross-session reproducibility: a small repeat of 10 R4 runs, the same seeds, to size session
-  noise before any cross-round claim.
+**A. Correctness (needed by every stage)**
 
-## 5. R6: cross-model verification
+| # | Build | Effort |
+|---|---|---|
+| A1 | D1: a receiver-less call never resolves to a method; a scored winner is tentative (`concrete_builder._resolve_ambiguous_call`, `digest._check_receiver`) | 0.5 day |
+| A2 | Break check against the committed version (`git show HEAD:`); arrow-function `signature()` parse fix (`impact/breaks.py`) | 1 day |
+| A3 | D2: calls to names the file neither defines nor imports are listed, embedded ones included (`digest._call`) | 0.5 day |
 
-- **The question:** does PRISM's effect hold, or change, with the model?
-- **The training-cutoff constraint:** a model may have seen commits before its cutoff.
-  - Same-family models released with the current one (Qwen2.5-Coder 7B and 32B, November 2024) are clean on any
-    task after 2024-12.
-  - A newer model family needs tasks after its own cutoff. So R5's held-out window should start after the newest
-    model R6 will use (`ROADMAP_SYNTHESIS.md` §5).
-- **Minimal R6:**
-  - Qwen2.5-Coder 32B (capability up) and 7B (capability down), both arms, on R5's tasks.
-  - About 640 runs, about 12 sessions *(guess; 32B about 2× slower)*.
-  - 32B fitting on T4×2 with a 20k context is **unverified** and must be checked first.
-- **Optional:** one other model family, restricted to tasks after its cutoff.
+**B. New capabilities (the stages' gaps)**
+
+| # | Build | Stage | Effort |
+|---|---|---|---|
+| B1 | **Same-behaviour detection** — candidates with evidence, never a verdict. (i) signature and name and purpose search (exists); (ii) structural match: the same callee set and the same digest facts (returns, raises, state changes); (iii) a normalized-AST fingerprint (identifiers and literals abstracted) for near-clones. Inside the anchor's scope (file, class) and outside (repository) | S1 | 2–3 days |
+| B2 | **Callee binding check (upstream)**: for each call in new or changed code: the target resolved (A1, A3), the arguments bound to the callee's signature (the break check's `bind`, in the other direction), the return value's use against what it returns, its raises against the enclosing catches | S3 | 2 days |
+| B3 | **Import-site list**: every import of a symbol (Python `import` / `from`; JS/TS `import` / `require` / re-exports) | S4 (move, delete, rename) | 1–1.5 days |
+| B4 | **`testcontext` served as a tool**, plus "tests that reach this function" in S4 | S4, tests | 0.5 day |
+| B5 | **The post-edit check tool** (working name `prism_check_changes`, no arguments): S3 + S4 over every function changed in the working tree against `HEAD`, with each issue's certainty; empty when consistent | S5 | 2 days |
+| B6 | **The relational summary** ("What this means for the change") closing `change_context` and `new_function_context`: the S3/S4 facts for the anchor in one block | S2–S4 | 0.5 day |
+| B7 | Readable formats: blast radius as a hop list with code (no XML envelope); `prism_ask` as a ranked list (no raw JSON) | all | 0.5 day |
+
+**C. Protocol (both arms, identical; pre-registered)**
+
+| # | Build | Effort |
+|---|---|---|
+| C1 | The repeat notice: an identical repeated call is answered with a short notice ("already called; result unchanged; last tests: …") | 0.5 day |
+| C2 | The last test result pinned in the window | 0.25 day |
+| C3 | The system prompt names the workflow neutrally, for both arms ("check what exists, make the change, check what it affects, run the tests"), with no PRISM-specific wording | 0.25 day |
+
+**D. Task families (miners, gates, oracles)**
+
+| # | Build | Effort |
+|---|---|---|
+| D1 | Family N: mine about 10–15 more repositories to reach about 80 | 1–1.5 weeks (mining + gating) |
+| D2 | Multi-function feature: miner + gate | 1 week |
+| D3 | Refactor: miner + gate + the "refactor done" oracle | 1–1.5 weeks |
+| D4 | Delete: miner + gate + oracle | 1 week |
+| D5 | Move: miner + gate + oracle | 1 week |
+| D6 | Tests: miner + gate + the "fails on the parent" oracle | 1–1.5 weeks |
+| D7 | Per-family pilots (10 tasks × 2 arms each) | about 1 GPU-hour each |
+
+**E. Analysis and verification**
+
+| # | Build | Effort |
+|---|---|---|
+| E1 | Per-family scoring paths; the named secondaries (false done, pass-to-pass broken, loops, S1 duplicates written: a new function that duplicates an existing one, detected by B1 after the run) | 1 day |
+| E2 | Re-verification after A1 (graph edges change): E1–E3, the blast-radius test-code check, dry runs on every family | 2–3 days |
+
+**Totals *(guess)*:**
+- PRISM and protocol (A–C): about **12–14 days of code**.
+- Task families (D): about **6–8 weeks**. Mining and gating is the long pole: R3a's Family B took about a week.
+- Verification and pilots: about **1 week**.
+- **About 2.5–3 months of single-builder work before R4 runs.**
+
+## 4. R4's design (final PRISM)
+
+- **Arms:** PRISM (A + B) + protocol (C), against BASELINE + protocol (C). Same model, seeds 42 and 1001, the cap
+  set by R4's pilots.
+  - Optionally a third arm, PRISM as in R3a + protocol, to separate the new PRISM from the protocol.
+- **Families:** 7 (B, N, multi-function, refactor, delete, move, tests), plus the request→plan type if included.
+- **The primary hypothesis**, one test, so Holm does not split α:
+  > Pooled over all families, the agent with PRISM resolves more tasks than without (per-task means over two
+  > seeds; Wilcoxon; α 0.05; +0.10 floor).
+
+  Per-family results are pre-registered secondaries, each with its own power statement.
+- **Size and power *(guess)*:**
+  - 80 tasks per family × 7 families × 2 arms × 2 seeds = 2,240 runs, about 270 GPU-hours (428 s per run, R3a's
+    pace). That is about 25 Kaggle sessions, **about 9 weeks of quota** (about 30 GPU-hours a week).
+  - At 40 per family: 1,120 runs, about 4.5 weeks. The pooled primary keeps +0.10 power (280 tasks). Each family
+    alone detects only about +0.20.
+  - **Decision needed:** tasks per family.
+
+## 5. R5 (double check) and R6 (cross-model): unchanged in shape, larger in size
+
+- **R5:** R4's frozen code and protocol, on fresh held-out tasks from repositories never used, in every family.
+  The same pooled primary.
+  - This needs a second round of mining per family. That is the most expensive part of R5 *(about 4–6 weeks)*.
+  - A smaller R5 (fewer families, or 40 per family) is a decision for after R4.
+- **R6:** Qwen2.5-Coder 7B and 32B (same release, so clean on any task after 2024-12), both arms, on R5's tasks.
+  - A newer model family needs tasks after its own training cutoff, so R5's mining window should start late
+    enough.
 
 ## 6. Going live (noted, as asked)
 
-**PRISM goes live after R5 or R6.**
-- **Proposed criterion, for your decision:** live after R5 if R4 and R5 agree on the primary. R6 then shows how far
-  the result generalizes across models, but does not gate going live for the tested model.
-- Waiting for R6 makes going live model-general, at about 4–6 more weeks.
+**PRISM goes live after R5 or R6.** The proposed criterion, for your decision: after R5, if R4's and R5's pooled
+primaries agree; or after R6, for a model-general result.
 
-**Engineering prerequisites for live use.** These are not research, but they gate going live:
+**Engineering prerequisites** (not research, but they gate going live):
+- an incremental index (base+delta, `r4/README.md`'s notes; a cold build is 2–43 s *(measured)*);
+- divergence warnings;
+- a real tokenizer (tiktoken falls back to a regex behind proxies);
+- test hygiene (`BACKLOG.md`);
+- packaging and serving the MCP server as a product.
 
-| Item | Why it matters live | Source |
-|---|---|---|
-| **Incremental index (base+delta)** | A cold index build is 2–43 s per repository *(measured: B-09's took 33 s)*. A live agent edits continuously. | `r4/README.md` (the old R4 notes: trail-code memoization, codegraph edge drift) |
-| **Divergence warnings** | Live edits and the index must not silently disagree | `AMENDMENT_R3-5.md` (R3-5's parse gate is the start) |
-| **Tokenizer** | PRISM falls back to a regex tokenizer when tiktoken cannot download (seen behind this environment's proxy), so budgets are approximate | `ROADMAP_SYNTHESIS.md` item 29 |
-| **Test hygiene** | 25 pre-existing failing tests, a flaky wall-clock test | `harness/experiments/BACKLOG.md` |
-| **Packaging and serving** | The MCP server as a product: setup, repository registration, latency targets | not in the record (new) |
+## 7. Honest scale
 
-## 7. Parked until after going live
-
-- **Planning from a request** (the old R4): the agent starts from a natural-language request.
-- **New task families** (the old R3b):
-  - Family N (23 gated; not viable without about 10–15 more repositories);
-  - refactor, delete, move (needs an import-site tool), tests (needs `testcontext` wired), multi-function features.
-- **Section attribution for `new_function_context`** (`r3/README.md`, R2 sign-off item 4).
-- **A skill-file round; the "bugs" type; the blast2 explanatory test** (`ROADMAP_SYNTHESIS.md` items 24–26).
-
-## 8. Timeline *(guess; Kaggle quota about 30 GPU-hours a week)*
-
-| Step | Time |
+| Phase | Time *(guess)* |
 |---|---|
-| R3a finishes (about 4 sessions, about 38 GPU-hours) | 1–1.5 weeks; the R4 build runs in parallel |
-| R4 build (B1–B8) + verification + R4 pilot | about 2–2.5 weeks |
-| R4 runs (320; 480 with the third arm) | about 1.5 weeks |
-| R5 mining (can overlap R4's runs) + R5 runs | about 2 weeks |
-| **Go live (after R5)** | **about 6–7 weeks from now** |
-| R6 (about 12 sessions) | about 4–6 weeks more → **about 3 months** if going live waits for R6 |
+| R3a finishes | 1–1.5 weeks (running) |
+| A–C (PRISM + protocol) + E2 verification | about 4 weeks (in parallel with mining) |
+| D (six families' mining, gating, oracles) | about 6–8 weeks (the long pole) |
+| R4 runs | about 4.5 weeks (40 per family) to about 9 weeks (80 per family) |
+| R5 (mining + runs) | about 6–10 weeks |
+| **Going live after R5** | **about 5–7 months from now** |
+| R6 | about 6–8 weeks more |
 
-## 9. Decisions needed from you (none blocks starting B1–B3)
+This is much larger than the earlier R4. That follows directly from "every task type before R4", and it is the
+right call only if a staged release is not wanted.
 
-1. **R4's third arm** (PRISM-old + protocol), to separate tools from protocol: yes or no.
-2. **R4's tasks:** R3a's 80 as development, with R5 as the held-out confirmation; or fresh tasks for R4 too.
-3. **The protocol's components** (B6): the repeat notice plus a pinned test line, or a different set from
-   `ROADMAP_SYNTHESIS.md` §4.
-4. **Going live:** after R5 (model-specific) or after R6 (model-general).
-5. **Whether B5** (post-edit verification) is in R4. It is the most direct answer to "the user has to re-verify",
-   and it is also the largest single build.
+**The alternative, if time matters:** run R4 family by family (B first, which is ready), with the same frozen PRISM.
+That spreads the GPU cost and gives early results. **Decision needed.**
+
+## 8. Decisions needed
+
+1. **Task families in R4:** all 7, and whether the plain-language request → plan type is one of them.
+2. **Tasks per family:** 40 (pooled power kept, per-family only about +0.20) or 80.
+3. **One R4, or staged by family** (with the same frozen PRISM).
+4. **The third arm** (R3a's PRISM + the new protocol): yes or no.
+5. **The offline summary index** (`prism summarize` writes one-line summaries with a model, offline; search can use
+   them). Allowed as a pre-built asset, or excluded so PRISM stays model-free end to end?
+6. **Going live:** after R5 or after R6.
+
+**What can start now without a decision:** A1–A3 (correctness), B2 (callee binding check) and B5 (post-edit check).
+Every option needs them.
