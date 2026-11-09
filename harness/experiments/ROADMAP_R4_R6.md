@@ -311,7 +311,20 @@ without coverage.
     against 100 ms.
   - 1 real behaviour change, `test_harness_metrics.py::test_all_four_existing_blast_seeds_pass_the_richness_screen`:
     `django.db.models.query.QuerySet.get` now has 2 direct and 5 transitive callers. At `bc53e055`, where the
-    test was added, it had 34 and 8. The cause is being bisected (§4a).
+    test was added, it had 34 and 8.
+  - **Bisected: drift, not a regression.** `934f83c8` (2026-10-07, "universal call-resolution fixes") took it
+    from 34+8 to 0+0. Its rule, "builtin method names (dict/list/str/…) are never guessed onto repo methods for
+    receivers of unknown type", removed false links.
+  - All 34 old "callers" were `dict.get` or request lookups, not `QuerySet.get`: `kwargs.get("using")`,
+    `request.GET.get(...)`, `self.options.get("proxy")`, the test `RequestFactory`'s `self.factory.get(...)`.
+    The commit's own runtime check says the same: "QuerySet.get callers never seen at runtime 18 → 0".
+  - So the seed's "20 or more callers" was only ever true because of those false links. **It does not affect
+    R4's measurement**: it is a correctness gain.
+  - **Recommended action (your decision; not done):** replace `QuerySet.get` in that test's seed list with a
+    Django seed that passes the 20-caller screen on today's graph.
+  - **A real limit it exposes** (spec T2 / L1): Django's real `QuerySet.get` calls go through managers
+    (`Model.objects.get(...)`, a descriptor-returned proxy). PRISM does not link them, and does not say so. That
+    is a "not followed (dynamic)" case the spec requires PRISM to report.
 
 **The 46 skips:**
 
