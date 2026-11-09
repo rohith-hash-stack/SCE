@@ -238,3 +238,37 @@ def test_fallback_handles_mixed_compound_and_string_text_without_crashing() -> N
         n = _fallback_count_tokens(text)
         assert n > 0
         assert n == _fallback_count_tokens(text)  # deterministic
+
+
+# --------------------------------------------------------------------- #
+# The vendored asset is verified before use (2026-11-09, option (b))
+# --------------------------------------------------------------------- #
+def test_a_mismatched_vendored_asset_is_refused(tmp_path, monkeypatch) -> None:
+    import pytest
+
+    import prism.slicer.tokenizer as T
+
+    bad = tmp_path / "cl100k_base.tiktoken"
+    bad.write_bytes(b"not the real merge table\n")
+    monkeypatch.setattr(T, "OFFLINE_BPE_ASSET_PATH", bad)
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        T.get_offline_bpe_encoding()
+
+
+def test_the_vendored_asset_matches_tiktokens_own_pinned_hash() -> None:
+    import hashlib
+
+    import pytest
+    import tiktoken_ext.openai_public as openai_public
+
+    import prism.slicer.tokenizer as T
+
+    # the constant is tiktoken's own expected hash for cl100k_base, not a copy that could drift from it
+    import inspect
+    assert T.CL100K_SHA256 in inspect.getsource(openai_public.cl100k_base)
+    if not T.OFFLINE_BPE_ASSET_PATH.exists():
+        pytest.skip("no vendored cl100k_base asset in this checkout (fetched on Kaggle: kaggle/fetch_tokenizer_cell.py)")
+    assert hashlib.sha256(T.OFFLINE_BPE_ASSET_PATH.read_bytes()).hexdigest() == T.CL100K_SHA256
+    enc = T.get_offline_bpe_encoding()
+    assert enc.encode("hello world") == [15339, 1917]           # cl100k_base's own ids
+    assert enc.name == "cl100k_base"
