@@ -266,6 +266,22 @@ without coverage.
 | **A. Corpus suite** | the 18 files above | their own pinned corpora, fetched by the resolver | exists; runs once per PRISM code commit a round uses (it does not depend on the round's clones) |
 | **B. Round-repository smoke** | for every repository the round clones, at the round's own revisions: index build; each served tool once on 3 anchors from the round's tasks; the cross-feature invariants (callers agree; no "possible" rendered "certain"; no test code with `include_tests=False`; the live index after a scripted edit equals a cold build) | the round's clones | **to build**, alongside the golden tests' cross-feature tests (the same invariant code, parametrized over real clones) |
 
+**Where each part runs (decided 2026-11-09, replacing the default below):**
+- **Part A runs on GitHub Actions:** `.github/workflows/real-codebase-tests.yml`, manually triggered with the PRISM
+  commit to test.
+  - One job per corpus (django, fastapi, express, trpc), then a multi-corpus job for the three files that index
+    several corpora, then an aggregation job. That is all 18 files.
+  - The jobs run one after another on standard `ubuntu-latest` runners (`needs:` chain, `if: always()`); a fresh
+    runner per job cleans the disk.
+  - The test steps are `continue-on-error`. Each job uploads its JUnit files, and the aggregation job writes a
+    per-file table and a failure list to the run summary.
+  - The install list includes express's npm dependencies (`npm install --omit=dev --ignore-scripts`). That
+    resolves today's 4 environment failures, the missing `etag`. Express has no lockfile, so npm picks versions
+    within express's own ranges.
+  - GitHub's runners have network access, so `tiktoken` loads the real encoding there.
+  - No container image: setup (pip and the corpus clones) takes minutes, not enough to justify one.
+- **Part B stays in the Kaggle GPU session** of each round, on the round's own clones.
+
 ### 2. Mechanics
 
 | Option | What breaks | What does not | Verdict |

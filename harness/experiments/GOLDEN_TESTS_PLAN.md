@@ -28,6 +28,7 @@ Two new directories: `tests/fixtures/golden/py_repo/` and `tests/fixtures/golden
 | a function changed in the working tree (an uncommitted edit adding a required parameter) with an unchanged caller | V2: the break check against the committed version |
 | a near-duplicate pair (the same body, identifiers renamed) | N1 (pinned now as "not detected"; changes when N1 is built) |
 | raises, empty returns and state changes in the digest | T1, T3 |
+| **Manager-proxied calls** (`KNOWN_LIMITATIONS.md`): a `Manager` class whose methods proxy a `QuerySet` class, `objects = Manager()` on a model class, and a call `Book.objects.get(pk=1)` | T2, Q2, L1. The query is `prism_change_context` and `prism_blast_radius` on `QuerySet.get`. **Expected output today: silent on the manager call**: the caller is not listed, and no "not followed" line appears. The golden file changes when the fix lands. |
 
 **`ts_repo` (TypeScript / JavaScript):**
 
@@ -101,6 +102,13 @@ makes committing the encoding (`DRIFT_INVESTIGATION.md`, option 2) a prerequisit
   - the `.prism/` directories already under `tests/fixtures/` are removed from version control and added to
     `.gitignore`.
 - **The 5 drift failures:** as decided after `DRIFT_INVESTIGATION.md`.
+- **A stale-looking xfail:** `tests/test_feature_masks_cache_parity.py` (the `@pytest.mark.xfail` at line 77) passed
+  unexpectedly in the real-codebase run of 2026-11-09. The marker documents an **intermittent** failure. One pass
+  does not prove it is fixed, so before removing it, check its history and run it several times. Batched with the
+  next hygiene pass; not urgent.
+- **The timing tests** (`test_fuzzy_seed_suggestion`, `test_mtime_invalidation`: wall-clock limits) stay as they
+  are: known-flaky, in `BACKLOG.md`. If more than two such tests become flaky, add `pytest.mark.flaky` with
+  retries.
 
 ## 6. Order of work
 

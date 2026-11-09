@@ -1,0 +1,202 @@
+# PRISM's real-codebase tests (test hygiene per round, part A; harness/experiments/ROADMAP_R4_R6.md).
+#
+# The 18 test files that index pinned benchmark corpora (benchmarks/corpora/pinned_commits.json), one job per
+# corpus, run one after another on standard runners. A fresh runner per job cleans the disk. A failing test never
+# stops the chain (continue-on-error), and each job uploads its JUnit results. The last job aggregates them.
+#
+# What this proves: PRISM does not crash on real code, and its real parsing and linking paths run. It does not
+# prove tool outputs are correct; the golden tests do that (harness/experiments/GOLDEN_TESTS_PLAN.md).
+#
+# Manual trigger only: Actions -> "PRISM real-codebase tests" -> Run workflow, with the PRISM commit to test.
+name: PRISM real-codebase tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      prism_sha:
+        description: "PRISM commit SHA to test (blank: the branch's head)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  django:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
+      - name: Install PRISM
+        run: python -m pip install -q -e ".[dev]"
+      - name: Fetch the pinned corpus
+        run: python -c "from benchmarks.corpora.resolver import resolve; print(resolve('django'))"
+      - name: Run the tests, one file per process
+        continue-on-error: true
+        run: |
+          mkdir -p results
+          for f in tests/phase_c/test_traversal_layer.py tests/phase_d/test_causal_path.py tests/test_causal_path.py \
+                   tests/test_feature_masks_cache_parity.py tests/test_fuzzy_seed_suggestion.py \
+                   tests/test_index_cache_consistency.py tests/test_index_cache_decorated_parity.py \
+                   tests/test_mtime_invalidation.py tests/test_prism_selection_regressions.py \
+                   tests/test_task_reachability.py tests/test_two_pass_benchmark.py tests/test_two_pass_engine.py; do
+            python -B -m pytest -q -p no:cacheprovider -rfEs --junitxml="results/$(echo $f | tr '/' '_').xml" "$f" || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: results-django, path: results/ }
+
+  fastapi:
+    needs: django
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
+      - name: Install PRISM
+        run: python -m pip install -q -e ".[dev]"
+      - name: Fetch the pinned corpus
+        run: python -c "from benchmarks.corpora.resolver import resolve; print(resolve('fastapi'))"
+      - name: Run the tests
+        continue-on-error: true
+        run: |
+          mkdir -p results
+          python -B -m pytest -q -p no:cacheprovider -rfEs --junitxml=results/tests_test_three_pass_integration.py.xml \
+            tests/test_three_pass_integration.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: results-fastapi, path: results/ }
+
+  express:
+    needs: fastapi
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}" }
+      - name: Install PRISM
+        run: python -m pip install -q -e ".[dev]"
+      - name: Fetch the pinned corpus and its npm dependencies
+        # express's own dependencies (etag, cookie, ...): the external-dependency tests read them from node_modules.
+        # Install scripts are not run.
+        run: |
+          python -c "from benchmarks.corpora.resolver import resolve; print(resolve('express'))"
+          cd .benchmarks/corpora/express && npm install --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Run the tests
+        continue-on-error: true
+        run: |
+          mkdir -p results
+          python -B -m pytest -q -p no:cacheprovider -rfEs --junitxml=results/tests_test_two_pass_root_imports.py.xml \
+            tests/test_two_pass_root_imports.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: results-express, path: results/ }
+
+  trpc:
+    needs: express
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
+      - name: Install PRISM
+        run: python -m pip install -q -e ".[dev]"
+      - name: Fetch the pinned corpus
+        run: python -c "from benchmarks.corpora.resolver import resolve; print(resolve('trpc'))"
+      - name: Run the tests
+        # tRPC is indexed at a subdirectory (packages/server/src); this file tests that resolution path.
+        continue-on-error: true
+        run: |
+          mkdir -p results
+          python -B -m pytest -q -p no:cacheprovider -rfEs --junitxml=results/tests_test_corpora_resolver_subdir.py.xml \
+            tests/test_corpora_resolver_subdir.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: results-trpc, path: results/ }
+
+  multi-corpus:
+    # The three files that index several corpora in one process.
+    needs: trpc
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}" }
+      - name: Install PRISM
+        run: python -m pip install -q -e ".[dev]"
+      - name: Fetch the pinned corpora
+        run: |
+          python -c "from benchmarks.corpora.resolver import resolve; [print(resolve(c)) for c in ('django', 'fastapi', 'express', 'trpc')]"
+          cd .benchmarks/corpora/express && npm install --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Run the tests, one file per process
+        continue-on-error: true
+        run: |
+          mkdir -p results
+          for f in tests/benchmarks/test_harness_metrics.py tests/test_smoke_corpus.py tests/test_layer4_runner.py; do
+            python -B -m pytest -q -p no:cacheprovider -rfEs --junitxml="results/$(echo $f | tr '/' '_').xml" "$f" || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: results-multi-corpus, path: results/ }
+
+  aggregate:
+    needs: [django, fastapi, express, trpc, multi-corpus]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: "results-*", path: all }
+      - name: Summarize
+        run: |
+          python - <<'EOF'
+          import glob, os, xml.etree.ElementTree as ET
+          rows, failures = [], []
+          for path in sorted(glob.glob("all/*/*.xml")):
+              job = path.split(os.sep)[1].removeprefix("results-")
+              for suite in ET.parse(path).getroot().iter("testsuite"):
+                  n, f, e, s = (int(suite.get(k, 0)) for k in ("tests", "failures", "errors", "skipped"))
+                  rows.append((job, os.path.basename(path)[:-4], n, n - f - e - s, f + e, s, float(suite.get("time", 0))))
+                  for case in suite.iter("testcase"):
+                      bad = case.find("failure") if case.find("failure") is not None else case.find("error")
+                      if bad is not None:
+                          failures.append((job, f"{case.get('classname')}::{case.get('name')}",
+                                           (bad.get("message") or "").splitlines()[0][:200] if bad.get("message") else ""))
+          out = ["# PRISM real-codebase tests", "", "| Job | File | Tests | Passed | Failed | Skipped | Seconds |",
+                 "|---|---|---|---|---|---|---|"]
+          out += [f"| {j} | `{f}` | {n} | {p} | {x} | {s} | {t:.0f} |" for j, f, n, p, x, s, t in rows]
+          tot = [sum(r[i] for r in rows) for i in (2, 3, 4, 5)]
+          out += [f"| **total** | | {tot[0]} | {tot[1]} | {tot[2]} | {tot[3]} | {sum(r[6] for r in rows):.0f} |", ""]
+          if failures:
+              out += ["## Failures (categorize: environment / real bug / drift)", ""]
+              out += [f"- **{j}** `{name}`: {msg}" for j, name, msg in failures]
+          text = "\n".join(out) + "\n"
+          open("summary.md", "w").write(text)
+          open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(text)
+          print(text)
+          EOF
+      - uses: actions/upload-artifact@v4
+        with: { name: summary, path: summary.md }

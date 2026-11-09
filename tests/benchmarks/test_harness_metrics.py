@@ -1314,11 +1314,15 @@ def test_validate_blast_seed_richness_accepts_real_sets_not_just_counts():
     reason="requires the real pinned Django checkout already resolved on disk - not a network fetch, "
     "but this file's own docstring promises no external dependency, so skip cleanly when it's absent",
 )
-def test_all_four_existing_blast_seeds_pass_the_richness_screen():
-    """Real, not synthetic: proves the Gap 4 substitute seeds (reverse,
-    QuerySet.get, Field.clean, Options.get_field) actually satisfy the
-    >=20-real-caller screen this refinement introduces, against the real
-    pinned Django 4.2.30 checkout."""
+def test_existing_blast_seeds_pass_the_richness_screen():
+    """Real, not synthetic: the Gap 4 substitute seeds that still satisfy the >=20-real-caller screen, against the
+    real pinned Django 4.2.30 checkout.
+
+    `django.db.models.query.QuerySet.get` was one of them until 934f83c8 (2026-10-07), which stopped guessing builtin
+    method names (`dict.get`) onto repo methods for receivers of unknown type: its 34 statically linked callers were
+    all `kwargs.get`, `request.GET.get`, `self.options.get` or `RequestFactory.get` calls, none a real QuerySet.get
+    call. It is checked separately below. `django.apps.registry.Apps.get_model` (96 callers on 2026-11-09) takes its
+    place here."""
     from prism.cli import build_pipeline
 
     from benchmarks.ground_truth.schema import validate_blast_seed_richness
@@ -1327,13 +1331,29 @@ def test_all_four_existing_blast_seeds_pass_the_richness_screen():
     builder, _ = build_pipeline(".benchmarks/corpora/django")
     seeds = [
         "django.urls.base.reverse",
-        "django.db.models.query.QuerySet.get",
+        "django.apps.registry.Apps.get_model",
         "django.forms.fields.Field.clean",
         "django.db.models.options.Options.get_field",
     ]
     for seed in seeds:
         direct, transitive = compute_direct_and_transitive_callers(builder, seed)
         validate_blast_seed_richness(direct, transitive)  # must not raise
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "KNOWN_LIMITATIONS.md, 'Manager-based calls': Django's real QuerySet.get calls go through managers "
+    "(Model.objects.get), which PRISM does not link, so the T13 task django_t13_002_blast_queryset_get's seed has "
+    "only 7 static callers (2026-11-09). When manager calls are linked this passes, and strict xfail fails, so the "
+    "limitation entry, this test and the task are revisited together."))
+def test_queryset_get_seed_passes_the_richness_screen_once_manager_calls_are_linked():
+    from prism.cli import build_pipeline
+
+    from benchmarks.ground_truth.schema import validate_blast_seed_richness
+    from benchmarks.metrics.bccr import compute_direct_and_transitive_callers
+
+    builder, _ = build_pipeline(".benchmarks/corpora/django")
+    direct, transitive = compute_direct_and_transitive_callers(builder, "django.db.models.query.QuerySet.get")
+    validate_blast_seed_richness(direct, transitive)
 
 
 # --------------------------------------------------------------------- #
