@@ -842,3 +842,12 @@ R3a's interpretation must make.
 - Added: regression safety R1–R4 (unit coverage per module, golden tool outputs on fixtures, cross-feature
   invariants, a clean suite). "One implementation should not break another feature of PRISM."
 - The coverage baseline is being measured (`pytest --cov=prism` over the whole suite).
+
+## 2026-11-09: amendment R3-10 (the interim readiness check), between sessions 1 and 2
+
+- Session 1 ended at its deadline: 202 of 320 runs, 50 of 80 tasks complete.
+- The interim was computed although r3a-B-01 and r3a-B-02 (in the first 40) had only harness errors awaiting retry.
+  This was a readiness bug.
+- Fixed in analysis code (`AMENDMENT_R3-10.md`). The invalid computation is recorded, not interpreted
+  (`INTERPRETATION_NOTES.md` §6).
+- The analysis code is frozen again; the cell is re-rendered at the fix commit for session 2.

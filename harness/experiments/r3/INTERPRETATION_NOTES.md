@@ -28,3 +28,7 @@ section states each of them, whatever the results are.
 5. **Known PRISM defect, not fixed for R3a (D1):** a bare call to a name not in scope can resolve, by name, to a
    method of an unrelated class (pilot B-09: `set_exception`), and that method's side effects are then reported as
    the anchor's. It was seen once in the pilot, not in the R3a probe. It is part of the treatment as measured.
+6. **An invalid interim (amendment R3-10):** "An invalid interim was computed during session 1 due to a readiness
+   bug. Its direction (PRISM ≤ baseline) is not a result. If the valid interim after session 2 shows the same
+   direction, it warrants investigation — potentially the loop suppressing PRISM's score on the sample. The invalid
+   computation itself tells us nothing about the true result."

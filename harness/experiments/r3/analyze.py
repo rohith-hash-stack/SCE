@@ -110,7 +110,10 @@ def load_runs(runs_dir: str, tasks: list[dict], seeds: list[int]) -> list[dict]:
                                  **turn_flags(os.path.join(runs_dir, rid + ".jsonl"), r)})
                 elif os.path.exists(err_p):
                     e = json.load(open(err_p))
-                    rows.append({**base, "outcome": "error", "error_stage": e.get("stage"), "error": e.get("error")})
+                    # a run that died in the harness (no score file yet): retried by the next session, so it is
+                    # not finished at an interim look (amendment R3-10); at the final analysis it counts as a death
+                    rows.append({**base, "outcome": "error", "error_stage": e.get("stage"), "error": e.get("error"),
+                                 "pending_retry": True})
                 else:
                     rows.append({**base, "outcome": "missing"})
     return rows
@@ -383,12 +386,14 @@ def threshold(fam: str) -> float:
 
 
 def interim_look(rows, tasks, fam: str, seeds) -> dict:
-    """Amendment R3-1 item 3 (α from R3-9): the first INTERIM_TASKS tasks of the frozen order, all runs present.
+    """Amendment R3-1 item 3 (α from R3-9): the first INTERIM_TASKS tasks of the frozen order, every run finished
+    with a real result (R3-10: a harness error awaiting its retry is not finished).
     Stop, in either direction, if the Wilcoxon p on per-task means is below the interim boundary; the label then
     comes from the usual table at that boundary. The `invalid` checks run at the look. No futility stop."""
     order = [t["id"] for t in tasks if t["family"] == fam][:INTERIM_TASKS[fam]]
     sel = [r for r in rows if r["family"] == fam and r["task"] in set(order)]
-    missing = sorted({r["task"] for r in sel if r["outcome"] == "missing"})
+    # finished = a real result; a missing run or a harness error awaiting its retry is not (amendment R3-10)
+    missing = sorted({r["task"] for r in sel if r["outcome"] == "missing" or r.get("pending_retry")})
     if missing or len(order) < INTERIM_TASKS[fam]:
         return {"ready": False, "tasks_missing_runs": missing}
     b = interim_boundaries(len(order) / PLANNED_TASKS[fam], LOCAL_ALPHA.get(fam, ALPHA))

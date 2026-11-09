@@ -42,3 +42,19 @@ def test_the_look_waits_for_the_first_40_tasks_complete():
     tasks, rows = _rows(80, 0.9, 0.1, missing={("t05", "PRISM", 1001)})
     look = interim_look(rows, tasks, "B", SEEDS)
     assert look == {"ready": False, "tasks_missing_runs": ["t05"]}
+
+
+def test_a_harness_error_awaiting_retry_is_not_finished():
+    """Amendment R3-10: session 1's B-01/B-02 had `.error.json` (no score) and were counted as finished."""
+    tasks, rows = _rows(80, 0.9, 0.1)
+    for r in rows:
+        if r["task"] in ("t00", "t01"):
+            r.update(outcome="error", pending_retry=True)
+    assert interim_look(rows, tasks, "B", SEEDS) == {"ready": False, "tasks_missing_runs": ["t00", "t01"]}
+
+
+def test_a_loop_recorded_error_is_a_finished_run():
+    """An `error` outcome in a score file (the model call failed inside the run) is final, not retried."""
+    tasks, rows = _rows(80, 0.3, 0.3)
+    rows[0].update(outcome="error")
+    assert interim_look(rows, tasks, "B", SEEDS)["ready"] is True

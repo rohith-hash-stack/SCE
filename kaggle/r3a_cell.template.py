@@ -305,9 +305,11 @@ def guard_disk():
 
 
 def progress():
+    """Runs with a real result (a score file), tasks with all their runs so, and whether the interim's tasks - the
+    first INTERIM_TASKS of the frozen order, not any INTERIM_TASKS tasks (amendment R3-10) - are all complete."""
     done = {f[:-len(".score.json")] for f in os.listdir(OUT) if f.endswith(".score.json")}
-    complete = sum(all(f"{t['id']}__{v}__{s}" in done for v in ("PRISM", "BASELINE") for s in SEEDS) for t in RTASKS)
-    return len(done), complete
+    full = [all(f"{t['id']}__{v}__{s}" in done for v in ("PRISM", "BASELINE") for s in SEEDS) for t in RTASKS]
+    return len(done), sum(full), all(full[:INTERIM_TASKS])
 
 
 def module(args, label, push_while=False, name="harness.experiments.change_history.run"):
@@ -329,23 +331,23 @@ def module(args, label, push_while=False, name="harness.experiments.change_histo
     return proc.returncode
 
 
-n_done, n_complete = progress()
+n_done, n_complete, interim_ready = progress()
 print(f"\n[r3a] {n_done}/{N_TASKS * 2 * len(SEEDS)} runs done; {n_complete}/{N_TASKS} tasks complete", flush=True)
 deadline = CELL_START + SESSION_HOURS * 3600 - STOP_MARGIN_MIN * 60
 rc = module([os.path.join(SCE_DIR, TASKS), OUT, "--cache-py", f"{CACHE}/py", "--cache-js", f"{CACHE}/js",
              "--base-url", f"http://127.0.0.1:{PORTS[0]}", "--seeds", *map(str, SEEDS), "--turn-cap", str(TURN_CAP),
              "--deadline", str(deadline), *[f"{n}={p}" for n, p in CLONES.items()]], "r3a", push_while=True,
             name="harness.experiments.r3.pilot_run")
-n_done, n_complete = progress()
+n_done, n_complete, interim_ready = progress()
 module([os.path.join(OUT, "r3a_analysis.json"), "--runs", OUT, "--tasks", os.path.join(SCE_DIR, TASKS),
         "--seeds", *map(str, SEEDS), "--covariates", os.path.join(SCE_DIR, COVARIATES), "--interim"], "r3a_analysis",
        name="harness.experiments.r3.analyze")
 open(os.path.join(OUT, "progress.json"), "w").write(json.dumps({
     "runs_done": n_done, "runs_total": N_TASKS * 2 * len(SEEDS), "tasks_complete": n_complete,
-    "interim_reached": n_complete >= INTERIM_TASKS, "code": CODE_COMMIT, "tasks_sha256": TASKS_SHA}, indent=1))
+    "interim_reached": interim_ready, "code": CODE_COMMIT, "tasks_sha256": TASKS_SHA}, indent=1))
 push_results(f"r3a: {n_done} runs, {n_complete}/{N_TASKS} tasks complete @ {CODE_COMMIT[:7]} ({SUMMARIZER})")
 print(f"\n[r3a] {n_done}/{N_TASKS * 2 * len(SEEDS)} runs done; {n_complete}/{N_TASKS} tasks complete"
-      + (" (interim look reached)" if n_complete >= INTERIM_TASKS else ""), flush=True)
+      + (" (the interim's first 40 tasks are complete)" if interim_ready else ""), flush=True)
 if rc == 3:
     print("\n=== SESSION DONE: run the cell again in a new session to continue ===", flush=True)
 elif rc != 0:
