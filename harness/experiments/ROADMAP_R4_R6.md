@@ -18,6 +18,42 @@
 Changes from the first version of this file: the "parked" list (§7 there) is gone. Every task family and leftover
 item is in R4's scope.
 
+## Spec: PRISM's required behaviour (accepted by the user, 2026-11-09)
+
+**Stages S1–S5 below are PRISM's behaviour definition, and they drive everything before R4.** The full spec, with
+requirement IDs and acceptance criteria, is `harness/experiments/PRISM_REQUIRED_BEHAVIOR.md`:
+- Q1–Q6: answer quality;
+- T1–T10: touch points;
+- N1–N3: before writing;
+- V1–V5: check my changes;
+- L1–L2: limits;
+- R1–R4: regression safety;
+- the pre-R4 gate.
+
+**Approved now (2026-11-09):**
+1. **Correctness fixes:** D1, D2, and the break check against the committed version, including the `async`
+   arrow-function parse bug.
+2. **Golden-output tests:** two purpose-built fixture repositories (Python, JS/TS) with every touch point plus the
+   D1/D2 traps. The outputs of `change_context`, `blast_radius`, `digest`, `new_function_context` and `prism_ask`
+   are pinned. An intended change updates the saved copy in the same commit.
+3. **Cross-feature tests:**
+   - the tools agree on callers;
+   - formatting never turns "possible" into "certain";
+   - no test code leaks when tests are excluded;
+   - the index rebuilt after edits equals a fresh build.
+4. **Suite hygiene:** the environment failures become skips; fixture caches move to temporary folders.
+
+**Investigate first, then decide:** the 5 drift failures (`COVERAGE_BASELINE.md`; findings in
+`DRIFT_INVESTIGATION.md`).
+
+**Deferred until R3a finishes:**
+- the order of task families;
+- 40 vs 80 tasks per family;
+- the third arm;
+- going live after R5 or R6;
+- every build beyond the correctness fixes (the post-edit check, same-behaviour detection, import sites, and the
+  rest).
+
 ## 1. The touch-point workflow, as PRISM stages
 
 One workflow for every task type. PRISM supplies a stage's facts; the agent decides and edits.
