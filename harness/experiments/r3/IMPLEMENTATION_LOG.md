@@ -828,3 +828,17 @@ R3a's interpretation must make.
   - the open decisions.
 
   Nothing built yet. R3a continues unchanged.
+
+## 2026-11-09: PRISM's required-behaviour spec recorded (the gate before R4)
+
+- `harness/experiments/PRISM_REQUIRED_BEHAVIOR.md`, written from the agent's side:
+  - Q1–Q6: answer quality (honest, complete about gaps, current, short, askable, deterministic);
+  - T1–T10: touch points;
+  - N1–N3: before writing new code;
+  - V1–V5: check my changes;
+  - L1–L2: what PRISM cannot see;
+  - the tool surface, and the expected workflow.
+- Every item is fixed or implemented before R4 (user, 2026-11-09).
+- Added: regression safety R1–R4 (unit coverage per module, golden tool outputs on fixtures, cross-feature
+  invariants, a clean suite). "One implementation should not break another feature of PRISM."
+- The coverage baseline is being measured (`pytest --cov=prism` over the whole suite).
