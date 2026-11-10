@@ -1,0 +1,726 @@
+[
+ {
+  "family": "N",
+  "repo": "click",
+  "language": "python",
+  "commit": "9f9b149ea30287b4977b800a024ee68144b8c869",
+  "parent": "16fc00e2f4a2717a521084f193709a6058afc693",
+  "commit_date": "2026-07-07T15:23:33+02:00",
+  "author_date": "2026-05-29T11:26:36+02:00",
+  "subject": "Add `@custom_version_option`, freeze `@version_option`",
+  "target": "src/click/decorators.py::custom_version_option",
+  "target_file": "src/click/decorators.py",
+  "signature": "def custom_version_option(\n    callback: t.Callable[[Context], str],\n    *param_decls: str,\n    **kwargs: t.Any,\n) -> t.Callable[[FC], FC]:",
+  "docstring": "Add a ``--version`` option whose output is produced by ``callback``.\n\n    This is the customizable companion to :func:`version_option`. Where\n    :func:`version_option` is intentionally limited to a fixed message and\n    a small set of values, this option calls ``callback`` to build the\n    whole string to print. Use it when you need values that\n    :func:`version_option` does not expose, such as a file path, the\n    Python version, or git metadata.\n\n    :param callback: Called with the current :class:`Context` when the\n        option is invoked. Its return value is printed, then the program\n        exits.\n    :param param_decls: One or more option names. Defaults to the single\n        value ``--version``.\n    :param kwargs: Extra arguments are passed to :func:`option`.\n\n    .. versionadded:: 8.5.0",
+  "after": "version_option",
+  "helpers": [
+   "callback",
+   "echo",
+   "option"
+  ],
+  "depth": 3,
+  "stratum": "3-4",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_basic.py b/tests/test_basic.py\nindex 733d8ca..96c1bf2 100644\n--- a/tests/test_basic.py\n+++ b/tests/test_basic.py\n@@ -857,3 +857,26 @@ def test_version_option_unknown_package_errors(runner, monkeypatch):\n     result = runner.invoke(cli, [\"--version\"])\n     assert result.exit_code != 0\n     assert \"not installed\" in str(result.exception)\n+\n+\n+@pytest.mark.parametrize(\"args\", [[\"--version\"], [\"-V\"]])\n+def test_custom_version_option(runner, args):\n+    @click.command()\n+    @click.custom_version_option(lambda ctx: \"custom 9.9.9\", \"-V\", \"--version\")\n+    def cli():\n+        pass\n+\n+    result = runner.invoke(cli, args)\n+    assert result.exit_code == 0\n+    assert result.output == \"custom 9.9.9\\n\"\n+\n+\n+def test_custom_version_option_receives_context(runner):\n+    @click.command()\n+    @click.custom_version_option(lambda ctx: f\"{ctx.info_name} 1.0\")\n+    def cli():\n+        pass\n+\n+    result = runner.invoke(cli, [\"--version\"], prog_name=\"mytool\")\n+    assert result.exit_code == 0\n+    assert result.output == \"mytool 1.0\\n\"\n",
+  "test_files": [
+   "tests/test_basic.py"
+  ],
+  "visible_tests": [
+   "tests/test_basic.py"
+  ],
+  "gold_files": [
+   "src/click/__init__.py",
+   "src/click/decorators.py"
+  ],
+  "gold_functions": [
+   "src/click/decorators.py::custom_version_option",
+   "src/click/decorators.py::custom_version_option.show_version"
+  ],
+  "prompt": "Add a new function in `src/click/decorators.py`, after `version_option`. Its signature and description:\n\n```\ndef custom_version_option(\n    callback: t.Callable[[Context], str],\n    *param_decls: str,\n    **kwargs: t.Any,\n) -> t.Callable[[FC], FC]:\n```\n\nAdd a ``--version`` option whose output is produced by ``callback``.\n\n    This is the customizable companion to :func:`version_option`. Where\n    :func:`version_option` is intentionally limited to a fixed message and\n    a small set of values, this option calls ``callback`` to build the\n    whole string to print. Use it when you need values that\n    :func:`version_option` does not expose, such as a file path, the\n    Python version, or git metadata.\n\n    :param callback: Called with the current :class:`Context` when the\n        option is invoked. Its return value is printed, then the program\n        exits.\n    :param param_decls: One or more option names. Defaults to the single\n        value ``--version``.\n    :param kwargs: Extra arguments are passed to :func:`option`.\n\n    .. versionadded:: 8.5.0\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "click",
+  "language": "python",
+  "commit": "271effb3d96da5575eb527216ce3552bd7628fab",
+  "parent": "be13b152cf5949a362926322c835fa76019cc6fe",
+  "commit_date": "2026-09-02T08:40:51+02:00",
+  "author_date": "2026-09-01T00:51:16+02:00",
+  "subject": "Add `Option.get_help_spec` to return the option's help left part",
+  "target": "src/click/core.py::Option.get_help_spec",
+  "target_file": "src/click/core.py",
+  "signature": "def get_help_spec(self, ctx: Context) -> str:",
+  "docstring": "Returns the left column of the option's help record: its spellings\n        and metavar, like ``-v, --verbose`` or ``-c, --config TEXT``.\n\n        Unlike :meth:`get_help_record`, the spec is produced even when the\n        option is :attr:`hidden`.\n\n        .. versionadded:: 8.5.1",
+  "after": "Option.add_to_parser",
+  "helpers": [
+   "_write_opts",
+   "join_options"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_options.py b/tests/test_options.py\nindex 5438a8c..0656a0b 100644\n--- a/tests/test_options.py\n+++ b/tests/test_options.py\n@@ -72,6 +72,30 @@ def test_deprecated_empty_help_no_leading_space(help_text, deprecated, expected)\n     assert opt.get_help_record(ctx)[1] == expected\n \n \n+@pytest.mark.parametrize(\n+    (\"param_decls\", \"kwargs\", \"expected\"),\n+    [\n+        ([\"-v\", \"--verbose\"], {\"is_flag\": True}, \"-v, --verbose\"),\n+        ([\"--config\"], {}, \"--config TEXT\"),\n+        ([\"--color/--no-color\"], {}, \"--color / --no-color\"),\n+        ([\"/debug;/no-debug\"], {}, \"/debug; /no-debug\"),\n+    ],\n+)\n+@pytest.mark.parametrize(\"hidden\", [False, True])\n+def test_help_spec(param_decls, kwargs, hidden, expected):\n+    \"\"\"A hidden option still produces its spec via ``get_help_spec()``, unlike\n+    ``get_help_record()``.\n+    \"\"\"\n+    opt = click.Option(param_decls, hidden=hidden, **kwargs)\n+    ctx = click.Context(click.Command(\"cli\"))\n+    assert opt.get_help_spec(ctx) == expected\n+\n+    if hidden:\n+        assert opt.get_help_record(ctx) is None\n+    else:\n+        assert opt.get_help_record(ctx)[0] == expected\n+\n+\n @pytest.mark.parametrize(\"deprecated\", [True, \"USE B INSTEAD\"])\n def test_deprecated_warning(runner, deprecated):\n     @click.command()\n",
+  "test_files": [
+   "tests/test_options.py"
+  ],
+  "visible_tests": [
+   "tests/test_options.py"
+  ],
+  "gold_files": [
+   "src/click/core.py"
+  ],
+  "gold_functions": [
+   "src/click/core.py::Option.get_help_record",
+   "src/click/core.py::Option.get_help_record._write_opts",
+   "src/click/core.py::Option.get_help_spec",
+   "src/click/core.py::Option.get_help_spec._write_opts"
+  ],
+  "prompt": "Add a new function in class `Option` of `src/click/core.py`, after `Option.add_to_parser`. Its signature and description:\n\n```\ndef get_help_spec(self, ctx: Context) -> str:\n```\n\nReturns the left column of the option's help record: its spellings\n        and metavar, like ``-v, --verbose`` or ``-c, --config TEXT``.\n\n        Unlike :meth:`get_help_record`, the spec is produced even when the\n        option is :attr:`hidden`.\n\n        .. versionadded:: 8.5.1\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "attrs",
+  "language": "python",
+  "commit": "0f758fe54a8742110f730ebbaf146e79f3937c8d",
+  "parent": "57b314c0dc8e0b80c0ed8f61c0be81965137ea41",
+  "commit_date": "2026-04-16T20:20:58+00:00",
+  "author_date": "2026-04-16T22:20:58+02:00",
+  "subject": "Expose converter as a decorator (#1541)",
+  "target": "src/attr/_make.py::_CountingAttr.converter",
+  "target_file": "src/attr/_make.py",
+  "signature": "def converter(self, meth):",
+  "docstring": "Decorator that appends *meth* to the list of converters.\n\n        Returns *meth* unchanged.\n\n        .. versionadded:: 26.2.0",
+  "after": "_CountingAttr.default",
+  "helpers": [
+   "meth",
+   "pipe"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_make.py b/tests/test_make.py\nindex 6f226c6..f83f852 100644\n--- a/tests/test_make.py\n+++ b/tests/test_make.py\n@@ -136,6 +136,43 @@ class TestCountingAttr:\n \n         assert _AndValidator((v, v2)) == a._validator\n \n+    def test_converter_decorator_single(self):\n+        \"\"\"\n+        If _CountingAttr.converter is used as a decorator and there is no\n+        decorator set, the decorated method is used as the converter.\n+        \"\"\"\n+        a = attr.ib()\n+\n+        @a.converter\n+        def v(self, value, field):\n+            pass\n+\n+        assert isinstance(a._converter, attr.Converter)\n+        assert a._converter.takes_self\n+        assert a._converter.takes_field\n+\n+    @pytest.mark.parametrize(\n+        \"wrap\", [lambda v: v, lambda v: [v], attr.converters.pipe]\n+    )\n+    def test_converter_decorator(self, wrap):\n+        \"\"\"\n+        If _CountingAttr.converter is used as a decorator and there is already\n+        a decorator set, the decorators are composed using `pipe`.\n+        \"\"\"\n+\n+        def v(_):\n+            pass\n+\n+        a = attr.ib(converter=wrap(v))\n+\n+        @a.converter\n+        def v2(self, value, field):\n+            pass\n+\n+        assert isinstance(a._converter, attr.Converter)\n+        assert a._converter.takes_self\n+        assert a._converter.takes_field\n+\n     def test_default_decorator_already_set(self):\n         \"\"\"\n         Raise DefaultAlreadySetError if the decorator is used after a default\n@@ -1720,6 +1757,23 @@ class TestConverter:\n \n         assert 84 == C(2).x\n \n+    def test_converter_decorated(self):\n+        \"\"\"\n+        Same as Converter with both `takes_field` and `takes_self`\n+        \"\"\"\n+\n+        @attr.define\n+        class C:\n+            factor: int = 5\n+            x: int = attr.field(default=0, metadata={\"offset\": 200})\n+\n+            @x.converter\n+            def _convert_x(self, field, value):\n+                assert isinstance(field, attr.Attribute)\n+                return int(value) * self.factor + field.metadata[\"offset\"]\n+\n+        assert 410 == C(x=\"42\").x\n+\n     @given(integers(), booleans())\n     def test_convert_property(self, val, init):\n         \"\"\"\ndiff --git a/tests/test_mypy.yml b/tests/test_mypy.yml\nindex 60285e4..2476be0 100644\n--- a/tests/test_mypy.yml\n+++ b/tests/test_mypy.yml\n@@ -712,6 +712,18 @@\n     C(42)\n     C(43)\n \n+- case: testAttrsConverterDecorator\n+  main: |\n+    import attr\n+    @attr.s\n+    class C:\n+        x = attr.ib()\n+        @x.converter\n+        def convert(self, attribute, value):\n+            return value + 1\n+\n+    C(42)\n+\n - case: testAttrsLocalVariablesInClassMethod\n   main: |\n     import attr\n",
+  "test_files": [
+   "tests/test_make.py",
+   "tests/test_mypy.yml"
+  ],
+  "visible_tests": [
+   "tests/test_make.py"
+  ],
+  "gold_files": [
+   "src/attr/_make.py"
+  ],
+  "gold_functions": [
+   "src/attr/_make.py::Attribute.from_counting_attr",
+   "src/attr/_make.py::_CountingAttr.__init__",
+   "src/attr/_make.py::_CountingAttr.converter"
+  ],
+  "prompt": "Add a new function in class `_CountingAttr` of `src/attr/_make.py`, after `_CountingAttr.default`. Its signature and description:\n\n```\ndef converter(self, meth):\n```\n\nDecorator that appends *meth* to the list of converters.\n\n        Returns *meth* unchanged.\n\n        .. versionadded:: 26.2.0\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "zod",
+  "language": "python",
+  "commit": "9782f87c69be3ceb0bbdae94fcc1c337bfc8618d",
+  "parent": "773a48676ede1a2144d4f2e60892e6c0cd6625a7",
+  "commit_date": "2026-08-28T09:03:24-07:00",
+  "author_date": "2026-08-28T09:03:24-07:00",
+  "subject": "perf(v4): validate without building the output, and keep schemas out of dictionary mode (#6480)",
+  "target": "packages/zod/src/v4/core/compile.ts::compileFn",
+  "target_file": "packages/zod/src/v4/core/compile.ts",
+  "signature": "function compileFn<T extends SomeType>(schema: T, options?: CompileFnOptions): CompiledFn<core.output<T>>",
+  "docstring": "Generate the standalone compiled function: a parser by default, a validator under\n`assertOnly`. Returns either the parsed value, `true` where nothing reads the output,\nor the `INVALID` sentinel. Internal \u2014 consumers should use `compile()`.",
+  "after": "installCompiledUserMethods",
+  "helpers": [
+   "generateCheck",
+   "isRecursiveSchema",
+   "return",
+   "schema"
+  ],
+  "depth": 4,
+  "stratum": "3-4",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/packages/zod/src/v4/classic/tests/instance-footprint.test.ts b/packages/zod/src/v4/classic/tests/instance-footprint.test.ts\nindex 7947d25..bc23410 100644\n--- a/packages/zod/src/v4/classic/tests/instance-footprint.test.ts\n+++ b/packages/zod/src/v4/classic/tests/instance-footprint.test.ts\n@@ -222,3 +222,60 @@ test(\"a hand-written getter member accepts assignment\", () => {\n   mini.with = () => \"WITH\";\n   expect(mini.with()).toBe(\"WITH\");\n });\n+\n+test(\"shape is lazy and stays out of Object.keys\", () => {\n+  const schema = z.object({ a: z.string() });\n+\n+  expect(Object.prototype.hasOwnProperty.call(schema, \"shape\")).toEqual(false);\n+  expect(\"shape\" in schema).toEqual(true);\n+  expect(Object.keys(schema)).not.toContain(\"shape\");\n+  expect({ ...schema }).not.toHaveProperty(\"shape\");\n+\n+  expect(Object.keys(schema.shape)).toEqual([\"a\"]);\n+\n+  // Reading caches a non-enumerable own data property. An own accessor here would put every later object schema into V8 dictionary mode.\n+  expect(Object.prototype.hasOwnProperty.call(schema, \"shape\")).toEqual(true);\n+  expect(Object.getOwnPropertyDescriptor(schema, \"shape\")).toMatchObject({\n+    writable: true,\n+    enumerable: false,\n+    configurable: true,\n+  });\n+  expect(Object.keys(schema)).not.toContain(\"shape\");\n+\n+  const mini = zm.object({ a: zm.string() });\n+  expect(Object.prototype.hasOwnProperty.call(mini, \"shape\")).toEqual(false);\n+  expect(Object.keys(mini.shape)).toEqual([\"a\"]);\n+  expect(Object.keys(mini)).not.toContain(\"shape\");\n+});\n+\n+test(\"shape accepts repeated assignment and recomputes after deletion\", () => {\n+  const schema: any = z.object({ a: z.string() });\n+\n+  schema.shape = { b: z.number() };\n+  expect(Object.keys(schema.shape)).toEqual([\"b\"]);\n+  // The cached property stays writable, so a second assignment does not throw in strict mode.\n+  schema.shape = { c: z.boolean() };\n+  expect(Object.keys(schema.shape)).toEqual([\"c\"]);\n+\n+  // Deleting clears the memo rather than removing the property, since the accessor lives on the prototype.\n+  delete schema.shape;\n+  expect(Object.keys(schema.shape)).toEqual([\"a\"]);\n+});\n+\n+test(\"a self-referential shape getter breaks the cycle instead of recursing\", () => {\n+  const Self: any = z.object({\n+    a: z.string(),\n+    get b() {\n+      return z.array(z.object(Self.shape));\n+    },\n+  });\n+  expect(Object.keys(Self.shape)).toEqual([\"a\", \"b\"]);\n+\n+  const Mini: any = zm.object({\n+    a: zm.string(),\n+    get b() {\n+      return zm.array(zm.object(Mini.shape));\n+    },\n+  });\n+  expect(Object.keys(Mini.shape)).toEqual([\"a\", \"b\"]);\n+});\ndiff --git a/packages/zod/src/v4/classic/tests/is-valid.test.ts b/packages/zod/src/v4/classic/tests/is-valid.test.ts\ndeleted file mode 100644\nindex 52c9dff..0000000\n--- a/packages/zod/src/v4/classic/tests/is-valid.test.ts\n+++ /dev/null\n@@ -1,76 +0,0 @@\n-import { expect, expectTypeOf, test } from \"vitest\";\n-\n-import * as zm from \"zod/mini\";\n-import * as z from \"zod/v4\";\n-\n-test(\"isValid answers like safeParse.success\", () => {\n-  expect(z.isValid(z.string(), \"asdf\")).toBe(true);\n-  expect(z.isValid(z.string(), 12)).toBe(false);\n-  expect(z.isValid(z.number().int().min(0), 5)).toBe(true);\n-  expect(z.isValid(z.number().int().min(0), -5)).toBe(false);\n-  const schema = z.object({ a: z.string(), b: z.array(z.number()) });\n-  expect(z.isValid(schema, { a: \"x\", b: [1, 2] })).toBe(true);\n-  expect(z.isValid(schema, { a: \"x\", b: [1, \"2\"] })).toBe(false);\n-  expect(z.isValid(schema, null)).toBe(false);\n-});\n-\n-test(\"isValid runs transforms and refinements for the verdict only\", () => {\n-  const schema = z\n-    .string()\n-    .transform((s) => s.length)\n-    .pipe(z.number().max(3));\n-  expect(z.isValid(schema, \"ab\")).toBe(true);\n-  expect(z.isValid(schema, \"abcd\")).toBe(false);\n-  expect(z.isValid(z.coerce.number(), \"5\")).toBe(true);\n-});\n-\n-test(\"isValid narrows to the input type\", () => {\n-  const value: unknown = \"hi\";\n-  if (z.isValid(z.string(), value)) {\n-    expectTypeOf(value).toEqualTypeOf<string>();\n-  }\n-  const transforming = z.string().transform((s) => s.length);\n-  if (z.isValid(transforming, value)) {\n-    expectTypeOf(value).toEqualTypeOf<string>();\n-  }\n-});\n-\n-test(\"isValid throws on async schemas; isValidAsync handles them\", async () => {\n-  const schema = z.string().refine(async (s) => s.length > 2);\n-  expect(() => z.isValid(schema, \"asdf\")).toThrow();\n-  await expect(z.isValidAsync(schema, \"asdf\")).resolves.toBe(true);\n-  await expect(z.isValidAsync(schema, \"a\")).resolves.toBe(false);\n-  await expect(z.isValidAsync(z.string(), \"a\")).resolves.toBe(true);\n-  // a promise-returning callback that is not declared async compiles, so the compiled schema must stay off the fast path\n-  const compiled = z.compile(z.string().refine((s) => Promise.resolve(s.length > 1)));\n-  await expect(z.isValidAsync(compiled, \"abc\")).resolves.toBe(true);\n-  await expect(z.isValidAsync(compiled, \"a\")).resolves.toBe(false);\n-});\n-\n-test(\"isValid agrees with the compiled fast path and keeps the callback bound\", () => {\n-  let calls = 0;\n-  const schema = z.object({\n-    name: z.string().refine((s) => {\n-      calls++;\n-      return s.length > 1;\n-    }),\n-  });\n-  const compiled = z.compile(schema);\n-\n-  calls = 0;\n-  expect(z.isValid(compiled, { name: \"ok\" })).toBe(true);\n-  expect(calls).toBe(1);\n-\n-  calls = 0;\n-  expect(z.isValid(compiled, { name: \"x\" })).toBe(false);\n-  expect(calls).toBeLessThanOrEqual(2);\n-\n-  expect(z.isValid(compiled, { name: 42 })).toBe(false);\n-  expect(z.isValid(schema, { name: \"ok\" })).toBe(true);\n-});\n-\n-test(\"isValid is exported from zod/mini\", () => {\n-  expect(zm.isValid(zm.string(), \"a\")).toBe(true);\n-  expect(zm.isValid(zm.string(), 1)).toBe(false);\n-  expect(zm.isValid(zm.object({ a: zm.number() }), { a: 1 })).toBe(true);\n-});\ndiff --git a/packages/zod/src/v4/classic/tests/validate.test.ts b/packages/zod/src/v4/classic/tests/validate.test.ts\nnew file mode 100644\nindex 0000000..94a2c44\n--- /dev/null\n+++ b/packages/zod/src/v4/classic/tests/validate.test.ts\n@@ -0,0 +1,76 @@\n+import { expect, expectTypeOf, test } from \"vitest\";\n+\n+import * as zm from \"zod/mini\";\n+import * as z from \"zod/v4\";\n+\n+test(\"validate answers like safeParse.success\", () => {\n+  expect(z.validate(z.string(), \"asdf\")).toBe(true);\n+  expect(z.validate(z.string(), 12)).toBe(false);\n+  expect(z.validate(z.number().int().min(0), 5)).toBe(true);\n+  expect(z.validate(z.number().int().min(0), -5)).toBe(false);\n+  const schema = z.object({ a: z.string(), b: z.array(z.number()) });\n+  expect(z.validate(schema, { a: \"x\", b: [1, 2] })).toBe(true);\n+  expect(z.validate(schema, { a: \"x\", b: [1, \"2\"] })).toBe(false);\n+  expect(z.validate(schema, null)).toBe(false);\n+});\n+\n+test(\"validate runs transforms and refinements for the verdict only\", () => {\n+  const schema = z\n+    .string()\n+    .transform((s) => s.length)\n+    .pipe(z.number().max(3));\n+  expect(z.validate(schema, \"ab\")).toBe(true);\n+  expect(z.validate(schema, \"abcd\")).toBe(false);\n+  expect(z.validate(z.coerce.number(), \"5\")).toBe(true);\n+});\n+\n+test(\"validate narrows to the input type\", () => {\n+  const value: unknown = \"hi\";\n+  if (z.validate(z.string(), value)) {\n+    expectTypeOf(value).toEqualTypeOf<string>();\n+  }\n+  const transforming = z.string().transform((s) => s.length);\n+  if (z.validate(transforming, value)) {\n+    expectTypeOf(value).toEqualTypeOf<string>();\n+  }\n+});\n+\n+test(\"validate throws on async schemas; validateAsync handles them\", async () => {\n+  const schema = z.string().refine(async (s) => s.length > 2);\n+  expect(() => z.validate(schema, \"asdf\")).toThrow();\n+  await expect(z.validateAsync(schema, \"asdf\")).resolves.toBe(true);\n+  await expect(z.validateAsync(schema, \"a\")).resolves.toBe(false);\n+  await expect(z.validateAsync(z.string(), \"a\")).resolves.toBe(true);\n+  // a promise-returning callback that is not declared async compiles, so the compiled schema must stay off the fast path\n+  const compiled = z.compile(z.string().refine((s) => Promise.resolve(s.length > 1)));\n+  await expect(z.validateAsync(compiled, \"abc\")).resolves.toBe(true);\n+  await expect(z.validateAsync(compiled, \"a\")).resolves.toBe(false);\n+});\n+\n+test(\"validate agrees with the compiled fast path and keeps the callback bound\", () => {\n+  let calls = 0;\n+  const schema = z.object({\n+    name: z.string().refine((s) => {\n+      calls++;\n+      return s.length > 1;\n+    }),\n+  });\n+  const compiled = z.compile(schema);\n+\n+  calls = 0;\n+  expect(z.validate(compiled, { name: \"ok\" })).toBe(true);\n+  expect(calls).toBe(1);\n+\n+  calls = 0;\n+  expect(z.validate(compiled, { name: \"x\" })).toBe(false);\n+  expect(calls).toBeLessThanOrEqual(2);\n+\n+  expect(z.validate(compiled, { name: 42 })).toBe(false);\n+  expect(z.validate(schema, { name: \"ok\" })).toBe(true);\n+});\n+\n+test(\"validate is exported from zod/mini\", () => {\n+  expect(zm.validate(zm.string(), \"a\")).toBe(true);\n+  expect(zm.validate(zm.string(), 1)).toBe(false);\n+  expect(zm.validate(zm.object({ a: zm.number() }), { a: 1 })).toBe(true);\n+});\ndiff --git a/packages/zod/src/v4/core/tests/compile-differential.test.ts b/packages/zod/src/v4/core/tests/compile-differential.test.ts\nindex 368d2ba..0c37de9 100644\n--- a/packages/zod/src/v4/core/tests/compile-differential.test.ts\n+++ b/packages/zod/src/v4/core/tests/compile-differential.test.ts\n@@ -1,7 +1,7 @@\n import { expect, test } from \"vitest\";\n \n import * as z from \"../../index.js\";\n-import { INVALID, ZodCompileUnsupportedError, compile, compileFastpass } from \"../compile.js\";\n+import { INVALID, ZodCompileUnsupportedError, compile, compileFn } from \"../compile.js\";\n \n // Differential harness: assert compiled schema agrees with the original on every fixture. Success path: data identical (incl. key order and undefined-vs-absent, which toEqual cannot see) AND the fast path actually produced the value (a fixture set that silently falls back on valid inputs tests nothing). Failure path: issues deep-equal (errors always come from the runtime fallback).\n function describe(value: unknown): string {\n@@ -58,7 +58,9 @@ function assertIdentical(actual: unknown, expected: unknown, path: string): void\n \n function differential(schema: z.ZodType, inputs: unknown[], opts?: { fallbackOk?: boolean }) {\n   const compiled = compile(schema);\n-  const fast = compileFastpass(schema);\n+  const fast = compileFn(schema);\n+  // Assert-mode codegen shares every validation path with the parser and only drops the output construction, so it must reach the same verdict on every fixture. Refusing to compile at all is fine (the caller falls back); silently disagreeing is the drift this catches.\n+  const assertFast = attempt(() => compileFn(schema, { assertOnly: true })).value;\n   for (const input of inputs) {\n     // A schema may throw rather than return \u2014 an async check reached synchronously does. Both sides have to agree on that too, and comparing results would just rethrow.\n     const at = attempt(() => schema.safeParse(input));\n@@ -71,6 +73,19 @@ function differential(schema: z.ZodType, inputs: unknown[], opts?: { fallbackOk?\n     const a = at.value!;\n     const b = bt.value!;\n     expect(b.success, `success mismatch for input ${describe(input)}`).toBe(a.success);\n+    if (assertFast) {\n+      const parseVerdict = attempt(() => fast(input) !== INVALID);\n+      const assertVerdict = attempt(() => assertFast(input) !== INVALID);\n+      expect(assertVerdict.threw ?? \"did not throw\", `assert-mode threw differently for input ${describe(input)}`).toBe(\n+        parseVerdict.threw ?? \"did not throw\"\n+      );\n+      if (!parseVerdict.threw) {\n+        expect(\n+          assertVerdict.value,\n+          `assert-mode verdict disagreed with the parse fast path for input ${describe(input)}`\n+        ).toBe(parseVerdict.value);\n+      }\n+    }\n     if (a.success && b.success) {\n       if (!opts?.fallbackOk) {\n         expect(fast(input) === INVALID, `fast path fell back on valid input ${describe(input)}`).toBe(false);\n@@ -207,6 +222,21 @@ test(\"nullable\", () => {\n   differential(z.string().nullable(), [\"hello\", null, undefined, 0]);\n });\n \n+// A wrapper around a container is where assert mode stops building: the wrapper itself constructs nothing, so the object or array inside it drops its output. Wrapping a scalar exercises none of that.\n+test(\"wrapped containers\", () => {\n+  const shape = { a: z.string(), b: z.number() };\n+  differential(z.object(shape).nullable(), [{ a: \"x\", b: 1 }, null, undefined, { a: 1, b: 1 }, \"no\"]);\n+  differential(z.looseObject(shape).optional(), [{ a: \"x\", b: 1, extra: 9 }, undefined, null, { a: 1 }]);\n+  differential(z.strictObject(shape).nullable(), [{ a: \"x\", b: 1 }, null, { a: \"x\", b: 1, extra: 9 }]);\n+  differential(z.array(z.object(shape)).nullable(), [[{ a: \"x\", b: 1 }], [], null, [{ a: 1 }]]);\n+  differential(z.object({ inner: z.object(shape).nullable() }), [\n+    { inner: { a: \"x\", b: 1 } },\n+    { inner: null },\n+    { inner: { a: 1, b: 1 } },\n+  ]);\n+  differential(z.object({ inner: z.looseObject(shape).optional() }), [{ inner: { a: \"x\", b: 1 } }, {}, { inner: 5 }]);\n+});\n+\n test(\"nullish\", () => {\n   differential(z.string().nullish(), [\"hello\", null, undefined, 0]);\n });\n@@ -710,3 +740,230 @@ test(\"a thenable predicate throws rather than rejecting\", () => {\n     [\"x\", 1, null, undefined]\n   );\n });\n+\n+// Generated corpus. The hand-written fixtures above pin the shapes we reasoned about; this covers the combinations nobody thought to write, which is where a codegen flag actually breaks. Seeded so a failure reproduces.\n+function makeRng(seed: number): () => number {\n+  let a = seed;\n+  return () => {\n+    a = (a + 0x6d2b79f5) | 0;\n+    let t = Math.imul(a ^ (a >>> 15), 1 | a);\n+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;\n+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;\n+  };\n+}\n+\n+function nonEmpty(v: unknown): boolean {\n+  if (v === \"\") return false;\n+  if (Array.isArray(v)) return v.length > 0;\n+  if (v !== null && typeof v === \"object\" && !(v instanceof Date)) return Object.keys(v).length > 0;\n+  return true;\n+}\n+\n+interface Generated {\n+  schema: z.ZodType;\n+  ok: () => unknown;\n+}\n+\n+function generate(rnd: () => number, depth: number): Generated {\n+  const pick = <T>(xs: T[]): T => xs[Math.floor(rnd() * xs.length)];\n+  const leaves = [\"string\", \"number\", \"boolean\", \"literal\", \"enum\", \"bounded\", \"int\"];\n+  // Only object, array, optional and nullable consume `buildsValue`; every other generator calls the 4-arg `compileChild`, which defaults `needsValue` to true and puts the subtree back in full-value mode. Assert-mode-specific state only arises in chains of those four, so they are weighted to make such chains common rather than incidental.\n+  const nodes = [\n+    \"object\",\n+    \"looseObject\",\n+    \"strictObject\",\n+    \"array\",\n+    \"optional\",\n+    \"nullable\",\n+    \"object\",\n+    \"array\",\n+    \"optional\",\n+    \"nullable\",\n+    \"union\",\n+    \"tuple\",\n+    \"record\",\n+    \"default\",\n+    \"catch\",\n+    \"refine\",\n+    \"refine\",\n+    \"refine\",\n+    \"transform\",\n+    \"pipe\",\n+  ];\n+  switch (depth <= 0 ? pick(leaves) : pick(rnd() < 0.45 ? leaves : nodes)) {\n+    case \"string\":\n+      return { schema: z.string(), ok: () => pick([\"a\", \"\", \"hello\"]) };\n+    case \"bounded\":\n+      return { schema: z.string().min(2).max(6), ok: () => pick([\"ab\", \"abcdef\"]) };\n+    case \"number\":\n+      return { schema: z.number(), ok: () => pick([0, 1, -1, 3.5]) };\n+    case \"int\":\n+      return { schema: z.number().int().min(0), ok: () => pick([0, 42]) };\n+    case \"boolean\":\n+      return { schema: z.boolean(), ok: () => rnd() < 0.5 };\n+    case \"literal\":\n+      return { schema: z.literal(\"lit\"), ok: () => \"lit\" };\n+    case \"enum\":\n+      return { schema: z.enum([\"a\", \"b\"]), ok: () => pick([\"a\", \"b\"]) };\n+    case \"object\":\n+    case \"looseObject\":\n+    case \"strictObject\": {\n+      const kids: Record<string, Generated> = {};\n+      const shape: Record<string, z.ZodType> = {};\n+      for (let i = 0; i < 1 + Math.floor(rnd() * 3); i++) {\n+        kids[`k${i}`] = generate(rnd, depth - 1);\n+        shape[`k${i}`] = kids[`k${i}`].schema;\n+      }\n+      const ctor = pick([z.object, z.looseObject, z.strictObject]) as typeof z.object;\n+      return {\n+        schema: ctor(shape as never),\n+        ok: () => Object.fromEntries(Object.entries(kids).map(([k, v]) => [k, v.ok()])),\n+      };\n+    }\n+    case \"array\": {\n+      const c = generate(rnd, depth - 1);\n+      return { schema: z.array(c.schema), ok: () => Array.from({ length: Math.floor(rnd() * 3) }, () => c.ok()) };\n+    }\n+    case \"tuple\": {\n+      const a = generate(rnd, depth - 1);\n+      const b = generate(rnd, depth - 1);\n+      return { schema: z.tuple([a.schema, b.schema]), ok: () => [a.ok(), b.ok()] };\n+    }\n+    case \"record\": {\n+      const c = generate(rnd, depth - 1);\n+      return { schema: z.record(z.string(), c.schema), ok: () => ({ p: c.ok(), q: c.ok() }) };\n+    }\n+    case \"optional\": {\n+      const c = generate(rnd, depth - 1);\n+      return { schema: z.optional(c.schema), ok: () => (rnd() < 0.3 ? undefined : c.ok()) };\n+    }\n+    case \"nullable\": {\n+      const c = generate(rnd, depth - 1);\n+      return { schema: z.nullable(c.schema), ok: () => (rnd() < 0.3 ? null : c.ok()) };\n+    }\n+    case \"union\": {\n+      const a = generate(rnd, depth - 1);\n+      const b = generate(rnd, depth - 1);\n+      return { schema: z.union([a.schema, b.schema]), ok: () => (rnd() < 0.5 ? a.ok() : b.ok()) };\n+    }\n+    case \"default\": {\n+      const c = generate(rnd, depth - 1);\n+      return { schema: z.optional(c.schema).default(c.ok() as never), ok: () => (rnd() < 0.3 ? undefined : c.ok()) };\n+    }\n+    case \"catch\": {\n+      const c = generate(rnd, depth - 1);\n+      return { schema: c.schema.catch(c.ok() as never), ok: () => (rnd() < 0.4 ? 12345 : c.ok()) };\n+    }\n+    case \"refine\": {\n+      const c = generate(rnd, depth - 1);\n+      // Keyed to the value's own content, not a sentinel nothing produces. `refine` is the only generator that hangs a check on a container, so this predicate is what exercises the \"carries checks of its own\" half of `buildsValue`, and a check that can never reject leaves that half uncovered. Rejecting every empty value makes that rejection common rather than lucky.\n+      return { schema: c.schema.refine(nonEmpty), ok: () => c.ok() };\n+    }\n+    case \"transform\": {\n+      const c = generate(rnd, depth - 1);\n+      return { schema: c.schema.transform((v: unknown) => ({ wrapped: v })), ok: () => c.ok() };\n+    }\n+    default: {\n+      const c = generate(rnd, depth - 1);\n+      return { schema: c.schema.pipe(z.any()), ok: () => c.ok() };\n+    }\n+  }\n+}\n+\n+const HOSTILE: unknown[] = [\n+  undefined,\n+  null,\n+  Number.NaN,\n+  -0,\n+  0,\n+  \"\",\n+  \"x\",\n+  true,\n+  false,\n+  [],\n+  {},\n+  [1, 2],\n+  { k0: 1 },\n+  Object.create(null),\n+  new Date(Number.NaN),\n+  1n,\n+  Symbol.iterator,\n+  Number.POSITIVE_INFINITY,\n+];\n+\n+function corrupt(rnd: () => number, value: unknown, depth = 0): unknown {\n+  const pick = <T>(xs: T[]): T => xs[Math.floor(rnd() * xs.length)];\n+  if (depth > 2 || rnd() < 0.35) return pick(HOSTILE);\n+  if (Array.isArray(value)) {\n+    const out = value.slice();\n+    if (out.length && rnd() < 0.6) out[Math.floor(rnd() * out.length)] = corrupt(rnd, out[0], depth + 1);\n+    else out.push(pick(HOSTILE));\n+    return out;\n+  }\n+  if (value && typeof value === \"object\") {\n+    const out: Record<string, unknown> = { ...(value as Record<string, unknown>) };\n+    const keys = Object.keys(out);\n+    if (keys.length && rnd() < 0.6) out[pick(keys)] = corrupt(rnd, out[pick(keys)], depth + 1);\n+    else if (rnd() < 0.5) out[`extra${Math.floor(rnd() * 3)}`] = pick(HOSTILE);\n+    else delete out[pick(keys)];\n+    return out;\n+  }\n+  return pick(HOSTILE);\n+}\n+\n+test(\"assert mode agrees with the parser and the runtime across generated schemas\", () => {\n+  let accepted = 0;\n+  let rejected = 0;\n+  let refused = 0;\n+\n+  for (const seed of [1, 7, 42, 1337]) {\n+    const rnd = makeRng(seed);\n+    for (let i = 0; i < 150; i++) {\n+      const g = generate(rnd, 1 + Math.floor(rnd() * 3));\n+      const parser = attempt(() => compileFn(g.schema));\n+      const validator = attempt(() => compileFn(g.schema, { assertOnly: true }));\n+      // A one-sided refusal is a silent loss of the fast path, so it fails here rather than dropping the schema.\n+      expect(!!validator.threw, `assert-mode refusal disagrees with the parser, seed ${seed} case ${i}`).toBe(\n+        !!parser.threw\n+      );\n+      const parseFn = parser.value;\n+      const assertFn = validator.value;\n+      if (!parseFn || !assertFn) {\n+        refused++;\n+        continue;\n+      }\n+      const compiled = attempt(() => compile(g.schema));\n+      const compiledSchema = compiled.value;\n+\n+      for (let j = 0; j < 6; j++) {\n+        const input = j < 3 ? g.ok() : corrupt(rnd, g.ok());\n+        const label = `seed ${seed} case ${i}/${j} input ${describe(input)}`;\n+\n+        const viaParser = attempt(() => parseFn(input) !== INVALID);\n+        const viaValidator = attempt(() => assertFn(input) !== INVALID);\n+        expect(viaValidator.threw ?? \"did not throw\", `assert-mode throw disagrees, ${label}`).toBe(\n+          viaParser.threw ?? \"did not throw\"\n+        );\n+        if (viaParser.threw) continue;\n+        expect(viaValidator.value, `assert-mode verdict disagrees, ${label}`).toBe(viaParser.value);\n+\n+        const runtime = attempt(() => g.schema.safeParse(input).success);\n+        if (runtime.threw) continue;\n+        expect(viaParser.value, `compiled verdict disagrees with the runtime, ${label}`).toBe(runtime.value);\n+        if (compiledSchema) {\n+          expect(z.validate(compiledSchema, input), `z.validate disagrees with the runtime, ${label}`).toBe(\n+            runtime.value\n+          );\n+        }\n+        if (runtime.value) accepted++;\n+        else rejected++;\n+      }\n+    }\n+  }\n+\n+  // Guard against a corpus that only ever passes: agreement on 3600 accepted verdicts would prove nothing about rejection.\n+  expect(accepted, \"generated corpus produced too few accepted inputs\").toBeGreaterThan(500);\n+  expect(rejected, \"generated corpus produced too few rejected inputs\").toBeGreaterThan(500);\n+  // Every construct the generator emits compiles today. Pinning it means a schema that starts refusing surfaces here instead of quietly shrinking the corpus behind the floors above.\n+  expect(refused, \"a generated schema stopped compiling\").toBe(0);\n+});\ndiff --git a/packages/zod/src/v4/core/tests/compile-global.test.ts b/packages/zod/src/v4/core/tests/compile-global.test.ts\nindex ce8989f..4045e0e 100644\n--- a/packages/zod/src/v4/core/tests/compile-global.test.ts\n+++ b/packages/zod/src/v4/core/tests/compile-global.test.ts\n@@ -72,3 +72,18 @@ test(\"schemas with unsupported features fall back without crashing\", () => {\n   // First call attempts compile, falls back. Subsequent calls use runtime. Sync parse of an async-refined schema is its own runtime concern; we only care that the post-processor doesn't crash with a compile error.\n   expect(() => schema.safeParse(\"ok\")).not.toThrow(/ZodCompile/);\n });\n+\n+test(\"global mode installs the validator validate reads\", () => {\n+  const schema = z.looseObject({ name: z.string() });\n+  schema.parse({ name: \"ok\", extra: 1 }); // shim fires and compiles\n+\n+  // Without this the shim leaves no validator behind, validate misses its fast path and answers from the runtime parser instead. Correct, so nothing else in the suite notices, and several times slower.\n+  const bag = schema._zod.bag as { validator?: (input: unknown) => unknown };\n+  expect(typeof bag.validator).toBe(\"function\");\n+\n+  // a verdict rather than a rebuilt object, so this is the assert-mode codegen and not the parser\n+  expect(bag.validator!({ name: \"ok\", extra: 1 })).toBe(true);\n+\n+  expect(z.validate(schema, { name: \"ok\", extra: 1 })).toBe(true);\n+  expect(z.validate(schema, { name: 1 })).toBe(false);\n+});\n",
+  "test_files": [
+   "packages/zod/src/v4/classic/tests/instance-footprint.test.ts",
+   "packages/zod/src/v4/classic/tests/is-valid.test.ts",
+   "packages/zod/src/v4/classic/tests/validate.test.ts",
+   "packages/zod/src/v4/core/tests/compile-differential.test.ts",
+   "packages/zod/src/v4/core/tests/compile-global.test.ts"
+  ],
+  "visible_tests": [
+   "packages/zod/src/v4/classic/tests/instance-footprint.test.ts",
+   "packages/zod/src/v4/classic/tests/is-valid.test.ts",
+   "packages/zod/src/v4/core/tests/compile-differential.test.ts",
+   "packages/zod/src/v4/core/tests/compile-global.test.ts"
+  ],
+  "gold_files": [
+   "packages/bench/compile-base64-inline-vs-hoist.ts",
+   "packages/bench/compile-codec-direction.ts",
+   "packages/bench/compile-helper-scope.ts",
+   "packages/bench/compile-matrix.ts",
+   "packages/bench/compile-vs-arktype.ts",
+   "packages/bench/compile.ts",
+   "packages/bench/memory/dict-mode.ts",
+   "packages/zod/src/compile.ts",
+   "packages/zod/src/v4/classic/parse.ts",
+   "packages/zod/src/v4/classic/schemas.ts",
+   "packages/zod/src/v4/core/compile.ts",
+   "packages/zod/src/v4/core/parse.ts",
+   "packages/zod/src/v4/core/util.ts",
+   "packages/zod/src/v4/mini/parse.ts",
+   "packages/zod/src/v4/mini/schemas.ts"
+  ],
+  "gold_functions": [
+   "packages/bench/compile-base64-inline-vs-hoist.ts::\"compileFastpass(z.base64())\"",
+   "packages/bench/compile-base64-inline-vs-hoist.ts::\"compileFn(z.base64())\"",
+   "packages/bench/compile-codec-direction.ts::\"current compileFastpass\"",
+   "packages/bench/compile-codec-direction.ts::\"current compileFn\"",
+   "packages/bench/compile-helper-scope.ts::\"base64url compileFastpass\"",
+   "packages/bench/compile-helper-scope.ts::\"base64url compileFn\"",
+   "packages/bench/compile-helper-scope.ts::\"jwt compileFastpass\"",
+   "packages/bench/compile-helper-scope.ts::\"jwt compileFn\"",
+   "packages/bench/compile-helper-scope.ts::\"url compileFastpass\"",
+   "packages/bench/compile-helper-scope.ts::\"url compileFn\"",
+   "packages/bench/compile-vs-arktype.ts::\"array-objects\"",
+   "packages/bench/compile-vs-arktype.ts::\"array-objects\".\"z.compileFastpass()\"",
+   "packages/bench/compile-vs-arktype.ts::\"array-objects\".\"z.compileFn()\"",
+   "packages/bench/compile-vs-arktype.ts::array",
+   "packages/bench/compile-vs-arktype.ts::array.\"z.compileFastpass()\"",
+   "packages/bench/compile-vs-arktype.ts::array.\"z.compileFn()\"",
+   "packages/bench/compile-vs-arktype.ts::du",
+   "packages/bench/compile-vs-arktype.ts::du.\"z.compileFastpass()\"",
+   "packages/bench/compile-vs-arktype.ts::du.\"z.compileFn()\"",
+   "packages/bench/compile-vs-arktype.ts::intersection",
+   "packages/bench/compile-vs-arktype.ts::intersection.\"z.compileFastpass()\"",
+   "packages/bench/compile-vs-arktype.ts::intersection.\"z.compileFn()\"",
+   "packages/bench/compile-vs-arktype.ts::nested",
+   "packages/bench/compile-vs-arktype.ts::nested.\"z.compileFastpass()\"",
+   "packages/bench/compile-vs-arktype.ts::nested.\"z.compileFn()\"",
+   "packages/bench/compile-vs-arktype.ts::simple",
+   "packages/bench/compile-vs-arktype.ts::simple.\"z.compileFastpass()\"",
+   "packages/bench/compile-vs-arktype.ts::simple.\"z.compileFn()\"",
+   "packages/bench/compile-vs-arktype.ts::xor",
+   "packages/bench/compile-vs-arktype.ts::xor.\"z.compileFastpass()\"",
+   "packages/bench/compile-vs-arktype.ts::xor.\"z.compileFn()\"",
+   "packages/zod/src/compile.ts::postProcessor",
+   "packages/zod/src/compile.ts::postProcessor.shim",
+   "packages/zod/src/v4/core/compile.ts::compile",
+   "packages/zod/src/v4/core/compile.ts::compile.wrapped",
+   "packages/zod/src/v4/core/compile.ts::compileChild",
+   "packages/zod/src/v4/core/compile.ts::compileFastpass",
+   "packages/zod/src/v4/core/compile.ts::compileFn",
+   "packages/zod/src/v4/core/compile.ts::compileValidator",
+   "packages/zod/src/v4/core/compile.ts::generateArrayCheck",
+   "packages/zod/src/v4/core/compile.ts::generateCheck",
+   "packages/zod/src/v4/core/compile.ts::generateNullableCheck",
+   "packages/zod/src/v4/core/compile.ts::generateObjectCheck",
+   "packages/zod/src/v4/core/compile.ts::generateOptionalCheck",
+   "packages/zod/src/v4/core/compile.ts::generateRecordCheck",
+   "packages/zod/src/v4/core/compile.ts::installCompiledUserMethods",
+   "packages/zod/src/v4/core/compile.ts::installCompiledUserMethods.parse",
+   "packages/zod/src/v4/core/compile.ts::installCompiledUserMethods.safeParse",
+   "packages/zod/src/v4/core/parse.ts::isValidAsync",
+   "packages/zod/src/v4/core/parse.ts::validateAsync",
+   "packages/zod/src/v4/core/parse.ts::validateFallback",
+   "packages/zod/src/v4/core/util.ts::defineCached",
+   "packages/zod/src/v4/core/util.ts::defineCached.get",
+   "packages/zod/src/v4/core/util.ts::defineCached.set",
+   "packages/zod/src/v4/core/util.ts::installLazyProp"
+  ],
+  "prompt": "Add a new function in `packages/zod/src/v4/core/compile.ts`, after `installCompiledUserMethods`. Its signature and description:\n\n```\nfunction compileFn<T extends SomeType>(schema: T, options?: CompileFnOptions): CompiledFn<core.output<T>>\n```\n\nGenerate the standalone compiled function: a parser by default, a validator under\n`assertOnly`. Returns either the parsed value, `true` where nothing reads the output,\nor the `INVALID` sentinel. Internal \u2014 consumers should use `compile()`.\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "zod",
+  "language": "python",
+  "commit": "6f0483671e622d5d01a1e17f69af0825137c7830",
+  "parent": "e4d67f3ea42de031f1f644a1efd7bd0a306dde56",
+  "commit_date": "2026-09-07T10:29:45-07:00",
+  "author_date": "2026-09-07T10:29:45-07:00",
+  "subject": "fix(v4): derive JSON Schema constraints by folding checks in the converter (#6554)",
+  "target": "packages/zod/src/v4/core/util.ts::derived",
+  "target_file": "packages/zod/src/v4/core/util.ts",
+  "signature": "function derived<T>(\n  computes:",
+  "docstring": "Adds members a table derives from the instance: each builds on first read and shadows as own data, and assignment shadows the same way, as when these were own properties.",
+  "after": "hide",
+  "helpers": [
+   "own",
+   "set"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/packages/treeshake/bundle-size.test.ts b/packages/treeshake/bundle-size.test.ts\nindex ba8a3ba..2460d58 100644\n--- a/packages/treeshake/bundle-size.test.ts\n+++ b/packages/treeshake/bundle-size.test.ts\n@@ -47,7 +47,8 @@ const CEILINGS: Record<string, number> = {\n   // Also carries the Standard Schema issue bag: a failing `~standard.validate` parses with a plain issue holder instead of constructing a ZodError. Measured 2974 / 3455 / 4540 locally plus 28 headroom.\n   // Also carries the lazy `safeParse` error: a getter and a setter on the failing result, and the async wrapper that keeps a sync throw a rejection. Measured 3021 / 3497 / 4581 locally plus 18 headroom.\n   // Also carries the symbol-key loop in `util.members`, which is what installs `$ZodProperties`'s `Symbol.iterator` on its prototype, and the memoizer's shared reference predicate. Measured 3036 / 3516 / 4611 locally plus 18 headroom.\n-  \"zod-mini-string\": 3534,\n+  // Lowered by the measured \u2212105 when checks stopped writing metadata into the bag at attach time: the string length/format closures and the per-instance bounded regex left every string bundle, and the template literal now derives its own part patterns.\n+  \"zod-mini-string\": 3429,\n   // Also carries the construction-time discriminator check, which writes a WeakMap entry from `$ZodObject`, so every bundle containing `z.object` pays for it whether or not it builds a discriminated union.\n   // Also carries the declared symbol keys from #6448: `normalizeDef` collects the shape's own symbols and the parse loop walks them. Almost none of that is the `Reflect.ownKeys` conversions \u2014 reverting all eight of them measures a byte larger.\n   // Also carries the memoizer seam from #6482: each container init reads `globalConfig.memoizer` and calls `attach`, which is what lets `zod/mini` opt into cycle support. Measured 4512 locally but 4533 on CI \u2014 the gzip stream differs across zlib builds \u2014 so the headroom rides on the CI number.\n@@ -55,7 +56,8 @@ const CEILINGS: Record<string, number> = {\n   // Also carries the lazy `safeParse` error: a getter and a setter on the failing result, and the async wrapper that keeps a sync throw a rejection. Measured 3021 / 3497 / 4581 locally plus 18 headroom.\n   // Also carries the symbol-key loop in `util.members`, which is what installs `$ZodProperties`'s `Symbol.iterator` on its prototype, and the memoizer's shared reference predicate. Measured 3036 / 3516 / 4611 locally plus 18 headroom.\n   // Also carries the guards `validate` parses under: an `aborted` check in each container loop, and two early exits in the generated object parser. Only a bundle containing a container pays \u2014 boolean is byte-identical to main and string measures three bytes smaller \u2014 so this ceiling rises by the measured +76 and the other two do not move. Measured 4696 locally plus 18 headroom.\n-  \"zod-mini-object\": 4714,\n+  // Lowered by the measured \u221269 for the same bag strip: the string and number inits no longer carry pattern derivation or attach-time metadata writes.\n+  \"zod-mini-object\": 4645,\n };\n \n /**\ndiff --git a/packages/zod/src/v4/classic/tests/instance-footprint.test.ts b/packages/zod/src/v4/classic/tests/instance-footprint.test.ts\nindex bc23410..675cca3 100644\n--- a/packages/zod/src/v4/classic/tests/instance-footprint.test.ts\n+++ b/packages/zod/src/v4/classic/tests/instance-footprint.test.ts\n@@ -152,10 +152,16 @@ test(\"a live member keeps the descriptor a prototype member had\", () => {\n   const proto = Object.getPrototypeOf(z.string());\n   expect(Object.getOwnPropertyDescriptor(proto, \"description\")?.enumerable).toBe(false);\n   expect(Object.getOwnPropertyDescriptor(proto, \"_def\")?.enumerable).toBe(false);\n+  // a derived member installs like a literal's accessor: not enumerable, still configurable\n+  expect(Object.getOwnPropertyDescriptor(proto, \"minLength\")).toMatchObject({ enumerable: false, configurable: true });\n \n+  // the derived metadata members live on the prototype and shadow as own data on first read\n+  const schema = z.string();\n   const keys: string[] = [];\n-  for (const k in z.string()) keys.push(k);\n-  expect(keys).toEqual([\"def\", \"type\", \"format\", \"minLength\", \"maxLength\"]);\n+  for (const k in schema) keys.push(k);\n+  expect(keys).toEqual([\"def\", \"type\"]);\n+  expect(schema.minLength).toBe(null);\n+  expect(Object.keys(schema)).toContain(\"minLength\");\n });\n \n test(\"a live member is not cached per instance\", () => {\n@@ -221,6 +227,16 @@ test(\"a hand-written getter member accepts assignment\", () => {\n   const mini: any = zm.string();\n   mini.with = () => \"WITH\";\n   expect(mini.with()).toBe(\"WITH\");\n+\n+  // a derived metadata member accepts assignment before its first read, as it did as an own property\n+  const derived = z.number().min(2);\n+  derived.minValue = 99;\n+  expect(derived.minValue).toBe(99);\n+  expect(Object.keys(derived)).toContain(\"minValue\");\n+\n+  // and, like every prototype member, recomputes after deletion rather than staying absent\n+  delete (derived as any).minValue;\n+  expect(derived.minValue).toBe(2);\n });\n \n test(\"shape is lazy and stays out of Object.keys\", () => {\ndiff --git a/packages/zod/src/v4/classic/tests/optin-ladder.test.ts b/packages/zod/src/v4/classic/tests/optin-ladder.test.ts\nindex 08c57ef..1605415 100644\n--- a/packages/zod/src/v4/classic/tests/optin-ladder.test.ts\n+++ b/packages/zod/src/v4/classic/tests/optin-ladder.test.ts\n@@ -222,7 +222,8 @@ test(\"ladder: the rung values themselves\", () => {\n \n test(\"exactOptional overrides the values and pattern optional installs\", () => {\n   expect(z.exactOptional(z.enum([\"a\", \"b\"]))._zod.values).toEqual(new Set([\"a\", \"b\"]));\n-  expect(z.exactOptional(z.string().regex(/^abc$/))._zod.pattern).toEqual(/^abc$/);\n+  // a format carries its pattern on its def; a chained `.regex()` no longer folds into the inner `_zod.pattern`, the template literal derives that itself\n+  expect(z.exactOptional(z.stringFormat(\"abc\", /^abc$/))._zod.pattern).toEqual(/^abc$/);\n   expect(z.templateLiteral([\"a\", z.exactOptional(z.literal(\"b\"))]).safeParse(\"a\").success).toEqual(false);\n });\n \n@@ -230,5 +231,5 @@ test(\"exactOptional overrides the values and pattern optional installs\", () => {\n test(\"exactOptional's override holds for later instances\", () => {\n   z.exactOptional(z.enum([\"a\", \"b\"]));\n   expect(z.exactOptional(z.enum([\"c\", \"d\"]))._zod.values).toEqual(new Set([\"c\", \"d\"]));\n-  expect(z.exactOptional(z.string().regex(/^xyz$/))._zod.pattern).toEqual(/^xyz$/);\n+  expect(z.exactOptional(z.stringFormat(\"xyz\", /^xyz$/))._zod.pattern).toEqual(/^xyz$/);\n });\ndiff --git a/packages/zod/src/v4/classic/tests/template-literal.test.ts b/packages/zod/src/v4/classic/tests/template-literal.test.ts\nindex e674d24..2899318 100644\n--- a/packages/zod/src/v4/classic/tests/template-literal.test.ts\n+++ b/packages/zod/src/v4/classic/tests/template-literal.test.ts\n@@ -778,3 +778,27 @@ test(\"template literal parsing - failure - issue format\", () => {\n     }\n   `);\n });\n+\n+test(\"part patterns fold checks through wrappers and unions\", () => {\n+  // a constrained string keeps its bounds under a wrapper and inside a union\n+  const wrapped = z.templateLiteral([\"a-\", z.string().min(2).max(3).optional()]);\n+  expect(wrapped.safeParse(\"a-\").success).toBe(true);\n+  expect(wrapped.safeParse(\"a-xy\").success).toBe(true);\n+  expect(wrapped.safeParse(\"a-x\").success).toBe(false);\n+  expect(wrapped.safeParse(\"a-wxyz\").success).toBe(false);\n+\n+  const union = z.templateLiteral([\"\", z.union([z.string().regex(/^[a-c]+$/), z.number().int()])]);\n+  expect(union.safeParse(\"abc\").success).toBe(true);\n+  expect(union.safeParse(\"12\").success).toBe(true);\n+  expect(union.safeParse(\"xyz\").success).toBe(false);\n+  expect(union.safeParse(\"1.5\").success).toBe(false);\n+\n+  // an empty length range matches nothing rather than building an invalid quantifier\n+  const empty = z.templateLiteral([\"\", z.string().min(8).length(5)]);\n+  expect(empty.safeParse(\"abcde\").success).toBe(false);\n+\n+  // lazy resolves its inner schema on the internals, not the def\n+  const lazy = z.templateLiteral([\"\", z.lazy(() => z.string().min(2)).optional()]);\n+  expect(lazy.safeParse(\"x\").success).toBe(false);\n+  expect(lazy.safeParse(\"xy\").success).toBe(true);\n+});\ndiff --git a/packages/zod/src/v4/classic/tests/to-json-schema.test.ts b/packages/zod/src/v4/classic/tests/to-json-schema.test.ts\nindex 2e149b4..672d5af 100644\n--- a/packages/zod/src/v4/classic/tests/to-json-schema.test.ts\n+++ b/packages/zod/src/v4/classic/tests/to-json-schema.test.ts\n@@ -777,6 +777,97 @@ describe(\"toJSONSchema\", () => {\n     `);\n   });\n \n+  test(\"chained multipleOf divisors emit the whole conjunction\", () => {\n+    // runtime rejects 4 (not a multiple of 3), so the emitted schema must too\n+    expect(z.toJSONSchema(z.number().multipleOf(2).multipleOf(3))).toMatchInlineSnapshot(`\n+      {\n+        \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n+        \"allOf\": [\n+          {\n+            \"multipleOf\": 3,\n+          },\n+        ],\n+        \"multipleOf\": 2,\n+        \"type\": \"number\",\n+      }\n+    `);\n+  });\n+\n+  test(\"length() does not overwrite a tighter earlier bound\", () => {\n+    // min(8) + length(5) matches nothing at runtime; the emitted bounds stay honest about that\n+    expect(z.toJSONSchema(z.string().min(8).length(5))).toMatchInlineSnapshot(`\n+      {\n+        \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n+        \"maxLength\": 5,\n+        \"minLength\": 8,\n+        \"type\": \"string\",\n+      }\n+    `);\n+  });\n+\n+  test(\"an integer format keeps the emitted type integer whatever format lands last\", () => {\n+    // runtime rejects 1.5 in both orders, so both must emit type integer\n+    const after = z.number().int().check(z.float32());\n+    expect(after.safeParse(1.5).success).toBe(false);\n+    expect(z.toJSONSchema(after).type).toBe(\"integer\");\n+    expect(z.toJSONSchema(z.number().check(z.float32()).int()).type).toBe(\"integer\");\n+  });\n+\n+  test(\"disjoint mime checks emit a false schema, not an unconstrained file\", () => {\n+    const file = z.file().mime(\"image/png\").mime(\"text/plain\");\n+    expect(z.toJSONSchema(file)).toMatchInlineSnapshot(`\n+      {\n+        \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n+        \"contentEncoding\": \"binary\",\n+        \"format\": \"binary\",\n+        \"not\": {},\n+        \"type\": \"string\",\n+      }\n+    `);\n+  });\n+\n+  test(\"a custom mime narrowing via onattach intersects with built-in mime checks\", () => {\n+    const check = {\n+      _zod: {\n+        def: { check: \"custom_mime\" },\n+        onattach: [\n+          (inst: any) => {\n+            inst._zod.bag.mime = [\"text/plain\"];\n+          },\n+        ],\n+        check: () => {},\n+      },\n+    };\n+    const file = z\n+      .file()\n+      .mime([\"image/png\", \"text/plain\"])\n+      .check(check as any);\n+    expect(z.toJSONSchema(file).contentMediaType).toBe(\"text/plain\");\n+  });\n+\n+  test(\"a custom check contributing via onattach still lands\", () => {\n+    // third-party checks have no converter handler; their bag writes are merged in as a fallback\n+    const check = {\n+      _zod: {\n+        def: { check: \"custom_range\" },\n+        onattach: [\n+          (inst: any) => {\n+            const bag = inst._zod.bag;\n+            if (bag.minimum === undefined || 5 > bag.minimum) bag.minimum = 5;\n+          },\n+        ],\n+        check: () => {},\n+      },\n+    };\n+    expect(z.toJSONSchema(z.number().check(check as any))).toMatchInlineSnapshot(`\n+      {\n+        \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n+        \"minimum\": 5,\n+        \"type\": \"number\",\n+      }\n+    `);\n+  });\n+\n   test(\"target normalization draft-04 and draft-07\", () => {\n     // Test that both old (draft-4, draft-7) and new (draft-04, draft-07) target formats work\n \ndiff --git a/packages/zod/src/v4/mini/tests/computed.test.ts b/packages/zod/src/v4/mini/tests/computed.test.ts\nindex ce1f374..faa02bf 100644\n--- a/packages/zod/src/v4/mini/tests/computed.test.ts\n+++ b/packages/zod/src/v4/mini/tests/computed.test.ts\n@@ -2,35 +2,29 @@ import { expect, test } from \"vitest\";\n import * as z from \"zod/mini\";\n import { util as zc } from \"zod/v4/core\";\n \n+// checks no longer write metadata into the bag at attach time; the converter folds the checks itself, so the derived values are asserted through it\n+\n test(\"min/max\", () => {\n   const a = z.number().check(z.minimum(5), z.minimum(6), z.minimum(7), z.maximum(10), z.maximum(11), z.maximum(12));\n-\n-  expect(a._zod.bag.minimum).toEqual(7);\n-  expect(a._zod.bag.maximum).toEqual(10);\n+  expect(z.toJSONSchema(a)).toMatchObject({ minimum: 7, maximum: 10 });\n+  expect(a._zod.bag).toEqual({});\n });\n \n test(\"multipleOf\", () => {\n   const b = z.number().check(z.multipleOf(5));\n-  expect(b._zod.bag.multipleOf).toEqual(5);\n-});\n-\n-test(\"int64 format\", () => {\n-  const c = z.int64();\n-  expect(c._zod.bag.format).toEqual(\"int64\");\n-  expect(c._zod.bag.minimum).toEqual(zc.BIGINT_FORMAT_RANGES.int64[0]);\n-  expect(c._zod.bag.maximum).toEqual(zc.BIGINT_FORMAT_RANGES.int64[1]);\n+  expect(z.toJSONSchema(b)).toMatchObject({ multipleOf: 5 });\n });\n \n test(\"int32 format\", () => {\n   const d = z.int32();\n-  expect(d._zod.bag.format).toEqual(\"int32\");\n-  expect(d._zod.bag.minimum).toEqual(zc.NUMBER_FORMAT_RANGES.int32[0]);\n-  expect(d._zod.bag.maximum).toEqual(zc.NUMBER_FORMAT_RANGES.int32[1]);\n+  expect(z.toJSONSchema(d)).toMatchObject({\n+    type: \"integer\",\n+    minimum: zc.NUMBER_FORMAT_RANGES.int32[0],\n+    maximum: zc.NUMBER_FORMAT_RANGES.int32[1],\n+  });\n });\n \n test(\"array size\", () => {\n   const e = z.array(z.string()).check(z.length(5));\n-  expect(e._zod.bag.length).toEqual(5);\n-  expect(e._zod.bag.minimum).toEqual(5);\n-  expect(e._zod.bag.maximum).toEqual(5);\n+  expect(z.toJSONSchema(e)).toMatchObject({ minItems: 5, maxItems: 5 });\n });\n",
+  "test_files": [
+   "packages/treeshake/bundle-size.test.ts",
+   "packages/zod/src/v4/classic/tests/instance-footprint.test.ts",
+   "packages/zod/src/v4/classic/tests/optin-ladder.test.ts",
+   "packages/zod/src/v4/classic/tests/template-literal.test.ts",
+   "packages/zod/src/v4/classic/tests/to-json-schema.test.ts",
+   "packages/zod/src/v4/mini/tests/computed.test.ts"
+  ],
+  "visible_tests": [
+   "packages/treeshake/bundle-size.test.ts",
+   "packages/zod/src/v4/classic/tests/instance-footprint.test.ts",
+   "packages/zod/src/v4/classic/tests/optin-ladder.test.ts",
+   "packages/zod/src/v4/classic/tests/template-literal.test.ts",
+   "packages/zod/src/v4/classic/tests/to-json-schema.test.ts",
+   "packages/zod/src/v4/mini/tests/computed.test.ts"
+  ],
+  "gold_files": [
+   "packages/zod/src/v4/classic/schemas.ts",
+   "packages/zod/src/v4/core/checks.ts",
+   "packages/zod/src/v4/core/json-schema-processors.ts",
+   "packages/zod/src/v4/core/regexes.ts",
+   "packages/zod/src/v4/core/schemas.ts",
+   "packages/zod/src/v4/core/util.ts"
+  ],
+  "gold_functions": [
+   "packages/zod/src/v4/classic/schemas.ts::format",
+   "packages/zod/src/v4/classic/schemas.ts::isInt",
+   "packages/zod/src/v4/classic/schemas.ts::maxDate",
+   "packages/zod/src/v4/classic/schemas.ts::maxLength",
+   "packages/zod/src/v4/classic/schemas.ts::maxValue",
+   "packages/zod/src/v4/classic/schemas.ts::minDate",
+   "packages/zod/src/v4/classic/schemas.ts::minLength",
+   "packages/zod/src/v4/classic/schemas.ts::minValue",
+   "packages/zod/src/v4/core/json-schema-processors.ts::addDivisor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::addPattern",
+   "packages/zod/src/v4/core/json-schema-processors.ts::aggregateChecks",
+   "packages/zod/src/v4/core/json-schema-processors.ts::arrayProcessor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::fileProcessor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::formatContributor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::greater_than",
+   "packages/zod/src/v4/core/json-schema-processors.ts::intersectMime",
+   "packages/zod/src/v4/core/json-schema-processors.ts::length_equals",
+   "packages/zod/src/v4/core/json-schema-processors.ts::less_than",
+   "packages/zod/src/v4/core/json-schema-processors.ts::maxContributor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::mime_type",
+   "packages/zod/src/v4/core/json-schema-processors.ts::minContributor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::multiple_of",
+   "packages/zod/src/v4/core/json-schema-processors.ts::narrowBoth",
+   "packages/zod/src/v4/core/json-schema-processors.ts::narrowMax",
+   "packages/zod/src/v4/core/json-schema-processors.ts::narrowMin",
+   "packages/zod/src/v4/core/json-schema-processors.ts::numberProcessor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::recordProcessor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::setFormat",
+   "packages/zod/src/v4/core/json-schema-processors.ts::size_equals",
+   "packages/zod/src/v4/core/json-schema-processors.ts::stringProcessor",
+   "packages/zod/src/v4/core/json-schema-processors.ts::string_format",
+   "packages/zod/src/v4/core/json-schema-processors.ts::tupleProcessor",
+   "packages/zod/src/v4/core/schemas.ts::leafPattern",
+   "packages/zod/src/v4/core/schemas.ts::partPattern",
+   "packages/zod/src/v4/core/util.ts::derived",
+   "packages/zod/src/v4/core/util.ts::derived.get",
+   "packages/zod/src/v4/core/util.ts::derived.set"
+  ],
+  "prompt": "Add a new function in `packages/zod/src/v4/core/util.ts`, after `hide`. Its signature and description:\n\n```\nfunction derived<T>(\n  computes:\n```\n\nAdds members a table derives from the instance: each builds on first read and shadows as own data, and assignment shadows the same way, as when these were own properties.\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "zod",
+  "language": "python",
+  "commit": "213ee75d2ad6e41508587c3fab8246967f006993",
+  "parent": "f9465d4e6497f92fe85ef7118ea64d7f86c28676",
+  "commit_date": "2026-09-09T09:31:49-07:00",
+  "author_date": "2026-09-09T09:31:49-07:00",
+  "subject": "feat(compile): add z.withParser for externally generated parsers (#6575)",
+  "target": "packages/zod/src/v4/core/compile.ts::withParser",
+  "target_file": "packages/zod/src/v4/core/compile.ts",
+  "signature": "function withParser<T extends SomeType>(schema: T, parser: (input: unknown) => core.output<T> | INVALID): T",
+  "docstring": "Install an already-generated parser as a schema's fast path. Returns a clone; the original is\nunchanged.\n\nThe parser takes the input and returns the parsed value, or `INVALID` to hand the parse to the\nruntime. It must be synchronous and forward-direction, and it must build fresh output rather than\nreturn its input \u2014 Zod cannot check either, and a wrong *success* is returned to the caller as-is.\n\n`compile()` is the ordinary entry point. This is for a build-time or native compiler that produces\na parser where `new Function` is unavailable.",
+  "after": "compile",
+  "helpers": [
+   "as",
+   "installCompiledUserMethods",
+   "isBackEdge",
+   "isRecursiveSchema",
+   "of"
+  ],
+  "depth": 5,
+  "stratum": "5+",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/packages/zod/src/v4/core/tests/compile.test.ts b/packages/zod/src/v4/core/tests/compile.test.ts\nindex 681ceeb..c395a93 100644\n--- a/packages/zod/src/v4/core/tests/compile.test.ts\n+++ b/packages/zod/src/v4/core/tests/compile.test.ts\n@@ -1,7 +1,14 @@\n-import { expect, test } from \"vitest\";\n+import { expect, expectTypeOf, test } from \"vitest\";\n \n import * as z from \"../../index.js\";\n-import { ZodCompileAsyncError, ZodCompileUnsupportedError, compile, compileFn } from \"../compile.js\";\n+import {\n+  INVALID,\n+  ZodCompileAsyncError,\n+  ZodCompileUnsupportedError,\n+  compile,\n+  compileFn,\n+  withParser,\n+} from \"../compile.js\";\n import { $ZodAsyncError } from \"../core.js\";\n \n // Differential helper: assert compiled schema matches the original on a value.\n@@ -1779,3 +1786,74 @@ test(\"compiled records walk own enumerable keys without Reflect.ownKeys\", () =>\n   expect(compile(plain).parse(revealing())).toStrictEqual(plain.parse(revealing()));\n   expect(compile(plain).parse(revealing())).toStrictEqual({ a: 1, b: 2 });\n });\n+\n+// withParser: a parser Zod did not generate, installed on the same wrapper compile() uses.\n+\n+// tags its output so a test fails loudly if the runtime ran instead of the supplied parser\n+function taggedParser(input: unknown) {\n+  if (typeof input !== \"object\" || input === null) return INVALID;\n+  const o = input as Record<string, unknown>;\n+  if (typeof o.a !== \"string\") return INVALID;\n+  return { a: o.a, tag: \"supplied\" };\n+}\n+\n+const withParserSchema = z.object({ a: z.string() });\n+\n+test(\"withParser installs the supplied parser\", () => {\n+  const installed = withParser(withParserSchema, taggedParser);\n+  expect(installed.parse({ a: \"x\" })).toStrictEqual({ a: \"x\", tag: \"supplied\" });\n+  // the clone is a new schema; the original keeps the runtime\n+  expect(installed).not.toBe(withParserSchema);\n+  expect(withParserSchema.parse({ a: \"x\" })).toStrictEqual({ a: \"x\" });\n+});\n+\n+test(\"withParser hands INVALID to the runtime and gets a real ZodError\", () => {\n+  const installed = withParser(withParserSchema, taggedParser);\n+  const result = installed.safeParse({ a: 1 });\n+  expect(result.success).toBe(false);\n+  expect(result.error!.issues).toEqual(withParserSchema.safeParse({ a: 1 }).error!.issues);\n+});\n+\n+test(\"withParser answers validate with the supplied parser\", () => {\n+  const installed = withParser(withParserSchema, taggedParser);\n+  expect(z.validate(installed, { a: \"x\" })).toBe(true);\n+  expect(z.validate(installed, { a: 1 })).toBe(false);\n+});\n+\n+test(\"withParser bypasses the fast path on async, like compile()\", async () => {\n+  const installed = withParser(withParserSchema, taggedParser);\n+  // async runs on the runtime, so the tag is absent\n+  await expect(installed.parseAsync({ a: \"x\" })).resolves.toStrictEqual({ a: \"x\" });\n+});\n+\n+test(\"withParser reaches a parse it does not own the call site of\", () => {\n+  const installed = withParser(withParserSchema, taggedParser);\n+  // installing on _zod.run rather than wrapping a call site is the whole point: a framework holding the schema gets the supplied parser through Standard Schema, and so does z.parse\n+  expect((installed[\"~standard\"].validate({ a: \"x\" }) as { value: unknown }).value).toStrictEqual({\n+    a: \"x\",\n+    tag: \"supplied\",\n+  });\n+  expect(z.parse(installed, { a: \"x\" })).toStrictEqual({ a: \"x\", tag: \"supplied\" });\n+});\n+\n+test(\"withParser refuses a recursive schema\", () => {\n+  type Node = { next: Node | null };\n+  const Node: z.ZodType<Node> = z.object({ next: z.lazy(() => z.nullable(Node)) });\n+  expect(() => withParser(Node, () => INVALID)).toThrow(ZodCompileUnsupportedError);\n+});\n+\n+test(\"withParser leaves encode on the runtime\", () => {\n+  const codec = z.codec(z.string(), z.number(), {\n+    decode: (s) => Number(s),\n+    encode: (n) => String(n),\n+  });\n+  const installed = withParser(codec, () => INVALID);\n+  expect(z.encode(installed, 5)).toBe(\"5\");\n+});\n+\n+test(\"withParser rejects a parser whose output contradicts the schema\", () => {\n+  // the returned schema still claims T, so a parser that succeeds with something else would make parse() lie about its own type\n+  // @ts-expect-error a number is not the output of z.string()\n+  withParser(z.string(), () => 123);\n+  expectTypeOf(withParser(z.string(), () => \"ok\")).toEqualTypeOf<z.ZodString>();\n+});\n",
+  "test_files": [
+   "packages/zod/src/v4/core/tests/compile.test.ts"
+  ],
+  "visible_tests": [
+   "packages/zod/src/v4/core/tests/compile.test.ts"
+  ],
+  "gold_files": [
+   "packages/zod/src/v4/classic/external.ts",
+   "packages/zod/src/v4/core/compile.ts",
+   "packages/zod/src/v4/mini/external.ts"
+  ],
+  "gold_functions": [
+   "packages/zod/src/v4/core/compile.ts::compile",
+   "packages/zod/src/v4/core/compile.ts::compile.wrapped",
+   "packages/zod/src/v4/core/compile.ts::withParser",
+   "packages/zod/src/v4/core/compile.ts::withParser.wrapped"
+  ],
+  "prompt": "Add a new function in `packages/zod/src/v4/core/compile.ts`, after `compile`. Its signature and description:\n\n```\nfunction withParser<T extends SomeType>(schema: T, parser: (input: unknown) => core.output<T> | INVALID): T\n```\n\nInstall an already-generated parser as a schema's fast path. Returns a clone; the original is\nunchanged.\n\nThe parser takes the input and returns the parsed value, or `INVALID` to hand the parse to the\nruntime. It must be synchronous and forward-direction, and it must build fresh output rather than\nreturn its input \u2014 Zod cannot check either, and a wrong *success* is returned to the caller as-is.\n\n`compile()` is the ordinary entry point. This is for a build-time or native compiler that produces\na parser where `new Function` is unavailable.\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "es-toolkit",
+  "language": "python",
+  "commit": "40e9ce98b3c16e20d027eb01b939727ea1fbd6a7",
+  "parent": "cdfd65ed130152d0fb4324518c7f4521b46870d9",
+  "commit_date": "2025-06-05T18:45:20+09:00",
+  "author_date": "2025-06-05T18:44:10+09:00",
+  "subject": "fix(truncate): Add tests from lodash & add docs for truncate",
+  "target": "src/compat/string/truncate.ts::truncate",
+  "target_file": "src/compat/string/truncate.ts",
+  "signature": "function truncate(string: string, options: TruncateOptions =",
+  "docstring": "Truncates `string` if it's longer than the given maximum string length.\nThe last characters of the truncated string are replaced with the omission\nstring which defaults to \"...\".",
+  "after": null,
+  "helpers": [
+   "if",
+   "isObject",
+   "return"
+  ],
+  "depth": 3,
+  "stratum": "3-4",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/src/compat/string/truncate.spec.ts b/src/compat/string/truncate.spec.ts\nindex d7c7af4a..319855d8 100644\n--- a/src/compat/string/truncate.spec.ts\n+++ b/src/compat/string/truncate.spec.ts\n@@ -1,13 +1,75 @@\n import { describe, expect, it } from 'vitest';\n import { truncate } from './truncate.ts';\n-\n-/**\n- * Truncates `string` if it's longer than the given maximum string length.\n- * The last characters of the truncated string are replaced with the omission\n- * string which defaults to \"...\"\n- */\n+import { forEach } from '../array/forEach.ts';\n+import { map } from '../array/map.ts';\n+import { constant } from '../util/constant.ts';\n \n describe('truncate', () => {\n+  const string = 'hi-diddly-ho there, neighborino';\n+\n+  it('should use a default `length` of `30`', () => {\n+    expect(truncate(string), 'hi-diddly-ho there).toBe(neighbo...');\n+  });\n+\n+  it('should not truncate if `string` is <= `length`', () => {\n+    expect(truncate(string, { length: string.length })).toBe(string);\n+    expect(truncate(string, { length: string.length + 2 })).toBe(string);\n+  });\n+\n+  it('should truncate string the given length', () => {\n+    expect(truncate(string, { length: 24 }), 'hi-diddly-ho there).toBe(n...');\n+  });\n+\n+  it('should support a `omission` option', () => {\n+    expect(truncate(string, { omission: ' [...]' })).toBe('hi-diddly-ho there, neig [...]');\n+  });\n+\n+  it('should coerce nullish `omission` values to strings', () => {\n+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n+    // @ts-expect-error\n+    expect(truncate(string, { omission: null }), 'hi-diddly-ho there).toBe(neighbnull');\n+    expect(truncate(string, { omission: undefined })).toBe('hi-diddly-ho there, nundefined');\n+  });\n+\n+  it('should support a `length` option', () => {\n+    expect(truncate(string, { length: 4 })).toBe('h...');\n+  });\n+\n+  it('should support a `separator` option', () => {\n+    expect(truncate(string, { length: 24, separator: ' ' })).toBe('hi-diddly-ho there,...');\n+    expect(truncate(string, { length: 24, separator: /,? +/ })).toBe('hi-diddly-ho there...');\n+    expect(truncate(string, { length: 24, separator: /,? +/g })).toBe('hi-diddly-ho there...');\n+  });\n+\n+  it('should treat negative `length` as `0`', () => {\n+    forEach([0, -2], length => {\n+      expect(truncate(string, { length: length })).toBe('...');\n+    });\n+  });\n+\n+  it('should coerce `length` to an integer', () => {\n+    forEach(['', NaN, 4.6, '4'], (length, index) => {\n+      const actual = index > 1 ? 'h...' : '...';\n+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n+      // @ts-expect-error\n+      expect(truncate(string, { length: { valueOf: constant(length) } })).toBe(actual);\n+    });\n+  });\n+\n+  it('should coerce `string` to a string', () => {\n+    expect(truncate(Object(string), { length: 4 })).toBe('h...');\n+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n+    // @ts-expect-error\n+    expect(truncate({ toString: constant(string) }, { length: 5 })).toBe('hi...');\n+  });\n+\n+  it('should work as an iteratee for methods like `_.map`', () => {\n+    const actual = map([string, string, string], truncate);\n+    const truncated = 'hi-diddly-ho there, neighbo...';\n+\n+    expect(actual).toEqual([truncated, truncated, truncated]);\n+  });\n+\n   const test = 'hi-diddly-ho there, neighborino';\n   const strAsciiLong = test.padEnd(500, 'A').padEnd(1000, '5').padEnd(1500, ' ').padEnd(2000, ', ');\n \ndiff --git a/src/string/truncate.spec.ts b/src/string/truncate.spec.ts\ndeleted file mode 100644\nindex d7c7af4a..00000000\n--- a/src/string/truncate.spec.ts\n+++ /dev/null\n@@ -1,51 +0,0 @@\n-import { describe, expect, it } from 'vitest';\n-import { truncate } from './truncate.ts';\n-\n-/**\n- * Truncates `string` if it's longer than the given maximum string length.\n- * The last characters of the truncated string are replaced with the omission\n- * string which defaults to \"...\"\n- */\n-\n-describe('truncate', () => {\n-  const test = 'hi-diddly-ho there, neighborino';\n-  const strAsciiLong = test.padEnd(500, 'A').padEnd(1000, '5').padEnd(1500, ' ').padEnd(2000, ', ');\n-\n-  it('should truncate to the default 30 characters', () => {\n-    expect(truncate(strAsciiLong, { length: 150 })).toEqual(\n-      'hi-diddly-ho there, neighborinoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...'\n-    );\n-  });\n-\n-  it('should truncate to 24 characters and remove trailing characters including the last space', () => {\n-    expect(truncate(test, { length: 24, separator: ' ' })).toEqual('hi-diddly-ho there,...');\n-  });\n-\n-  it('should truncate to 24 characters and remove trailing characters including the last comma using regex separator', () => {\n-    expect(truncate(test, { length: 24, separator: /,? +/ })).toEqual('hi-diddly-ho there...');\n-  });\n-\n-  it('should handle using a regex separator with already existing \"u\" flag', () => {\n-    expect(truncate(test, { length: 24, separator: /,? +/u })).toEqual('hi-diddly-ho there...');\n-  });\n-\n-  it('should truncate to 30 characters using \" [...]\" as the omission string', () => {\n-    expect(truncate(test, { omission: ' [...]' })).toEqual('hi-diddly-ho there, neig [...]');\n-  });\n-\n-  it('should return the input string if string is <= length', () => {\n-    expect(truncate('ABC', { length: 3 })).toEqual('ABC');\n-  });\n-\n-  it('should return the omission string if string is longer than length and shorter than the omission string', () => {\n-    expect(truncate('ABC', { length: 2 })).toEqual('...');\n-  });\n-\n-  it('should count unicode characters as a single character instead of string.length', () => {\n-    expect(truncate('\u00a5\u00a7\u2708\u2709\ud83e\udd13', { length: 5 })).toEqual('\u00a5\u00a7\u2708\u2709\ud83e\udd13');\n-  });\n-\n-  it('should truncate unicode characters correctly', () => {\n-    expect(truncate('\u00a5\u00a7\u2708\u2709\ud83e\udd13', { length: 4, omission: '\u2026' })).toEqual('\u00a5\u00a7\u2708\u2026');\n-  });\n-});\n",
+  "test_files": [
+   "src/compat/string/truncate.spec.ts",
+   "src/string/truncate.spec.ts"
+  ],
+  "visible_tests": [
+   "src/compat/string/truncate.spec.ts",
+   "src/string/truncate.spec.ts"
+  ],
+  "gold_files": [
+   "src/compat/string/truncate.ts",
+   "src/string/index.ts",
+   "src/string/truncate.ts"
+  ],
+  "gold_functions": [
+   "src/compat/string/truncate.ts::parseLength",
+   "src/compat/string/truncate.ts::truncate",
+   "src/string/truncate.ts::truncate"
+  ],
+  "prompt": "Add a new function in `src/compat/string/truncate.ts`. Its signature and description:\n\n```\nfunction truncate(string: string, options: TruncateOptions =\n```\n\nTruncates `string` if it's longer than the given maximum string length.\nThe last characters of the truncated string are replaced with the omission\nstring which defaults to \"...\".\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "more-itertools",
+  "language": "python",
+  "commit": "6932dee9f1a219401a14255a2b620f774229768f",
+  "parent": "a7236314cdb977d154d90a27cd7d5ddc3f86c851",
+  "commit_date": "2024-12-02T14:52:50-06:00",
+  "author_date": "2024-12-02T14:52:50-06:00",
+  "subject": "Add nth_prime also",
+  "target": "more_itertools/recipes.py::nth_prime",
+  "target_file": "more_itertools/recipes.py",
+  "signature": "def nth_prime(n):",
+  "docstring": "Return the nth prime (counting from 0).\n\n    >>> nth_prime(0)\n    2\n    >>> nth_prime(100)\n    547",
+  "after": "is_prime",
+  "helpers": [
+   "nth",
+   "sieve"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_recipes.py b/tests/test_recipes.py\nindex 3de4d09..b15c2fd 100644\n--- a/tests/test_recipes.py\n+++ b/tests/test_recipes.py\n@@ -1217,24 +1217,14 @@ class TotientTests(TestCase):\n                 self.assertEqual(mi.totient(n), expected)\n \n \n-class IsPrimeTests(TestCase):\n-    def test_pseudoprimes(self):\n+class PrimeFunctionTests(TestCase):\n+    def test_is_prime_pseudoprimes(self):\n         for n in (341, 561, 645, 1105, 1387, 1729, 1905, 2047, 2465, 2701):\n             with self.subTest(n=n):\n                 self.assertFalse(mi.is_prime(n))\n \n     def test_primes(self):\n-        for n in (\n-            2,\n-            15_485_863,\n-            15_485_867,\n-            32_452_843,\n-            32_452_867,\n-            49_979_687,\n-            49_979_693,\n-            67_867_967,\n-            67_867_979,\n-            86_028_121,\n-        ):\n+        for i, n in enumerate(mi.sieve(10**5)):\n             with self.subTest(n=n):\n                 self.assertTrue(mi.is_prime(n))\n+                self.assertEqual(mi.nth_prime(i), n)\n",
+  "test_files": [
+   "tests/test_recipes.py"
+  ],
+  "visible_tests": [
+   "tests/test_recipes.py"
+  ],
+  "gold_files": [
+   "more_itertools/recipes.py"
+  ],
+  "gold_functions": [
+   "more_itertools/recipes.py::_nth_prime_ub",
+   "more_itertools/recipes.py::nth_prime"
+  ],
+  "prompt": "Add a new function in `more_itertools/recipes.py`, after `is_prime`. Its signature and description:\n\n```\ndef nth_prime(n):\n```\n\nReturn the nth prime (counting from 0).\n\n    >>> nth_prime(0)\n    2\n    >>> nth_prime(100)\n    547\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "more-itertools",
+  "language": "python",
+  "commit": "edb9970d02e29a30d470d63aab9d94d61a85d349",
+  "parent": "c3cfc508573812eb9fc5a8f5233056bf925a3e3c",
+  "commit_date": "2025-02-10T16:32:45-06:00",
+  "author_date": "2025-02-10T16:32:45-06:00",
+  "subject": "Bring over the multinomial() recipe from the itertool docs",
+  "target": "more_itertools/recipes.py::multinomial",
+  "target_file": "more_itertools/recipes.py",
+  "signature": "def multinomial(*counts):",
+  "docstring": "Number of distinct arrangements of a multiset.\n\n    The expression ``multinomial(3, 4, 2)`` has several equivalent\n    interpretations:\n\n    * In the expansion of ``(a + b + c)\u2079``, the coefficient of the\n    ``a\u00b3b\u2074c\u00b2`` term is 1260.\n\n    * There are 1260 distinct ways to arrange 9 balls consisting of 3 reds, 4\n    greens, and 2 blues.\n\n    * There are 1260 unique ways to place 9 distinct objects into three bins\n    with sizes 3, 4, and 2.\n\n    The :func:`multinomial` function computes the length of\n    :func:`distinct_permutations`.  For example, there are 83,160 distinct\n    anagrams of the word \"abracadabra\":\n\n        >>> from more_itertools import distinct_permutations, ilen\n        >>> ilen(distinct_permutations('abracadabra'))\n        83160\n\n    This can be computed directly from the letter counts, 5a 2b 2r 1c 1d:\n\n        >>> from collections import Counter\n        >>> list(Counter('abracadabra').values())\n        [5, 2, 2, 1, 1]\n        >>> multinomial(5, 2, 1, 1, 2)\n        83160\n\n    A binomial coefficient is a special case of multinomial where there are\n    only two categories.  For example, the number of ways to arrange 12 balls\n    with 5 reds and 7 blues is ``multinomial(5, 7)`` or ``math.comb(12, 5)``.\n\n    When the multiplicities are all just 1, :func:`multinomial`\n    is a special case of ``math.factorial`` so that\n    ``multinomial(1, 1, 1, 1, 1, 1, 1) == math.factorial(7)``.\n\n    Reference:  https://en.wikipedia.org/wiki/Multinomial_theorem",
+  "after": "loops",
+  "helpers": [
+   "distinct_permutations",
+   "ilen"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_recipes.py b/tests/test_recipes.py\nindex a810b8d..84bc927 100644\n--- a/tests/test_recipes.py\n+++ b/tests/test_recipes.py\n@@ -1,10 +1,11 @@\n+from collections import Counter\n from decimal import Decimal\n from doctest import DocTestSuite\n from fractions import Fraction\n from functools import reduce\n from itertools import combinations, count, groupby, permutations\n from operator import mul\n-from math import comb, factorial\n+from math import comb, prod, factorial\n from sys import version_info\n from unittest import TestCase, skipIf\n from unittest.mock import patch\n@@ -1385,3 +1386,50 @@ class LoopsTests(TestCase):\n         self.assertTrue(\n             all(list(mi.loops(n)) == [None] * n for n in range(-10, 10))\n         )\n+\n+\n+class MultinomialTests(TestCase):\n+    def test_basic(self):\n+        multinomial = mi.multinomial\n+\n+        # Case M(11; 5, 2, 1, 1, 2) = 83160\n+        # https://www.wolframalpha.com/input?i=Multinomia%285%2C+2%2C+1%2C+1%2C+2%29\n+        self.assertEqual(multinomial(5, 2, 1, 1, 2), 83160)\n+\n+        # Commutative\n+        self.assertEqual(multinomial(2, 1, 1, 2, 5), 83160)\n+\n+        # Unaffected by zero-sized bins\n+        self.assertEqual(multinomial(2, 0, 1, 0, 1, 2, 5, 0), 83160)\n+\n+        # Matches definition\n+        self.assertEqual(\n+            multinomial(5, 2, 1, 1, 2),\n+            (\n+                factorial(sum([5, 2, 1, 1, 2]))\n+                // prod(map(factorial, [5, 2, 1, 1, 2]))\n+            ),\n+        )\n+\n+        # Corner cases and identities\n+        self.assertEqual(multinomial(), 1)\n+        self.assertEqual(multinomial(5), 1)\n+        self.assertEqual(multinomial(5, 7), comb(12, 5))\n+        self.assertEqual(multinomial(1, 1, 1, 1, 1, 1, 1), factorial(7))\n+\n+        # Relationship to distinct_permuations\n+        word = 'coffee'\n+        self.assertEqual(\n+            multinomial(*Counter(word).values()),\n+            mi.ilen(mi.distinct_permutations(word)),\n+        )\n+\n+        # Error cases\n+        with self.assertRaises(ValueError):\n+            multinomial(-5, 7)  # No negative inputs\n+        with self.assertRaises(TypeError):\n+            multinomial(5, 7.25)  # No float inputs\n+        with self.assertRaises(TypeError):\n+            multinomial(5, 'x')  # No non-numeric inputs\n+        with self.assertRaises(TypeError):\n+            multinomial([5, 7])  # No sequence inputs\n",
+  "test_files": [
+   "tests/test_recipes.py"
+  ],
+  "visible_tests": [
+   "tests/test_recipes.py"
+  ],
+  "gold_files": [
+   "more_itertools/more.py",
+   "more_itertools/recipes.py"
+  ],
+  "gold_functions": [
+   "more_itertools/recipes.py::multinomial"
+  ],
+  "prompt": "Add a new function in `more_itertools/recipes.py`, after `loops`. Its signature and description:\n\n```\ndef multinomial(*counts):\n```\n\nNumber of distinct arrangements of a multiset.\n\n    The expression ``multinomial(3, 4, 2)`` has several equivalent\n    interpretations:\n\n    * In the expansion of ``(a + b + c)\u2079``, the coefficient of the\n    ``a\u00b3b\u2074c\u00b2`` term is 1260.\n\n    * There are 1260 distinct ways to arrange 9 balls consisting of 3 reds, 4\n    greens, and 2 blues.\n\n    * There are 1260 unique ways to place 9 distinct objects into three bins\n    with sizes 3, 4, and 2.\n\n    The :func:`multinomial` function computes the length of\n    :func:`distinct_permutations`.  For example, there are 83,160 distinct\n    anagrams of the word \"abracadabra\":\n\n        >>> from more_itertools import distinct_permutations, ilen\n        >>> ilen(distinct_permutations('abracadabra'))\n        83160\n\n    This can be computed directly from the letter counts, 5a 2b 2r 1c 1d:\n\n        >>> from collections import Counter\n        >>> list(Counter('abracadabra').values())\n        [5, 2, 2, 1, 1]\n        >>> multinomial(5, 2, 1, 1, 2)\n        83160\n\n    A binomial coefficient is a special case of multinomial where there are\n    only two categories.  For example, the number of ways to arrange 12 balls\n    with 5 reds and 7 blues is ``multinomial(5, 7)`` or ``math.comb(12, 5)``.\n\n    When the multiplicities are all just 1, :func:`multinomial`\n    is a special case of ``math.factorial`` so that\n    ``multinomial(1, 1, 1, 1, 1, 1, 1) == math.factorial(7)``.\n\n    Reference:  https://en.wikipedia.org/wiki/Multinomial_theorem\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "more-itertools",
+  "language": "python",
+  "commit": "18c57c720fc5a7672439ea45a5393a8c1ff40d1e",
+  "parent": "9210d54527ddfa63ebe75cd5b5daa0201902c674",
+  "commit_date": "2026-03-31T15:04:37-05:00",
+  "author_date": "2026-03-31T15:04:37-05:00",
+  "subject": "Issue #1134: Add running_statistics (#1135)",
+  "target": "more_itertools/more.py::running_statistics",
+  "target_file": "more_itertools/more.py",
+  "signature": "def running_statistics(iterable, *, maxlen=None):",
+  "docstring": "Statistics for values seen so far or values in a sliding window.\n\n    Set *maxlen* to a positive integer to specify the maximum size\n    of the sliding window.  The default of *None* is equivalent to\n    an unbounded window.\n\n    Yields instances of a ``Stats`` dataclass with fields for the dataset *size*,\n    *mininum* value, *median* value, *maximum* value, and the arithmetic *mean*.\n\n    Supports numeric types such as int, float, Decimal, and Fraction,\n    but not complex numbers which are unorderable.",
+  "after": "concurrent_tee",
+  "helpers": [
+   "count",
+   "running_mean",
+   "running_median"
+  ],
+  "depth": 3,
+  "stratum": "3-4",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_more.py b/tests/test_more.py\nindex 2e0cc06..c69326e 100644\n--- a/tests/test_more.py\n+++ b/tests/test_more.py\n@@ -28,8 +28,8 @@ from itertools import (\n )\n from operator import add, mul, itemgetter, not_\n from pickle import loads, dumps\n-from random import Random, random, randrange, seed\n-from statistics import mean\n+from random import Random, choices, random, randrange, seed\n+from statistics import mean, median\n from string import ascii_letters\n from threading import Thread, Lock\n from time import sleep\n@@ -6646,3 +6646,245 @@ class TestConcurrentTee(TestCase):\n         with self.assertRaises(ValueError):\n             non_concurrent_source = producer(limit)\n             mi.concurrent_tee(non_concurrent_source, n=-1)  # Negative n\n+\n+\n+def grow_to_window(data, maxlen):\n+    \"Return growing window views upto maxlen.\"\n+    for j in range(1, len(data) + 1):\n+        i = max(j - maxlen, 0)\n+        yield data[i:j]\n+\n+\n+class TestRunningMin(TestCase):\n+    def test_basic(self):\n+        for i, (iterable, expected) in enumerate(\n+            [\n+                ([], []),\n+                ([1], [1]),\n+                ([1, 2], [1, 1]),\n+                (\n+                    [Fraction(1, 1), Fraction(2, 1)],\n+                    [Fraction(1, 1), Fraction(1, 1)],\n+                ),\n+                (\n+                    [Decimal('1.0'), Decimal('2.0')],\n+                    [Decimal('1.0'), Decimal('1.0')],\n+                ),\n+                ([8.5, 9.5, 7.5, 6.5], [8.5, 8.5, 7.5, 6.5]),\n+            ]\n+        ):\n+            with self.subTest(i=i, iterable=iterable, expected=expected):\n+                actual = list(mi.running_min(iterable))\n+                self.assertEqual(actual, expected)\n+\n+    def test_maxlen(self):\n+        data = choices(range(20), k=1000)\n+\n+        # Window size must be positive\n+        with self.assertRaises(ValueError):\n+            list(mi.running_min(iter(data), maxlen=0))\n+\n+        # Window size of 1 should return the original dataset unchanged\n+        self.assertEqual(list(mi.running_min(iter(data), maxlen=1)), data)\n+\n+        # Window size normal cases\n+        for maxlen in range(2, 6):\n+            with self.subTest(maxlen=maxlen):\n+                actual = list(mi.running_min(iter(data), maxlen=maxlen))\n+                expected = list(map(min, grow_to_window(data, maxlen)))\n+                self.assertEqual(actual, expected)\n+\n+        # Window size larger than the data same as the unbounded case\n+        self.assertEqual(\n+            list(mi.running_min(iter(data), maxlen=len(data) * 2)),\n+            list(mi.running_min(iter(data))),\n+        )\n+\n+\n+class TestRunningMax(TestCase):\n+    def test_basic(self):\n+        for i, (iterable, expected) in enumerate(\n+            [\n+                ([], []),\n+                ([1], [1]),\n+                ([1, 2], [1, 2]),\n+                (\n+                    [Fraction(1, 1), Fraction(2, 1)],\n+                    [Fraction(1, 1), Fraction(2, 1)],\n+                ),\n+                (\n+                    [Decimal('1.0'), Decimal('2.0')],\n+                    [Decimal('1.0'), Decimal('2.0')],\n+                ),\n+                ([8.5, 9.5, 7.5, 6.5], [8.5, 9.5, 9.5, 9.5]),\n+            ]\n+        ):\n+            with self.subTest(i=i, iterable=iterable, expected=expected):\n+                actual = list(mi.running_max(iterable))\n+                self.assertEqual(actual, expected)\n+\n+    def test_maxlen(self):\n+        data = choices(range(20), k=1000)\n+\n+        # Window size must be positive\n+        with self.assertRaises(ValueError):\n+            list(mi.running_max(iter(data), maxlen=0))\n+\n+        # Window size of 1 should return the original dataset unchanged\n+        self.assertEqual(list(mi.running_max(iter(data), maxlen=1)), data)\n+\n+        # Window size normal cases\n+        for maxlen in range(2, 6):\n+            with self.subTest(maxlen=maxlen):\n+                actual = list(mi.running_max(iter(data), maxlen=maxlen))\n+                expected = list(map(max, grow_to_window(data, maxlen)))\n+                self.assertEqual(actual, expected)\n+\n+        # Window size larger than the data same as the unbounded case\n+        self.assertEqual(\n+            list(mi.running_max(iter(data), maxlen=len(data) * 2)),\n+            list(mi.running_max(iter(data))),\n+        )\n+\n+\n+class TestRunningStats(TestCase):\n+    # Assumes that the component functions are already tested,\n+    # so we only need to test whether they are properly integrated\n+    # (i.e correctly pass *maxlen* to each and correctly send\n+    # each statistic to the correct slot in Stats).\n+\n+    def test_single_example(self):\n+        data = [4, 3, 7, 0, 8, 1, 6, 2, 9, 5]\n+\n+        it = mi.running_statistics(iter(data))\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=1, minimum=4, median=4, maximum=4, mean=4.0),\n+        )\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=2, minimum=3, median=3.5, maximum=4, mean=7 / 2),\n+        )\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=3, minimum=3, median=4, maximum=7, mean=14 / 3),\n+        )\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=4, minimum=0, median=3.5, maximum=7, mean=14 / 4),\n+        )\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=5, minimum=0, median=4, maximum=8, mean=22 / 5),\n+        )\n+        w = [4, 3, 7, 0, 8, 1]  # Unbounded window\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(\n+                size=len(w),\n+                minimum=min(w),\n+                median=median(w),\n+                maximum=max(w),\n+                mean=mean(w),\n+            ),\n+        )\n+        w = [4, 3, 7, 0, 8, 1, 6]  # Unbounded window\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(\n+                size=len(w),\n+                minimum=min(w),\n+                median=median(w),\n+                maximum=max(w),\n+                mean=mean(w),\n+            ),\n+        )\n+\n+        it = mi.running_statistics(iter(data), maxlen=3)\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=1, minimum=4, median=4, maximum=4, mean=4.0),\n+        )\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=2, minimum=3, median=3.5, maximum=4, mean=7 / 2),\n+        )\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=3, minimum=3, median=4, maximum=7, mean=14 / 3),\n+        )\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=3, minimum=0, median=3, maximum=7, mean=10 / 3),\n+        )\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(size=3, minimum=0, median=7, maximum=8, mean=15 / 3),\n+        )\n+        w = [0, 8, 1]  # Window with maxlen=3\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(\n+                size=len(w),\n+                minimum=min(w),\n+                median=median(w),\n+                maximum=max(w),\n+                mean=mean(w),\n+            ),\n+        )\n+        w = [8, 1, 6]  # Window with maxlen=3\n+        self.assertEqual(\n+            next(it),\n+            mi.Stats(\n+                size=len(w),\n+                minimum=min(w),\n+                median=median(w),\n+                maximum=max(w),\n+                mean=mean(w),\n+            ),\n+        )\n+\n+    def test_early_error_detection(self):\n+        with self.assertRaises(TypeError):\n+            mi.running_statistics(None)  # Non-iterable input\n+\n+        with self.assertRaises(ValueError):\n+            mi.running_statistics([10, 5, 20], maxlen=0)  # Non-positive maxlen\n+\n+    def test_stat_properties(self):\n+        st = mi.Stats(size=5, minimum=0, median=4, maximum=8, mean=22 / 5)\n+\n+        # Comparable\n+        self.assertEqual(\n+            st, mi.Stats(size=5, minimum=0, median=4, maximum=8, mean=22 / 5)\n+        )\n+\n+        # Hashable\n+        hash(st)\n+\n+        # Slots\n+        with self.assertRaises(TypeError):\n+            vars(st)\n+\n+        # Immutable\n+        with self.assertRaises(AttributeError):\n+            st.size = 10\n+\n+        # Not sizeable, indexable, or iterable\n+        # (so we can add new fields in the future)\n+        with self.assertRaises(TypeError):\n+            len(st)\n+        with self.assertRaises(TypeError):\n+            st[0]\n+        with self.assertRaises(TypeError):\n+            iter(st)\n+\n+    def test_datatypes(self):\n+        data = [4, 3, 7, 0, 8, 1, 6, 2, 9, 5]\n+        for kind in (int, float, Fraction, Decimal):\n+            list(mi.running_statistics(map(kind, data)))\n+            list(mi.running_statistics(map(kind, data), maxlen=3))\n+        with self.assertRaises(TypeError):\n+            list(mi.running_statistics(map(complex, data)))\n+        with self.assertRaises(TypeError):\n+            list(mi.running_statistics(map(complex, data), maxlen=3))\ndiff --git a/tests/test_recipes.py b/tests/test_recipes.py\nindex e62d317..814b63f 100644\n--- a/tests/test_recipes.py\n+++ b/tests/test_recipes.py\n@@ -1507,6 +1507,13 @@ class MultinomialTests(TestCase):\n             multinomial([5, 7])  # No sequence inputs\n \n \n+def grow_to_window(data, maxlen):\n+    \"Return growing window views upto maxlen.\"\n+    for j in range(1, len(data) + 1):\n+        i = max(j - maxlen, 0)\n+        yield data[i:j]\n+\n+\n class RunningMeanTests(TestCase):\n     def test_basic(self):\n         for i, (iterable, expected) in enumerate(\n@@ -1523,12 +1530,36 @@ class RunningMeanTests(TestCase):\n                     [Decimal('1.0'), Decimal('1.5')],\n                 ),\n                 ([8.5, 9.5, 7.5, 6.5], [8.5, 9.0, 8.5, 8.0]),\n+                ([3 + 4j, 5 - 1j, 4 + 3j], [(3 + 4j), (4 + 1.5j), (4 + 2j)]),\n             ]\n         ):\n             with self.subTest(i=i):\n                 actual = list(mi.running_mean(iterable))\n                 self.assertEqual(actual, expected)\n \n+    def test_maxlen(self):\n+        data = random.choices(range(20), k=1000)\n+\n+        # Window size must be positive\n+        with self.assertRaises(ValueError):\n+            list(mi.running_mean(iter(data), maxlen=0))\n+\n+        # Window size of 1 should return the original dataset unchanged\n+        self.assertEqual(list(mi.running_mean(iter(data), maxlen=1)), data)\n+\n+        # Window size normal cases\n+        for maxlen in range(2, 6):\n+            with self.subTest(maxlen=maxlen):\n+                actual = list(mi.running_mean(iter(data), maxlen=maxlen))\n+                expected = list(map(mean, grow_to_window(data, maxlen)))\n+                self.assertEqual(actual, expected)\n+\n+        # Window size larger than the data same as the unbounded case\n+        self.assertEqual(\n+            list(mi.running_mean(iter(data), maxlen=len(data) * 2)),\n+            list(mi.running_mean(iter(data))),\n+        )\n+\n \n class RunningMedianTests(TestCase):\n     def test_vs_statistics_median(self):\n",
+  "test_files": [
+   "tests/test_more.py",
+   "tests/test_recipes.py"
+  ],
+  "visible_tests": [
+   "tests/test_more.py",
+   "tests/test_recipes.py"
+  ],
+  "gold_files": [
+   "more_itertools/more.py",
+   "more_itertools/recipes.py"
+  ],
+  "gold_functions": [
+   "more_itertools/more.py::_windowed_running_max",
+   "more_itertools/more.py::_windowed_running_min",
+   "more_itertools/more.py::running_max",
+   "more_itertools/more.py::running_min",
+   "more_itertools/more.py::running_statistics",
+   "more_itertools/recipes.py::_windowed_running_mean",
+   "more_itertools/recipes.py::running_mean"
+  ],
+  "prompt": "Add a new function in `more_itertools/more.py`, after `concurrent_tee`. Its signature and description:\n\n```\ndef running_statistics(iterable, *, maxlen=None):\n```\n\nStatistics for values seen so far or values in a sliding window.\n\n    Set *maxlen* to a positive integer to specify the maximum size\n    of the sliding window.  The default of *None* is equivalent to\n    an unbounded window.\n\n    Yields instances of a ``Stats`` dataclass with fields for the dataset *size*,\n    *mininum* value, *median* value, *maximum* value, and the arithmetic *mean*.\n\n    Supports numeric types such as int, float, Decimal, and Fraction,\n    but not complex numbers which are unorderable.\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "more-itertools",
+  "language": "python",
+  "commit": "842a2b17a8e3f78462fe20cd4a88abd32085c111",
+  "parent": "0c48044a70bae53fed919526bb1229d459a3e496",
+  "commit_date": "2026-06-09T21:06:48-06:00",
+  "author_date": "2026-06-09T21:06:48-06:00",
+  "subject": "Add subfactorial()",
+  "target": "more_itertools/more.py::subfactorial",
+  "target_file": "more_itertools/more.py",
+  "signature": "def subfactorial(n):",
+  "docstring": "Number of permutations of *n* elements with no fixed points.\n\n    The :func:`subfactorial` function computes the length of\n    :func:`derangements`.  For example, there are 1,854 ways to\n    rearrange the letters in word \"epsilon\" without leaving any\n    letter in its original position:\n\n        >>> from more_itertools import derangements, ilen\n        >>> ilen(derangements('epsilon'))\n        1854\n        >>> subfactorial(len('epsilon'))\n        1854\n\n    Reference:  https://oeis.org/A000166",
+  "after": "concurrent_tee",
+  "helpers": [
+   "derangements",
+   "ilen"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_more.py b/tests/test_more.py\nindex a019677..471f3c7 100644\n--- a/tests/test_more.py\n+++ b/tests/test_more.py\n@@ -6993,3 +6993,33 @@ class TestRunningStats(TestCase):\n             list(mi.running_statistics(map(complex, data)))\n         with self.assertRaises(TypeError):\n             list(mi.running_statistics(map(complex, data), maxlen=3))\n+\n+\n+class TestSubfactorial(TestCase):\n+    def test_oeis_baseline(self):\n+        # https://oeis.org/A000166\n+        reference_cases = \"\"\"\n+        1, 0, 1, 2, 9, 44, 265, 1854, 14833, 133496, 1334961, 14684570,\n+        176214841, 2290792932, 32071101049, 481066515734, 7697064251745,\n+        130850092279664, 2355301661033953, 44750731559645106,\n+        895014631192902121, 18795307255050944540, 413496759611120779881,\n+        9510425471055777937262\n+        \"\"\".replace(',', ' ').split()\n+        for n, target_str in enumerate(reference_cases):\n+            with self.subTest(n=n):\n+                self.assertEqual(mi.subfactorial(n), int(target_str))\n+\n+    def test_vs_derangements(self):\n+        for n in range(10):\n+            with self.subTest(n=n):\n+                self.assertEqual(\n+                    mi.subfactorial(n), mi.ilen(mi.derangements('.' * n))\n+                )\n+\n+    def test_error_cases(self):\n+        with self.assertRaises(TypeError):\n+            mi.subfactorial(5.0)  # float input\n+        with self.assertRaises(TypeError):\n+            mi.subfactorial('5')  # string input\n+        with self.assertRaises(ValueError):\n+            mi.subfactorial(-1)  # negative input\n",
+  "test_files": [
+   "tests/test_more.py"
+  ],
+  "visible_tests": [
+   "tests/test_more.py"
+  ],
+  "gold_files": [
+   "more_itertools/more.py"
+  ],
+  "gold_functions": [
+   "more_itertools/more.py::subfactorial"
+  ],
+  "prompt": "Add a new function in `more_itertools/more.py`, after `concurrent_tee`. Its signature and description:\n\n```\ndef subfactorial(n):\n```\n\nNumber of permutations of *n* elements with no fixed points.\n\n    The :func:`subfactorial` function computes the length of\n    :func:`derangements`.  For example, there are 1,854 ways to\n    rearrange the letters in word \"epsilon\" without leaving any\n    letter in its original position:\n\n        >>> from more_itertools import derangements, ilen\n        >>> ilen(derangements('epsilon'))\n        1854\n        >>> subfactorial(len('epsilon'))\n        1854\n\n    Reference:  https://oeis.org/A000166\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "boltons",
+  "language": "python",
+  "commit": "6270b5e35ed902859df6188970eec5bee5ab73d1",
+  "parent": "37ba6b2a3adde5795dee9195b255a4cb1d342a7b",
+  "commit_date": "2026-10-25T16:08:17-07:00",
+  "author_date": "2026-10-25T16:01:57-07:00",
+  "subject": "iterutils: fix remap namedtuples, chunk_ranges edges, iterator bucketize, falsey keys, key-once untyped_sorted, negative maxsplit, fractional backoff; add chunked_filter (#585, #569, #563, #554, #552, #502, #496, #491)",
+  "target": "boltons/iterutils.py::chunked_filter",
+  "target_file": "boltons/iterutils.py",
+  "signature": "def chunked_filter(src, size, key=None):",
+  "docstring": "Filters *src* in *size*-sized batches, calling *key* once per\n    batch rather than once per item. *key* receives a list of up to\n    *size* items and must return an iterable of the same length, one\n    truthy or falsy flag per item; items with a truthy flag are\n    yielded. If *key* is ``None``, items are filtered by their own\n    truthiness.\n\n    This is useful when the predicate is expensive per call but cheap\n    per item, such as a database or API lookup:\n\n    >>> processed_ids = {2, 5}\n    >>> def is_new(batch):\n    ...     return [item_id not in processed_ids for item_id in batch]\n    >>> list(chunked_filter(range(1, 8), 3, key=is_new))\n    [1, 3, 4, 6, 7]\n    >>> list(chunked_filter([0, 1, '', 'a', None], 2))\n    [1, 'a']\n\n    See :func:`chunked_iter` for more on how *src* is chunked.",
+  "after": "chunked_iter",
+  "helpers": [
+   "chunked_iter",
+   "len"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_iterutils.py b/tests/test_iterutils.py\nindex a1f9dc0..e3d0695 100644\n--- a/tests/test_iterutils.py\n+++ b/tests/test_iterutils.py\n@@ -32,6 +32,10 @@ class TestSplit:\n         assert split(values, maxsplit=0) == [values]\n         assert split(iter(values), maxsplit=0) == [values]\n \n+    def test_negative_maxsplit_is_unlimited(self):\n+        # see #502\n+        assert split([1, None, 2, None, 3], maxsplit=-1) == [[1], [2], [3]]\n+\n \n class TestFirst:\n     def test_empty_iterables(self):\n@@ -70,8 +74,6 @@ class TestFirst:\n \n \n class TestRemap:\n-    # TODO: test namedtuples and other immutable containers\n-\n     def test_basic_clone(self):\n         orig = {\"a\": \"b\", \"c\": [1, 2]}\n         assert orig == remap(orig)\n@@ -137,24 +139,24 @@ class TestRemap:\n         assert remapped[0] is not duperef[0]\n \n     def test_namedtuple(self):\n-        \"\"\"TODO: this fails right now because namedtuples' __new__ is\n-        overridden to accept arguments. remap's default_enter tries\n-        to create an empty namedtuple and gets a TypeError.\n-\n-        Could make it so that immutable types actually don't create a\n-        blank new parent and instead use the old_parent as a\n-        placeholder, creating a new one at exit-time from the value's\n-        __class__ (how default_exit works now). But even then it would\n-        have to *args in the values, as namedtuple constructors don't\n-        take an iterable.\n-        \"\"\"\n-\n+        # see #585\n         Point = namedtuple('Point', 'x y')\n         point_map = {'origin': [Point(0, 0)]}\n \n-        with pytest.raises(TypeError):\n-            remapped = remap(point_map)\n-            assert isinstance(remapped['origin'][0], Point)\n+        remapped = remap(point_map)\n+        assert remapped == point_map\n+        assert isinstance(remapped['origin'][0], Point)\n+\n+        doubled = remap({'p': Point(1, 2)},\n+                        visit=lambda p, k, v: (k, v * 2 if isinstance(v, int) else v))\n+        assert doubled['p'] == Point(2, 4)\n+        assert isinstance(doubled['p'], Point)\n+\n+    def test_unconstructible_sequences(self):\n+        # see #585\n+        r = range(3)\n+        remapped = remap({'r': r})\n+        assert remapped['r'] is r\n \n     def test_path(self):\n         path_map = {}\n@@ -474,6 +476,13 @@ def test_backoff_zero_start():\n     assert slow_backoff == [0.0, 1.0, 1.2, 1.44, 1.73, 2.07, 2.49, 2.9]\n \n \n+def test_backoff_zero_start_fractional_stop():\n+    # see #496\n+    from boltons.iterutils import backoff\n+\n+    assert backoff(0, 0.5) == [0.0, 0.5]\n+\n+\n def test_backoff_validation():\n     from boltons.iterutils import backoff\n \n@@ -594,6 +603,80 @@ def test_chunk_ranges():\n     assert list(chunk_ranges(input_offset=3, input_size=2, chunk_size=5, overlap_size=1, align=True)) == [(3, 5)]\n \n \n+def test_chunk_ranges_edges():\n+    # see #569\n+    from boltons.iterutils import chunk_ranges\n+\n+    assert list(chunk_ranges(0, 5, align=True)) == []\n+    with pytest.raises(ValueError):\n+        list(chunk_ranges(10, 2, overlap_size=2))\n+\n+\n+def test_chunked_filter():\n+    # see #491\n+    from boltons.iterutils import chunked_filter\n+\n+    calls = []\n+    processed_ids = {2, 5}\n+\n+    def is_new(batch):\n+        calls.append(list(batch))\n+        return [i not in processed_ids for i in batch]\n+\n+    assert list(chunked_filter(range(1, 8), 3, key=is_new)) == [1, 3, 4, 6, 7]\n+    assert calls == [[1, 2, 3], [4, 5, 6], [7]]\n+    assert list(chunked_filter([0, 1, '', 'a'], 3)) == [1, 'a']\n+\n+    with pytest.raises(ValueError):\n+        list(chunked_filter(range(4), 2, key=lambda batch: [True]))\n+    with pytest.raises(TypeError):\n+        list(chunked_filter(range(4), 2, key='nope'))\n+\n+\n+def test_bucketize_iterator_with_key_list():\n+    # see #563\n+    from boltons.iterutils import bucketize\n+\n+    assert bucketize(iter([1, 2, 3]), key=['a', 'b', 'a']) == {'a': [1, 3], 'b': [2]}\n+    with pytest.raises(ValueError):\n+        bucketize(iter([1, 2, 3, 4]), key=['a', 'b', 'a'])\n+\n+\n+class _FalseyCallable:\n+    def __init__(self, func):\n+        self.func = func\n+        self.calls = 0\n+\n+    def __call__(self, x):\n+        self.calls += 1\n+        return self.func(x)\n+\n+    def __bool__(self):\n+        return False\n+\n+\n+def test_redundant_falsey_key():\n+    # see #554\n+    from boltons.iterutils import redundant\n+\n+    assert redundant([1, 3, 2], key=_FalseyCallable(lambda x: x % 2)) == [3]\n+\n+\n+def test_untyped_sorted_key_called_once_per_item():\n+    # see #552\n+    from boltons.iterutils import untyped_sorted\n+\n+    key = _FalseyCallable(lambda x: -x)\n+    assert untyped_sorted([3, 1, 2], key=key) == [3, 2, 1]\n+    assert key.calls == 3\n+\n+    def bad_key(x):\n+        raise ZeroDivisionError()\n+\n+    with pytest.raises(ZeroDivisionError):\n+        untyped_sorted([1], key=bad_key)\n+\n+\n def test_lstrip():\n     from boltons.iterutils import lstrip\n \n",
+  "test_files": [
+   "tests/test_iterutils.py"
+  ],
+  "visible_tests": [
+   "tests/test_iterutils.py"
+  ],
+  "gold_files": [
+   "boltons/iterutils.py"
+  ],
+  "gold_functions": [
+   "boltons/iterutils.py::backoff_iter",
+   "boltons/iterutils.py::bucketize",
+   "boltons/iterutils.py::chunk_ranges",
+   "boltons/iterutils.py::chunked_filter",
+   "boltons/iterutils.py::default_enter",
+   "boltons/iterutils.py::default_exit",
+   "boltons/iterutils.py::redundant",
+   "boltons/iterutils.py::split_iter",
+   "boltons/iterutils.py::untyped_sorted",
+   "boltons/iterutils.py::untyped_sorted._Wrapper.__init__",
+   "boltons/iterutils.py::untyped_sorted._Wrapper.__lt__"
+  ],
+  "prompt": "Add a new function in `boltons/iterutils.py`, after `chunked_iter`. Its signature and description:\n\n```\ndef chunked_filter(src, size, key=None):\n```\n\nFilters *src* in *size*-sized batches, calling *key* once per\n    batch rather than once per item. *key* receives a list of up to\n    *size* items and must return an iterable of the same length, one\n    truthy or falsy flag per item; items with a truthy flag are\n    yielded. If *key* is ``None``, items are filtered by their own\n    truthiness.\n\n    This is useful when the predicate is expensive per call but cheap\n    per item, such as a database or API lookup:\n\n    >>> processed_ids = {2, 5}\n    >>> def is_new(batch):\n    ...     return [item_id not in processed_ids for item_id in batch]\n    >>> list(chunked_filter(range(1, 8), 3, key=is_new))\n    [1, 3, 4, 6, 7]\n    >>> list(chunked_filter([0, 1, '', 'a', None], 2))\n    [1, 'a']\n\n    See :func:`chunked_iter` for more on how *src* is chunked.\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "textual",
+  "language": "python",
+  "commit": "02fd2451cb66df4f4b4b43cb8aeb85f949e32918",
+  "parent": "2d98a4546edb65468b101ad05dc7f656a5b65c24",
+  "commit_date": "2025-09-28T16:20:24+01:00",
+  "author_date": "2025-09-28T16:20:24+01:00",
+  "subject": "long placeholder",
+  "target": "src/textual/content.py::Content.wrap",
+  "target_file": "src/textual/content.py",
+  "signature": "def wrap(\n        self, width: int, align: TextAlign = \"left\", overflow: TextOverflow = \"fold\"\n    ) -> list[Content]:",
+  "docstring": "Wrap text so that it fits within the given dimensions.\n\n        Args:\n            width: Maximum width of the line (in cells).\n            align: Alignment of lines.\n            overflow: Overflow of lines (what happens when the text doesn't fit).\n\n        Returns:\n            A list of Content objects, one per line.",
+  "after": "Content.join",
+  "helpers": [
+   "line",
+   "lines"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/snapshot_tests/test_snapshots.py b/tests/snapshot_tests/test_snapshots.py\nindex 2b3eade0..9dc5e95b 100644\n--- a/tests/snapshot_tests/test_snapshots.py\n+++ b/tests/snapshot_tests/test_snapshots.py\n@@ -4626,3 +4626,27 @@ def test_header_format(snap_compare):\n             yield Header()\n \n     assert snap_compare(HeaderApp())\n+\n+\n+def test_long_textarea_placeholder(snap_compare) -> None:\n+\n+    TEXT = \"\"\"I must not fear.\n+Fear is the mind-killer.\n+Fear is the little-death that brings total obliteration.\n+I will face my fear.\n+I will permit it to pass over me and through me.\n+And when it has gone past, I will turn the inner eye to see its path.\n+Where the fear has gone there will be nothing. Only I will remain.\"\"\"\n+\n+    class PlaceholderApp(App):\n+\n+        CSS = \"\"\"\n+        TextArea {\n+            width: 50%;\n+        }\n+        \"\"\"\n+\n+        def compose(self) -> ComposeResult:\n+            yield TextArea(placeholder=TEXT)\n+\n+    assert snap_compare(PlaceholderApp())\ndiff --git a/tests/test_content.py b/tests/test_content.py\nindex ec280583..5020db8f 100644\n--- a/tests/test_content.py\n+++ b/tests/test_content.py\n@@ -349,3 +349,19 @@ def test_add_spans() -> None:\n         Span(7, 9, style=\"blue\"),\n     ]\n     assert content.spans == expected\n+\n+\n+def test_wrap() -> None:\n+    content = Content.from_markup(\"[green]Hello, [b]World, One two three[/b]\")\n+    wrapped = content.wrap(6)\n+    print(wrapped)\n+    expected = [\n+        Content(\"Hello,\", spans=[Span(0, 6, style=\"green\")]),\n+        Content(\"World,\", spans=[Span(0, 6, style=\"green\"), Span(0, 6, style=\"b\")]),\n+        Content(\"One\", spans=[Span(0, 3, style=\"green\"), Span(0, 3, style=\"b\")]),\n+        Content(\"two\", spans=[Span(0, 3, style=\"green\"), Span(0, 3, style=\"b\")]),\n+        Content(\"three\", spans=[Span(0, 5, style=\"green\"), Span(0, 5, style=\"b\")]),\n+    ]\n+    assert len(wrapped) == len(expected)\n+    for line1, line2 in zip(wrapped, expected):\n+        assert line1.is_same(line2)\n",
+  "test_files": [
+   "tests/snapshot_tests/test_snapshots.py",
+   "tests/test_content.py"
+  ],
+  "visible_tests": [
+   "tests/snapshot_tests/test_snapshots.py",
+   "tests/test_content.py"
+  ],
+  "gold_files": [
+   "src/textual/content.py",
+   "src/textual/widgets/_text_area.py"
+  ],
+  "gold_functions": [
+   "src/textual/content.py::Content.wrap",
+   "src/textual/widgets/_text_area.py::TextArea.render_line"
+  ],
+  "prompt": "Add a new function in class `Content` of `src/textual/content.py`, after `Content.join`. Its signature and description:\n\n```\ndef wrap(\n        self, width: int, align: TextAlign = \"left\", overflow: TextOverflow = \"fold\"\n    ) -> list[Content]:\n```\n\nWrap text so that it fits within the given dimensions.\n\n        Args:\n            width: Maximum width of the line (in cells).\n            align: Alignment of lines.\n            overflow: Overflow of lines (what happens when the text doesn't fit).\n\n        Returns:\n            A list of Content objects, one per line.\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ },
+ {
+  "family": "N",
+  "repo": "textual",
+  "language": "python",
+  "commit": "d6e3fc0948eebbd30c3d764fcf1a390acca59d51",
+  "parent": "4e79675fc89a6b1c564688c4c3bea2ee9c5ed2f5",
+  "commit_date": "2025-11-26T13:56:07+00:00",
+  "author_date": "2025-11-26T13:56:07+00:00",
+  "subject": "fold method",
+  "target": "src/textual/content.py::Content.fold",
+  "target_file": "src/textual/content.py",
+  "signature": "def fold(self, width: int) -> list[Content]:",
+  "docstring": "Fold this line into a list of lines which have a cell length no greater than `width`.\n\n        Folded lines may be 1 less than the width if it contains double width characters (which may\n        not be subdivided).\n\n        Note that this method will not do any word wrappig. For that, see [wrap()][textual.content.Content.wrap].\n\n        Args:\n            width: Desired maximum width (in cells)\n\n        Returns:\n            List of content instances.",
+  "after": "Content.wrap",
+  "helpers": [
+   "width",
+   "wrap"
+  ],
+  "depth": 2,
+  "stratum": "2",
+  "start_patch": null,
+  "start_files": [],
+  "start_functions": [],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/tests/test_content.py b/tests/test_content.py\nindex 1232bc07..57f2996c 100644\n--- a/tests/test_content.py\n+++ b/tests/test_content.py\n@@ -380,3 +380,173 @@ def test_wrap() -> None:\n     assert len(wrapped) == len(expected)\n     for line1, line2 in zip(wrapped, expected):\n         assert line1.is_same(line2)\n+\n+\n+@pytest.mark.parametrize(\n+    \"content, width, expected\",\n+    [\n+        (\n+            Content(\"\"),\n+            10,\n+            [Content(\"\")],\n+        ),\n+        (\n+            Content(\"1\"),\n+            10,\n+            [Content(\"1\")],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6\"),\n+            10,\n+            [Content(\"\ud83d\udce6\")],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6\"),\n+            1,\n+            [Content(\"\ud83d\udce6\")],\n+        ),\n+        (\n+            Content(\"Hello\"),\n+            10,\n+            [Content(\"Hello\")],\n+        ),\n+        (\n+            Content(\"Hello\"),\n+            5,\n+            [Content(\"Hello\")],\n+        ),\n+        (\n+            Content(\"Hello\"),\n+            2,\n+            [Content(\"He\"), Content(\"ll\"), Content(\"o\")],\n+        ),\n+        (\n+            Content.from_markup(\"H[b]ell[/]o\"),\n+            2,\n+            [\n+                Content.from_markup(\"H[b]e\"),\n+                Content.from_markup(\"[b]ll[/]\"),\n+                Content(\"o\"),\n+            ],\n+        ),\n+        (\n+            Content.from_markup(\"\ud83d\udca9H[b]ell[/]o\"),\n+            2,\n+            [\n+                Content(\"\ud83d\udca9\"),\n+                Content.from_markup(\"H[b]e\"),\n+                Content.from_markup(\"[b]ll[/]\"),\n+                Content(\"o\"),\n+            ],\n+        ),\n+        (\n+            Content.from_markup(\"\ud83d\udca9H[b]ell[/]o\"),\n+            3,\n+            [\n+                Content(\"\ud83d\udca9H\"),\n+                Content.from_markup(\"[b]ell\"),\n+                Content.from_markup(\"[b]o[/]\"),\n+            ],\n+        ),\n+        (\n+            Content.from_markup(\"\ud83d\udca9H[b]ell[/]\ud83d\udca9\"),\n+            3,\n+            [\n+                Content(\"\ud83d\udca9H\"),\n+                Content.from_markup(\"[b]ell\"),\n+                Content.from_markup(\"[b]o[/]\ud83d\udca9\"),\n+            ],\n+        ),\n+        (\n+            Content.from_markup(\"\ud83d\udca9\ud83d\udca9\ud83d\udca9\"),\n+            1,\n+            [\n+                Content(\"\ud83d\udca9\"),\n+                Content(\"\ud83d\udca9\"),\n+                Content(\"\ud83d\udca9\"),\n+            ],\n+        ),\n+        (\n+            Content.from_markup(\"\ud83d\udca9\ud83d\udca9\ud83d\udca9\"),\n+            3,\n+            [\n+                Content(\"\ud83d\udca9\"),\n+                Content(\"\ud83d\udca9\"),\n+                Content(\"\ud83d\udca9\"),\n+            ],\n+        ),\n+        (\n+            Content.from_markup(\"\ud83d\udca9\ud83d\udca9\ud83d\udca9\"),\n+            4,\n+            [\n+                Content(\"\ud83d\udca9\ud83d\udca9\"),\n+                Content(\"\ud83d\udca9\"),\n+            ],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6999\"),\n+            50,\n+            [Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6999\")],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6999\"),\n+            49,\n+            [\n+                Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce699\"),\n+                Content(\"9\"),\n+            ],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6999\"),\n+            48,\n+            [\n+                Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce69\"),\n+                Content(\"99\"),\n+            ],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6999\"),\n+            47,\n+            [\n+                Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6\"),\n+                Content(\"999\"),\n+            ],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6999\"),\n+            46,\n+            [\n+                Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\"),\n+                Content(\"\ud83d\udce6999\"),\n+            ],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6999\"),\n+            45,\n+            [\n+                Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\"),\n+                Content(\"\ud83d\udce6999\"),\n+            ],\n+        ),\n+        (\n+            Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce6888\ud83d\udce6999\"),\n+            44,\n+            [\n+                Content(\"\ud83d\udce6000\ud83d\udce6111\ud83d\udce6222\ud83d\udce6333\ud83d\udce6444\ud83d\udce6555\ud83d\udce6666\ud83d\udce6777\ud83d\udce688\"),\n+                Content(\"8\ud83d\udce6999\"),\n+            ],\n+        ),\n+    ],\n+)\n+def test_fold(content: Content, width: int, expected: list[Content]) -> None:\n+    \"\"\"Test content.fold method works, and correctly handles double width cells.\n+\n+    Args:\n+        content: Test content.\n+        width: Desired width.\n+        expected: Expectected result.\n+    \"\"\"\n+    result = content.fold(width)\n+    assert isinstance(result, list)\n+    for line, expected_line in zip(result, expected):\n+        assert line.is_same(expected_line)\n",
+  "test_files": [
+   "tests/test_content.py"
+  ],
+  "visible_tests": [
+   "tests/test_content.py"
+  ],
+  "gold_files": [
+   "src/textual/content.py"
+  ],
+  "gold_functions": [
+   "src/textual/content.py::Content.fold"
+  ],
+  "prompt": "Add a new function in class `Content` of `src/textual/content.py`, after `Content.wrap`. Its signature and description:\n\n```\ndef fold(self, width: int) -> list[Content]:\n```\n\nFold this line into a list of lines which have a cell length no greater than `width`.\n\n        Folded lines may be 1 less than the width if it contains double width characters (which may\n        not be subdivided).\n\n        Note that this method will not do any word wrappig. For that, see [wrap()][textual.content.Content.wrap].\n\n        Args:\n            width: Desired maximum width (in cells)\n\n        Returns:\n            List of content instances.\n\nImplement it so the project's tests pass. When your changes are complete, call done."
+ }
+]
