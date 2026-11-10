@@ -10,6 +10,10 @@ from prism.cli import build_pipeline
 os.environ.setdefault("PRISM_BREADCRUMB_STRICT", "1")
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+
+#: The golden fixture repositories carry their own test suites (PRISM reads them as test code); they are fixture
+#: data for SCE's suite, never SCE's tests.
+collect_ignore_glob = ["fixtures/golden/*"]
 PYTHON_REPO = os.path.join(FIXTURES_DIR, "python_repo")
 
 
