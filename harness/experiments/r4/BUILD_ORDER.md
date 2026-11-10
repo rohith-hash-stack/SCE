@@ -54,5 +54,15 @@ behaviour before any fix.
 
 - **Mining** (`D1`–`D6`): candidate lists only (`harness/experiments/r4/mine_families.py`; Family N via
   `r3/mine.py`). Yield in `r4/MINING_STATUS.md`.
-- **Part A workflow:** verified against `ab22ff5d` (`.github/part-a-request`).
+- **Part A workflow:** verified against `ab22ff5d`.
+  - **How it runs:** a push changing `.github/part-a-request` starts it. A manual dispatch needs the workflow on
+    the default branch.
+  - **Run 42736490634, 51 min:** 327 tests; 323 passed, 1 failed, 3 skipped.
+  - **The one failure:** `test_fuzzy_match_performance_on_real_corpus` took 53.2 ms against a 50 ms wall-clock
+    limit. It is known-flaky (timing).
+  - **The skips:** `orjson` not installed (1); one in `test_index_cache_consistency`; the strict xfail for the
+    manager calls (JUnit counts it as a skip).
+  - **Against the local run of 2026-11-09 (7 failures):** the 4 etag failures are gone (the npm install step), and
+    `test_mtime_invalidation` passed.
+  - **The stale-looking xfail** (feature-mask parity) passed again here, and in a local run.
 - **Next, in order:** track 1 items 1–3; then track 3 items 1–2 and track 4, until the tokenizer asset arrives.
