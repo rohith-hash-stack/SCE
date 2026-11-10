@@ -1,0 +1,88 @@
+# New function context: `export_pretty` in class `JsonExporter` in src/shelf/exporters.py
+
+## 1. Group `src/shelf`
+20 functions, 4 classes in 12 files.
+Conventions:
+- function names are snake_case (7 of 7 multi-word names)
+
+## 2. Class `JsonExporter`
+
+## 3. Existing functions that may do part of the work (reuse them rather than rewrite them)
+- `src.shelf.exporters.JsonExporter.export` (src/shelf/exporters.py:12; same file, same directory, name words: export): `def export(self, rows):`
+  ```
+  L12 parameters (self, rows)
+  L13 return json.dumps(rows)
+  ```
+- `src.shelf.exporters.Exporter.export` (src/shelf/exporters.py:6; same file, same directory, name words: export): `def export(self, rows):`
+  ```
+  L6 parameters (self, rows)
+  L8 return rows
+  ```
+- `src.shelf.exporters.CsvExporter.export` (src/shelf/exporters.py:17; same file, same directory, name words: export): `def export(self, rows):`
+  ```
+  L17 parameters (self, rows)
+  L18 return "\n".join(",".join(r) for r in rows)
+  ```
+- `src.shelf.exporters.export_all` (src/shelf/exporters.py:21; same file, same directory, name words: export): `def export_all(exporter: Exporter, rows):`
+  ```
+  L21 parameters (exporter: Exporter, rows)
+  L23 return exporter.export(rows) [calls: export() -> src.shelf.exporters.Exporter.export]
+  ```
+- `src.shelf.store.Store.__init__` (src/shelf/store.py:5; same directory): `def __init__(self):`
+  ```
+  L5 parameters (self)
+  L6 self._data = {} (own state)
+  L7 self.writes = 0 (own state)
+  ```
+- `src.shelf.store.Store.set_value` (src/shelf/store.py:9; same directory): `def set_value(self, key, value):`
+  ```
+  L9 parameters (self, key, value)
+  L11 self._data[key] = value (own state)
+  L12 self.writes += 1 (own state)
+  ```
+- `src.shelf.registry.register` (src/shelf/registry.py:6; same directory): `def register(name):`
+  ```
+  L6 parameters (name)
+  L8-10 defines nested function wrap
+  L11 return wrap
+  ```
+- `src.shelf.build.assemble` (src/shelf/build.py:9; same directory): `def assemble(x):`
+  ```
+  L9 parameters (x)
+  L10 return build(missing_helper(x)) [calls: build() -> src.shelf.build.build]
+  ```
+- `src.shelf.checkout.total` (src/shelf/checkout.py:5; same directory): `def total(amount):`
+  ```
+  L5 parameters (amount)
+  L6 return price(amount, 0.2)
+  ```
+- `src.shelf.settings.configure` (src/shelf/settings.py:6; same directory): `def configure(debug):`
+  ```
+  L6 parameters (debug)
+  L7 call set_value("debug", debug) -> one of: src.shelf.store.Store.set_value, src.shelf.values.set_value
+  ```
+- `src.shelf.build.build` (src/shelf/build.py:4; same directory): `def build(parts):`
+  ```
+  L4 parameters (parts)
+  L6 return "-".join(parts)
+  ```
+- `src.shelf.registry.wrap` (src/shelf/registry.py:8; same directory): `def wrap(fn):`
+  ```
+  L8 parameters (fn)
+  L9 REGISTRY[name] = fn (module constant REGISTRY)
+  L10 return fn
+  ```
+
+## 4. Style to follow (the closest existing functions)
+`src.shelf.exporters.Exporter.export` (src/shelf/exporters.py):
+```
+    def export(self, rows):
+        """Export rows; the base exporter returns them unchanged."""
+        return rows
+```
+`src.shelf.exporters.export_all` (src/shelf/exporters.py):
+```
+def export_all(exporter: Exporter, rows):
+    """Export through whichever exporter is passed (virtual dispatch)."""
+    return exporter.export(rows)
+```

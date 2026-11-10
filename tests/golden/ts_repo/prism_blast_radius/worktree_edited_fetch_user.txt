@@ -1,0 +1,58 @@
+Blast radius of `src.user.fetchUser`: 1 transitive callers, nearest first:
+- hop 1: `src.profile.loadProfile` (src/profile.ts:4)
+
+<prism_context budget_consumed="821" budget_total="4000" schema_version="3" task_type="blast">
+  <metadata>
+    <engine commit="*" name="prism-causal_two_pass" version="0.2.0"/>
+    <seed file="src/user.ts" line="2" symbol="src.user.fetchUser"/>
+    <budget exact="true" tokenizer="tiktoken:cl100k_base_offline" tokens="4000"/>
+    <language files="2" primary="typescript" tier="2"/>
+    <options>
+      <option key="engine" value="prism-causal_two_pass"/>
+      <option key="max_hops" value="6.0"/>
+    </options>
+  </metadata>
+  <manifest considered_nodes="1" packed_nodes="2" reachable_nodes="1">
+    <compression count="2" level="L0_full"/>
+    <distance_metric dist_max="6.0" lambda_data_flow="0.25" lambda_guard="0.15" name="causal_dijkstra"/>
+  </manifest>
+  <coverage covered_features="5" omitted_features="0" total_features="5">
+    <feature count="2" id="SINK_PURE_COMPUTE" present="true"/>
+    <feature count="2" id="FORM_LINEAR" present="true"/>
+    <feature count="2" id="FORM_ASYNC_CONCURRENT" present="true"/>
+    <feature count="2" id="OUTPUT_QUERY" present="true"/>
+    <feature count="2" id="OUTPUT_ASYNC_DEFERRED" present="true"/>
+  </coverage>
+  <warnings>
+    <warning code="LANGUAGE_TIER_2" severity="low">
+      <message>typescript is Tier 2 (structural/lexical linking only)</message>
+    </warning>
+  </warnings>
+  <nodes>
+    <node compression="L0_full" cost="34" distance="0.0" end_line="4" file="src/user.ts" id="src.user.fetchUser" language="typescript" line="2" role="seed" symbol_kind="function" symbol_name="fetchUser">
+      <signature>
+        <param name="{ id, retries }" optional="false" type="{ id: string; retries: number }"/>
+        <returns kind="Query" type="Promise&lt;string&gt;"/>
+      </signature>
+      <features form="LINEAR,ASYNC_CONCURRENT" output="QUERY,ASYNC_DEFERRED" role="NONE" substance="PURE_COMPUTE"/>
+      <body><![CDATA[export const fetchUser = async ({ id, retries }: { id: string; retries: number }): Promise<string> => {
+  return `${id}:${retries}`;
+};]]></body>
+    </node>
+    <node compression="L0_full" cost="23" distance="0.8333" end_line="6" file="src/profile.ts" id="src.profile.loadProfile" language="typescript" line="4" role="caller" symbol_kind="function" symbol_name="loadProfile">
+      <signature>
+        <param name="id" optional="false" type="string"/>
+        <returns kind="Query" type="Promise&lt;string&gt;"/>
+        <docstring><![CDATA[An unchanged caller of fetchUser (positional arguments).]]></docstring>
+      </signature>
+      <features form="LINEAR,ASYNC_CONCURRENT" output="QUERY,ASYNC_DEFERRED" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[export async function loadProfile(id: string): Promise<string> {
+  return fetchUser(id, 2);
+}]]></body>
+    </node>
+  </nodes>
+  <edges>
+    <edge back_edge="true" data_flow="false" from="src.profile.loadProfile" guard="false" to="src.user.fetchUser" type="CALLS" weight="1.0"/>
+  </edges>
+  <trailer edge_count="1" node_count="2" sha256="2981f00b03d5e04fa63105077a2643a394fa20490e7dcaa3bd1b40433af97f9a" token_count="821"/>
+</prism_context>

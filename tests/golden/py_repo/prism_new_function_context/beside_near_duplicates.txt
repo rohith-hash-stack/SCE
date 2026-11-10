@@ -1,0 +1,99 @@
+# New function context: `heavy_count` in src/shelf/dupes.py
+
+## 1. Group `src/shelf`
+20 functions, 4 classes in 12 files.
+Conventions:
+- function names are snake_case (7 of 7 multi-word names)
+
+## 3. Existing functions that may do part of the work (reuse them rather than rewrite them)
+- `src.shelf.dupes.total_weight` (src/shelf/dupes.py:4; same file, same directory): `def total_weight(items):`
+  ```
+  L4 parameters (items)
+  L5 result = 0
+  when for each item in items:
+    when item.weight > 0:
+      L8 result += item.weight
+  L9 return result
+  ```
+- `src.shelf.dupes.sum_masses` (src/shelf/dupes.py:12; same file, same directory): `def sum_masses(things):`
+  ```
+  L12 parameters (things)
+  L13 acc = 0
+  when for each thing in things:
+    when thing.weight > 0:
+      L16 acc += thing.weight
+  L17 return acc
+  ```
+- `src.shelf.registry.register` (src/shelf/registry.py:6; same directory): `def register(name):`
+  ```
+  L6 parameters (name)
+  L8-10 defines nested function wrap
+  L11 return wrap
+  ```
+- `src.shelf.build.assemble` (src/shelf/build.py:9; same directory): `def assemble(x):`
+  ```
+  L9 parameters (x)
+  L10 return build(missing_helper(x)) [calls: build() -> src.shelf.build.build]
+  ```
+- `src.shelf.checkout.total` (src/shelf/checkout.py:5; same directory): `def total(amount):`
+  ```
+  L5 parameters (amount)
+  L6 return price(amount, 0.2)
+  ```
+- `src.shelf.settings.configure` (src/shelf/settings.py:6; same directory): `def configure(debug):`
+  ```
+  L6 parameters (debug)
+  L7 call set_value("debug", debug) -> one of: src.shelf.store.Store.set_value, src.shelf.values.set_value
+  ```
+- `src.shelf.build.build` (src/shelf/build.py:4; same directory): `def build(parts):`
+  ```
+  L4 parameters (parts)
+  L6 return "-".join(parts)
+  ```
+- `src.shelf.registry.wrap` (src/shelf/registry.py:8; same directory): `def wrap(fn):`
+  ```
+  L8 parameters (fn)
+  L9 REGISTRY[name] = fn (module constant REGISTRY)
+  L10 return fn
+  ```
+- `src.shelf.store.Store.__init__` (src/shelf/store.py:5; same directory): `def __init__(self):`
+  ```
+  L5 parameters (self)
+  L6 self._data = {} (own state)
+  L7 self.writes = 0 (own state)
+  ```
+- `src.shelf.exporters.JsonExporter.export` (src/shelf/exporters.py:12; same directory): `def export(self, rows):`
+  ```
+  L12 parameters (self, rows)
+  L13 return json.dumps(rows)
+  ```
+- `src.shelf.exporters.CsvExporter.export` (src/shelf/exporters.py:17; same directory): `def export(self, rows):`
+  ```
+  L17 parameters (self, rows)
+  L18 return "\n".join(",".join(r) for r in rows)
+  ```
+- `src.shelf.registry.loader` (src/shelf/registry.py:14; same directory): `def loader(name):`
+  ```
+  L14 parameters (name)
+  L16 return REGISTRY[name]
+  ```
+
+## 4. Style to follow (the closest existing functions)
+`src.shelf.dupes.sum_masses` (src/shelf/dupes.py):
+```
+def sum_masses(things):
+    acc = 0
+    for thing in things:
+        if thing.weight > 0:
+            acc += thing.weight
+    return acc
+```
+`src.shelf.dupes.total_weight` (src/shelf/dupes.py):
+```
+def total_weight(items):
+    result = 0
+    for item in items:
+        if item.weight > 0:
+            result += item.weight
+    return result
+```

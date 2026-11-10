@@ -1,0 +1,88 @@
+# New function context: `firstWord` in src/text.ts
+
+## 1. Group `src`
+24 functions, 5 classes in 12 files.
+Conventions:
+- function names are camelCase (8 of 8 multi-word names)
+- 4 of 24 functions are async
+
+## 3. Existing functions that may do part of the work (reuse them rather than rewrite them)
+- `src.text.words` (src/text.ts:7; same file, same directory): `export const words = (s: string): string[] => clean(s).split(/\s+/).filter(Boolean);`
+  ```
+  L7 parameters (s: string) -> string[] [calls: clean() -> src.text.clean]
+  L7 return clean(s).split(/\s+/).filter(Boolean)
+  L7 call clean(s).split(/\s+/).filter(Boolean) -> ?
+  ```
+- `src.text.clean` (src/text.ts:2; same file, same directory): `export function clean(s: string): string {`
+  ```
+  L2 parameters (s: string) -> string
+  L3 return s.trim().toLowerCase()
+  ```
+- `src.text.countWords` (src/text.ts:10; same file, same directory): `export const countWords = async (s: string): Promise<number> => {`
+  ```
+  L10 parameters (s: string) -> Promise<number>
+  L11 call await Promise.resolve() -> std Promise.resolve
+  L12 return words(s).length [calls: words() -> src.text.words]
+  ```
+- `src.race.firstOf` (src/race.ts:6; same directory, name words: first): `export function firstOf(url: string, ms: number): Promise<string> {`
+  ```
+  L6 parameters (url: string, ms: number) -> Promise<string>
+  L8 return Promise.race([fetchOne(url), timeoutAfter(ms)]) [calls: fetchOne() -> src.race.fetchOne]
+  ```
+- `src.report.report` (src/report.ts:6; same directory): `export function report(name: string, xs: number[]): string {`
+  ```
+  L6 parameters (name: string, xs: number[]) -> string
+  L7 return `${greet(text.clean(name))}: ${sum(xs)}` [calls: clean() -> src.text.clean; sum() -> src.math.sum]
+  ```
+- `src.router.home` (src/router.ts:16; same directory): `export function home(path: string): string {`
+  ```
+  L16 parameters (path: string) -> string
+  L16 registered as an entry point: GET /
+  L17 return `home ${path}`
+  ```
+- `src.router.about` (src/router.ts:20; same directory): `export function about(path: string): string {`
+  ```
+  L20 parameters (path: string) -> string
+  L20 registered as an entry point: GET /about
+  L21 return `about ${path}`
+  ```
+- `src.greet.greet` (src/greet.ts:2; same directory): `export default function greet(name: string): string {`
+  ```
+  L2 parameters (name: string) -> string
+  L3 return `hello ${name}`
+  ```
+- `src.race.fetchOne` (src/race.ts:2; same directory): `export async function fetchOne(url: string): Promise<string> {`
+  ```
+  L2 parameters (url: string) -> Promise<string>
+  L3 return url
+  ```
+- `src.race.wrapped` (src/race.ts:11; same directory): `export function wrapped(x: string): string {`
+  ```
+  L11 parameters (x: string) -> string
+  L13 return String(undefinedThing(x))
+  ```
+- `src.profile.loadProfile` (src/profile.ts:4; same directory): `export async function loadProfile(id: string): Promise<string> {`
+  ```
+  L4 parameters (id: string) -> Promise<string>
+  L5 return fetchUser(id, 2) [calls: fetchUser() -> src.user.fetchUser]
+  ```
+- `src.legacy.legacyFormat` (src/legacy.js:1; same directory): `export function legacyFormat(value) {`
+  ```
+  L1 parameters (value)
+  L2 return String(value)
+  ```
+
+## 4. Style to follow (the closest existing functions)
+`src.text.clean` (src/text.ts):
+```
+export function clean(s: string): string {
+  return s.trim().toLowerCase();
+}
+```
+`src.text.countWords` (src/text.ts):
+```
+export const countWords = async (s: string): Promise<number> => {
+  await Promise.resolve();
+  return words(s).length;
+};
+```

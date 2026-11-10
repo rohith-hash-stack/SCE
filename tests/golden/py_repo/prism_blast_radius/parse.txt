@@ -1,0 +1,64 @@
+Blast radius of `src.shelf.core.parse.parse`: 0 transitive callers, nearest first:
+
+<prism_context budget_consumed="869" budget_total="4000" schema_version="3" task_type="blast">
+  <metadata>
+    <engine commit="*" name="prism-causal_two_pass" version="0.2.0"/>
+    <seed file="src/shelf/core/parse.py" line="16" symbol="src.shelf.core.parse.parse"/>
+    <budget exact="true" tokenizer="tiktoken:cl100k_base_offline" tokens="4000"/>
+    <language files="1" primary="python" tier="1"/>
+    <options>
+      <option key="engine" value="prism-causal_two_pass"/>
+      <option key="max_hops" value="6.0"/>
+    </options>
+  </metadata>
+  <manifest considered_nodes="3" packed_nodes="2" reachable_nodes="3">
+    <compression count="2" level="L0_full"/>
+    <distance_metric dist_max="6.0" lambda_data_flow="0.25" lambda_guard="0.15" name="causal_dijkstra"/>
+  </manifest>
+  <coverage covered_features="5" omitted_features="1" total_features="6">
+    <feature count="2" id="SINK_PURE_COMPUTE" present="true"/>
+    <feature count="2" id="FORM_LINEAR" present="true"/>
+    <feature count="0" id="OUTPUT_QUERY" present="false"/>
+    <feature count="2" id="OUTPUT_AGGREGATOR" present="true"/>
+    <feature count="1" id="ROLE_ENTRYPOINT" present="true"/>
+    <feature count="1" id="ROLE_PUBLIC_API" present="true"/>
+    <gap feature="OUTPUT_QUERY" reason="no_candidate_in_budget"/>
+  </coverage>
+  <warnings/>
+  <nodes>
+    <node compression="L0_full" cost="62" distance="0.0" end_line="22" file="src/shelf/core/parse.py" id="src.shelf.core.parse.parse" language="python" line="16" role="seed" symbol_kind="function" symbol_name="parse">
+      <signature>
+        <param name="text" optional="false"/>
+        <returns kind="Aggregator"/>
+        <docstring><![CDATA[Parse text into a list of records; blank text gives an empty list.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="AGGREGATOR" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[def parse(text):
+    """Parse text into a list of records; blank text gives an empty list."""
+    if text is None:
+        raise ValueError("text is required")
+    if not text.strip():
+        return []
+    return [tokenize(line) for line in text.splitlines() if line.strip()]]]></body>
+    </node>
+    <node compression="L0_full" cost="34" distance="1.0" end_line="13" file="src/shelf/core/parse.py" id="src.shelf.core.parse.tokenize" language="python" line="11" role="callee" symbol_kind="function" symbol_name="tokenize">
+      <signature>
+        <param name="line" optional="false"/>
+        <returns kind="Aggregator"/>
+        <docstring><![CDATA[Split one normalized line into fields.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="AGGREGATOR" role="NONE" substance="PURE_COMPUTE"/>
+      <contract call_line="22" passes_args="line" target_id="src.shelf.core.parse.parse"/>
+      <body><![CDATA[def tokenize(line):
+    """Split one normalized line into fields."""
+    return [field for field in normalize(line).split(SEPARATOR) if field]
+
+# Referenced module constants:
+SEPARATOR = ","]]></body>
+    </node>
+  </nodes>
+  <edges>
+    <edge back_edge="false" data_flow="false" from="src.shelf.core.parse.parse" guard="false" to="src.shelf.core.parse.tokenize" type="CALLS" weight="1.0"/>
+  </edges>
+  <trailer edge_count="1" node_count="2" sha256="4ad238941b129ce9419ee1cf13c37cdca485edb0bd9ada5c7af655154a4bb7d8" token_count="869"/>
+</prism_context>

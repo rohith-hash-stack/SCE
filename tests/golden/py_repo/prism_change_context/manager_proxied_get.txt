@@ -1,0 +1,65 @@
+# Change context: `src.shelf.models.query.QuerySet.get`
+src/shelf/models/query.py, lines 13-17
+
+## 1. Codebase
+32 functions in 4 directories; 0 registered entry points; languages: python 32
+
+Largest directories (functions, entry points):
+- `src/shelf`: 20 functions
+- `src/shelf/models`: 7 functions
+- `src/shelf/core`: 4 functions
+- `src/shelf/plugins`: 1 functions
+
+## 2. Group `src/shelf/models`
+7 functions, 3 classes in 2 files.
+
+## 3. Anchor
+```python
+    def get(self, **kwargs):
+        """The one matching object; raises LookupError when there is none."""
+        if not kwargs:
+            raise LookupError("no lookup given")
+        return self.filter(**kwargs)
+```
+
+Digest (what its code does, line by line):
+```
+L13 parameters (self, **kwargs)
+when not kwargs:
+  L16 raise LookupError("no lookup given")
+L17 return self.filter(**kwargs) [calls: filter() -> src.shelf.models.query.QuerySet.filter]
+```
+
+## 4. Who depends on it
+No callers in the index (an entry point, a callback, or unused).
+
+## 5. What it depends on
+- L17 result: `src.shelf.models.query.QuerySet.filter` changes state: self.filters.update(kwargs) changes self.filters (own state)
+
+## 6. Style to follow
+Conventions in `src/shelf/models`:
+- function names are snake_case (4 of 4 multi-word names)
+
+Sibling `src.shelf.models.query.BaseManager.make` (src/shelf/models/query.py:26; same file):
+```python
+        def make(name):
+            def manager_method(self, *args, **kwargs):
+                return getattr(self.get_queryset(), name)(*args, **kwargs)
+            return manager_method
+```
+
+Sibling `src.shelf.models.query.BaseManager.from_queryset` (src/shelf/models/query.py:24; same file):
+```python
+    @classmethod
+    def from_queryset(cls, queryset_class):
+        def make(name):
+            def manager_method(self, *args, **kwargs):
+                return getattr(self.get_queryset(), name)(*args, **kwargs)
+            return manager_method
+        attrs = {name: make(name) for name in ("get", "filter")}
+        attrs["_queryset_class"] = queryset_class
+        return type(cls.__name__ + "FromQuerySet", (cls,), attrs)
+```
+
+## 8. Wider impact
+0 transitive callers; by distance:

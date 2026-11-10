@@ -1,0 +1,105 @@
+Blast radius of `src.text.clean`: 5 transitive callers, nearest first:
+- hop 1: `src.report.report` (src/report.ts:6)
+- hop 1: `src.text.words` (src/text.ts:7)
+- hop 1: `test.text.test.text.cleans` (test/text.test.ts:5)
+- hop 2: `src.text.countWords` (src/text.ts:10)
+- hop 3: `test.text.test.text.counts_words` (test/text.test.ts:8)
+
+<prism_context budget_consumed="1605" budget_total="4000" schema_version="3" task_type="blast">
+  <metadata>
+    <engine commit="*" name="prism-causal_two_pass" version="0.2.0"/>
+    <seed file="src/text.ts" line="2" symbol="src.text.clean"/>
+    <budget exact="true" tokenizer="tiktoken:cl100k_base_offline" tokens="4000"/>
+    <language files="3" primary="typescript" tier="2"/>
+    <options>
+      <option key="engine" value="prism-causal_two_pass"/>
+      <option key="max_hops" value="6.0"/>
+    </options>
+  </metadata>
+  <manifest considered_nodes="1" packed_nodes="6" reachable_nodes="1">
+    <compression count="6" level="L0_full"/>
+    <distance_metric dist_max="6.0" lambda_data_flow="0.25" lambda_guard="0.15" name="causal_dijkstra"/>
+  </manifest>
+  <coverage covered_features="3" omitted_features="0" total_features="3">
+    <feature count="6" id="SINK_PURE_COMPUTE" present="true"/>
+    <feature count="6" id="FORM_LINEAR" present="true"/>
+    <feature count="3" id="OUTPUT_QUERY" present="true"/>
+  </coverage>
+  <warnings>
+    <warning code="LANGUAGE_TIER_2" severity="low">
+      <message>typescript is Tier 2 (structural/lexical linking only)</message>
+    </warning>
+  </warnings>
+  <nodes>
+    <node compression="L0_full" cost="17" distance="0.0" end_line="4" file="src/text.ts" id="src.text.clean" language="typescript" line="2" role="seed" symbol_kind="function" symbol_name="clean">
+      <signature>
+        <param name="s" optional="false" type="string"/>
+        <returns kind="Query" type="string"/>
+        <docstring><![CDATA[Trim and lower-case a string.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="NONE" substance="PURE_COMPUTE"/>
+      <body><![CDATA[export function clean(s: string): string {
+  return s.trim().toLowerCase();
+}]]></body>
+    </node>
+    <node compression="L0_full" cost="29" distance="0.8333" end_line="8" file="src/report.ts" id="src.report.report" language="typescript" line="6" role="caller" symbol_kind="function" symbol_name="report">
+      <signature>
+        <param name="name" optional="false" type="string"/>
+        <param name="xs" optional="false" type="number[]"/>
+        <returns kind="Query" type="string"/>
+        <docstring><![CDATA[A one-line report: a namespace call, a default import, a barrel import.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[export function report(name: string, xs: number[]): string {
+  return `${greet(text.clean(name))}: ${sum(xs)}`;
+}]]></body>
+    </node>
+    <node compression="L0_full" cost="23" distance="0.8333" end_line="7" file="src/text.ts" id="src.text.words" language="typescript" line="7" role="caller" symbol_kind="function" symbol_name="words">
+      <signature>
+        <param name="s" optional="false" type="string"/>
+        <returns kind="Command" type="string[]"/>
+      </signature>
+      <features form="LINEAR" output="COMMAND" role="NONE" substance="PURE_COMPUTE"/>
+      <contract call_line="12" passes_args="s" target_id="src.text.countWords"/>
+      <body><![CDATA[export const words = (s: string): string[] => clean(s).split(/\s+/).filter(Boolean);]]></body>
+    </node>
+    <node compression="L0_full" cost="23" distance="1.0" end_line="7" file="test/text.test.ts" id="test.text.test.text.cleans" language="typescript" line="5" role="caller" symbol_kind="function" symbol_name="cleans">
+      <signature>
+        <returns kind="Command"/>
+      </signature>
+      <features form="LINEAR" output="COMMAND" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[  it("cleans", () => {
+    expect(clean("  A ")).toBe("a");
+  });]]></body>
+    </node>
+    <node compression="L0_full" cost="29" distance="2.0" end_line="13" file="src/text.ts" id="src.text.countWords" language="typescript" line="10" role="caller" symbol_kind="function" symbol_name="countWords">
+      <signature>
+        <param name="s" optional="false" type="string"/>
+        <returns kind="Query" type="Promise&lt;number&gt;"/>
+      </signature>
+      <features form="LINEAR,ASYNC_CONCURRENT" output="QUERY,ASYNC_DEFERRED" role="NONE" substance="PURE_COMPUTE"/>
+      <contract call_line="9" passes_args="&quot;a b&quot;" target_id="test.text.test.text.counts_words"/>
+      <body><![CDATA[export const countWords = async (s: string): Promise<number> => {
+  await Promise.resolve();
+  return words(s).length;
+};]]></body>
+    </node>
+    <node compression="L0_full" cost="25" distance="3.0" end_line="10" file="test/text.test.ts" id="test.text.test.text.counts_words" language="typescript" line="8" role="caller" symbol_kind="function" symbol_name="counts_words">
+      <signature>
+        <returns kind="Command"/>
+      </signature>
+      <features form="LINEAR,ASYNC_CONCURRENT" output="COMMAND,ASYNC_DEFERRED" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[  it("counts words", async () => {
+    expect(await countWords("a b")).toBe(2);
+  });]]></body>
+    </node>
+  </nodes>
+  <edges>
+    <edge back_edge="true" data_flow="false" from="src.report.report" guard="false" to="src.text.clean" type="CALLS" weight="1.0"/>
+    <edge back_edge="false" data_flow="false" from="src.text.countWords" guard="false" to="src.text.words" type="CALLS" weight="1.0"/>
+    <edge back_edge="true" data_flow="false" from="src.text.words" guard="false" to="src.text.clean" type="CALLS" weight="1.0"/>
+    <edge back_edge="true" data_flow="false" from="test.text.test.text.cleans" guard="false" to="src.text.clean" type="CALLS" weight="1.0"/>
+    <edge back_edge="false" data_flow="false" from="test.text.test.text.counts_words" guard="false" to="src.text.countWords" type="CALLS" weight="1.0"/>
+  </edges>
+  <trailer edge_count="5" node_count="6" sha256="ddbaba46e826b6fb1a44c7abc28e1feb16cf69c9e6658bec32a3fcfafc21363b" token_count="1605"/>
+</prism_context>
