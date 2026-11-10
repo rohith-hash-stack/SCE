@@ -39,6 +39,7 @@ from harness.experiments.r3.pool_scan import SOURCE, TEST, show
 
 RELATED_MAX = 4
 TIME_LIMIT_S = 1500
+MIN_FREE_GB = 2.0      # below this the gate stops (exit 3) instead of recording failures caused by a full disk
 
 
 def _git(*args, cwd=None, check=True):
@@ -318,6 +319,9 @@ def main(argv=None) -> int:
     scratch = tempfile.mkdtemp(prefix=f"r4gate_{a.family}_")
     try:
         for c in draw_order(cands, a.seed):
+            if shutil.disk_usage(a.out).free < MIN_FREE_GB * 1e9:
+                print(f"stopping: less than {MIN_FREE_GB} GB free", flush=True)
+                return 3
             passed = [r for r in done.values() if r.get("passed")]
             if len(passed) >= a.want or len(done) >= a.max_attempts:
                 break
