@@ -26,14 +26,9 @@ yet.
 | **the agent** (`prism_check_changes`) | after every `edit_file` | the working tree against `HEAD` | facts in four sections (§3) |
 
 - **Timing:**
-  - **What fires it:** every `edit_file`. In the harness, the check runs and its answer is appended to the edit's
-    result, so it is part of the loop rather than an extra choice. The tool can also be called directly.
-  - **Budget:** at most 0.5 s per check, on the live index (`WorkingIndex.refresh()`).
-  - **What the investigation measured** on R3a's tasks: the break check 0.015 s median, the reverse walk 0.001 s, the
-    upstream checks 0.003 s. The refresh's rebuild is the risk; it is measured at verification (§7, step 4). Over
-    0.5 s means recalibrating before R4.
-- **The protocol question for R4's pre-registration:** whether the check's result is appended automatically or only
-  returned when called. This is noted as such; it changes PRISM's arm only.
+  - **When:** the check runs after every `edit_file`, always. Its output is conditional: the boolean gate, §8.
+  - **Cost:** the analysis measured 0.003–0.015 s per anchor on an existing index. The live index's refresh after
+    an edit is measured at verification (§7, step 4); the budget is at most 0.5 s per check.
 
 ## 2. Internal / external callee classification
 
@@ -168,3 +163,72 @@ undefined" (unresolved only, not external). The agent's tool uses it to phrase t
 - **Order:** steps 1–2 are A3 and A1 plus the classification. Step 3 is B5, which needs A2 and B2. Step 4 is the
   verification.
 - **The golden recording still comes first.** It needs the tokenizer asset, so each fix's output change is visible.
+
+## 8. The boolean gate (decided 2026-11-10; recorded in `PREREG_DRAFT.md` §2)
+
+**The rule:**
+1. After every `edit_file`, the check runs. Always.
+2. It computes one boolean: is anything affected, upstream or downstream?
+3. The output depends on the boolean:
+
+| Condition | Boolean | What is sent after the edit's own result |
+|---|---|---|
+| any downstream break | true | the full four-section feedback |
+| any internal upstream mismatch | true | the full four-section feedback |
+| any external upstream mismatch (verified against a known signature) | true | the full four-section feedback, with the "do NOT edit" phrasing |
+| any undefined call | true | the full four-section feedback |
+| warnings only (dead code, a removed callee with no other callers) | true (soft) | **the warnings section only**, without the other headings |
+| no issues | false | **`[check: clean]`** (one line, about 5 tokens) |
+
+**The warnings-only format:**
+```
+## Warnings
+- [file:line] [what]
+```
+
+**Why a clean line instead of silence:**
+- Silence is ambiguous: was the edit clean, did the check fail, or is it late?
+- `[check: clean]` costs about 5 tokens, removes that ambiguity, says the check ran on this edit, and tells clean
+  apart from warnings-only.
+
+**Token cost** (a task of about 10 edits, about 3 of them with issues):
+
+| Protocol | Tokens per task |
+|---|---|
+| append the full feedback after every edit | 10 × 800 = **8,000** |
+| the boolean gate with the one-line clean | 3 × 800 + 7 × 5 = **2,435** (about 70% less) |
+
+**The rule's own failure:** if the check errors or times out, the line is `[check: unavailable]`, never
+`[check: clean]`. An unverified edit is never reported as clean.
+
+**Verification after the fixes** (§7, step 4; validation, not a decision input): on R3a's 80 tasks, replaying each
+developer change as edits, count:
+- edits that trigger true, and edits that trigger false;
+- that `[check: clean]` is the common case;
+- that warnings-only cases are distinguishable from clean.
+
+## 9. Both arms: the same protocol, different content
+
+| | PRISM arm | Baseline arm |
+|---|---|---|
+| When | after every `edit_file` | after every `edit_file` |
+| Boolean, clean line, warnings-only, the four sections, 800-token cap, `[check: unavailable]` | identical | identical |
+| What computes the facts | PRISM: the parse tree, the resolved call graph, the break check against `HEAD`, callee origin (V1a) | text only: `git diff HEAD`, regular expressions and `grep`; no parser, no index (below) |
+
+**The baseline's grep-derived facts** (a fixed algorithm, written into the pre-registration):
+- **Changed functions:** the functions whose lines the diff against `HEAD` touches. Their definition lines are found by
+  pattern (`def name(`, `function name(`, `name = (…) =>`, `name(…) {`).
+- **Downstream:** for each changed function whose parameter list changed (the definition line, before and after),
+  `grep -nw 'name('` over the repository's source. Each call site whose comma-counted argument number does not fit
+  the new list is reported: "`file:line` passes N arguments; `name` now takes M".
+- **Upstream internal:** in the changed lines, each `name(` with a definition elsewhere in the repository (by the
+  same patterns), comma-counted against that definition's parameters.
+- **Upstream external:** a called name bound by an import line from a module that is not a repository path. Text
+  cannot verify an external signature, so this section reports only the binding ("`get` comes from the external
+  `requests`: do NOT edit it"), and only when the call's line also changed.
+- **Undefined:** a called name in the changed lines with no definition and no import line in the repository.
+  Builtins come from a fixed list per language.
+- **Warnings:** a function whose last textual call site disappeared in the diff.
+
+**The parity this keeps:** both arms receive the same kind of feedback, at the same moments, in the same format and
+budget. What differs is precision, which is what R4 measures: parsed and resolved facts against text-matched facts.

@@ -187,6 +187,57 @@ graph and git. Costs are *guesses*.
     alone detects only about +0.20.
   - **Decision needed:** tasks per family.
 
+## 4a. R4's validation in three phases (decided 2026-11-10)
+
+| Phase | Question | Arms | Criteria |
+|---|---|---|---|
+| **Sanity 1** | Does PRISM work at all? | PRISM only, two configurations: with and without compaction (`r4/COMPACTION_DESIGN.md`) | **none:** observation and diagnosis |
+| **Sanity 2** | Does PRISM beat the baseline? | the better Sanity 1 configuration (or the simpler one, if tied) against the baseline | **none:** observation and diagnosis |
+| **R4** | The comparison at scale | the winning configuration against the baseline, at the full task count | **pre-registered** (`r4/PREREG_DRAFT.md`) |
+
+**The rules:**
+- **Sanity 1 has no baseline arm.** Comparing with the baseline before PRISM works measures the wrong thing.
+- **The sanity phases are development iterations.** They have no pass or fail criteria and no pre-registration:
+  1. run;
+  2. observe;
+  3. diagnose (which arm, which tasks, which mechanism);
+  4. fix PRISM or the compaction design;
+  5. re-run.
+  - A phase is left when its behaviour looks right, judged by observation, not by a preset threshold.
+- **Pre-registration applies to R4's full run only.** It is frozen after Sanity 2: the configuration, families, counts,
+  test and thresholds. The R3 discipline applies unchanged: hash-committed before the run; amendments recorded and
+  never used to lower a threshold.
+- **Task selection stays a gate,** not an observation: `r4/GATES.md` and the pre-flight scope check
+  (`r4/SCOPE_INVESTIGATION.md`).
+- **The earlier three-layer, baseline-only sanity check** (2026-11-10: scope, calibration, signal):
+  - its scope layer remains the task-selection check;
+  - its baseline calibration and signal layers conflict with "no baseline until Sanity 2". Folding them into Sanity
+    2's observations is proposed, pending the user's confirmation.
+
+**What Sanity 1 observes** (per run, per edit, logged by the harness):
+
+| Area | Signals |
+|---|---|
+| Outcome | solved or not, and which tasks; partial (file and function F1); pass-to-pass broken |
+| The check | how often it fires; true against false; which sections; facts per check; latency (target at most 0.5 s); `[check: unavailable]` events |
+| Retry | does the next edit address a reported fact (it touches the named file:line or caller)? Do facts per check fall over the turns (converging) or rise (diverging)? Is the same feedback repeated after an edit (facts ignored)? |
+| Stopping | done called while the last check reported issues (a false done); done right after `[check: clean]`; turns to the first edit; turns to the first clean check |
+| Loop behaviour | identical calls 3+ times with no edit; early done (within 5 turns, no edit) |
+| External safety | any edit to a vendored, stub or library path (expected: none) |
+| Context | peak and mean prompt tokens per call; budget or turn-cap stops. Compaction arm: compaction events, tokens removed, and **re-requests of a stubbed output** (what compaction cost). Arm without compaction: overflow-fallback events |
+| The two arms | solve rates, and each signal above, side by side |
+
+**Sanity 1 cost** *(estimate)*:
+
+| Item | Estimate |
+|---|---|
+| Tasks | about 10 per family over 5 families (delete, move, feature, tests, refactor; plus Family N's 9 if included): 50–59 |
+| Runs | 2 PRISM arms × 1 seed (42): **100–118** |
+| Model time | 5–7 min per run (28-turn cap; check feedback and larger prompts make PRISM runs longer than R3a's average of about 4 min): **9–14 h** |
+| Environment setup | about 25–35 repositories × 10–15 min. Kaggle's disk resets between sessions, so it is paid again in each session: **5–8 h per session** |
+| Total | **15–22 h: 2 sessions at 11.5 h, plan for 3.** Each re-run after a fix costs the same again (or only the affected families) |
+| Disk | the safeguards from the gating run: check before each repository; clean between repositories; stop at under 2 GB; clear the package caches |
+
 ## 5. R5 (double check) and R6 (cross-model): unchanged in shape, larger in size
 
 - **R5:** R4's frozen code and protocol, on fresh held-out tasks from repositories never used, in every family.
