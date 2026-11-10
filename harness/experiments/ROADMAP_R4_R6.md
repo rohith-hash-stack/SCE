@@ -187,6 +187,28 @@ graph and git. Costs are *guesses*.
     alone detects only about +0.20.
   - **Decision needed:** tasks per family.
 
+## 4a′. Decided 2026-11-10 (latest): a task-validation sanity check, baseline only
+
+**The user's decision:** "Baseline-only three-layer check. On delete, feature, callers only. ~25 runs, not 44."
+
+| | |
+|---|---|
+| **What it validates** | the tasks, not PRISM: Layer 1 scope (static), Layer 2 calibration, Layer 3 signal |
+| **Families** | delete (10), feature (10), Family B (5, only if at least 5 pass the scope re-check after K4; otherwise Family B is not sanity-checked and stays directional from the start) |
+| **Arm** | the baseline only: the 14B model, seed 42, the same loop as R3a (28-turn cap, 300k budget), each family's own template (§2a) |
+| **Runs** | about 25, one Kaggle session |
+| **Not in it** | move, tests and Family N (deferred: no harness is built for them); a PRISM arm |
+
+**Why** (the user):
+- sanity validates tasks, not PRISM;
+- a PRISM-only Sanity 1 would duplicate R4 with less power;
+- deferred families are not validated.
+
+**The code fixes continue in parallel.** The sanity check does not wait for them.
+
+**What this replaces:** the PRISM-only "Sanity 1" in §4a below is superseded. §4a stays for the record: its
+observation list (fact uptake first) applies to the first runs with `prism_check_changes`.
+
 ## 4a. R4's validation in three phases (decided 2026-11-10; restructured the same day, smaller first)
 
 | Phase | Question | Families | Arms | Tasks / runs | Criteria |
