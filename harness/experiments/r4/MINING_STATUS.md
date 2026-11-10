@@ -74,3 +74,23 @@ each repository at 10 passes.
 **Overall:** 6–8 weeks, as estimated. Mining is done except 5 repositories. The long pole is gating and oracle work
 (about 5–6 weeks across families, on CPU), then the per-family pilots on Kaggle. Move and N are the two families
 whose volume is not assured.
+
+## Gating paused (2026-11-10, the user's instruction)
+
+**Why paused:** delete (71 passes) and feature (23) exceed Sanity 1's needs (about 10 each). The queue resumes after
+Sanity 1. R4's targets (80 per family) are unchanged.
+
+| Family | Tried | Passed | Setup failures | Repositories passing |
+|---|---|---|---|---|
+| move | 38 (of 39) | 10 | 2 | 6 |
+| delete | 204 | 71 | 8 | 22 |
+| tests | 103 | 11 | 11 | 8 |
+| feature | 37 | 23 | 1 | 8 |
+| Family N | 12 | 9 | 1 | 3 |
+| refactor | 0 | 0 | — | — |
+
+- **Resuming:** the logs and the driver in the session's scratch area (`r4gate/`) resume where they stopped. The
+  state is in `paused_state.json` there.
+- **Excluded from these counts:** records with infrastructure errors (the full disk, or a worktree removed under a
+  running gate). They are retried on resume.
+- **Family B** is re-gated separately: `FAMILY_B_REGATE.md`.
