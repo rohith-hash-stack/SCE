@@ -2,12 +2,15 @@
 diagnostics, secondary T2 lift, failure records, server truncation guard,
 native Ollama client."""
 import http.server
+import importlib.util
 import json
 import math
 import threading
 
 import pandas as pd
 import pytest
+
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None   # harness.tokenizer needs it
 
 from harness import config as C
 from harness.llm import Completion, OllamaChatLLM
@@ -167,6 +170,7 @@ def test_arm1_t2_diagnostic_separates_mapping_bug_from_retrieval_failure(tmp_pat
     assert set(r["retrieved_top5"][0]) == {"chunk_source_id", "chunk_symbols", "chunk_text"}
 
 
+@pytest.mark.skipif(not HAS_TRANSFORMERS, reason="transformers missing (the runner's tokenizer)")
 def test_kaggle_runner_writes_summary_wall_time_and_diagnostic(tmp_path, monkeypatch):
     import os
     import shutil
@@ -230,6 +234,7 @@ def test_gate_summary_keeps_synthetic_and_real_t2_apart(tmp_path):
 
 
 # ---- Gate B exclusions (t02_005: ambiguous inherited-member gold, docs/m2_closure.md) ----
+@pytest.mark.skipif(not HAS_TRANSFORMERS, reason="transformers missing (the runner's tokenizer)")
 def test_gate_b_excludes_listed_tasks_and_records_why(tmp_path, monkeypatch):
     import os
     if not os.path.isdir("/home/user/SCE/.benchmarks/corpora/fastapi"):

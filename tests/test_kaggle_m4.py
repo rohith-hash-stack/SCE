@@ -2,10 +2,13 @@
 keys / resume rule / atomic writes, the per-corpus .prism/ clear, and an
 end-to-end dry run on Express T5 (scripted model, stand-in encoders) that
 checks the cell count, the checkpoint, resume and the bias-control JSON."""
+import importlib.util
 import json
 import os
 
 import pytest
+
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None   # harness.tokenizer needs it
 
 from harness import kaggle_m1 as K
 
@@ -55,7 +58,8 @@ def test_task_type_flag_rejects_deferred_types(capsys):
     assert "deferred" in capsys.readouterr().err
 
 
-@pytest.mark.skipif(not (os.path.exists(QWEN) and os.path.isdir(EXPRESS)), reason="tokenizer / Express checkout missing")
+@pytest.mark.skipif(not (os.path.exists(QWEN) and os.path.isdir(EXPRESS) and HAS_TRANSFORMERS),
+                    reason="tokenizer / Express checkout / transformers missing")
 def test_m4_dry_run_on_express_t5_checkpoints_resumes_and_writes_bias_control(tmp_path, monkeypatch):
     import harness.tokenizer as T
     from harness import config as C

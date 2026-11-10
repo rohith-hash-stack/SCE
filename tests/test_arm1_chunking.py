@@ -1,5 +1,6 @@
 """ast_splitter: compilable chunks, nested class naming, first-level-only
 splitting, preambles, decorators/docstrings, full coverage of a real file."""
+import importlib.util
 import os
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from harness.ast_splitter import PythonSplitter, module_name
 
 QWEN = os.environ.get("HARNESS_TOKENIZER_PATH", "/home/user/models/qwen2-tokenizer")
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None   # harness.tokenizer needs it
 FASTAPI = "/home/user/SCE/.benchmarks/corpora/fastapi"
 
 
@@ -105,7 +107,8 @@ def test_unsplittable_falls_back_whole():
     assert len(ch) == 1 and ch[0].oversized and "unsplittable" in ch[0].notes[0]
 
 
-@pytest.mark.skipif(not (os.path.isdir(FASTAPI) and os.path.exists(QWEN)), reason="FastAPI checkout / Qwen tokenizer missing")
+@pytest.mark.skipif(not (os.path.isdir(FASTAPI) and os.path.exists(QWEN) and HAS_TRANSFORMERS),
+                    reason="FastAPI checkout / Qwen tokenizer / transformers missing")
 def test_real_fastapi_file_reassembles_and_compiles():
     from harness.tokenizer import HuggingFaceTokenizer
     sp = PythonSplitter(HuggingFaceTokenizer(QWEN), 800)

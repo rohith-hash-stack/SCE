@@ -3,6 +3,7 @@ task schema, tokenizer). One section per module, added step by step."""
 from __future__ import annotations
 
 import http.server
+import importlib.util
 import json
 import os
 import pytest
@@ -119,7 +120,9 @@ def test_legacy_loader_maps_debug_to_t2_and_blast_to_t5():
 
 
 QWEN_GGUF = os.environ.get("HARNESS_TOKENIZER_PATH", "/home/user/models/qwen2-tokenizer")
-needs_qwen = pytest.mark.skipif(not os.path.exists(QWEN_GGUF), reason="Qwen2 tokenizer file not available")
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None   # harness.tokenizer needs it
+needs_qwen = pytest.mark.skipif(not (os.path.exists(QWEN_GGUF) and HAS_TRANSFORMERS),
+                                reason="Qwen2 tokenizer file / transformers not available")
 
 
 class _FakeLlamaServer(http.server.BaseHTTPRequestHandler):

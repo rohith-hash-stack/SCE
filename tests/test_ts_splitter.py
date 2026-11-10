@@ -2,6 +2,7 @@
 wrapping, JSDoc attachment, oversized splits and callback descent, routing
 by extension, and real Express and tRPC files (every chunk parses with
 tree-sitter-typescript, braces balance, every non-blank line covered)."""
+import importlib.util
 import os
 
 import pytest
@@ -11,6 +12,7 @@ from harness.ast_splitter import (
 )
 
 QWEN = os.environ.get("HARNESS_TOKENIZER_PATH", "/home/user/models/qwen2-tokenizer")
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None   # harness.tokenizer needs it
 CORPORA = "/home/user/SCE/.benchmarks/corpora"
 EXPRESS = f"{CORPORA}/express"
 TRPC = f"{CORPORA}/trpc/packages/server/src"
@@ -216,7 +218,7 @@ def test_iter_source_files_and_corpus_language(tmp_path):
     assert corpus_language(str(tmp_path), {"language": "python"}) == "python"
 
 
-@pytest.mark.skipif(not os.path.exists(QWEN), reason="Qwen tokenizer missing")
+@pytest.mark.skipif(not (os.path.exists(QWEN) and HAS_TRANSFORMERS), reason="Qwen tokenizer / transformers missing")
 @pytest.mark.parametrize("root,rel,expect", [
     (EXPRESS, "lib/application.js", ["lib.application.init", "lib.application.use", "lib.application.handle"]),
     (EXPRESS, "lib/router/index.js", ["lib.router.handle", "lib.router.process_params"]),
@@ -247,7 +249,7 @@ def test_real_express_and_trpc_files_chunk_parse_and_cover(root, rel, expect):
                 "core.internals.procedureBuilder.createBuilder.use"} <= inner
 
 
-@pytest.mark.skipif(not os.path.exists(QWEN), reason="Qwen tokenizer missing")
+@pytest.mark.skipif(not (os.path.exists(QWEN) and HAS_TRANSFORMERS), reason="Qwen tokenizer / transformers missing")
 @pytest.mark.parametrize("root", [EXPRESS, TRPC])
 def test_whole_ts_corpus_chunks_parse(root):
     if not os.path.isdir(root):
