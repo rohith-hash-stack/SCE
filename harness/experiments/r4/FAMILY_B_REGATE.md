@@ -39,3 +39,12 @@
 - **More Family B candidates** can come from R3's full mined pool (`r3/r3a_tasks/candidates_B.json`), not only the 80
   that were gated. They would be gated with G1, G2 and the scope check together. Not done here: the instruction was
   R3a's 80.
+
+## After the K4 fix (2026-11-10)
+
+- **The re-check:** R3a's poetry and packaging tasks (B-11, B-13, B-27, B-29, B-52, B-54, B-66, B-71, B-72, B-75)
+  were re-run through the scope analysis with the fixed caller graph. They are the only R3a tasks K4 could affect:
+  packaging was confirmed unaffected, and the other repositories keep their packages at the root.
+- **The result: no change.** Every task's relations are identical before and after.
+- **Family B stays at 4.** That is below the sanity floor of 5, so Family B is not sanity-checked and stays
+  directional from the start (the user's rule, 2026-11-10).

@@ -151,6 +151,16 @@ def score(task: dict, work: str, env, start_tree: str | None = None) -> dict:
                 outcomes[f"{f}::{t}"] = (group, id_status(r.get("tests") or {}, t, work))
     res["tests"] = {k: v[1] for k, v in outcomes.items()}
     res["resolved"] = bool(outcomes) and all(s == "passed" for _g, s in outcomes.values())
+    # R4's delete family (`r4/sanity_tasks.py`): the task is done only if the target is gone as well. R3's tasks never
+    # carry this key, so their scoring is unchanged.
+    absent = task.get("must_be_absent")
+    if absent:
+        f, q = absent.split("::", 1)
+        path = os.path.join(work, f)
+        from harness.experiments.change_history.mine import functions
+        still = os.path.isfile(path) and q in functions(f, open(path, "rb").read())
+        res["target_absent"] = not still
+        res["resolved"] = res["resolved"] and not still
     res["fail_to_pass_passed"] = sum(1 for g, s in outcomes.values() if g == "fail_to_pass" and s == "passed")
     res["pass_to_pass_broken"] = sum(1 for g, s in outcomes.values() if g == "pass_to_pass" and s != "passed")
     return res

@@ -206,7 +206,22 @@ graph and git. Costs are *guesses*.
 
 **The code fixes continue in parallel.** The sanity check does not wait for them.
 
-**What this replaces:** the PRISM-only "Sanity 1" in §4a below is superseded. §4a stays for the record: its
+**Updated the same day (the user): both arms on the same sample.**
+- The baseline arm is unchanged: it validates the tasks (Layers 2 and 3).
+- A **PRISM arm on the same sample** is added, about 25 more runs, to catch regressions from the code fixes (K4, D1,
+  parsed-code detection, internal/external, `prism_check_changes`) before R4.
+- **In total:** about 50 runs, one session (6–8 h), seed 42, the same protocol as R3a.
+- **How each layer is read:**
+  - Layer 1 (scope) is static;
+  - Layer 2 (calibration) is the baseline's solve rate, aiming for 1–4 of 10: task validity;
+  - Layer 3 (signal) is both arms' edit, loop and early-done rates;
+  - **a regression check:** the PRISM arm completes cleanly;
+  - PRISM against the baseline is underpowered here: a smoke signal, not a result.
+- **The standalone Sanity 2** (a separate sample, about 60 runs) **is retired.**
+- **Which PRISM the arm runs:** the arm uses R3a's tool layer with the fixes merged when the cell runs. The post-edit
+  check protocol (the boolean gate) is part of the arm only if it is built and wired into the loop by then.
+
+**What this replaces:** the PRISM-only "Sanity 1" and the standalone "Sanity 2" in §4a below are superseded. §4a stays for the record: its
 observation list (fact uptake first) applies to the first runs with `prism_check_changes`.
 
 ## 4a. R4's validation in three phases (decided 2026-11-10; restructured the same day, smaller first)
