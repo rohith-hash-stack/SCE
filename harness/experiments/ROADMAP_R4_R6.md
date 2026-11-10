@@ -209,10 +209,11 @@ graph and git. Costs are *guesses*.
   never used to lower a threshold.
 - **Task selection stays a gate,** not an observation: `r4/GATES.md` and the pre-flight scope check
   (`r4/SCOPE_INVESTIGATION.md`).
-- **The earlier three-layer, baseline-only sanity check** (2026-11-10: scope, calibration, signal):
-  - its scope layer remains the task-selection check;
-  - its baseline calibration and signal layers conflict with "no baseline until Sanity 2". Folding them into Sanity
-    2's observations is proposed, pending the user's confirmation.
+- **The earlier three-layer, baseline-only sanity check is split (the user's decision, 2026-11-10):**
+  - **its Layer 1** (the scope check) stays as task selection, before Sanity 1. It needs no baseline;
+  - **its Layers 2 (calibration) and 3 (signal)** need baseline runs, so they are part of Sanity 2's comparison.
+  - The user: "This isn't a compromise — it's the correct split. Sanity 1 = 'does PRISM work?' Sanity 2 = 'does PRISM
+    beat baseline?' including calibration and signal as part of that comparison."
 
 **What Sanity 1 observes** (per run, per edit, logged by the harness):
 
@@ -226,6 +227,13 @@ graph and git. Costs are *guesses*.
 | External safety | any edit to a vendored, stub or library path (expected: none) |
 | Context | peak and mean prompt tokens per call; budget or turn-cap stops. Compaction arm: compaction events, tokens removed, and **re-requests of a stubbed output** (what compaction cost). Arm without compaction: overflow-fallback events |
 | The two arms | solve rates, and each signal above, side by side |
+| **Fact uptake** (added 2026-11-10) | does the next edit **fix what the feedback named**? The named caller is updated, the undefined name is defined or imported, the mismatched call is changed. Editing differently while leaving the named fact in place counts as no uptake (a false positive for retry) |
+| **Peak context per arm** (added 2026-11-10) | the peak prompt as a share of the window. **Expected:** the compaction arm peaks at 65–75%; the arm without compaction at 85–95%, or reaches the limit. **Read as:** both near 90% means compaction is not working; the compaction arm never above 50% means it triggers too aggressively. These are diagnostic expectations, not gates |
+| **Re-request rate** (added 2026-11-10) | how often a stubbed output is called again, and how soon. Immediate re-calls mean compaction is wasting turns; no re-requests mean the dropped content was safe to drop |
+
+**How the compaction contrast is reported:** the two arms compare **proactive compaction (at 70%) with reactive
+compaction (R3's rule at overflow)**, not "compaction against none". Sanity 1's results are interpreted in this
+narrower framing.
 
 **Sanity 1 cost** *(estimate)*:
 

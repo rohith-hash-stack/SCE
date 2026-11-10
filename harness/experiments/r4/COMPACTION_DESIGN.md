@@ -54,7 +54,17 @@ would not fit 20,480 tokens. Without that fallback, Ollama silently truncates th
 prompt included. That is not a usable control.
 - **Each overflow event is logged,** so Sanity 1 can see how often the arm without compaction is forced into it.
 
-## 6. The contrast Sanity 1 measures
+## 6. The contrast Sanity 1 measures (the framing for its results, the user's decision, 2026-11-10)
+
+**It is proactive compaction (at 70%) against reactive compaction (at overflow), not compaction against none.** Sanity
+1's results are interpreted in this narrower framing.
+
+**What the observations are read against** (`ROADMAP_R4_R6.md` §4a; expectations, not gates):
+- **peak context:** the compaction arm peaks at 65–75% of the window; the reactive arm at 85–95%, or reaches the
+  limit;
+- **re-request rate:** how often a stubbed output is called again.
+
+**The design as written:**
 
 **Proactive, structured compaction** (at 70%, superseded first, a ledger, the latest state pinned) **against
 overflow-only stubbing** (R3's rule at 100%).
