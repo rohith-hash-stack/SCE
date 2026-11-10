@@ -201,7 +201,16 @@ def main(argv=None) -> int:
     for i, tid in enumerate(samples.get("B", [])):
         tasks.append({**family_b_task(json.load(open(f"reports/r3/r3a/tasks/{tid}.json"))), "id": f"r4s-B-{i + 1:02d}",
                       "r3a_id": tid})
-    json.dump({"tasks": tasks}, open(a.out, "w"), indent=1)
+    layer1 = samples.get("layer1", {})           # commit -> Layer 1 class (from the scope check)
+    for t in tasks:
+        t["layer1"] = layer1.get(t.get("commit"), t.get("layer1"))
+    urls = {}
+    for name in sorted({t["repo"] for t in tasks}):
+        url = _git("-C", clones[name], "remote", "get-url", "origin").stdout.strip()
+        urls[name] = url if url.endswith(".git") else url + ".git"
+    import hashlib
+    sha = hashlib.sha256(json.dumps(tasks, sort_keys=True).encode()).hexdigest()
+    json.dump({"tasks": tasks, "tasks_sha256": sha, "repo_urls": urls}, open(a.out, "w"), indent=1)
     print(f"{len(tasks)} tasks -> {a.out}")
     return 0
 
