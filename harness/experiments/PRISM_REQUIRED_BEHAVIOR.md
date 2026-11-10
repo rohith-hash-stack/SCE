@@ -63,11 +63,37 @@ From the agent's side, and seen in the R3 pilot (`r3/PILOT_LOOP_INVESTIGATION.md
 
 | ID | The agent asks | PRISM returns | Status today |
 |---|---|---|---|
-| **V1** | Do my calls fit what I call? (upstream) | per call in new or changed code: the target exists and is imported (Q1, Q2); the arguments bind to its signature; the return value's use matches what it returns; its raises are handled | **missing** (the break check binds callers to the anchor only) |
+| **V1** | Do my calls fit what I call? (upstream) | per call in new or changed code (found from the parse tree, never by text pattern): the target exists and is imported (Q1, Q2); its **origin** (internal, external, unresolved: V1a); the arguments bind to its signature; the return value's use matches what it returns; its raises are handled. Facts, never verdicts | **missing** (the break check binds callers to the anchor only) |
 | **V2** | Do callers still fit what I changed? (downstream) | per caller: fails, changes meaning, or check, compared with the **committed** version | **partial** (`impact/breaks.py` needs the pre-change version from `git show HEAD:`, and an arrow-function parse fix) |
 | **V3** | What have I not updated? | touch points (T2, T4–T9) of each changed symbol that the working tree has not touched yet | **missing** |
 | **V4** | Check everything I changed | V1–V3 over every function changed in the working tree against `HEAD`, with certainty. **Empty when consistent.** It changes as the tree changes, so it is never an identical repeat | **missing** (a new tool) |
 | **V5** | Which tests should I run? | the smallest set of test files that reach the changed functions (from T8) | **missing** |
+
+**V1a: the callee's origin (adopted 2026-11-10).** The right fix for a mismatch depends on where the callee comes from:
+
+| Callee | Fact | What the agent should do |
+|---|---|---|
+| a downstream caller | "`caller` passes 3 arguments; `anchor` now takes 2" | update the caller |
+| internal (defined in, or imported from, the repository) | "internal `Y` now requires `strict`" | the agent's choice: update the callee, or adapt the call |
+| external (a third-party package, the standard library, a system module, a runtime builtin) | "you call `requests.get` with `timeout=None`; the library expects a positive number. Do NOT edit the library: adapt this call" | adapt the call only, never the library |
+| unresolved (defined nowhere, imported from nowhere) | "`X` is called but defined nowhere: define or import it" | define or import |
+
+- **External** includes type stubs (`.pyi`, `.d.ts`) of external APIs, and vendored code (`vendor/`,
+  `third_party/`, `node_modules/`): physically present, logically external.
+- **Ambiguous imports** (star imports, namespace packages, a name that is both a repository root and an installed
+  package) default to external, and the fact names the ambiguity.
+- **The same name internal and external:** the file's import decides. If it cannot, both are reported.
+- **External arguments** are checked only against a known signature (installed package headers, stubs). Otherwise
+  the fact says the arguments were not checked (L1).
+- **Design and order:** `r4/CHECK_CHANGES_DESIGN.md`.
+
+**V4 is `prism_check_changes`, the core of R4's multi-turn loop (2026-11-10).**
+- **When it runs:** after every edit, it returns facts in four sections: downstream; upstream internal; upstream
+  external (do not edit, adapt the call); warnings.
+- **Shape:** empty sections omitted; under 800 tokens; at most 0.5 s.
+- **When the tree is clean,** it returns one line: "No downstream or upstream issues detected from the latest
+  edit."
+- **It never gives a verdict.** The agent decides what to do with the facts.
 
 ## 5. What PRISM must say it cannot do
 
