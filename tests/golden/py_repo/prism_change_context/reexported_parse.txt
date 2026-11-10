@@ -2,16 +2,22 @@
 src/shelf/core/parse.py, lines 16-22
 
 ## 1. Codebase
-32 functions in 4 directories; 0 registered entry points; languages: python 32
+32 functions in 4 directories; 1 registered entry points; languages: python 32
 
 Largest directories (functions, entry points):
 - `src/shelf`: 20 functions
 - `src/shelf/models`: 7 functions
 - `src/shelf/core`: 4 functions
-- `src/shelf/plugins`: 1 functions
+- `src/shelf/plugins`: 1 functions, 1 entry points
+
+Strongest calls between directories:
+- `src/shelf` -> `src/shelf/core`: 3 calls
+- `src/shelf/plugins` -> `src/shelf/core`: 1 calls
 
 ## 2. Group `src/shelf/core`
 4 functions, 0 classes in 2 files.
+Called from other directories (its API): `src.shelf.core.parse.parse` (3), `src.shelf.core.fmt.render` (1)
+Used by: `src/shelf` (3 calls), `src/shelf/plugins` (1 calls)
 
 ## 3. Anchor
 ```python
@@ -35,7 +41,16 @@ L22 return [tokenize(line) for line in text.splitlines() if line.strip()] [calls
 ```
 
 ## 4. Who depends on it
-No callers in the index (an entry point, a callback, or unused).
+- `src.shelf.cli.check` (src/shelf/cli.py)
+  - L17 result: linked to it by the call graph, but no call site by its name was found (passed as a callback, aliased, or called dynamically)
+- `src.shelf.cli.main` (src/shelf/cli.py)
+  - L12 result: stores the result in `records`, then passes it to `render()`
+  - L12 errors: does not catch `ValueError` raised by it: the error propagates to this function's callers
+  - L12 arguments: passes 1 positional argument
+- `src.shelf.plugins.csv_plugin.load_csv` (src/shelf/plugins/csv_plugin.py)
+  - L9 result: returns the result to its own callers
+  - L9 errors: does not catch `ValueError` raised by it: the error propagates to this function's callers
+  - L9 arguments: passes 1 positional argument
 
 ## 5. What it depends on
 No resolved callee raises, returns nothing or changes state.
@@ -56,5 +71,30 @@ def render(records, width=20):
     return "\n".join(" ".join(field.ljust(width) for field in record) for record in records)
 ```
 
+## 7. Callers' code
+`src.shelf.cli.check` (src/shelf/cli.py):
+```python
+def check(text):
+    """Parse text through the alias import; True when it has records."""
+    return bool(p(text))
+```
+`src.shelf.cli.main` (src/shelf/cli.py):
+```python
+def main(argv=None):
+    """Parse standard input and print it rendered."""
+    argv = sys.argv[1:] if argv is None else argv
+    records = parse(sys.stdin.read())
+    print(render(records))
+    return 0
+```
+`src.shelf.plugins.csv_plugin.load_csv` (src/shelf/plugins/csv_plugin.py):
+```python
+@register("csv")
+def load_csv(text):
+    """Load CSV text."""
+    return parse(text)
+```
+
 ## 8. Wider impact
-0 transitive callers; by distance:
+3 transitive callers; by distance: 1 hop: 3
+Entry points reached: `src.shelf.plugins.csv_plugin.load_csv`

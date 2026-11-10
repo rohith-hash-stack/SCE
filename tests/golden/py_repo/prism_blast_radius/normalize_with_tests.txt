@@ -1,26 +1,32 @@
-Blast radius of `src.shelf.core.parse.normalize`: 2 transitive callers, nearest first:
+Blast radius of `src.shelf.core.parse.normalize`: 8 transitive callers, nearest first:
 - hop 1: `src.shelf.core.parse.tokenize` (src/shelf/core/parse.py:11)
+- hop 1: `tests.helpers.clean` (tests/helpers.py:4)
 - hop 2: `src.shelf.core.parse.parse` (src/shelf/core/parse.py:16)
+- hop 2: `tests.test_parse.test_clean_reaches_normalize_through_a_helper` (tests/test_parse.py:9)
+- hop 3: `src.shelf.cli.check` (src/shelf/cli.py:17)
+- hop 3: `src.shelf.cli.main` (src/shelf/cli.py:9)
+- hop 3: `src.shelf.plugins.csv_plugin.load_csv` (src/shelf/plugins/csv_plugin.py:6)
+- hop 3: `tests.test_parse.test_parse_two_lines` (tests/test_parse.py:5)
 
-<prism_context budget_consumed="1018" budget_total="4000" schema_version="3" task_type="blast">
+<prism_context budget_consumed="2319" budget_total="4000" schema_version="3" task_type="blast">
   <metadata>
     <engine commit="*" name="prism-causal_two_pass" version="0.2.0"/>
     <seed file="src/shelf/core/parse.py" line="6" symbol="src.shelf.core.parse.normalize"/>
     <budget exact="true" tokenizer="tiktoken:cl100k_base_offline" tokens="4000"/>
-    <language files="1" primary="python" tier="1"/>
+    <language files="5" primary="python" tier="1"/>
     <options>
       <option key="engine" value="prism-causal_two_pass"/>
       <option key="max_hops" value="6.0"/>
     </options>
   </metadata>
-  <manifest considered_nodes="1" packed_nodes="3" reachable_nodes="1">
-    <compression count="3" level="L0_full"/>
+  <manifest considered_nodes="1" packed_nodes="9" reachable_nodes="1">
+    <compression count="9" level="L0_full"/>
     <distance_metric dist_max="6.0" lambda_data_flow="0.25" lambda_guard="0.15" name="causal_dijkstra"/>
   </manifest>
   <coverage covered_features="3" omitted_features="0" total_features="3">
-    <feature count="3" id="SINK_PURE_COMPUTE" present="true"/>
-    <feature count="3" id="FORM_LINEAR" present="true"/>
-    <feature count="1" id="OUTPUT_QUERY" present="true"/>
+    <feature count="9" id="SINK_PURE_COMPUTE" present="true"/>
+    <feature count="9" id="FORM_LINEAR" present="true"/>
+    <feature count="5" id="OUTPUT_QUERY" present="true"/>
   </coverage>
   <warnings/>
   <nodes>
@@ -50,13 +56,24 @@ Blast radius of `src.shelf.core.parse.normalize`: 2 transitive callers, nearest 
 # Referenced module constants:
 SEPARATOR = ","]]></body>
     </node>
+    <node compression="L0_full" cost="9" distance="0.8333" end_line="5" file="tests/helpers.py" id="tests.helpers.clean" language="python" line="4" role="caller" symbol_kind="function" symbol_name="clean">
+      <signature>
+        <param name="line" optional="false"/>
+        <returns kind="Query"/>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="NONE" substance="PURE_COMPUTE"/>
+      <contract call_line="10" passes_args="&quot;  A &quot;" target_id="tests.test_parse.test_clean_reaches_normalize_through_a_helper"/>
+      <body><![CDATA[def clean(line):
+    return normalize(line)]]></body>
+    </node>
     <node compression="L0_full" cost="62" distance="2.0" end_line="22" file="src/shelf/core/parse.py" id="src.shelf.core.parse.parse" language="python" line="16" role="caller" symbol_kind="function" symbol_name="parse">
       <signature>
         <param name="text" optional="false"/>
         <returns kind="Aggregator"/>
         <docstring><![CDATA[Parse text into a list of records; blank text gives an empty list.]]></docstring>
       </signature>
-      <features form="LINEAR" output="AGGREGATOR" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <features form="LINEAR" output="AGGREGATOR" role="NONE" substance="PURE_COMPUTE"/>
+      <contract call_line="12" passes_args="sys.stdin.read()" target_id="src.shelf.cli.main" unpacks="records"/>
       <body><![CDATA[def parse(text):
     """Parse text into a list of records; blank text gives an empty list."""
     if text is None:
@@ -65,10 +82,69 @@ SEPARATOR = ","]]></body>
         return []
     return [tokenize(line) for line in text.splitlines() if line.strip()]]]></body>
     </node>
+    <node compression="L0_full" cost="21" distance="2.0" end_line="10" file="tests/test_parse.py" id="tests.test_parse.test_clean_reaches_normalize_through_a_helper" language="python" line="9" role="caller" symbol_kind="function" symbol_name="test_clean_reaches_normalize_through_a_helper">
+      <signature>
+        <returns kind="Command"/>
+      </signature>
+      <features form="LINEAR" output="COMMAND" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[def test_clean_reaches_normalize_through_a_helper():
+    assert clean("  A ") == "a"]]></body>
+    </node>
+    <node compression="L0_full" cost="25" distance="3.0" end_line="19" file="src/shelf/cli.py" id="src.shelf.cli.check" language="python" line="17" role="caller" symbol_kind="function" symbol_name="check">
+      <signature>
+        <param name="text" optional="false"/>
+        <returns kind="Query"/>
+        <docstring><![CDATA[Parse text through the alias import; True when it has records.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[def check(text):
+    """Parse text through the alias import; True when it has records."""
+    return bool(p(text))]]></body>
+    </node>
+    <node compression="L0_full" cost="47" distance="3.0" end_line="14" file="src/shelf/cli.py" id="src.shelf.cli.main" language="python" line="9" role="caller" symbol_kind="function" symbol_name="main">
+      <signature>
+        <param name="argv" optional="true"/>
+        <returns kind="Query"/>
+        <docstring><![CDATA[Parse standard input and print it rendered.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[def main(argv=None):
+    """Parse standard input and print it rendered."""
+    argv = sys.argv[1:] if argv is None else argv
+    records = parse(sys.stdin.read())
+    print(render(records))
+    return 0]]></body>
+    </node>
+    <node compression="L0_full" cost="20" distance="3.0" end_line="9" file="src/shelf/plugins/csv_plugin.py" id="src.shelf.plugins.csv_plugin.load_csv" language="python" line="6" role="caller" symbol_kind="function" symbol_name="load_csv">
+      <signature>
+        <param name="text" optional="false"/>
+        <returns kind="Query"/>
+        <docstring><![CDATA[Load CSV text.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[@register("csv")
+def load_csv(text):
+    """Load CSV text."""
+    return parse(text)]]></body>
+    </node>
+    <node compression="L0_full" cost="25" distance="3.0" end_line="6" file="tests/test_parse.py" id="tests.test_parse.test_parse_two_lines" language="python" line="5" role="caller" symbol_kind="function" symbol_name="test_parse_two_lines">
+      <signature>
+        <returns kind="Command"/>
+      </signature>
+      <features form="LINEAR" output="COMMAND" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[def test_parse_two_lines():
+    assert parse("a,b\nc") == [["a", "b"], ["c"]]]]></body>
+    </node>
   </nodes>
   <edges>
+    <edge back_edge="false" data_flow="false" from="src.shelf.cli.check" guard="false" to="src.shelf.core.parse.parse" type="CALLS" weight="1.0"/>
+    <edge back_edge="false" data_flow="false" from="src.shelf.cli.main" guard="false" to="src.shelf.core.parse.parse" type="CALLS" weight="1.0"/>
     <edge back_edge="false" data_flow="false" from="src.shelf.core.parse.parse" guard="false" to="src.shelf.core.parse.tokenize" type="CALLS" weight="1.0"/>
     <edge back_edge="true" data_flow="false" from="src.shelf.core.parse.tokenize" guard="false" to="src.shelf.core.parse.normalize" type="CALLS" weight="1.0"/>
+    <edge back_edge="false" data_flow="false" from="src.shelf.plugins.csv_plugin.load_csv" guard="false" to="src.shelf.core.parse.parse" type="CALLS" weight="1.0"/>
+    <edge back_edge="true" data_flow="false" from="tests.helpers.clean" guard="false" to="src.shelf.core.parse.normalize" type="CALLS" weight="1.0"/>
+    <edge back_edge="false" data_flow="false" from="tests.test_parse.test_clean_reaches_normalize_through_a_helper" guard="false" to="tests.helpers.clean" type="CALLS" weight="1.0"/>
+    <edge back_edge="false" data_flow="false" from="tests.test_parse.test_parse_two_lines" guard="false" to="src.shelf.core.parse.parse" type="CALLS" weight="1.0"/>
   </edges>
-  <trailer edge_count="2" node_count="3" sha256="9a8ea059e867beb9ad56d480dc3e588867f44613233ebcaa1d71b1315df0e7d2" token_count="1018"/>
+  <trailer edge_count="8" node_count="9" sha256="270c04b852e96061266dec5bceeaeabda6cf01fbe36c1d6d05b25d904dc3baa4" token_count="2319"/>
 </prism_context>

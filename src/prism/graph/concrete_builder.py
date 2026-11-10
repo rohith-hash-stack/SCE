@@ -1194,13 +1194,17 @@ class ConcreteGraphBuilder:
             alias_node = name_node.child_by_field_name("alias")
             target_text = node_text(target_node, src)
             alias_text = node_text(alias_node, src)
-            qualified = f"{from_module}.{target_text}" if from_module else target_text
+            qualified = f"{from_module}.{target_text}" if from_module else self._absolute_python_module(target_text)
             import_map.add(alias_text, qualified)
         else:  # dotted_name
             text = node_text(name_node, src)
             if from_module is None:
                 root = text.split(".")[0]
-                import_map.add(root, root)
+                # `import shelf.core` binds `shelf`; rebind it to the repository's module only when the whole dotted
+                # name resolves there (a namespace shared with a third-party package, such as poetry's `src/poetry`
+                # and the external `poetry.core`, must not pull the external part inside)
+                full = self._absolute_python_module(text)
+                import_map.add(root, full[: len(full) - len(text)] + root if full != text else root)
             else:
                 import_map.add(text, f"{from_module}.{text}")
 
@@ -1214,7 +1218,18 @@ class ConcreteGraphBuilder:
                 elif child.type == "dotted_name":
                     suffix = node_text(child, src)
             return self._resolve_relative_module(current_module, dots, suffix, is_package_init)
-        return node_text(node, src)
+        return self._absolute_python_module(node_text(node, src))
+
+    def _absolute_python_module(self, text: str) -> str:
+        """An absolute import of the repository's own package, when the package is not at the repository root
+        (`src/shelf` imported as `shelf`), mapped onto PRISM's module name (`src.shelf`); anything else unchanged.
+        K4 (`harness/experiments/r4/K4_DIAGNOSIS.md`); the safeguards are `ImportRoots`'s."""
+        from prism.graph.import_roots import ImportRoots
+        files = [f for f in self._parsed_files if f.endswith((".py", ".pyi"))]
+        if getattr(self, "_import_roots_key", None) != len(files):
+            self._import_roots = ImportRoots(self.repo_root, files)
+            self._import_roots_key = len(files)
+        return self._import_roots.resolve(text)
 
     @staticmethod
     def _resolve_relative_module(current_module: str, dots: int, suffix: str | None, is_package_init: bool = False) -> str:

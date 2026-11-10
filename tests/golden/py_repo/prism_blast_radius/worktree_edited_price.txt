@@ -1,25 +1,25 @@
-Blast radius of `src.shelf.pricing.price`: 0 transitive callers, nearest first:
+Blast radius of `src.shelf.pricing.price`: 1 transitive callers, nearest first:
+- hop 1: `src.shelf.checkout.total` (src/shelf/checkout.py:5)
 
-<prism_context budget_consumed="542" budget_total="4000" schema_version="3" task_type="blast">
+<prism_context budget_consumed="722" budget_total="4000" schema_version="3" task_type="blast">
   <metadata>
     <engine commit="*" name="prism-causal_two_pass" version="0.2.0"/>
     <seed file="src/shelf/pricing.py" line="4" symbol="src.shelf.pricing.price"/>
     <budget exact="true" tokenizer="tiktoken:cl100k_base_offline" tokens="4000"/>
-    <language files="1" primary="python" tier="1"/>
+    <language files="2" primary="python" tier="1"/>
     <options>
       <option key="engine" value="prism-causal_two_pass"/>
       <option key="max_hops" value="6.0"/>
     </options>
   </metadata>
-  <manifest considered_nodes="1" packed_nodes="1" reachable_nodes="1">
-    <compression count="1" level="L0_full"/>
+  <manifest considered_nodes="1" packed_nodes="2" reachable_nodes="1">
+    <compression count="2" level="L0_full"/>
     <distance_metric dist_max="6.0" lambda_data_flow="0.25" lambda_guard="0.15" name="causal_dijkstra"/>
   </manifest>
-  <coverage covered_features="4" omitted_features="0" total_features="4">
-    <feature count="1" id="SINK_PURE_COMPUTE" present="true"/>
-    <feature count="1" id="FORM_LINEAR" present="true"/>
-    <feature count="1" id="OUTPUT_QUERY" present="true"/>
-    <feature count="1" id="ROLE_PUBLIC_API" present="true"/>
+  <coverage covered_features="3" omitted_features="0" total_features="3">
+    <feature count="2" id="SINK_PURE_COMPUTE" present="true"/>
+    <feature count="2" id="FORM_LINEAR" present="true"/>
+    <feature count="2" id="OUTPUT_QUERY" present="true"/>
   </coverage>
   <warnings/>
   <nodes>
@@ -31,12 +31,23 @@ Blast radius of `src.shelf.pricing.price`: 0 transitive callers, nearest first:
         <returns kind="Query"/>
         <docstring><![CDATA[Amount with tax at `rate`, in `currency`.]]></docstring>
       </signature>
-      <features form="LINEAR" output="QUERY" role="PUBLIC_API" substance="PURE_COMPUTE"/>
+      <features form="LINEAR" output="QUERY" role="NONE" substance="PURE_COMPUTE"/>
       <body><![CDATA[def price(amount, rate, currency):
     """Amount with tax at `rate`, in `currency`."""
     return f"{amount * (1 + rate):.2f} {currency}"]]></body>
     </node>
+    <node compression="L0_full" cost="14" distance="0.8333" end_line="6" file="src/shelf/checkout.py" id="src.shelf.checkout.total" language="python" line="5" role="caller" symbol_kind="function" symbol_name="total">
+      <signature>
+        <param name="amount" optional="false"/>
+        <returns kind="Query"/>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[def total(amount):
+    return price(amount, 0.2)]]></body>
+    </node>
   </nodes>
-  <edges/>
-  <trailer edge_count="0" node_count="1" sha256="22d8286a5b88808a6e789a465bcd236be4ca54d03a465d7a8fbfe9892bf42255" token_count="542"/>
+  <edges>
+    <edge back_edge="true" data_flow="false" from="src.shelf.checkout.total" guard="false" to="src.shelf.pricing.price" type="CALLS" weight="1.0"/>
+  </edges>
+  <trailer edge_count="1" node_count="2" sha256="2c675bcd6819aa82fce64a2a1f839ee49a995f4037d286c523df15f1b150de10" token_count="722"/>
 </prism_context>
