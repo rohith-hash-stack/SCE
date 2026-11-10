@@ -17,6 +17,11 @@ collect_ignore_glob = ["fixtures/golden/*"]
 PYTHON_REPO = os.path.join(FIXTURES_DIR, "python_repo")
 
 
+def pytest_addoption(parser):
+    parser.addoption("--update-golden", action="store_true", default=False,
+                     help="rewrite tests/golden's saved tool outputs instead of comparing with them")
+
+
 def _clear_fixture_caches() -> None:
     """Remove the `.prism/` state PRISM writes into the shared fixture repositories (index and feature caches)."""
     import shutil
