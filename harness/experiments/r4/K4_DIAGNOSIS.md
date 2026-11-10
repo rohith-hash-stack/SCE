@@ -157,3 +157,31 @@ If present, treated as K4b — same fix class, different resolver." (the user, 2
   "pkg/sub"`) instead of a relative path.
 - **The candidates to check:** the JS repositories with gated tasks: zod, hono, nitro, h3, prettier, execa.
 - **Status:** not fixed now; noted. R4's JS tasks may be affected.
+
+## 8. Verification of the fix (2026-11-10, commit `66ff359c`)
+
+| Repository | Internal calls marked external (before → after) | Calls linked across files (before → after) |
+|---|---|---|
+| pydantic-ai | 4,581 → **8** | 6,462 → 14,435 |
+| textual | 1,005 → **0** | 815 → 3,886 |
+| fastmcp | 973 → **2** | 300 → 2,295 |
+| poetry | 291 → **0** | 403 → 1,058 |
+| marshmallow | 50 → **0** | 10 → 67 |
+| click | 6 → 0 | 200 → 245 |
+| packaging | 5 → 0 | 200 → 205 |
+| werkzeug | 0 → 0 | 303 → 305 |
+| sqlglot (control) | 0 → 0 | 4,744 → **4,744 (unchanged)** |
+
+- **The 10 remaining** (fastmcp 2, pydantic-ai 8) are absolute imports with two equal roots inside one workspace
+  package (`pydantic_graph._utils`). They stay unresolved by design (safeguard 5).
+- **The golden K4 lines** gained the expected callers (`tests/golden/KNOWN_DEFECTS.md`, "Fixed"). `ts_repo` is
+  unchanged.
+- **The new unit tests:** `tests/test_import_roots.py`, 9 passed.
+- **The full suite,** minus the 18 real-codebase files (those run in the Part A workflow): 2,939 passed, 13 failed, 4
+  errors. All 17 also fail identically at `b56de3e9` (before the vendored tokenizer and before K4) and at `89380e98`
+  (before K4). So they are pre-existing, not regressions from either change:
+  - `test_ts_arms_index` (4), `test_benchmark` (2), `test_budget_exceeded` (2), `test_nlq_p1` (2) and
+    `test_query_to_evidence` (3);
+  - `test_pipeline_preservation`, `test_progressive_seed_degradation`, `test_redundancy_elimination` and
+    `test_runtime_tracer` (1 each).
+  - Triage is outside K4: the hygiene backlog.
