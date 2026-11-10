@@ -851,3 +851,18 @@ R3a's interpretation must make.
 - Fixed in analysis code (`AMENDMENT_R3-10.md`). The invalid computation is recorded, not interpreted
   (`INTERPRETATION_NOTES.md` §6).
 - The analysis code is frozen again; the cell is re-rendered at the fix commit for session 2.
+
+## 2026-11-10: R4 build work starts in parallel with R3a's remaining sessions (guardrail)
+
+"Branch head moves forward with R4 build work. R3a's cell remains pinned to ab22ff5d for all remaining sessions. Any re-render of r3a_cell.py uses ab22ff5d, not branch head. This preserves R3a's byte-identical invariant."
+
+- Started now, with no Kaggle run:
+  - task mining for refactor, delete, move and tests, plus more repositories for Family N (candidate lists only;
+    no gating before the scope decisions);
+  - the golden repositories;
+  - the correctness fixes;
+  - the new tools (S1, S3, S5);
+  - the loop-aware protocol code (built, not run);
+  - one GitHub Actions run of part A against ab22ff5d.
+- Waiting for R3a: every Kaggle run, and the scope decisions (tasks per family, the third arm, B5 in R4,
+  request→plan, family order).
