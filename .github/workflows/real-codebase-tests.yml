@@ -7,7 +7,9 @@
 # What this proves: PRISM does not crash on real code, and its real parsing and linking paths run. It does not
 # prove tool outputs are correct; the golden tests do that (harness/experiments/GOLDEN_TESTS_PLAN.md).
 #
-# Manual trigger only: Actions -> "PRISM real-codebase tests" -> Run workflow, with the PRISM commit to test.
+# Triggers: manual (Actions -> "PRISM real-codebase tests" -> Run workflow, with the PRISM commit to test; needs this
+# file on the default branch), or a push that changes .github/part-a-request (its first line is the commit to test),
+# which works from any branch.
 name: PRISM real-codebase tests
 
 on:
@@ -17,6 +19,8 @@ on:
         description: "PRISM commit SHA to test (blank: the branch's head)"
         required: false
         default: ""
+  push:
+    paths: [".github/part-a-request"]
 
 permissions:
   contents: read
@@ -27,12 +31,26 @@ env:
   NODE_VERSION: "20"
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        run: |
+          sha="${{ inputs.prism_sha }}"
+          if [ -z "$sha" ] && [ -f .github/part-a-request ]; then sha="$(head -n1 .github/part-a-request | tr -d '[:space:]')"; fi
+          echo "sha=${sha:-$GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Testing PRISM commit: ${sha:-$GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+
   django:
+    needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
-        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+        with: { ref: "${{ needs.resolve.outputs.sha }}" }
       - uses: actions/setup-python@v5
         with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
       - name: Install PRISM
@@ -55,13 +73,13 @@ jobs:
         with: { name: results-django, path: results/ }
 
   fastapi:
-    needs: django
+    needs: [resolve, django]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+        with: { ref: "${{ needs.resolve.outputs.sha }}" }
       - uses: actions/setup-python@v5
         with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
       - name: Install PRISM
@@ -79,13 +97,13 @@ jobs:
         with: { name: results-fastapi, path: results/ }
 
   express:
-    needs: fastapi
+    needs: [resolve, fastapi]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+        with: { ref: "${{ needs.resolve.outputs.sha }}" }
       - uses: actions/setup-python@v5
         with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
       - uses: actions/setup-node@v4
@@ -109,13 +127,13 @@ jobs:
         with: { name: results-express, path: results/ }
 
   trpc:
-    needs: express
+    needs: [resolve, express]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+        with: { ref: "${{ needs.resolve.outputs.sha }}" }
       - uses: actions/setup-python@v5
         with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
       - name: Install PRISM
@@ -135,13 +153,13 @@ jobs:
 
   multi-corpus:
     # The three files that index several corpora in one process.
-    needs: trpc
+    needs: [resolve, trpc]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-        with: { ref: "${{ inputs.prism_sha || github.sha }}" }
+        with: { ref: "${{ needs.resolve.outputs.sha }}" }
       - uses: actions/setup-python@v5
         with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
       - uses: actions/setup-node@v4
