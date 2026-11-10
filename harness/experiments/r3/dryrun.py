@@ -90,6 +90,8 @@ class Script:
 def pad_calls(task: dict, version: str, n: int) -> list[dict]:
     """`n` read-only calls, cycling the disk tools and the version's index-backed tool (the memory test's check that
     memory does not grow with the number of tool calls, amendment R3-7). They change nothing in the tree."""
+    if n <= 0:
+        return []
     path = task.get("anchor_file") or task["target"].split("::", 1)[0]
     symbol = task.get("anchor") or task["target"].split("::", 1)[1]
     leaf = symbol.rsplit(".", 1)[-1]
@@ -112,6 +114,12 @@ def gold_calls(task: dict, clone: str, version: str) -> list[dict]:
     if version == "PRISM":
         if task["family"] == "B":
             calls.append({"tool": "prism_change_context", "args": {"symbol": task["anchor"]}})
+        elif task["family"] == "delete":      # R4: the anchor is FILE::QUAL; PRISM's name is the dotted module path
+            f, q = task["anchor"].split("::", 1)
+            calls.append({"tool": "prism_change_context",
+                          "args": {"symbol": f.rsplit(".", 1)[0].replace("/", ".") + "." + q}})
+        elif task["family"] == "feature":     # R4: no anchor; one question from the spec's first line
+            calls.append({"tool": "prism_ask", "args": {"question": (task.get("subject") or task["prompt"])[:200]}})
         else:
             f, q = task["target"].split("::", 1)
             calls.append({"tool": "prism_new_function_context",
