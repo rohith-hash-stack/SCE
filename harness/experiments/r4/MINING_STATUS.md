@@ -13,23 +13,33 @@
 - **Not decided here:** which window R4 and R5 each use, how many tasks per family, and the gate rules. These are
   post-R3a scope decisions. Candidates are not tasks: none has been gated.
 
-## Yield (43 of 48 repositories, 2026-11-10 05:20 UTC)
+## Yield: 48 of 48 repositories (complete, 2026-11-10)
 
-**Still running:** pydantic-ai (5,263 commits in the window), fastmcp (4,311), pdm, hatch and instructor, one process
-per repository. A sandbox restart killed the sequential run twice at pydantic-ai. This section is updated when they
-finish.
+**pydantic-ai** (5,263 commits in the window) was mined in date chunks: sandbox restarts killed the single run.
+- **Merged into** `harness/experiments/r4/candidates/` (one file per pool, plus `yield.json`).
+- **The merge:** `merge.py`, run in the session scratch area. It takes the whole repositories, the pydantic-ai chunks,
+  and whichever of the last chunk or its weekly parts finished first.
 
-**Candidate lists:** `harness/experiments/r4/candidates/`, one file per family, with one entry per commit. None is
-gated.
-
-| Family | Candidates | Largest contributors | Note |
+| Pool | Candidates | Repositories | Largest contributors |
 |---|---|---|---|
-| delete | 276 | svelte 36, nitro 31, vitest 25, prettier 22 | removed function, with callers at the parent, and the callers updated |
-| move | **31** | prettier 8; no other repository above 3 | **the thin one** |
-| refactor | 696 | sqlglot 149, nitro 108, prettier 60, textual 51 | 68 renames with callers updated; 628 refactor-worded commits with no test change (noisy) |
-| tests | 523 | fastify 103, es-toolkit 52, scrapy 51, textual 38 | test-only commits adding test functions that name repository functions |
-| feature | 291 | scrapy 44, es-toolkit 28, nitro 20, vitest 19 | 2+ new production functions, named by a changed test |
-| **N** (R3's rule) | 14 from 21 new repositories | | about 0.7 per repository |
+| delete | 397 | 39 | pydantic-ai 65, fastmcp 48, svelte 36, nitro 31 |
+| move | **39** | 18 | prettier 8, fastmcp 4; no other above 3 |
+| refactor, by commit message (superseded) | 772 | | not used for gating (the user's decision, 2026-11-10) |
+| **refactor, by signature** (`refactor_candidates.py`) | **2,998** | 48 | textual 383, nitro 309, fastmcp 286, sqlglot 242 |
+| tests | 766 | 45 | pydantic-ai 129, fastify 103, fastmcp 83, es-toolkit 52 |
+| feature | 758 | 40 | pydantic-ai 319, fastmcp 120, scrapy 44, es-toolkit 28 |
+| **N** (R3's rule) | **149** | 10 | **pydantic-ai 103, fastmcp 30**; 16 from the other 8 |
+
+**The refactor signature's funnel** (no message filter):
+- 42,738 commits kept;
+- 8,654 change source and no test file;
+- 7,100 of those change only product paths (not docs, examples, scripts, tools or fixtures);
+- 4,056 are 6–400 lines;
+- **2,998** change a function's normalized code. These are the candidates.
+- "Tests pass at parent AND at HEAD" is the gate's check.
+
+**Concentration:** two very active repositories (pydantic-ai, fastmcp) dominate N, feature and tests. The gate caps
+each repository at 10 passes.
 
 **Family N's drop points** (the rule is R3's, pre-registered for R3; changing it is a scope decision):
 - **"The function's file exists at the parent":**
