@@ -866,3 +866,26 @@ R3a's interpretation must make.
   - one GitHub Actions run of part A against ab22ff5d.
 - Waiting for R3a: every Kaggle run, and the scope decisions (tasks per family, the third arm, B5 in R4,
   request→plan, family order).
+
+## 2026-11-10: R3a complete; the floor investigation; the pin lifted
+
+- **R3a finished:** 320 of 320 runs, 80 of 80 tasks, all on `ab22ff5d` (`reports/r3/r3a/progress.json`).
+- **The pre-registered result stands, unchanged:**
+  - interim at 40 tasks: z 1.0, "continue";
+  - final, Family B primary over 80 tasks: −0.0125, Wilcoxon p = 0.317, against p < 0.049. No improvement shown.
+  - PRISM resolved 0 of 160 runs; the baseline 2 of 160.
+- **The floor investigation** (`R3A_FLOOR_INVESTIGATION.md`; scripts and outputs in `inv3/`) was accepted with
+  verdict (e), a combination.
+  - **No scoring bug:** the developer's fix resolves in 10 of 10 tasks, scored by R3a's own `runner.score()`.
+  - **Task design is the primary cause.** In 23 of 80 tasks no visible test fails at the start: 18 have all visible
+    tests passing, and 5 have no visible tests. The template's "update the project so its tests pass" is then
+    already true.
+  - **Task validity and difficulty are a large cause.** In 54 of 62 one-caller tasks, the developer's change goes
+    beyond the caller.
+  - **Model capability contributes:** quitting despite failing tests, test-file edits, loops (PRISM 53 of 160).
+- **The R3a cell's pin is lifted.** R3a is complete, and the byte-identical invariant across sessions no longer
+  constrains branch head.
+  - `kaggle/r3a_cell.py` keeps `CODE_COMMIT = ab22ff5d` as the record of what R3a ran.
+  - R3a is not re-run.
+- **R4's design changes:** family-specific templates, done criteria and signal gates (`ROADMAP_R4_R6.md`, "Task
+  families: templates"; `PRISM_REQUIRED_BEHAVIOR.md` §10).

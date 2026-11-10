@@ -1,4 +1,7 @@
 # ============================================================
+# R3a IS COMPLETE (2026-11-10: 320/320 runs at ab22ff5d). This file is the record of what ran; the pin no longer
+# constrains branch head (IMPLEMENTATION_LOG.md, 2026-11-10). Do not re-run it.
+# ============================================================
 # PRISM round R3a - the main run: 80 Family B tasks x 2 versions x seeds 42 and 1001 = 320 runs, turn cap 28.
 # Family B at alpha 0.05 (amendment R3-9): interim look at 40 tasks, p < 0.0031; final p < 0.0490.
 #

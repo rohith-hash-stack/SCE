@@ -1,0 +1,67 @@
+##### r3a-B-15 yarl visible=['tests/test_url.py', 'tests/test_url_mode.py'] tokenizer_cap=yes
+tests/test_url.py: 690 passed, 0 failed, 0 skipped
+
+tests/test_url_mode.py: 50 passed, 0 failed, 0 skipped
+----- with the hidden tests applied (never shown to agents) -----
+tests/test_url.py: 689 passed, 1 failed, 0 skipped
+failing:
+- tests.test_url::test_default_ignorable_covers_idna_stripped
+ def test_default_ignorable_covers_idna_stripped() -> None:
+        """_DEFAULT_IGNORABLE_RE must match every code point IDNA silently deletes.
+    
+        This pins the hand-written character class to the installed ``idna`` and
+        Unicode data: if a future version starts deleting a code point the regex
+        does not cover, host confusion returns and this test fails loudly. The
+        ranges cover every plane that holds such code points (the highest is
+        ``U+E0FFF``); the empty planes in between hold none.
+        """
+        stripped = {
+            cp
+            for lo, hi in ((0x00A0, 0x20000), (0xE0000, 0xE1000))
+            for cp in range(lo, hi)
+            if not 0xD800 <= cp <= 0xDFFF and _idna_collapses(cp)
+        }
+>       assert stripped, "expected IDNA to strip at least the known default-ignorables"
+E       AssertionError: expected IDNA to strip at least the known default-ignorables
+E       assert set()
+
+stripped   = set()
+
+tests/test_url.py:2927: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_url.py::test_default_ignorable_covers_idna_stripped - Asser...
+1 failed, 689 passed in 4.48s
+
+
+tests/test_url_mode.py: 53 passed, 9 failed, 0 skipped
+failing:
+- tests.test_url_mode::test_at_sign_in_userinfo[http://a@b@example.com/-http://a%40b@example.com/]
+- tests.test_url_mode::test_at_sign_in_userinfo[sc://a:b@c@example.com/-sc://a:b%40c@example.com/]
+- tests.test_url_mode::test_at_sign_in_userinfo_rejected_by_build
+- tests.test_url_mode::test_rfc_mode_empty_host_with_at_sign_rejected
+- tests.test_url_mode::test_idna2008_host_in_rfc_mode[\U0001f4a9]
+- tests.test_url_mode::test_idna2008_host_in_rfc_mode[\U0001f4a9.example]
+- tests.test_url_mode::test_idna2008_host_in_rfc_mode[\U0001f4a9.123]
+- tests.test_url_mode::test_idna2008_check_shares_host_cache[rfc]
+- tests.test_url_mode::test_idna2008_check_shares_host_cache[whatwg]
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               Failed: DID NOT RAISE ValueError
+
+first      = <Mode.WHATWG: 'whatwg'>
+host       = '💩-cache.example'
+mode       = <Mode.RFC: 'rfc'>
+url        = URL('http://xn---cache-hx54e.example')
+
+tests/test_url_mode.py:248: Failed
+=========================== short test summary info ============================
+FAILED tests/test_url_mode.py::test_at_sign_in_userinfo[http://a@b@example.com/-http://a%40b@example.com/]
+FAILED tests/test_url_mode.py::test_at_sign_in_userinfo[sc://a:b@c@example.com/-sc://a:b%40c@example.com/]
+FAILED tests/test_url_mode.py::test_at_sign_in_userinfo_rejected_by_build - F...
+FAILED tests/test_url_mode.py::test_rfc_mode_empty_host_with_at_sign_rejected
+FAILED tests/test_url_mode.py::test_idna2008_host_in_rfc_mode[\U0001f4a9] - F...
+FAILED tests/test_url_mode.py::test_idna2008_host_in_rfc_mode[\U0001f4a9.example]
+FAILED tests/test_url_mode.py::test_idna2008_host_in_rfc_mode[\U0001f4a9.123]
+FAILED tests/test_url_mode.py::test_idna2008_check_shares_host_cache[rfc] - F...
+FAILED tests/test_url_mode.py::test_idna2008_check_shares_host_cache[whatwg]
+9 failed, 53 passed in 0.89s
+

@@ -85,6 +85,32 @@ A re-check after a real update returns new information, unlike re-asking the fix
 | **Write tests** | `testcontext` (target, callers, existing tests, conventions), then S5 | mined: commits adding tests for existing code | the written tests pass on the developer's code and **fail on the parent** (or on a seeded mutant) | `testcontext` exists, not served; new oracle. The suite's earlier test task was invalid through truncation (`reports/r1/REPORT.md`) |
 | **(Plain-language request → plan)** | S1 first (what exists), then the matching type | needs a task design (the developer's commit message as the request?) | as the matching type | **decision needed**: "whatever query type" may include it. It was the old R4 (`r4/README.md`) |
 
+## 2a. Task families: templates, done criteria and signal gates (the R4 design contract; adopted 2026-11-10)
+
+**The user's decision, as given (2026-11-10, after `r3/R3A_FLOOR_INVESTIGATION.md`):**
+
+"Each family requires its own task template, done criterion, and signal gate. R3a's single template worked only for delete tasks. Refactor, move, and test families have 'tests pass at start' as the correct starting state — treating that as 'no signal' was a task-design failure, not an agent failure. R4 does not use a single template."
+
+| Family | Prompt template | Done criterion | Signal gate |
+|---|---|---|---|
+| Delete | "Remove [target]. Remaining tests must still pass." | Delete completed, project tests pass | Tests pass at end, target absent |
+| Refactor | "Refactor [target] to [goal]. Behavior must not change; all tests must still pass." | Code changed, all tests pass | Tests pass at start AND end; diff is structural |
+| Move | "Move [target] to [destination]. Callers must be updated. Tests must pass." | Moved, callers updated, tests pass | Tests pass at end; old path gone, new path exists |
+| Tests | "Write tests for [target]. They must pass on current code, fail on [prior version]." | Tests pass on current, fail on prior | Score by fail-to-pass on the prior version |
+| Feature | "Implement [feature spec]. Tests for the feature must pass." | Feature tests pass | Visible failing test at start |
+| Family B (callers) | "Function [X] changed [diff]. Update callers. Hidden tests will verify." | Fail-to-pass tests pass, no pass-to-pass broken | At least one visible failing test at start (per G1) |
+
+**Notes:**
+- **"G1" here is the signal gate in Family B's row:** at least one fail-to-pass test exists in a test file the agent
+  can see at the start. It is not `ROADMAP_SYNTHESIS.md`'s G1 (PRISM correctness).
+- **G1 applies to Family B only.** It is the wrong gate for refactor, move and tests, whose correct start state has
+  the tests passing.
+- **R3a's 80 tasks under G1:** 57 pass, and 23 would be excluded (18 with all visible tests passing, 5 with no
+  visible tests; `r3/R3A_FLOOR_INVESTIGATION.md` §2).
+- **How the gates are implemented on the mined candidates** (test selection, "structural", "prior version"):
+  `r4/GATES.md`.
+- **The same contract is in `PRISM_REQUIRED_BEHAVIOR.md` §10** (task families).
+
 ## 3. The build list (everything PRISM has left)
 
 PRISM never calls a model. Every new capability below is deterministic, from the index, the parse trees, the

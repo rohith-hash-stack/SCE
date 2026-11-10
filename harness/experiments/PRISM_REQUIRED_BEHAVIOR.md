@@ -131,3 +131,26 @@ R4 starts only when:
 
 The order of work is in `ROADMAP_R4_R6.md` §3. Correctness first (Q1, Q2, V2), because every other requirement
 reads those facts.
+
+## 10. Task families: what each R4 task asks, and when it is done (the R4 design contract; adopted 2026-11-10)
+
+**The principle (the user's decision, 2026-11-10):** "Each family requires its own task template, done criterion,
+and signal gate. … R4 does not use a single template."
+- **Why:** R3a's one template ("update the rest of the project so its tests pass") was wrong for 5 of 6 families.
+- **The evidence:** in 23 of R3a's 80 tasks the agent saw no failing test (`r3/R3A_FLOOR_INVESTIGATION.md`).
+
+| Family | Prompt template | Done criterion | Signal gate |
+|---|---|---|---|
+| Delete | "Remove [target]. Remaining tests must still pass." | Delete completed, project tests pass | Tests pass at end, target absent |
+| Refactor | "Refactor [target] to [goal]. Behavior must not change; all tests must still pass." | Code changed, all tests pass | Tests pass at start AND end; diff is structural |
+| Move | "Move [target] to [destination]. Callers must be updated. Tests must pass." | Moved, callers updated, tests pass | Tests pass at end; old path gone, new path exists |
+| Tests | "Write tests for [target]. They must pass on current code, fail on [prior version]." | Tests pass on current, fail on prior | Score by fail-to-pass on the prior version |
+| Feature | "Implement [feature spec]. Tests for the feature must pass." | Feature tests pass | Visible failing test at start |
+| Family B (callers) | "Function [X] changed [diff]. Update callers. Hidden tests will verify." | Fail-to-pass tests pass, no pass-to-pass broken | At least one visible failing test at start (G1) |
+
+**What PRISM must support per family:** the stages in §2–§4 and `ROADMAP_R4_R6.md` §2.
+- delete and move need import sites (B3);
+- refactor needs S4 and S5 over every changed function;
+- tests needs `testcontext` (B4);
+- feature needs S1 and S2.
+
