@@ -266,7 +266,7 @@ graph and git. Costs are *guesses*.
 |---|---|---|
 | delete | 71 | **primary**: the conclusive comparison, 40–80 tasks |
 | feature | 23 (gating paused; more on resume) | **primary**: 40–80 tasks as the pool allows |
-| Family B | 4 (`r4/FAMILY_B_REGATE.md`); re-gated again after the K4 fix, and over R3's full mined pool | **directional only**, analysed separately at its real size (4–10), and stated as directional |
+| Family B | 4 (`r4/FAMILY_B_REGATE.md`); re-gated again after the K4 fix, and over R3's full mined pool | **directional by default**, analysed separately at its real size and stated as directional. **The promotion rule:** Family B becomes primary only if its honest pool after K4 reaches 40 under G1, G2 and the scope check, as for the primary families. There is no expansion to reach it: no new mining, no relaxed gates. The pool is the re-gated R3a 80 plus R3's full mined pool; the new repositories (pydantic-ai, fastmcp) were mined only for the other families |
 | move, tests, Family N | 10, 11, 9 | **deferred** to R4b or later: not enough volume to answer |
 | refactor | not gated yet | resumes gating after Sanity 1; becomes an R4 family if it yields 80+ |
 
