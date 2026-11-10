@@ -37,10 +37,29 @@
    - **the gate:** about 2,435 tokens (3 × 800 + 7 × 5);
    - **appending the full feedback after every edit:** about 8,000 tokens.
 
-## 3. Still to be entered (after Sanity 2, before R4)
+## 3. Protocol: compaction (decided 2026-11-10)
 
-- **The compaction configuration** (`ROADMAP_R4_R6.md` §4a). It is chosen in Sanity 1, then frozen here.
+**One deterministic rule in every arm** (`COMPACTION_DESIGN.md`). It is a protocol setting, not an arm variable:
+- compact when the next prompt would pass 70% of the window, down to 50%;
+- old tool outputs dropped by age, never by tool name;
+- kept: the system prompt, the task, the latest 3 turns, the latest test result, the latest check feedback, and the
+  edit ledger;
+- recurring before every call;
+- R3's window rule only as the overflow fallback.
+
+## 4. Families and counts (the smaller-first approach, 2026-11-10)
+
+- **Families enter in sequence.**
+  - First, the families validated in Sanity 1 and 2: delete, feature, and Family B re-gated.
+  - Then refactor, move, tests and Family N, as each passes gating after Sanity 1 has shown the loop works.
+- **Counts:** 40–80 tasks per family, as each family's gated pool allows.
+- **Family B is counted as it yields.** A small Family B (for example 15) is an expected outcome, analysed at its real
+  size, not mined harder to force a count.
+- **The final families and counts are entered here before R4,** from the gated pools at that time.
+
+## 5. Still to be entered (after Sanity 2, before R4)
+
 - **Run settings:** the turn cap, the token budget, the context window, the seeds.
-- **Families and counts:** the families in R4, tasks per family, the third arm if any.
+- **Families and counts:** the final list and numbers under §4, and the third arm if any.
 - **The test:** the primary outcome, the per-family α and thresholds, interim looks, secondaries, and the stop rules.
 - **Parity rules** for anything else that differs between arms.

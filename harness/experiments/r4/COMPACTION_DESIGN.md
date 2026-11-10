@@ -1,9 +1,13 @@
-# Context compaction for Sanity 1: recommendation (2026-11-10; for the user's decision)
+# Context compaction: the protocol rule for every arm (2026-11-10; adopted by the user)
 
-**Sanity 1 compares two PRISM-only arms, which differ in compaction alone:**
-- **with compaction:** proactive, structured compaction (below);
-- **without compaction:** overflow-only. R3's existing window rule applies only when the next call would not fit
-  (§5).
+**One fixed, deterministic rule, applied to every arm:** Sanity 1's PRISM arm; Sanity 2's PRISM and baseline arms;
+R4's arms.
+- **It is not an arm variable.** There is no with-and-without comparison in Sanity 1. That would double the runs to
+  answer a question that is not PRISM's.
+- **Why the rule exists at all:** without compaction, R3a's failure mode returns. PRISM fills the 300k budget
+  mid-fix, the agent stops, and the user has to ask again. The loop R4 tests has to be the realistic one.
+- **Proactive against reactive compaction** (this rule against R3's overflow-only window rule) is, if run at all, a
+  small **side test after R4's main result** (§6), not part of R4.
 
 ## 1. Recommendation
 
@@ -14,9 +18,9 @@
 | **What is dropped first** | in tiers, oldest first within each tier (§2) | superseded information first, then old bulk, then old feedback. The agent's own calls are never dropped. The latest state of everything is always kept |
 | **Recurring or one-shot** | **recurring.** Checked before every call; it fires whenever the prompt is above 70%, and runs down to 50% | one-shot cannot bound a 28-turn run |
 | **Always preserved** | the system prompt; the task message; **the latest 3 turns in full**; the latest test result (pinned, C2); the latest check feedback (`CHECK_CHANGES_DESIGN.md` §8); a harness-written **edit ledger** (§3) | these are what the agent needs to act next: the goal, the current state of the tests and the check, and what it has already changed |
-| **Symmetry between the two PRISM arms** | the arms differ only in this rule. The model, prompt, tools, gate, caps and seed are identical. Inside the compaction arm, tool types are treated alike: stubs are by size and age, never by tool name | Sanity 1 asks whether compaction helps PRISM. Any other difference would confound it |
+| **Symmetry** | every arm runs the same rule. Tool outputs are dropped by age and size, never by tool name. So PRISM's longer outputs and the baseline's shorter ones are treated alike | a rule that singled out one arm's tools would be a parity break |
 
-## 2. Drop tiers (the compaction arm)
+## 2. Drop tiers
 
 Applied in order until the prompt is at or below 50%. A dropped output becomes a one-line stub: "[`tool(args)` at
 turn N: K tokens, removed by compaction; call it again if you need it]".
@@ -34,7 +38,7 @@ A harness-written block, updated after each edit and kept at the end of the task
 the lines changed and the latest check's boolean ("`src/a.py`: lines 40–52, 88 (3 edits); last check: clean").
 - **Built from the harness's own state,** not by a model, so it is deterministic.
 - **It is what lets tiers 1–3 drop old outputs** without the agent losing track of its own work.
-- **It is in the compaction arm only.** It is part of what "compaction" means here.
+- **It is in every arm,** as part of the rule.
 
 ## 4. Alternatives considered
 
@@ -47,24 +51,17 @@ the lines changed and the latest check's boolean ("`src/a.py`: lines 40–52, 88
 | **A lower per-call output cap** instead of compaction | A different mechanism: it cuts information before the agent has seen it. The 4,000-token cap stays the same in both arms |
 | **A larger context window** instead | Kaggle's T4 memory limits the 14B model's window. It also changes every arm, so it is a separate decision |
 
-## 5. What the arm without compaction does at the limit
+## 5. If the window still overflows
 
-**R3's window rule, unchanged:** it stubs the oldest tool outputs, then drops the oldest turns, only when the next call
-would not fit 20,480 tokens. Without that fallback, Ollama silently truncates the front of the context, the system
-prompt included. That is not a usable control.
-- **Each overflow event is logged,** so Sanity 1 can see how often the arm without compaction is forced into it.
+**R3's window rule stays as the overflow fallback:** it stubs the oldest outputs, then drops the oldest turns, only
+if the next call would not fit even after compaction.
+- **Each fallback event is logged.** With compaction working, it should be rare.
 
-## 6. The contrast Sanity 1 measures (the framing for its results, the user's decision, 2026-11-10)
+## 6. A possible side test after R4 (not part of R4)
 
-**It is proactive compaction (at 70%) against reactive compaction (at overflow), not compaction against none.** Sanity
-1's results are interpreted in this narrower framing.
-
-**What the observations are read against** (`ROADMAP_R4_R6.md` §4a; expectations, not gates):
-- **peak context:** the compaction arm peaks at 65–75% of the window; the reactive arm at 85–95%, or reaches the
-  limit;
-- **re-request rate:** how often a stubbed output is called again.
-
-**The design as written:**
-
-**Proactive, structured compaction** (at 70%, superseded first, a ledger, the latest state pinned) **against
-overflow-only stubbing** (R3's rule at 100%).
+- **The question:** does proactive compaction (this rule, at 70%) beat reactive compaction (R3's rule, at overflow)?
+- **The design:** 2 families × 10 tasks × 2 configurations, run after R4's main result, if at all.
+- **How it is reported:** proactive against reactive, not compaction against none.
+- **What it is read against** (diagnostic expectations):
+  - peak context: about 65–75% of the window proactive, 85–95% (or the limit) reactive;
+  - the re-request rate for stubbed outputs.

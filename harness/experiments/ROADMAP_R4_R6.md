@@ -187,64 +187,81 @@ graph and git. Costs are *guesses*.
     alone detects only about +0.20.
   - **Decision needed:** tasks per family.
 
-## 4a. R4's validation in three phases (decided 2026-11-10)
+## 4a. R4's validation in three phases (decided 2026-11-10; restructured the same day, smaller first)
 
-| Phase | Question | Arms | Criteria |
-|---|---|---|---|
-| **Sanity 1** | Does PRISM work at all? | PRISM only, two configurations: with and without compaction (`r4/COMPACTION_DESIGN.md`) | **none:** observation and diagnosis |
-| **Sanity 2** | Does PRISM beat the baseline? | the better Sanity 1 configuration (or the simpler one, if tied) against the baseline | **none:** observation and diagnosis |
-| **R4** | The comparison at scale | the winning configuration against the baseline, at the full task count | **pre-registered** (`r4/PREREG_DRAFT.md`) |
+| Phase | Question | Families | Arms | Tasks / runs | Criteria |
+|---|---|---|---|---|---|
+| **Sanity 1** | Does PRISM's loop work? | the healthiest gated now: delete and feature, plus Family B re-gated, whatever it yields | **PRISM only, one arm** | about 30 tasks, 1 seed: about 30 runs | **none:** observation |
+| **Sanity 2** | Does PRISM beat the baseline? | the same | PRISM and the baseline | about 30 tasks: about 60 runs | **none:** observation |
+| **R4** | The comparison at scale | the Sanity families, plus refactor, move, tests and Family N as each passes gating | PRISM and the baseline | 40–80 per family: 240+ runs | **pre-registered** (`r4/PREREG_DRAFT.md`) |
+
+**The same in every phase and every arm:**
+- the boolean-gated post-edit check (`r4/CHECK_CHANGES_DESIGN.md` §8–§9);
+- one fixed compaction rule (`r4/COMPACTION_DESIGN.md`). It is a protocol setting, not an arm variable;
+- the model, the prompt template per family, the caps and the seeds.
 
 **The rules:**
-- **Sanity 1 has no baseline arm.** Comparing with the baseline before PRISM works measures the wrong thing.
-- **The sanity phases are development iterations.** They have no pass or fail criteria and no pre-registration:
+- **Sanity 1 has one arm, PRISM.** It has no baseline: comparing before PRISM's loop works measures the wrong thing.
+- **The sanity phases are development iterations:** no pass or fail criteria, no pre-registration.
   1. run;
   2. observe;
-  3. diagnose (which arm, which tasks, which mechanism);
-  4. fix PRISM or the compaction design;
+  3. diagnose (which tasks, which mechanism);
+  4. fix;
   5. re-run.
-  - A phase is left when its behaviour looks right, judged by observation, not by a preset threshold.
-- **Pre-registration applies to R4's full run only.** It is frozen after Sanity 2: the configuration, families, counts,
-  test and thresholds. The R3 discipline applies unchanged: hash-committed before the run; amendments recorded and
-  never used to lower a threshold.
-- **Task selection stays a gate,** not an observation: `r4/GATES.md` and the pre-flight scope check
-  (`r4/SCOPE_INVESTIGATION.md`).
-- **The earlier three-layer, baseline-only sanity check is split (the user's decision, 2026-11-10):**
-  - **its Layer 1** (the scope check) stays as task selection, before Sanity 1. It needs no baseline;
-  - **its Layers 2 (calibration) and 3 (signal)** need baseline runs, so they are part of Sanity 2's comparison.
-  - The user: "This isn't a compromise — it's the correct split. Sanity 1 = 'does PRISM work?' Sanity 2 = 'does PRISM
-    beat baseline?' including calibration and signal as part of that comparison."
+  - A phase is left when its behaviour looks right, judged by observation.
+- **Pre-registration applies to R4's full run only.** It is frozen after Sanity 2. The R3 discipline applies
+  unchanged: hash-committed before the run; amendments recorded and never used to lower a threshold.
+- **Task selection stays a gate:** `r4/GATES.md` and the pre-flight scope check (`r4/SCOPE_INVESTIGATION.md`). The
+  scope check is the former sanity check's Layer 1. Its Layers 2 (calibration) and 3 (signal) need the baseline, so
+  they are part of Sanity 2 (the user, 2026-11-10: "the correct split").
+- **Families enter in sequence, not by permanent exclusion.** Refactor, move, tests and Family N join R4 only after
+  they pass gating and Sanity 1 has shown the loop works.
+- **Family B may be small, and that is an expected outcome, not a blocker.**
+  - Real caller-update tasks are rare in commit history (about 1 in 20 of R3a's tasks).
+  - If re-gating yields 15, R4 measures 15 for Family B and 40–80 for delete and feature.
+  - Family B is mined from what the repositories offer, not forced.
+- **Dropped:** a separate deep-cascade presentation (hops 2+). It cannot be predicted before the edit, and it emerges
+  from the re-check after each edit.
 
-**What Sanity 1 observes** (per run, per edit, logged by the harness):
+**What Sanity 1 observes.** **Fact uptake is the primary observation, ahead of the solve rate:**
 
-| Area | Signals |
-|---|---|
-| Outcome | solved or not, and which tasks; partial (file and function F1); pass-to-pass broken |
-| The check | how often it fires; true against false; which sections; facts per check; latency (target at most 0.5 s); `[check: unavailable]` events |
-| Retry | does the next edit address a reported fact (it touches the named file:line or caller)? Do facts per check fall over the turns (converging) or rise (diverging)? Is the same feedback repeated after an edit (facts ignored)? |
-| Stopping | done called while the last check reported issues (a false done); done right after `[check: clean]`; turns to the first edit; turns to the first clean check |
-| Loop behaviour | identical calls 3+ times with no edit; early done (within 5 turns, no edit) |
-| External safety | any edit to a vendored, stub or library path (expected: none) |
-| Context | peak and mean prompt tokens per call; budget or turn-cap stops. Compaction arm: compaction events, tokens removed, and **re-requests of a stubbed output** (what compaction cost). Arm without compaction: overflow-fallback events |
-| The two arms | solve rates, and each signal above, side by side |
-| **Fact uptake** (added 2026-11-10) | does the next edit **fix what the feedback named**? The named caller is updated, the undefined name is defined or imported, the mismatched call is changed. Editing differently while leaving the named fact in place counts as no uptake (a false positive for retry) |
-| **Peak context per arm** (added 2026-11-10) | the peak prompt as a share of the window. **Expected:** the compaction arm peaks at 65–75%; the arm without compaction at 85–95%, or reaches the limit. **Read as:** both near 90% means compaction is not working; the compaction arm never above 50% means it triggers too aggressively. These are diagnostic expectations, not gates |
-| **Re-request rate** (added 2026-11-10) | how often a stubbed output is called again, and how soon. Immediate re-calls mean compaction is wasting turns; no re-requests mean the dropped content was safe to drop |
+| Signal | What | How it is read |
+|---|---|---|
+| **Fact uptake (primary)** | of the checks that reported issues, the share whose next edit fixes the named fact: the named caller updated, the undefined name defined or imported, the mismatched call changed. An edit elsewhere counts as no uptake. Also: on which turn after the report (the next turn, or the one after)? | **near zero:** the model is the bottleneck, not PRISM. Escalate before any comparison: the 32B model (R6), or a protocol change. **Meaningful (about 30% or more):** the feedback is used and the loop functions. Go to Sanity 2. Readings, not gates |
+| Solves | solved tasks (at least one?), which ones; partial (file and function F1); pass-to-pass broken | |
+| Convergence | facts per check over the turns: falling (converging) or rising (diverging); the same feedback repeated after an edit | |
+| The check | fires after every edit; `[check: clean]` against warnings-only against full feedback; facts per check; latency (target at most 0.5 s); `[check: unavailable]` events | |
+| Stopping | done while the last check reported issues (a false done); done right after `[check: clean]`; turns to the first edit and to the first clean check | |
+| Context | peak and mean prompt as a share of the window (expected below about 75% with compaction); compaction events; overflow-fallback events; budget and turn-cap stops | |
+| Re-request rate | stubbed outputs called again, and how soon | immediate re-calls mean compaction is wasting turns |
+| Loops | identical calls 3+ times with no edit; early done (within 5 turns, no edit) | |
+| External safety | edits to vendored, stub or library paths | expected none |
 
-**How the compaction contrast is reported:** the two arms compare **proactive compaction (at 70%) with reactive
-compaction (R3's rule at overflow)**, not "compaction against none". Sanity 1's results are interpreted in this
-narrower framing.
+**After Sanity 1:**
+- uptake meaningful and edits converging: Sanity 2;
+- uptake near zero: escalate (the model or the protocol);
+- mechanism errors: fix and re-run.
 
-**Sanity 1 cost** *(estimate)*:
+**After Sanity 2:**
+- PRISM ahead of the baseline: the full R4;
+- tied or behind: investigate the tasks, the model, or whether the baseline's text-only feedback is good enough.
 
-| Item | Estimate |
-|---|---|
-| Tasks | about 10 per family over 5 families (delete, move, feature, tests, refactor; plus Family N's 9 if included): 50–59 |
-| Runs | 2 PRISM arms × 1 seed (42): **100–118** |
-| Model time | 5–7 min per run (28-turn cap; check feedback and larger prompts make PRISM runs longer than R3a's average of about 4 min): **9–14 h** |
-| Environment setup | about 25–35 repositories × 10–15 min. Kaggle's disk resets between sessions, so it is paid again in each session: **5–8 h per session** |
-| Total | **15–22 h: 2 sessions at 11.5 h, plan for 3.** Each re-run after a fix costs the same again (or only the affected families) |
-| Disk | the safeguards from the gating run: check before each repository; clean between repositories; stop at under 2 GB; clear the package caches |
+**Cost** *(estimate)*:
+
+| Phase | Runs | Sessions (11.5 h) |
+|---|---|---|
+| Sanity 1 | about 30 (one arm) | 1–2 |
+| Sanity 2 | about 60 (two arms) | 2 |
+| Full R4 | 240+ (more families, two arms) | 8+ |
+
+- **The working figures:** 5–7 min per run, plus environment setup of 10–15 min per repository, paid again in each
+  session (Kaggle's disk resets).
+- **Before knowing whether PRISM works:** about 90 runs, 3–4 sessions, about a week.
+- **Disk:** the gating run's safeguards apply. Check before each repository, clean between repositories, stop under
+  2 GB, clear the package caches.
+
+**After R4, if at all:** a side test of proactive against reactive compaction (2 families × 10 tasks × 2
+configurations; `r4/COMPACTION_DESIGN.md` §6). It is not part of R4.
 
 ## 5. R5 (double check) and R6 (cross-model): unchanged in shape, larger in size
 
