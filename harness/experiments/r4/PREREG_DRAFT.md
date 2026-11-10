@@ -49,6 +49,9 @@
 
 ## 4. Families and counts (the smaller-first approach, 2026-11-10)
 
+- **R4's primary families are delete and feature** (the user, 2026-11-10). Family B is analysed separately as a
+  directional small sample (4–10), stated as directional. Move, tests and Family N are deferred (R4b or later).
+  Refactor joins if its gating yields 80+.
 - **Families enter in sequence.**
   - First, the families validated in Sanity 1 and 2: delete, feature, and Family B re-gated.
   - Then refactor, move, tests and Family N, as each passes gating after Sanity 1 has shown the loop works.

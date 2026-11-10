@@ -260,6 +260,33 @@ graph and git. Costs are *guesses*.
 - **Disk:** the gating run's safeguards apply. Check before each repository, clean between repositories, stop under
   2 GB, clear the package caches.
 
+**R4's scope, from the gated pools (confirmed 2026-11-10, after the K4 diagnosis):**
+
+| Family | Pool (gated) | Role in R4 |
+|---|---|---|
+| delete | 71 | **primary**: the conclusive comparison, 40–80 tasks |
+| feature | 23 (gating paused; more on resume) | **primary**: 40–80 tasks as the pool allows |
+| Family B | 4 (`r4/FAMILY_B_REGATE.md`); re-gated again after the K4 fix, and over R3's full mined pool | **directional only**, analysed separately at its real size (4–10), and stated as directional |
+| move, tests, Family N | 10, 11, 9 | **deferred** to R4b or later: not enough volume to answer |
+| refactor | not gated yet | resumes gating after Sanity 1; becomes an R4 family if it yields 80+ |
+
+**Sanity 1's shape:**
+- about 13 delete, about 13 feature, and Family B's 4–10: 30–36 tasks;
+- delete and feature exercise `prism_check_changes` the same way Family B does, so the loop is validated on the
+  three together;
+- fact uptake is measured across all three.
+
+**Code fix order (2026-11-10):**
+1. K4 diagnosis (done: `r4/K4_DIAGNOSIS.md`);
+2. the K4 fix (import roots), with the golden K4 lines updated, and the scope check re-run on the 50 tasks on
+   affected repositories (`r4/K4_DIAGNOSIS.md` §5);
+3. parsed-code call detection;
+4. D1;
+5. internal/external classification;
+6. `prism_check_changes`.
+
+Sanity 1 waits for all six.
+
 **After R4, if at all:** a side test of proactive against reactive compaction (2 families × 10 tasks × 2
 configurations; `r4/COMPACTION_DESIGN.md` §6). It is not part of R4.
 
