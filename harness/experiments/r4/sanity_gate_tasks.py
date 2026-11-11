@@ -35,8 +35,9 @@ def gate_paragraph(task: dict) -> str:
     """The task message's statement of the gate (amendment R4-SANITY-2, C2)."""
     if task["family"] == "delete":
         f, q = task["must_be_absent"].split("::", 1)
+        name = task.get("target_display") or f"`{q}`"        # R4-SANITY-3: the name as written in the code
         files = ", ".join(f"`{x}`" for x in task.get("visible_tests") or []) or "the visible test files"
-        what = (f"`{q}` is no longer defined in `{f}`, and the tests in {files} that passed at the start still pass "
+        what = (f"{name} is no longer defined in `{f}`, and the tests in {files} that passed at the start still pass "
                 "(a test you delete is not counted)")
     elif task["family"] == "feature":
         what = ("the tests listed above pass and the other tests in those files still pass. Test files are checked as "

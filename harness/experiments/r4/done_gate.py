@@ -97,17 +97,23 @@ class DoneGate:
         return out
 
     # ------------------------------------------------------------------ per family
-    def _delete(self) -> list[str]:
-        problems = []
+    def target_status(self) -> str | None:
+        """Delete: "`NAME` is still defined in FILE at line N" while it is, else None (a fact, not an instruction)."""
         f, q = self.task["must_be_absent"].split("::", 1)
         path = os.path.join(self.work, f)
         from harness.experiments.change_history.mine import functions
-        if os.path.isfile(path):
-            defs = functions(f, open(path, "rb").read())
-            if q in defs:
-                line = defs[q].get("start") or defs[q].get("line")
-                problems.append(f"`{q}` is still defined in {f}" + (f" at line {line}" if line else ""))
-        return problems + self.regressions(self.task.get("visible_start_pass") or {})
+        if not os.path.isfile(path):
+            return None
+        defs = functions(f, open(path, "rb").read())
+        if q not in defs:
+            return None
+        line = defs[q].get("start") or defs[q].get("line")
+        name = self.task.get("target_display") or f"`{q}`"
+        return f"{name} is still defined in {f}" + (f" at line {line}" if line else "")
+
+    def _delete(self) -> list[str]:
+        status = self.target_status()
+        return ([status] if status else []) + self.regressions(self.task.get("visible_start_pass") or {})
 
     def _feature(self) -> list[str]:
         tests = sorted(set(self.task.get("visible_tests") or []) | set(self.task.get("test_files") or []))
@@ -160,7 +166,10 @@ class DoneGate:
     # ------------------------------------------------------------------ the check
     def check(self) -> tuple[bool, str]:
         if not self.changed_files():
-            return False, "Done rejected: no file has been changed yet. The task has not been started. Continue."
+            # R4-SANITY-3 (fix 1): a delete task's target status is stated here too
+            status = self.target_status() if self.task.get("family") == "delete" else None
+            return False, ("Done rejected: no file has been changed yet. The task has not been started."
+                           + (f"\n- {status}" if status else "") + "\nContinue.")
         fam = self.task.get("family")
         if fam == "feature":
             problems = self._feature()

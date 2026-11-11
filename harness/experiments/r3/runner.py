@@ -232,7 +232,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         apply_patch(work, task.get("after_index_patch"))
         start_tree = snapshot_tree(work)      # the start state, after setup: what the agent changes is diffed from it
         layer = ToolLayer(wi, TOKENIZER)
-        shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER)
+        shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER,
+                             explicit=bool(task.get("explicit_tools")))      # R4-SANITY-3
         stage = "loop"
         summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
                            gate=_gate(task, work, env, start_tree)).run(out)

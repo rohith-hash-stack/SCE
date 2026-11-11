@@ -57,3 +57,51 @@ changes.
 | Solve rate | uncertain |
 
 **If the solve rate holds flat,** the edit-error fixes (currently parked) are the next step.
+
+## R4-SANITY-3 (2026-11-11): explicit tool messages, the delete prompt, and the gate's no-change message
+
+**Status:** approved by the user (2026-11-11), from `SANITY2_RESULTS.md`'s fixes 1–4. Both arms, shared wording.
+Development changes in the sanity phase. The turn cap, budget, seeds and gate logic are unchanged, apart from fix 1.
+
+**The fixes:**
+1. **The gate's no-change message** (`done_gate.py`): when no file has changed, a delete task's rejection also states
+   the target's status ("… is still defined in FILE at line N"). It is a fact, not an instruction, and stays within
+   the approved scope: the target and its line, no call sites.
+2. **Edit errors that help** (`r3/shared_tools.py`, `explicit=True`):
+   - "not found" shows the closest lines in the file, numbered as `read_file` shows them;
+   - "occurs N times" gives the line numbers of the matches;
+   - an empty `old` on an existing file is explained ("an empty `old` only creates a new file; give the exact lines to
+     replace").
+3. **An honest cut read:** a `read_file` that hits the 4,000-token cap shows only whole lines and says so, in its
+   header and at its end: "lines 1–212 of 3265 shown (cut at 4,000 tokens); continue with start=213".
+4. **The delete prompt** (root cause R1, `sanity3_tasks.py`): the target is named as written in the code, with its
+   kind and its start line, e.g. "Remove the method `_generate_definitions` of class `GenerateJsonSchema` from
+   `pydantic/json_schema.py` (it is defined at line 377)". The gate paragraph and the gate's messages use the same
+   name.
+
+**Held:** PRISM's "not found" hints (R7), for the PRISM tool work.
+
+**Tasks:** `sanity/tasks_v3.json`, the second run's 20 tasks with `explicit_tools` and the delete prompts above. The
+tasks' gate check still holds, because the checks themselves are unchanged.
+
+### Expectations, recorded before the third sanity run (user, 2026-11-11)
+
+"Sanity 3 expectations: (1) Loop rate drops (target <30%). (2) Applied edits rise to ≥60%. (3) Solve rate rises above
+Sanity 2's 2 delete / 0 feature. If applied edits rise but solves don't, the binding constraint becomes task
+difficulty — next step is difficulty calibration or model change. If applied edits don't rise, the edit-error fixes
+are wrong — next step is diagnosis. If solves rise, pipeline is validated for R4. Note: if zod/pydantic solve, the
+prompt fix is likely the primary driver — the gate's status message shouldn't be doing the finding."
+
+**To report when it lands:**
+- the applied-edit rate (target ≥60%) and the loop rate (target <30%);
+- the solve rate per family, the `stuck_done` count and the gate-leniency counter;
+- for zod and pydantic: solved via the prompt fix, the gate fix, or both. This is read from the turn logs: whether
+  the first edit to the target came before or after a rejection that stated the target's line;
+- any new failure modes.
+
+**Decisions, as recorded:**
+- **Solves rise:** the R4 pipeline is validated. Next are R4's remaining prerequisites: the upstream check's false
+  alarms, `prism_check_changes`, and R4's pre-registration.
+- **Applied edits rise, solves don't:** task difficulty. Next is difficulty calibration or a model change, not more
+  tool fixes.
+- **Applied edits don't rise:** diagnosis before any more iterations.

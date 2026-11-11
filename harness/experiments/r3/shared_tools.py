@@ -59,6 +59,38 @@ def occurrences(text: str, span: str) -> int:
     return n
 
 
+READ_MARGIN_TOKENS = 120     # room for read_file's header and its cut note (R4-SANITY-3)
+CLOSEST_MAX_LINES = 15
+
+
+def match_lines(text: str, span: str) -> list[int]:
+    """1-based line numbers where `span` starts in `text` (overlapping matches included)."""
+    out, i = [], text.find(span)
+    while i != -1:
+        out.append(text.count("\n", 0, i) + 1)
+        i = text.find(span, i + 1)
+    return out
+
+
+def closest_lines(text: str, old: str) -> str:
+    """R4-SANITY-3: the file's lines closest to `old` (by its first non-blank line), numbered as read_file shows them."""
+    import difflib
+    want = [ln for ln in old.splitlines() if ln.strip()]
+    lines = text.splitlines()
+    if not want or not lines:
+        return "Read the file to see its current text."
+    key = want[0].strip()
+    scores = [(difflib.SequenceMatcher(None, key, ln.strip()).ratio(), i) for i, ln in enumerate(lines)]
+    best, at = max(scores)
+    if best < 0.5:
+        return f"No line in the file is close to its first line ({key[:80]!r}); read the file to see its current text."
+    n = min(CLOSEST_MAX_LINES, max(len(old.splitlines()), 1) + 1)
+    lo, hi = at, min(len(lines), at + n)
+    shown = "\n".join(f"{i + 1}\t{lines[i]}" for i in range(lo, hi))
+    return (f"The closest lines in the file, from line {at + 1} (each line is its number, a tab, then the text; copy "
+            f"the text only):\n{shown}")
+
+
 def whitespace_matches(text: str, old: str) -> list[int]:
     """1-based line numbers where `old` matches `text` line by line once leading and trailing whitespace is ignored.
 
@@ -83,8 +115,12 @@ def whitespace_matches(text: str, old: str) -> list[int]:
 class SharedTools:
     NAMES = ("read_file", "list_dir", "grep", "edit_file", "run_tests", "done")
 
-    def __init__(self, workdir: str, env, visible_tests: list[str], tokenizer_path: str | None = None):
+    def __init__(self, workdir: str, env, visible_tests: list[str], tokenizer_path: str | None = None,
+                 explicit: bool = False):
+        """`explicit`: amendment R4-SANITY-3's tool messages (a cut read says so and where to continue; edit errors show
+        the closest lines, the duplicates' lines, and what an empty `old` means). Off for R3a and sanity runs 1-2."""
         self.work, self.env, self.visible = os.path.abspath(workdir), env, list(visible_tests)
+        self.explicit = explicit
         self.done_summary = None
         self._tok = None
         if tokenizer_path:
@@ -128,6 +164,20 @@ class SharedTools:
             lines = fh.read().decode("utf8", "replace").splitlines()
         start = max(1, int(start))
         end = len(lines) if end is None else min(len(lines), int(end))
+        if self.explicit and self._tok is not None:
+            # R4-SANITY-3: show only the lines that fit under the cap, and say so (the cap would otherwise cut the
+            # text silently under a header that claims every line)
+            budget, used, last = CAP_TOKENS - READ_MARGIN_TOKENS, 0, start - 1
+            for i in range(start, end + 1):
+                used += len(self._tok.encode(f"{i}\t{lines[i - 1]}\n").ids)
+                if used > budget:
+                    break
+                last = i
+            if last < end:
+                body = "\n".join(f"{i}\t{lines[i - 1]}" for i in range(start, last + 1))
+                note = (f"lines {start}-{last} of {len(lines)} shown (cut at {CAP_TOKENS:,} tokens); continue with "
+                        f"start={last + 1}")
+                return f"{path} ({note})\n{body}\n... [{note}]"
         # The number and the line are separated by one tab: indentation is spaces, so the prefix cannot be read as
         # part of it (the qwen notice check, 2026-11-06: a space gutter was copied into `edit_file`'s `old` text).
         body = "\n".join(f"{i}\t{lines[i - 1]}" for i in range(start, end + 1))
@@ -162,6 +212,11 @@ class SharedTools:
         p = self._path(path)
         if old == "":
             if os.path.exists(p):
+                if self.explicit:
+                    raise ToolCallError(
+                        f"{path} already exists, so `old` cannot be empty: an empty `old` only creates a new file. To "
+                        f"change this file, read the lines you want to change, then give them exactly in `old` (without "
+                        f"the line numbers read_file shows) and their replacement in `new`")
                 raise ToolCallError(f"{path} exists: give the exact text to replace")
             os.makedirs(os.path.dirname(p), exist_ok=True)
             with open(p, "w", encoding="utf8") as fh:
@@ -179,8 +234,14 @@ class SharedTools:
                     f"the text to replace was not found in {path}, but it matches once apart from whitespace, at line "
                     f"{near[0]}. Copy the indentation exactly; the line-number prefix that read_file shows (the number "
                     f"and a tab) is not part of the file")
+            if self.explicit:
+                raise ToolCallError(f"the text to replace was not found in {path}. " + closest_lines(text, old))
             raise ToolCallError(f"the text to replace was not found in {path}")
         if n > 1:
+            if self.explicit:
+                at = match_lines(text, old)
+                raise ToolCallError(f"the text to replace occurs {n} times in {path}, at lines "
+                                    f"{', '.join(map(str, at[:20]))}. Include a line before or after it to pick one")
             raise ToolCallError(f"the text to replace occurs {n} times in {path}; give a longer, unique span")
         with open(p, "w", encoding="utf8") as fh:
             fh.write(text.replace(old, new, 1))

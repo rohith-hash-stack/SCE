@@ -93,3 +93,11 @@ def test_feature_passes_when_the_listed_tests_pass(tmp_path):
             "fail_to_pass": {"tests/f.txt": ["test_new"]}, "pass_to_pass": {"tests/f.txt": ["test_old"]}}
     open(os.path.join(w, "pkg/m.py"), "w").write("X = 1\n")
     assert DoneGate(task, w, Env(w), st).check() == (True, "done")
+
+
+def test_no_change_also_states_the_delete_target_status(tmp_path):
+    """R4-SANITY-3 fix 1: the model that believes the target does not exist is told it does, and where."""
+    w, st = _repo(tmp_path, {"pkg/m.py": SRC, "tests/t.txt": "test_keep: ok\ntest_gone: ok\n"})
+    t = {**_delete_task(), "target_display": "the function `gone`"}
+    ok, msg = DoneGate(t, w, Env(w), st).check()
+    assert not ok and "no file has been changed" in msg and "the function `gone` is still defined in pkg/m.py at line 5" in msg
