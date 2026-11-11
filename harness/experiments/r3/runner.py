@@ -183,7 +183,7 @@ def outcome(result: dict) -> str:
 
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
-             score_run: bool = True) -> dict:
+             score_run: bool = True, plan: bool = False) -> dict:
     from harness.experiments.r3.loop import AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
@@ -209,7 +209,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         layer = ToolLayer(wi, TOKENIZER)
         shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER)
         stage = "loop"
-        summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap).run(out)
+        summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan).run(out)
         result = {**summary}
         if score_run:
             stage = "scoring"
@@ -248,11 +248,18 @@ def main(argv=None) -> int:
     p.add_argument("--cache", required=True)
     p.add_argument("--base-url", default="http://127.0.0.1:11434")
     p.add_argument("--turn-cap", type=int, default=30)
+    # the planning investigation (r4/PLANNING_INVESTIGATION.md); the defaults are R3a's
+    p.add_argument("--model", default=None)
+    p.add_argument("--plan", action="store_true", help="every reply states a one-sentence plan")
+    p.add_argument("--think", choices=("on", "off"), default=None, help="Ollama's thinking mode (reasoning models)")
+    p.add_argument("--answer-tokens", type=int, default=None, help="the answer limit, thinking included")
+    p.add_argument("--no-json-format", action="store_true", help="do not constrain the answer to JSON")
     a = p.parse_args(argv)
-    from harness.experiments.r3.loop import OllamaChat
+    from harness.experiments.r3.loop import ANSWER_TOKENS, MODEL, OllamaChat
     task = json.load(open(a.task))
-    res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, OllamaChat(a.base_url),
-                   a.turn_cap)
+    chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
+                      answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format)
+    res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))
     return 0
 

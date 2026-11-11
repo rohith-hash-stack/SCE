@@ -73,6 +73,14 @@ Tools:
 {tools}
 Symbols are fully qualified names as the repository's index writes them (e.g. `pkg.module.Class.method`)."""
 
+# The planning investigation (`r4/PLANNING_INVESTIGATION.md`; opt-in, off for R3a and the R4 sanity run): every reply
+# carries a one-sentence plan inside the JSON (replies are constrained to JSON), and the plan stays in the history.
+PLAN_ADDENDUM = """
+
+Planning: every reply also states your plan, first, inside the same JSON object:
+{{"plan": "I will <action> because <reason>. Then <next step>.", "tool": "<name>", "args": {{...}}}}
+Base the plan on what the tools have shown you so far."""
+
 FORMAT_REMINDER = ('Your reply was not one JSON tool call. Reply with exactly one JSON object: '
                    '{"tool": "<name>", "args": {...}}.')
 
@@ -82,26 +90,41 @@ def tool_docs(version: str) -> str:
     return "\n".join(f"- {name} {sig}: {what}" for name, (sig, what) in docs.items())
 
 
-def system_prompt(version: str) -> str:
+def system_prompt(version: str, plan: bool = False) -> str:
     """Identical in both versions except the tool list (parity table)."""
-    return SYSTEM.format(tools=tool_docs(version))
+    return (SYSTEM + (PLAN_ADDENDUM if plan else "")).format(tools=tool_docs(version))
 
 
 class OllamaChat:
     """One chat call to an Ollama server; the answer is constrained to JSON (`format: json`)."""
 
-    def __init__(self, base_url: str, model: str = MODEL, timeout: int = 900):
+    def __init__(self, base_url: str, model: str = MODEL, timeout: int = 900, think: bool | None = None,
+                 answer_tokens: int = ANSWER_TOKENS, json_format: bool = True):
+        """`think` and `answer_tokens`: the planning investigation's reasoning-model runs (off by default). The prompt
+        window stays NUM_CTX - ANSWER_TOKENS, as for every run; a longer answer (thinking included) widens num_ctx."""
         self.url, self.model, self.timeout = base_url.rstrip("/"), model, timeout
+        self.think, self.answer_tokens, self.json_format = think, answer_tokens, json_format
 
     def __call__(self, messages: list[dict], seed: int) -> dict:
-        body = json.dumps({"model": self.model, "messages": messages, "stream": False, "format": "json",
-                           "options": {"temperature": TEMPERATURE, "seed": seed, "num_ctx": NUM_CTX,
-                                       "num_predict": ANSWER_TOKENS}}).encode()
+        req_body = {"model": self.model, "messages": messages, "stream": False,
+                    "options": {"temperature": TEMPERATURE, "seed": seed,
+                                "num_ctx": NUM_CTX - ANSWER_TOKENS + self.answer_tokens,
+                                "num_predict": self.answer_tokens}}
+        if self.json_format:
+            req_body["format"] = "json"
+        if self.think is not None:
+            req_body["think"] = self.think
+        body = json.dumps(req_body).encode()
         req = urllib.request.Request(f"{self.url}/api/chat", data=body, headers={"Content-Type": "application/json"})
         t = time.time()
         with urllib.request.urlopen(req, timeout=self.timeout) as r:
             data = json.loads(r.read())
-        return {"text": data.get("message", {}).get("content", ""), "prompt_tokens": data.get("prompt_eval_count", 0),
+        text, thinking = data.get("message", {}).get("content", ""), data.get("message", {}).get("thinking")
+        if "</think>" in text:          # a model that writes its reasoning into the answer: the tool call follows it
+            head, text = text.rsplit("</think>", 1)
+            thinking = (thinking or "") + head.replace("<think>", "")
+        return {"text": text, "thinking": thinking,
+                "prompt_tokens": data.get("prompt_eval_count", 0),
                 "answer_tokens": data.get("eval_count", 0), "done_reason": data.get("done_reason"),
                 "seconds": round(time.time() - t, 1)}
 
@@ -145,6 +168,17 @@ def turn_counts(log_path: str) -> dict:
             "notice_turns": sum(1 for t in turns if t.get("notice"))}
 
 
+def _plan_of(text: str) -> str | None:
+    """The reply's "plan" field (the planning investigation), or None."""
+    try:
+        m = re.search(r"\{.*\}", text, re.S)
+        obj = json.loads(m.group(0)) if m else None
+    except ValueError:
+        return None
+    p = obj.get("plan") if isinstance(obj, dict) else None
+    return p.strip() if isinstance(p, str) and p.strip() else None
+
+
 def parse_call(text: str) -> tuple[str, dict] | None:
     """`(tool, args)` from the model's reply, or None when it is not exactly one tool call."""
     s = text.strip()
@@ -167,10 +201,10 @@ def parse_call(text: str) -> tuple[str, dict] | None:
 
 class AgentRun:
     def __init__(self, task: dict, version: str, seed: int, model, shared, index_tools=None,
-                 tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP):
+                 tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False):
         """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's five tools, or `related_code`)."""
         self.task, self.version, self.seed, self.model = task, version, seed, model
-        self.shared, self.index_tools, self.turn_cap = shared, index_tools, turn_cap
+        self.shared, self.index_tools, self.turn_cap, self.plan = shared, index_tools, turn_cap, plan
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
         self.allowed = set(SHARED_DOC) | set(PRISM_DOC if version == "PRISM" else BASELINE_DOC)
@@ -224,7 +258,7 @@ class AgentRun:
             with open(summary_path) as fh:
                 return json.load(fh)
         log_path = os.path.join(out_dir, run_id + ".jsonl")
-        system, task_msg = system_prompt(self.version), self.task["prompt"]
+        system, task_msg = system_prompt(self.version, self.plan), self.task["prompt"]
         history: list[dict] = []
         used, turn, end = 0, 0, None
         t0 = time.time()
@@ -248,6 +282,11 @@ class AgentRun:
                 rec = {"turn": turn, "prompt_tokens": reply["prompt_tokens"], "answer_tokens": reply["answer_tokens"],
                        "done_reason": reply["done_reason"], "model_seconds": reply["seconds"], "stubbed": stubbed,
                        "used_tokens": used, "reply": reply["text"]}
+                if reply.get("thinking"):
+                    rec["thinking"], rec["thinking_tokens"] = reply["thinking"], self.n(reply["thinking"])
+                plan = _plan_of(reply["text"]) if self.plan else None
+                if plan:
+                    rec["plan"] = plan
                 call = parse_call(reply["text"])
                 if call is None:
                     rec["parse_error"] = True
@@ -265,7 +304,8 @@ class AgentRun:
                            **{k: v for k, v in res.items() if k != "output"})
                 log.write(json.dumps(rec) + "\n")
                 log.flush()
-                history += [{"role": "assistant", "content": json.dumps({"tool": tool, "args": args})},
+                said = {"plan": plan, "tool": tool, "args": args} if plan else {"tool": tool, "args": args}
+                history += [{"role": "assistant", "content": json.dumps(said)},
                             {"role": "user", "content": res["output"], "tool_output": True, "tool": tool}]
                 if tool == "done":
                     end = "done"

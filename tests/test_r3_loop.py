@@ -95,3 +95,19 @@ def test_a_finished_run_is_not_repeated(tmp_path):
     m = Model([])
     s = L.AgentRun(task(), "PRISM", 7, m, Shared()).run(str(tmp_path))
     assert s["end"] == "done" and m.seen == []
+
+
+def test_plan_mode_is_opt_in_and_keeps_the_plan_in_the_history(tmp_path):
+    """The planning investigation (r4/PLANNING_INVESTIGATION.md): off by default; on, the plan is logged and replayed."""
+    assert "Planning:" not in L.system_prompt("PRISM") and "Planning:" in L.system_prompt("PRISM", plan=True)
+    first = json.dumps({"plan": "I will read a because it holds the target. Then edit it.", "tool": "read_file",
+                        "args": {"path": "a"}})
+    m = Model([first, json.dumps({"plan": "I will finish.", "tool": "done", "args": {}})])
+    L.AgentRun(task(), "BASELINE", 42, m, Shared(), plan=True).run(str(tmp_path / "p"))
+    assert "Planning:" in m.seen[0][0]["content"]
+    assert any("I will read a because" in msg["content"] for msg in m.seen[1] if msg["role"] == "assistant")
+    log = [json.loads(ln) for ln in open(tmp_path / "p" / "t1__BASELINE__42.jsonl")]
+    assert log[0]["plan"].startswith("I will read a")
+    m2 = Model([first, json.dumps({"tool": "done", "args": {}})])                     # off: the plan is not replayed
+    L.AgentRun(task(), "BASELINE", 42, m2, Shared()).run(str(tmp_path / "q"))
+    assert not any("I will read" in msg["content"] for msg in m2.seen[1] if msg["role"] == "assistant")
