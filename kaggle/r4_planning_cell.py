@@ -17,6 +17,15 @@
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
 # ============================================================
 
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+import urllib.request
+
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
 CODE_COMMIT = "f7a7a0f9eb75fd2194cc5bea42b2391d325f3740"
