@@ -130,6 +130,13 @@ def score(task: dict, work: str, env, start_tree: str | None = None) -> dict:
         res["function_f1"] = f1(fns - drop_fns, set(task.get("gold_functions", [])))
     except Exception as exc:  # diff quality is secondary: recorded, never fatal
         res["function_f1"], res["function_error"] = None, f"{type(exc).__name__}: {exc}"
+    if task.get("restore_scored_tests") and start_tree:
+        # amendment R4-SANITY-2: the scored test files are the task's own. The files the hidden patch touches, and a
+        # feature task's test files, are put back to the start state first, so the model's edits to them neither
+        # block the hidden patch (the first sanity run's delete scorer bug) nor change what is scored.
+        touched = re.findall(r"^diff --git a/(\S+) b/", task.get("hidden_patch") or "", re.M)
+        _restore(work, start_tree, sorted(set(touched) | set(task.get("test_files") if task.get("family") == "feature" else [])))
+        res["scored_tests_restored"] = True
     try:
         apply_patch(work, task.get("hidden_patch"))
         res["hidden_patch_applied"] = True
@@ -178,8 +185,26 @@ def outcome(result: dict) -> str:
     stop = result.get("stop") or ("done" if result.get("end") == "done" else "stuck" if result.get("end") == "turn_cap"
                                   else "budget" if result.get("end") == "budget" else "error")
     if stop != "done":
-        return stop
+        return stop          # stuck, budget, stuck_done (amendment R4-SANITY-2) or error
     return "resolved" if (result.get("score") or {}).get("resolved") else "unresolved"
+
+
+def _gate(task: dict, work: str, env, start_tree: str):
+    """Amendment R4-SANITY-2: the verification gate at done, for tasks that carry `done_gate` (R3a's do not)."""
+    if not task.get("done_gate"):
+        return None
+    from harness.experiments.r4.done_gate import DoneGate
+    return DoneGate(task, work, env, start_tree)
+
+
+def _restore(work: str, tree: str, files: list[str]) -> None:
+    """These files as they are in `tree` (absent there: removed)."""
+    present = set(_git("ls-tree", "-r", "--name-only", tree, "--", *files, cwd=work).stdout.split("\n")) if files else set()
+    for f in files:
+        if f in present:
+            _git("checkout", tree, "--", f, cwd=work)
+        elif os.path.exists(os.path.join(work, f)):
+            os.remove(os.path.join(work, f))
 
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
@@ -209,7 +234,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         layer = ToolLayer(wi, TOKENIZER)
         shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER)
         stage = "loop"
-        summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan).run(out)
+        summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
+                           gate=_gate(task, work, env, start_tree)).run(out)
         result = {**summary}
         if score_run:
             stage = "scoring"

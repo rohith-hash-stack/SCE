@@ -38,6 +38,7 @@ ANSWER_TOKENS = 4096
 BUDGET_TOKENS = 300_000
 DEFAULT_TURN_CAP = 30
 TEMPERATURE = 0.2
+STUCK_DONE_REJECTIONS = 3     # amendment R4-SANITY-2
 
 SHARED_DOC = {
     "read_file": ('{"path": str, "start": int = 1, "end": int | null}', "Read a file's lines (numbered)."),
@@ -142,6 +143,8 @@ def stop_kind(end: str | None) -> str:
         return "stuck"
     if end == "budget":
         return "budget"
+    if end == "stuck_done":     # amendment R4-SANITY-2: 3 rejected dones in a row with no applied edit between
+        return "stuck_done"
     return "error"
 
 
@@ -201,10 +204,13 @@ def parse_call(text: str) -> tuple[str, dict] | None:
 
 class AgentRun:
     def __init__(self, task: dict, version: str, seed: int, model, shared, index_tools=None,
-                 tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False):
+                 tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False,
+                 gate=None):
+        """`gate`: amendment R4-SANITY-2's verification at done (`r4/done_gate.DoneGate`), or None (R3a)."""
         """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's five tools, or `related_code`)."""
         self.task, self.version, self.seed, self.model = task, version, seed, model
         self.shared, self.index_tools, self.turn_cap, self.plan = shared, index_tools, turn_cap, plan
+        self.gate = gate
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
         self.allowed = set(SHARED_DOC) | set(PRISM_DOC if version == "PRISM" else BASELINE_DOC)
@@ -261,6 +267,7 @@ class AgentRun:
         system, task_msg = system_prompt(self.version, self.plan), self.task["prompt"]
         history: list[dict] = []
         used, turn, end = 0, 0, None
+        rejected_in_a_row = rejections = 0
         t0 = time.time()
         with open(log_path, "w") as log:
             while True:
@@ -298,6 +305,15 @@ class AgentRun:
                 rec.update(tool=tool, args=args)
                 t = time.time()
                 res = self.execute(tool, args)
+                if tool == "done" and self.gate is not None:
+                    ok, verdict = self.gate.check()
+                    res = {**res, "gate": {"accepted": ok, "message": verdict[:1500]}}
+                    if not ok:
+                        res["output"] = verdict
+                        rejections += 1
+                        rejected_in_a_row += 1
+                elif tool == "edit_file" and res["output"].startswith(("edited", "created")):
+                    rejected_in_a_row = 0
                 rec.update(tool_seconds=round(time.time() - t, 1), output_tokens=self.n(res["output"]),
                            output_head=res["output"][:OUTPUT_HEAD_CHARS],
                            output_cut="[cut at 4,000 tokens]" in res["output"], rss_mb=_rss_mb(),
@@ -307,13 +323,17 @@ class AgentRun:
                 said = {"plan": plan, "tool": tool, "args": args} if plan else {"tool": tool, "args": args}
                 history += [{"role": "assistant", "content": json.dumps(said)},
                             {"role": "user", "content": res["output"], "tool_output": True, "tool": tool}]
-                if tool == "done":
+                if tool == "done" and not (res.get("gate") and not res["gate"]["accepted"]):
                     end = "done"
+                    break
+                if rejected_in_a_row >= STUCK_DONE_REJECTIONS:
+                    end = "stuck_done"
                     break
         summary = {"run": run_id, "task": self.task["id"], "version": self.version, "seed": self.seed, "turns": turn,
                    "end": end, "done_called": end == "done", "stop": stop_kind(end), "used_tokens": used,
                    "seconds": round(time.time() - t0, 1), "done_summary": self.shared.done_summary,
-                   "turn_cap": self.turn_cap, **turn_counts(log_path)}
+                   "turn_cap": self.turn_cap, **turn_counts(log_path),
+                   **({"gate_rejections": rejections} if self.gate is not None else {})}
         with open(summary_path, "w") as fh:
             json.dump(summary, fh, indent=1)
         return summary

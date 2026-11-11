@@ -111,3 +111,42 @@ def test_plan_mode_is_opt_in_and_keeps_the_plan_in_the_history(tmp_path):
     m2 = Model([first, json.dumps({"tool": "done", "args": {}})])                     # off: the plan is not replayed
     L.AgentRun(task(), "BASELINE", 42, m2, Shared()).run(str(tmp_path / "q"))
     assert not any("I will read" in msg["content"] for msg in m2.seen[1] if msg["role"] == "assistant")
+
+
+class Gate:
+    """A stand-in for r4/done_gate.DoneGate: rejects the first `n` dones."""
+    def __init__(self, n):
+        self.n, self.calls = n, 0
+
+    def check(self):
+        self.calls += 1
+        return (self.calls > self.n), ("done" if self.calls > self.n else "Done rejected: still defined. Continue.")
+
+
+class EditShared(Shared):
+    def call(self, tool, **args):
+        return "edited a at line 1: replaced 1 lines with 1" if tool == "edit_file" else super().call(tool, **args)
+
+
+def test_gate_rejects_done_feeds_back_and_accepts_later(tmp_path):
+    """Amendment R4-SANITY-2: a rejected done costs a turn, its message is the tool output, and the run continues."""
+    done = json.dumps({"tool": "done", "args": {"summary": "x"}})
+    edit = json.dumps({"tool": "edit_file", "args": {"path": "a", "old": "x", "new": "y"}})
+    m = Model([done, edit, done])
+    s = L.AgentRun(task(), "BASELINE", 42, m, EditShared(), gate=Gate(1)).run(str(tmp_path / "a"))
+    assert s["end"] == "done" and s["turns"] == 3 and s["gate_rejections"] == 1
+    assert any("Done rejected" in msg["content"] for msg in m.seen[1] if msg["role"] == "user")
+    log = [json.loads(ln) for ln in open(tmp_path / "a" / "t1__BASELINE__42.jsonl")]
+    assert log[0]["gate"]["accepted"] is False and log[2]["gate"]["accepted"] is True
+
+
+def test_three_rejected_dones_without_an_edit_end_stuck_done_and_an_edit_resets_the_count(tmp_path):
+    done = json.dumps({"tool": "done", "args": {}})
+    edit = json.dumps({"tool": "edit_file", "args": {"path": "a", "old": "x", "new": "y"}})
+    s = L.AgentRun(task(), "BASELINE", 42, Model([done] * 5), EditShared(), gate=Gate(99)).run(str(tmp_path / "b"))
+    assert s["end"] == "stuck_done" and s["stop"] == "stuck_done" and s["turns"] == 3
+    s = L.AgentRun(task(), "BASELINE", 42, Model([done, done, edit, done, done, done]), EditShared(),
+                   gate=Gate(99)).run(str(tmp_path / "c"))
+    assert s["end"] == "stuck_done" and s["turns"] == 6
+    s = L.AgentRun(task(), "BASELINE", 42, Model([done]), Shared()).run(str(tmp_path / "d"))   # no gate: R3a
+    assert s["end"] == "done" and "gate_rejections" not in s

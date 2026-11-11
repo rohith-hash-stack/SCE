@@ -108,7 +108,10 @@ def gold_calls(task: dict, clone: str, version: str) -> list[dict]:
     raw = _git("-C", clone, "diff", "--raw", "--no-renames", task["parent"], task["commit"]).stdout.split("\n")
     gitlinks = {ln.split("\t", 1)[1] for ln in raw if "\t" in ln and "160000" in ln.split("\t", 1)[0].split()[:2]}
     files = [f for f in _git("-C", clone, "diff", "--name-only", "--no-renames", task["parent"], task["commit"])
-             .stdout.split("\n") if f and f not in set(task["test_files"]) and f not in gitlinks]   # no submodule bumps
+             .stdout.split("\n") if f and (f not in set(task["test_files"]) or task.get("done_gate") and
+                                            task["family"] == "delete") and f not in gitlinks]   # no submodule bumps
+    # R4-SANITY-2: a gated delete task's gold also updates the tests that used the target (the developer's test changes),
+    # as the model must; scoring restores those files and applies the hidden patch, so the score is unchanged
     before = start_contents(clone, task, files)
     calls = []
     if version == "PRISM":
@@ -166,7 +169,9 @@ def main(argv=None) -> int:
                 model = make()
                 res = run_task(t, version, seed, os.path.abspath(clones[t["repo"]]), a.out, cache, model, a.turn_cap)
                 want = "resolved" if kind == "gold" else "unresolved"
-                ok = res.get("outcome") == want
+                # with the verification gate (R4-SANITY-2), an immediate done is rejected 3 times: stuck_done
+                ok = res.get("outcome") == want or (kind == "empty" and t.get("done_gate")
+                                                     and res.get("outcome") == "stuck_done")
                 bad += not ok
                 print(json.dumps({"task": t["id"], "version": version, "script": kind, "outcome": res.get("outcome"),
                                   "want": want, "ok": ok, "turns": res.get("turns"),

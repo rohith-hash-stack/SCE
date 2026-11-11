@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from harness.experiments.r3.analyze import load_runs, load_tasks
@@ -38,6 +39,41 @@ def layer3(rows) -> dict:
            "early_done_rate": _rate(done, "early_done")}
     out["pass"] = (out["runs"] > 0 and out["edit_rate"] is not None and out["edit_rate"] >= EDIT_MIN
                    and (out["loop_rate"] or 0) < LOOP_MAX and (out["early_done_rate"] or 0) < EARLY_MAX)
+    return out
+
+
+EARLY_TURNS = 5          # R3's early-done window (analyze.EARLY_DONE_TURNS)
+
+
+def gate_counts(runs_dir: str, rows) -> dict:
+    """Amendment R4-SANITY-2's counters, per arm (runs without a gate count nothing):
+    - `accepted_unresolved`: the gate accepted done, the scorer did not resolve the run (the gate's leniency);
+    - `stuck_done`: runs ended by 3 rejected dones in a row with no applied edit;
+    - `rejections`: rejected done calls, and the runs with at least one;
+    - `early_done_attempts`: runs that called done (accepted or not) within 5 turns, with no applied edit before it."""
+    out = {"accepted_unresolved": 0, "stuck_done": 0, "rejections": 0, "runs_rejected": 0, "early_done_attempts": 0,
+           "gated_runs": 0}
+    for r in rows:
+        lp = os.path.join(runs_dir, r["run"] + ".jsonl")
+        if r["outcome"] in ("missing", "error") or not os.path.exists(lp):
+            continue
+        turns = [json.loads(ln) for ln in open(lp)]
+        gated = [t for t in turns if t.get("tool") == "done" and "gate" in t]
+        if not gated:
+            continue
+        out["gated_runs"] += 1
+        rej = sum(1 for t in gated if not t["gate"]["accepted"])
+        out["rejections"] += rej
+        out["runs_rejected"] += rej > 0
+        out["stuck_done"] += r["outcome"] == "stuck_done"
+        out["accepted_unresolved"] += any(t["gate"]["accepted"] for t in gated) and r["outcome"] != "resolved"
+        edits = 0
+        for t in turns:
+            if t.get("tool") == "edit_file" and (t.get("output_head") or "").startswith(("edited", "created")):
+                edits += 1
+            if t.get("tool") == "done" and t.get("turn", 99) <= EARLY_TURNS and edits == 0:
+                out["early_done_attempts"] += 1
+                break
     return out
 
 
@@ -63,7 +99,9 @@ def report(runs_dir: str, tasks_path: str, seeds: list[int], layer1_pool: dict |
             "layer3": {v: layer3(by[v]) for v in by},
             "prism_clean": {"pass": not prism_bad, "bad_runs": prism_bad},
             "smoke": {v: {o: sum(r["outcome"] == o for r in by[v])
-                          for o in ("resolved", "unresolved", "stuck", "budget", "error", "missing")} for v in by},
+                          for o in ("resolved", "unresolved", "stuck", "budget", "stuck_done", "error", "missing")}
+                      for v in by},
+            "gate": {v: gate_counts(runs_dir, by[v]) for v in by},
         }
     return out
 
@@ -84,6 +122,15 @@ def render(rep: dict) -> str:
             f"| {_pct(p['edit_rate'])}/{_pct(b['edit_rate'])} | {_pct(p['loop_rate'])}/{_pct(b['loop_rate'])} "
             f"| {_pct(p['early_done_rate'])}/{_pct(b['early_done_rate'])} | {ok(p['pass'])}/{ok(b['pass'])} "
             f"| {ok(f['prism_clean']['pass'])} | {f['smoke']['PRISM']['resolved']}/{f['smoke']['BASELINE']['resolved']} |")
+    gated = [(fam, f) for fam, f in rep["families"].items() if any(g["gated_runs"] for g in f["gate"].values())]
+    if gated:
+        lines += ["", "| Family | Gate rejections P/B (runs) | stuck_done P/B | Early-done attempts P/B | "
+                  "Gate accepted, scorer unresolved P/B |", "|---|---|---|---|---|"]
+        for fam, f in gated:
+            p, b = f["gate"]["PRISM"], f["gate"]["BASELINE"]
+            lines.append(f"| {fam} | {p['rejections']} ({p['runs_rejected']}) / {b['rejections']} ({b['runs_rejected']}) | "
+                         f"{p['stuck_done']} / {b['stuck_done']} | {p['early_done_attempts']} / {b['early_done_attempts']} | "
+                         f"{p['accepted_unresolved']} / {b['accepted_unresolved']} |")
     return "\n".join(lines)
 
 
