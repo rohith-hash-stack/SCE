@@ -48,7 +48,41 @@ product features, and are left out: typer `90f087ac` (`scripts/prepare_release.p
 commit messages are **not** screened out: the failing tests are visible, so a title plus tests is the task as a
 developer saw it.
 
-@@SAMPLES@@
+**All 20 built on the first pass** (`sanity_tasks.py`; no backup was needed): in each, the developer's change resolves
+and the unchanged start does not. Task list: `sanity/tasks.json` (sha256 `8d89c2d27cd9…`, in the file). Six are JS/TS.
+
+| Task | Repo | Lang | Target (delete) / spec (feature) | Fail-to-pass | Pass-to-pass | Gold files |
+|---|---|---|---|---|---|---|
+| r4s-delete-01 | zod | js | `packages/zod/src/v4/classic/schemas.ts::object.shape` | – | 196 | 4 |
+| r4s-delete-02 | instructor | py | `instructor/v2/providers/anthropic/handlers.py::AnthropicHandlerBase._r…` | – | 141 | 5 |
+| r4s-delete-03 | pydantic-ai | py | `pydantic_evals/…/evaluators/common.py::Python.evaluate` | – | 69 | 2 |
+| r4s-delete-04 | hono | js | `src/utils/url.ts::safeEncodeURI` | – | 278 | 2 |
+| r4s-delete-05 | multidict | py | `multidict/_multidict_py.py::GenericAlias` | – | 26 | 2 |
+| r4s-delete-06 | pydantic | py | `pydantic/json_schema.py::GenerateJsonSchema._generate_definitions` | – | 639 | 2 |
+| r4s-delete-07 | scrapy | py | `scrapy/utils/response.py::_remove_html_comments` | – | 24 | 1 |
+| r4s-delete-08 | werkzeug | py | `src/werkzeug/_internal.py::_get_environ` | – | 14 | 3 |
+| r4s-delete-09 | litestar | py | `litestar/params.py::Dependency` | – | 188 | 4 |
+| r4s-delete-10 | prettier | js | `website/playground/EditorState.js::EditorState.constructor` | – | 20 | 6 |
+| r4s-feature-01 | hono | js | JSX: isolate context per request during async SSR (security fix) | 18 | 322 | 4 |
+| r4s-feature-02 | litestar | py | plain-text traceback in the HTML debug response | 1 | 30 | 2 |
+| r4s-feature-03 | scrapy | py | serialize cached responses with `Response.to_dict()` | 21 | 84 | 3 |
+| r4s-feature-04 | typer | py | fix shell completions for fish | 6 | 14 | 3 |
+| r4s-feature-05 | h3 | js | precompose middleware chains | 1 | 13 | 5 |
+| r4s-feature-06 | pydantic-ai | py | response-based fallback for `FallbackModel` | 41 | 0 | 3 |
+| r4s-feature-07 | aiohttp | py | `output_size` property | 88 | 514 | 1 |
+| r4s-feature-08 | fastmcp | py | client utilities for downloading skills | 18 | 0 | 2 |
+| r4s-feature-09 | scrapy | py | `AsyncCrawlerProcess` and `Crawler.crawl_async()` | 3 | 0 | 4 |
+| r4s-feature-10 | h3 | js | basic auth: jitter and constant-time comparison | 23 | 28 | 2 |
+
+**Notes for reading the results:**
+- **K4-affected repositories in the sample:** pydantic-ai (delete-03, feature-06) and fastmcp (feature-08).
+- **r4s-delete-10** removes code from prettier's website playground, not the formatter. It is what the developer
+  deleted, and the playground's tests score it; kept, flagged.
+- **Three feature tasks have no pass-to-pass tests** (feature-06, -08, -09: the test files are new), so they score on
+  the new tests alone.
+- **The candidates' language label was wrong** for zod and hono (and other new JS repos). The builder now takes it
+  from the clone (`language_of`); the built environment and scoring check were already right, since both read the
+  clone.
 
 ## Harness
 
@@ -58,7 +92,10 @@ developer saw it.
 | delete scoring (`must_be_absent`) | `r3/runner.py` | done; R3's tests pass |
 | Kaggle cell | `kaggle/r4_sanity_cell.template.py` | written; renders after the tasks are committed |
 | report | `r4/sanity_report.py` | done; tested on synthetic runs |
-| local dry run (1–2 tasks per family, both arms, no model) | — | next |
+| local dry run (both arms, scripted gold and empty "models", no model calls; `r3/dryrun.py`) | — | Python: werkzeug delete and typer feature, 8/8 as expected (gold resolved, empty unresolved). JS: hono delete-04 and h3 feature-10, 8/8 as expected |
+
+The scripts that produced Layer 1 and the sample are kept with the results: `sanity/scope_family.py` and
+`sanity/sample.py` (they read scratch paths; a record, not a tool).
 
 **The PRISM arm** runs R3a's tool layer with the fixes merged at the cell's pinned commit (today: K4).
 `prism_check_changes` is part of the arm only if it is built and wired before the session; the report states which.

@@ -79,7 +79,7 @@ def _gold(work: str, parent: str, commit: str, source: list[str], start_patch: s
 
 
 def build_one(family: str, cand: dict, gate: dict, clone: str, cache: str, scratch: str) -> dict:
-    from harness.experiments.r3.shared_tools import make_env
+    from harness.experiments.r3.shared_tools import language_of, make_env
     work = os.path.join(scratch, "w")
     shutil.rmtree(work, ignore_errors=True)
     _git("-C", clone, "worktree", "prune", check=False)
@@ -93,7 +93,7 @@ def build_one(family: str, cand: dict, gate: dict, clone: str, cache: str, scrat
         tests = [f for f in changed if TEST.search(f)]
         source = [f for f in changed if f.endswith(SOURCE) and f not in tests]
         test_patch = _git("diff", "--binary", "--no-renames", cand["parent"], cand["commit"], "--", *tests, cwd=work).stdout if tests else ""
-        task = {"family": family, "repo": cand["repo"], "language": "js" if cand["language"] == "js" else "python",
+        task = {"family": family, "repo": cand["repo"], "language": language_of(clone),   # the candidates' label is wrong for some new JS repos
                 "commit": cand["commit"], "parent": cand["parent"], "subject": cand.get("subject", ""),
                 "after_index_patch": None, "start_files": [], "start_functions": [], "test_files": tests}
         if family == "delete":
