@@ -88,3 +88,49 @@ once. Qwen3-14B with thinking on vs off isolates thinking itself, on the same we
 - **Tested locally against a fake Ollama server** (no model calls): the plan prompt and history, the think flag and
   `num_ctx` (28,672), thinking logged, and the report rows. R3's tests pass (48), and the loop has a new plan-mode
   test.
+
+## Results (2026-11-12)
+
+**The run:** 12/12 runs, code `f7a7a0f9`, PRISM arm, seed 42. Results in `reports/r4/planning/`.
+- **Every smoke check passed with JSON forced on**, so no variant needed the fallback.
+- **QwQ's feature run** ended on a model timeout: one call ran over 900 s, at about 11 tok/s with about 2,200 thinking
+  tokens a turn.
+- **These runs used the first sanity run's tasks:** no gate, and the index-name delete prompt.
+
+| Variant | Plan or thinking first | Edits applied (all 3 tasks) | Hallucinated done | Verified before done | Resolved | Minutes per run |
+|---|---|---|---|---|---|---|
+| Qwen 14B, current prompt (sanity 1) | 0/3 | 1/6 (17%) | 2/3 | 0/3 | 0/3 | 0.2–3 |
+| Qwen 14B + planning | 3/3 (every turn) | 0/0 | 2/3 | 0/3 | 0/3 | 0.5–8.5 |
+| Qwen3-14B, thinking off | 0/3 | 5/24 (21%) | 2/3 | 2/3 | 0/3 | 2.4–3.8 |
+| Qwen3-14B, thinking on | 3/3 (~700–1,200 thinking tokens/turn) | 14/18 (78%) | **3/3** | 0/3 | 0/3 | 1.8–34 |
+| QwQ-32B | 3/3 (~1,000–2,200 thinking tokens/turn) | 9/22 (41%) | 1/3 (the other two hit the turn cap or a model timeout) | 1/3 | 0/3 | 33–87 |
+
+**What each one did:**
+- **Planning (A) changes nothing that matters.**
+  - The plans are fluent, but they are built on the wrong facts. In delete-02: "I will first identify all usages of
+    `AnthropicHandlerBase._register_streaming_from_kwargs`…". It greps that dotted name (R1), finds nothing, and plans
+    "it appears the method does not exist". Done after 3 turns.
+  - So a plan does not make the model check its premises.
+- **Thinking (B) helps with editing and finding, not with finishing.**
+  - **Editing:** on the same weights, edit success rises from 21% to 78% with thinking on.
+  - **Finding:** Qwen3 found the pydantic target despite the bad prompt; QwQ found both delete targets.
+  - **Finishing:** every thinking run that called done claimed success, while 639 tests (pydantic) or 69 (instructor)
+    were broken. "Ensuring tests pass" and "Tests pass after removal" were written without running the tests, or
+    against their output.
+  - **Cost:** 5–30× the time per run, with QwQ at 33–87 minutes a run.
+
+## Verdict, by the rule set before the runs
+
+- **The rule:** "fixes" means no hallucinated done on at least 2 of 3 tasks, and edit success above today's.
+- **No variant meets it.** Thinking-on raises edit success but has 3 of 3 hallucinated dones. QwQ's 1 of 3 comes from
+  runs that ended at the cap or on a timeout, not from verifying.
+- **So planning is not the answer, and the verification gate is needed regardless.**
+
+**For R4:**
+- **Do not add the planning prompt.**
+- **Keep the model** for now. Thinking is the one lever that clearly raised edit success, though on 3 tasks at 1 seed.
+  It is the candidate model change if sanity 3 lands in "applied edits rise but solves don't" (task difficulty or
+  model):
+  - Qwen3-14B with thinking: 14B, fits as today, about 10–30 minutes a run;
+  - not QwQ-32B: 30–90 minutes a run and call timeouts make 240+ R4 runs impractical, at about 240 GPU-hours.
+- **A switch would break comparability with R3a** and needs its own pre-registered decision.
