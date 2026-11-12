@@ -33,9 +33,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "b766a8f931f8b245616785110fb93148cb5c5f1e"
+CODE_COMMIT = "1302951147ae393ba5f3de6c8a017697802e25ba"
 CODE_TREES = {"src": "82963a7414f3425c789548097ae3cc1d88402091",
-              "harness": "5f42c4345907fbec31c9beac4431f043da395347"}
+              "harness": "70c73915deab3ad570e0ff1b9e626b291298a474"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 SUMMARIZER = "qwen3:14b-q8_0"         # R4-SANITY-4: Qwen3-14B, thinking ON + the plan field
