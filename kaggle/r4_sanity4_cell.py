@@ -1,6 +1,6 @@
 # ============================================================
 # PRISM R4 sanity run 4 (R4-SANITY-4, harness/experiments/r4/AMENDMENTS.md): the same 20 tasks on Qwen3-14B with
-# thinking ON and the plan field, on the fixed harness (sanity 3's three bugs fixed: the indentation message shows the
+# thinking ON, the plan field and the harness-built progress summary (ledger), on the fixed harness (sanity 3's three bugs fixed: the indentation message shows the
 # file's lines; the gate rejects vanished tests; run_tests warns when tests stop running). Gate active. Both arms,
 # seed 42, turn cap 28. Thinking runs take ~20-45 min each: about 13-28 GPU-hours, 2-3 sessions. Run the cell again
 # to continue after a session ends (finished runs are kept).
@@ -33,13 +33,13 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "b0ee68eef8fdcac29c2f3bad374bf0a919dc6faa"
+CODE_COMMIT = "b766a8f931f8b245616785110fb93148cb5c5f1e"
 CODE_TREES = {"src": "82963a7414f3425c789548097ae3cc1d88402091",
-              "harness": "602e80567de1b56db9a15c10eb980f15ae184b90"}
+              "harness": "5f42c4345907fbec31c9beac4431f043da395347"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 SUMMARIZER = "qwen3:14b-q8_0"         # R4-SANITY-4: Qwen3-14B, thinking ON + the plan field
-MODEL_FLAGS = ["--model", SUMMARIZER, "--think", "on", "--plan", "--answer-tokens", "12288"]
+MODEL_FLAGS = ["--model", SUMMARIZER, "--think", "on", "--plan", "--answer-tokens", "12288", "--ledger"]
 OLLAMA_VERSION = "0.34.0"
 PORTS = (11434,)
 GPU_GROUPS = ("0,1",)
