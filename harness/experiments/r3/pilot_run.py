@@ -42,9 +42,11 @@ def main(argv=None) -> int:
     p.add_argument("--think", choices=("on", "off"), default=None)
     p.add_argument("--plan", action="store_true")
     p.add_argument("--answer-tokens", type=int, default=None)
+    p.add_argument("--ledger", action="store_true")
     a = p.parse_args(argv)
     extra = ((["--model", a.model] if a.model else []) + (["--think", a.think] if a.think else [])
-             + (["--plan"] if a.plan else []) + (["--answer-tokens", str(a.answer_tokens)] if a.answer_tokens else []))
+             + (["--plan"] if a.plan else []) + (["--answer-tokens", str(a.answer_tokens)] if a.answer_tokens else [])
+             + (["--ledger"] if a.ledger else []))
     from harness.experiments.r3.memtest import leftovers
     clones = dict(r.split("=", 1) for r in a.repos)
     tasks = json.load(open(a.tasks))["tasks"]

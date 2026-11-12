@@ -222,7 +222,7 @@ def _restore(work: str, tree: str, files: list[str]) -> None:
 
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
-             score_run: bool = True, plan: bool = False) -> dict:
+             score_run: bool = True, plan: bool = False, ledger: bool = False) -> dict:
     from harness.experiments.r3.loop import AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
@@ -250,8 +250,13 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
                              explicit=bool(task.get("explicit_tools")),      # R4-SANITY-3
                              expected=_expected_tests(task))                 # R4-SANITY-4 (bug 3)
         stage = "loop"
+        gate = _gate(task, work, env, start_tree)
+        progress = None
+        if ledger:                                        # R4-SANITY-4: the per-turn progress summary
+            from harness.experiments.r4.progress_ledger import ProgressLedger
+            progress = ProgressLedger(turn_cap, gate)
         summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
-                           gate=_gate(task, work, env, start_tree)).run(out)
+                           gate=gate, ledger=progress).run(out)
         result = {**summary}
         if score_run:
             stage = "scoring"
@@ -296,12 +301,14 @@ def main(argv=None) -> int:
     p.add_argument("--think", choices=("on", "off"), default=None, help="Ollama's thinking mode (reasoning models)")
     p.add_argument("--answer-tokens", type=int, default=None, help="the answer limit, thinking included")
     p.add_argument("--no-json-format", action="store_true", help="do not constrain the answer to JSON")
+    p.add_argument("--ledger", action="store_true", help="R4-SANITY-4: the per-turn progress summary")
     a = p.parse_args(argv)
     from harness.experiments.r3.loop import ANSWER_TOKENS, MODEL, OllamaChat
     task = json.load(open(a.task))
     chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
                       answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format)
-    res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan)
+    res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan,
+                   ledger=a.ledger)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))
     return 0
 

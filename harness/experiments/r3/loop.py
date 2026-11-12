@@ -205,12 +205,13 @@ def parse_call(text: str) -> tuple[str, dict] | None:
 class AgentRun:
     def __init__(self, task: dict, version: str, seed: int, model, shared, index_tools=None,
                  tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False,
-                 gate=None):
-        """`gate`: amendment R4-SANITY-2's verification at done (`r4/done_gate.DoneGate`), or None (R3a)."""
+                 gate=None, ledger=None):
+        """`gate`: amendment R4-SANITY-2's verification at done (`r4/done_gate.DoneGate`), or None (R3a).
+        `ledger`: amendment R4-SANITY-4's per-turn progress summary (`r4/progress_ledger.ProgressLedger`), or None."""
         """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's five tools, or `related_code`)."""
         self.task, self.version, self.seed, self.model = task, version, seed, model
         self.shared, self.index_tools, self.turn_cap, self.plan = shared, index_tools, turn_cap, plan
-        self.gate = gate
+        self.gate, self.ledger = gate, ledger
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
         self.allowed = set(SHARED_DOC) | set(PRISM_DOC if version == "PRISM" else BASELINE_DOC)
@@ -219,10 +220,11 @@ class AgentRun:
         return len(self.tok.encode(text).ids) if self.tok else len(text) // 4
 
     # ------------------------------------------------------------------ the window rule
-    def window(self, system: str, task_msg: str, history: list[dict]) -> tuple[list[dict], int]:
-        """The messages for one call, and how many tool outputs were stubbed."""
+    def window(self, system: str, task_msg: str, history: list[dict], tail: str = "") -> tuple[list[dict], int]:
+        """The messages for one call, and how many tool outputs were stubbed. `tail` (the progress ledger) is appended
+        to the newest message, rebuilt every turn, so the window rule never stubs it."""
         msgs = [dict(m) for m in history]
-        base = self.n(system) + self.n(task_msg)
+        base = self.n(system) + self.n(task_msg) + (self.n(tail) if tail else 0)
         size = lambda: base + sum(self.n(m["content"]) for m in msgs) + 8 * (len(msgs) + 2)
         stubbed = 0
         for m in msgs:                                   # oldest tool outputs first
@@ -236,6 +238,8 @@ class AgentRun:
             msgs = msgs[2:]
         out = [{"role": "system", "content": system}, {"role": "user", "content": task_msg}]
         out += [{"role": m["role"], "content": m["content"]} for m in msgs]
+        if tail and len(out) > 2:
+            out[-1] = {**out[-1], "content": out[-1]["content"] + "\n\n" + tail}
         return out, stubbed
 
     # ------------------------------------------------------------------ one tool call
@@ -274,7 +278,8 @@ class AgentRun:
                 if turn >= self.turn_cap:
                     end = "turn_cap"
                     break
-                msgs, stubbed = self.window(system, task_msg, history)
+                tail = self.ledger.render(turn + 1) if self.ledger is not None and history else ""
+                msgs, stubbed = self.window(system, task_msg, history, tail)
                 est = sum(self.n(m["content"]) for m in msgs) + ANSWER_TOKENS
                 if used + est > BUDGET_TOKENS:
                     end = "budget"
@@ -318,6 +323,9 @@ class AgentRun:
                            output_head=res["output"][:OUTPUT_HEAD_CHARS],
                            output_cut="[cut at 4,000 tokens]" in res["output"], rss_mb=_rss_mb(),
                            **{k: v for k, v in res.items() if k != "output"})
+                if self.ledger is not None:
+                    self.ledger.update(turn, tool, args, res["output"], res.get("gate"))
+                    rec["ledger"] = tail
                 log.write(json.dumps(rec) + "\n")
                 log.flush()
                 said = {"plan": plan, "tool": tool, "args": args} if plan else {"tool": tool, "args": args}

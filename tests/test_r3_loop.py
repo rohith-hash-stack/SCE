@@ -150,3 +150,34 @@ def test_three_rejected_dones_without_an_edit_end_stuck_done_and_an_edit_resets_
     assert s["end"] == "stuck_done" and s["turns"] == 6
     s = L.AgentRun(task(), "BASELINE", 42, Model([done]), Shared()).run(str(tmp_path / "d"))   # no gate: R3a
     assert s["end"] == "done" and "gate_rejections" not in s
+
+
+def test_progress_ledger_is_appended_every_turn_from_tool_results_and_survives_the_window(tmp_path):
+    """R4-SANITY-4: the harness-built summary (r4/progress_ledger.py), off by default."""
+    from harness.experiments.r4.progress_ledger import ProgressLedger
+    edit = json.dumps({"tool": "edit_file", "args": {"path": "a", "old": "x", "new": "y"}})
+    big = json.dumps({"tool": "read_file", "args": {"path": "a", "size": 60000}})
+    m = Model([edit, big, big, json.dumps({"tool": "done", "args": {}})])
+    L.AgentRun(task(), "BASELINE", 42, m, EditShared(), turn_cap=10, ledger=ProgressLedger(10)).run(str(tmp_path / "l"))
+    assert not any("Progress so far" in msg["content"] for msg in m.seen[0])          # turn 1: nothing done yet
+    last = m.seen[-1][-1]["content"]
+    assert "Progress so far (from the tool results, not from you). This is turn 4 of 10." in last
+    assert "edits applied (1): a line 1" in last and "tests: you have not run them yet" in last
+    m2 = Model([edit, json.dumps({"tool": "done", "args": {}})])
+    L.AgentRun(task(), "BASELINE", 42, m2, EditShared()).run(str(tmp_path / "m"))     # off: R3a
+    assert not any("Progress so far" in msg["content"] for turn in m2.seen for msg in turn)
+
+
+def test_progress_ledger_records_rejections_tests_and_done():
+    from harness.experiments.r4.progress_ledger import ProgressLedger
+    lg = ProgressLedger(28)
+    lg.update(2, "edit_file", {"path": "h.py"}, "error: the text to replace occurs 3 times in h.py, at lines 5, 9")
+    lg.update(3, "run_tests", {}, "t.py: 3 passed, 1 failed, 0 skipped\nfailing:\n- test_x\nwarning: 2 tests in this file "
+              "that ran at the start did not run now")
+    lg.update(4, "done", {}, "Done rejected", {"accepted": False, "message": "Done rejected: x\n- `f` is still defined in "
+                                                                             "h.py at line 7\nContinue."})
+    r = lg.render(5)
+    assert "edits applied: none yet" in r and "h.py: duplicate match ×1" in r
+    assert "your last test run (turn 3): t.py: 3 passed, 1 failed, 0 skipped | warning: 2 tests" in r
+    assert "done rejected 1× (last at turn 4: `f` is still defined in h.py at line 7)" in r
+    assert "caller" not in r.lower()

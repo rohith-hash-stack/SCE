@@ -149,3 +149,23 @@ calibration, not model config. (6) If edits <50% → bugs weren't the only probl
 - actual GPU-hours;
 - a per-task breakdown of what failed and why;
 - the comparison with the planning test's 78% edit rate on the old harness.
+
+### Addition before the run (user, 2026-11-12): the per-turn progress summary (ledger)
+
+- **What it is** (`progress_ledger.py`): every turn after the first, the harness appends a short summary to the newest
+  message. It is rebuilt from tool results each turn, never written by the model, so it survives the window rule:
+  - the turn count ("turn N of 28");
+  - the edits applied (file and line) and rejected (file and reason);
+  - the model's own last `run_tests` result, with any vanished-test warning;
+  - done rejections, with the first unmet item;
+  - for delete, the target's current status: the gate's file check, a parse of one file.
+- **What it never does:** run tests by itself, name callers or places to fix, or use the hidden tests. It is the same
+  in both arms.
+- **Why:** the model loses its earlier results once outputs are stubbed, and its earlier thinking is never kept (the
+  thinking run called its own edits "the user has already tried that"). A self-written summary would carry its false
+  beliefs forward ("Removed the method and its usages" after 1 of 5 edits applied); a harness-built one cannot.
+- **Attribution caveat:** sanity 4 now changes three things against sanity 3: the model with thinking, the plan field
+  and the ledger (plus the bug fixes). Its result tells whether this configuration works, not which part helps. Per
+  the decision above, there are no comparison runs unless it fails.
+- **Also reported:** how often a turn's plan contradicts the ledger's facts, for example planning an edit that is
+  already applied, or claiming tests pass after a failing run.

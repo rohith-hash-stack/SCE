@@ -151,6 +151,7 @@ def main(argv=None) -> int:
     p.add_argument("--scripts", nargs="*", default=["gold", "empty"])
     p.add_argument("--pad", type=int, default=0, help="read-only calls before each script's own calls")
     p.add_argument("--turn-cap", type=int, default=30)
+    p.add_argument("--ledger", action="store_true", help="R4-SANITY-4: the per-turn progress summary")
     a = p.parse_args(argv)
     from harness.experiments.r3.runner import run_task
     clones = dict(s.split("=", 1) for s in a.repos)
@@ -167,7 +168,8 @@ def main(argv=None) -> int:
                        ("empty", a.seed + 1, lambda: Script(list(pad)))]
             for kind, seed, make in [x for x in scripts if x[0] in a.scripts]:
                 model = make()
-                res = run_task(t, version, seed, os.path.abspath(clones[t["repo"]]), a.out, cache, model, a.turn_cap)
+                res = run_task(t, version, seed, os.path.abspath(clones[t["repo"]]), a.out, cache, model, a.turn_cap,
+                               ledger=a.ledger)
                 want = "resolved" if kind == "gold" else "unresolved"
                 # with the verification gate (R4-SANITY-2), an immediate done is rejected 3 times: stuck_done
                 ok = res.get("outcome") == want or (kind == "empty" and t.get("done_gate")
