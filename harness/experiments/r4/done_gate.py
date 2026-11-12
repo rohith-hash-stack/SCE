@@ -30,13 +30,26 @@ def _git(*args, cwd):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, errors="replace")
 
 
+def _name_in(test_id: str, text: str) -> bool:
+    """Whether a test's own name still appears in its file's text (pytest: the function name, parameters stripped;
+    vitest/jest: the full name, or its last part)."""
+    name = test_id.rsplit("::", 1)[-1].split("[", 1)[0].strip()
+    if not name:
+        return True
+    if name in text:
+        return True
+    tail = name.split(" > ")[-1]
+    return len(tail) >= 6 and tail[-40:] in text
+
+
 def error_lines(text: str, n: int = ERROR_LINES) -> list[str]:
     """The first lines of a test run's output that state an error (pytest's `E ` lines, `...Error:` lines)."""
     text = re.sub(r"\x1b\[[0-9;]*m", "", text or "")
     out = []
     for ln in text.splitlines():
         s = ln.strip()
-        if (s.startswith("E ") or re.search(r"\b\w*(Error|Exception)\b[:(]", s)) and s not in out:
+        if (s.startswith("E ") or re.search(r"\b\w*(Error|Exception)\b[:(]", s) or "ERROR:" in s
+                or s.startswith("Transform failed")) and s not in out:
             out.append(s[:200])
         if len(out) >= n:
             break
@@ -74,21 +87,36 @@ class DoneGate:
         """Problems: visible tests that passed at the start and now fail, and test files that now fail to run."""
         files = sorted(start_pass)
         runs = self._run(files)
-        failing, broken, errs = [], [], []
+        changed = set(self.changed_files())
+        failing, broken, vanished, errs = [], [], [], []
         for f in files:
             if f not in runs:
                 continue                                   # the model deleted the file
             r = runs[f]
-            present = [t for t in start_pass[f] if id_status(r.get("tests") or {}, t, self.work) != "missing"]
-            if not r.get("parsed") or (not present and r.get("failed")):
+            tests = r.get("tests") or {}
+            present = [t for t in start_pass[f] if id_status(tests, t, self.work) != "missing"]
+            absent = [t for t in start_pass[f] if t not in present]
+            # R4-SANITY-4 (bug 2): an absent test counts as deleted by the model only if the model changed this test
+            # file and the test's name is gone from it. Otherwise it vanished: e.g. a syntax error that breaks one of
+            # the suite's projects (zod's type-checked copy) while the plain copy still passes.
+            text = open(os.path.join(self.work, f), errors="replace").read() if f in changed else None
+            gone = [t for t in absent if text is None or _name_in(t, text)]
+            if not r.get("parsed") or (not present and (r.get("failed") or gone)):
                 broken.append(f)                           # the file no longer loads or runs
                 errs += error_lines(r.get("text") or r.get("tail", ""))
                 continue
-            bad = [t for t in present if id_status(r["tests"], t, self.work) != "passed"]
+            bad = [t for t in present if id_status(tests, t, self.work) != "passed"]
             if bad:
                 failing += [f"{f}::{t}" for t in bad]
                 errs += error_lines(r.get("text") or r.get("tail", ""))
+            if gone:
+                vanished += [f"{f}::{t}" for t in gone]
+                errs += error_lines(r.get("text") or r.get("tail", ""))
         out = [f"test file {f} now fails to load or run" for f in broken]
+        if vanished:
+            out.append(f"{len(vanished)} tests that passed at the start did not run (the file, or code it imports, may "
+                       f"fail to load or compile): " + ", ".join(vanished[:MAX_NAMED])
+                       + (" …" if len(vanished) > MAX_NAMED else ""))
         if failing:
             out.append(f"{len(failing)} tests that passed at the start now fail: "
                        + ", ".join(failing[:MAX_NAMED]) + (" …" if len(failing) > MAX_NAMED else ""))

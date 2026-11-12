@@ -45,3 +45,29 @@ def test_a_cut_read_says_what_it_showed_and_where_to_continue(tmp_path):
     assert out.rstrip().endswith(f"continue with start={last + 1}]")
     small = _tools(tmp_path, {"s.py": "a = 1\n"}, tok=TOK).call("read_file", path="s.py")
     assert small.split("\n", 1)[0] == "s.py (lines 1-1 of 1)"
+
+
+def test_whitespace_only_mismatch_shows_the_files_own_lines(tmp_path):
+    """R4-SANITY-4 bug 1 (sanity 3's prettier): the indentation to copy is shown, not just named."""
+    t = _tools(tmp_path, {"m.py": SRC})
+    out = t.call("edit_file", path="m.py", old="def f(self, x):\n    return x", new="")
+    assert "matches once apart from whitespace" in out and "2\t    def f(self, x):\n3\t        return x" in out
+
+
+def test_run_tests_warns_when_tests_that_ran_at_the_start_do_not_run(tmp_path):
+    """R4-SANITY-4 bug 3: the model sees that tests vanished, instead of only '49 passed'."""
+    class E:
+        def __init__(self): self.n = 2
+        def run_test(self, rel):
+            tests = {"a": "passed", "b": "passed"} if self.n == 2 else {"a": "passed"}
+            return {"parsed": True, "passed": len(tests), "failed": 0, "skipped": 0, "tests": tests, "tail": ""}
+    (tmp_path / "t.py").write_text("x")
+    env = E()
+    t = SharedTools(str(tmp_path), env, ["t.py"], None, explicit=True, expected={"t.py": ["a", "b"]})
+    assert "warning" not in t.call("run_tests")
+    env.n = 1
+    out = t.call("run_tests")
+    assert "1 tests in this file that ran at the start did not run now (e.g. b)" in out
+    t2 = SharedTools(str(tmp_path), env, ["t.py"], None, explicit=True)          # no start list: earlier count
+    env.n = 2; t2.call("run_tests"); env.n = 1
+    assert "reported 2 tests earlier in this task and 1 now" in t2.call("run_tests")

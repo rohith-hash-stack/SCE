@@ -37,7 +37,14 @@ def main(argv=None) -> int:
     p.add_argument("--seeds", type=int, nargs="+", default=[42])
     p.add_argument("--deadline", type=float, default=None)
     p.add_argument("--turn-cap", type=int, default=30)
+    # R4-SANITY-4: the model configuration, passed to every run (defaults: R3a's model, no thinking, no plan)
+    p.add_argument("--model", default=None)
+    p.add_argument("--think", choices=("on", "off"), default=None)
+    p.add_argument("--plan", action="store_true")
+    p.add_argument("--answer-tokens", type=int, default=None)
     a = p.parse_args(argv)
+    extra = ((["--model", a.model] if a.model else []) + (["--think", a.think] if a.think else [])
+             + (["--plan"] if a.plan else []) + (["--answer-tokens", str(a.answer_tokens)] if a.answer_tokens else []))
     from harness.experiments.r3.memtest import leftovers
     clones = dict(r.split("=", 1) for r in a.repos)
     tasks = json.load(open(a.tasks))["tasks"]
@@ -58,7 +65,7 @@ def main(argv=None) -> int:
             t0 = time.time()
             proc = subprocess.run([sys.executable, "-B", "-m", "harness.experiments.r3.runner", task_path, v,
                                    str(seed), "--clone", os.path.abspath(clones[t["repo"]]), "--out", a.out,
-                                   "--cache", cache, "--base-url", a.base_url, "--turn-cap", str(a.turn_cap)],
+                                   "--cache", cache, "--base-url", a.base_url, "--turn-cap", str(a.turn_cap), *extra],
                                   capture_output=True, text=True)
             time.sleep(2)
             rec = {"run": run_id, "rc": proc.returncode, "seconds": round(time.time() - t0, 1),

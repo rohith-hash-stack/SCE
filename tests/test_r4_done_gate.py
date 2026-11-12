@@ -101,3 +101,24 @@ def test_no_change_also_states_the_delete_target_status(tmp_path):
     t = {**_delete_task(), "target_display": "the function `gone`"}
     ok, msg = DoneGate(t, w, Env(w), st).check()
     assert not ok and "no file has been changed" in msg and "the function `gone` is still defined in pkg/m.py at line 5" in msg
+
+
+def test_vanished_tests_in_an_unchanged_test_file_are_a_regression_not_a_deletion(tmp_path):
+    """R4-SANITY-4 bug 2 (sanity 3's zod): some start-passing tests stop running while the file is untouched."""
+    w, st = _repo(tmp_path, {"pkg/m.py": SRC, "tests/t.txt": "test_keep: ok\ntest_gone: ok\n"})
+    open(os.path.join(w, "pkg/m.py"), "w").write("def keep():\n    return 1\n")
+
+    class HalfEnv(Env):                      # one of the suite's two copies no longer runs
+        def run_test(self, rel):
+            return {"parsed": True, "failed": 0, "tests": {"test_keep": "passed"},
+                    "text": "Transform failed with 1 error:\nm.py:1:1: ERROR: Expected \":\" but found \"this\""}
+    ok, msg = DoneGate(_delete_task(), w, HalfEnv(w), st).check()
+    assert not ok and "1 tests that passed at the start did not run" in msg and "tests/t.txt::test_gone" in msg
+    assert "ERROR: Expected" in msg
+
+
+def test_a_test_the_model_removed_from_the_file_still_counts_as_deleted(tmp_path):
+    w, st = _repo(tmp_path, {"pkg/m.py": SRC, "tests/t.txt": "test_keep: ok\ntest_gone: ok\n"})
+    open(os.path.join(w, "pkg/m.py"), "w").write("def keep():\n    return 1\n")
+    open(os.path.join(w, "tests/t.txt"), "w").write("test_keep: ok\n")
+    assert DoneGate(_delete_task(), w, Env(w), st).check() == (True, "done")

@@ -105,3 +105,47 @@ prompt fix is likely the primary driver — the gate's status message shouldn't 
 - **Applied edits rise, solves don't:** task difficulty. Next is difficulty calibration or a model change, not more
   tool fixes.
 - **Applied edits don't rise:** diagnosis before any more iterations.
+
+## R4-SANITY-4 (2026-11-12): the three harness bugs fixed; thinking + planning tested first
+
+**Status:** approved by the user (2026-11-12). Both arms, shared wording. Same 20 tasks (`tasks_v3.json`), seed 42,
+turn cap 28; the gate stays active.
+
+**Bug fixes** (all from `SANITY3_RESULTS.md`):
+1. **The indentation message** (`r3/shared_tools.py`): when `old` matches once apart from whitespace, the error shows
+   the file's own lines there, numbered as `read_file` shows them, so the indentation can be copied. Before, it only
+   said "copy the indentation exactly".
+2. **The gate and vanished tests** (`done_gate.py`): a start-passing test that did not run counts as deleted by the
+   model only if the model changed that test file and the test's name is gone from it. Otherwise it is a regression
+   ("N tests that passed at the start did not run …"), and done is rejected. Sanity 3's zod case: one of the suite's
+   two copies stopped running after a syntax error. Vitest's "Transform failed … ERROR:" lines are now quoted.
+3. **Vanished tests are visible to the model** (`run_tests`): a file whose start-passing tests (delete:
+   `visible_start_pass`; feature: the listed tests) did not run, or whose test count fell since an earlier run in the
+   same task, gets a warning: "N tests in this file that ran at the start did not run now …".
+
+**The configuration:**
+- **Qwen3-14B (`qwen3:14b-q8_0`)** with thinking on (answer limit 12,288 tokens, thinking included; the prompt window
+  unchanged) and the plan field (`--plan`). Passed to every run via `pilot_run` (`--model --think --plan
+  --answer-tokens`).
+- **40 runs,** about 13–28 GPU-hours, 2–3 sessions.
+- **No current-model runs and no comparison runs** unless this configuration fails.
+- **The optional attribution run** (thinking without planning) is not run.
+
+### Expectations, recorded before the run (user, 2026-11-12)
+
+"Testing thinking+planning config first. (1) Edit rate target ≥78% (thinking alone was 78% on old harness; planning
+should be neutral or slightly worse). (2) Solve rate target ≥3 of 20. (3) If <60% edits → planning is actively
+hurting, revert to thinking-without-planning. (4) If edits ≥78% and solves ≥4 → this config goes to R4 directly,
+comparison optional. (5) If edits ≥60% but solves <4 → model can edit but tasks too hard; next is difficulty
+calibration, not model config. (6) If edits <50% → bugs weren't the only problem; think again."
+
+**Measures:**
+- **Edit rate** = applied / attempted `edit_file` calls, over all 40 runs; the "solve rate" counts tasks solved, per arm.
+- **Rules (3) and (6) overlap below 50%.** Both are reported.
+
+**To report:**
+- the edit rate (target ≥78%), the solve rate per family (target ≥3 of 20), the loop rate;
+- false dones: the gate should catch all, and the "gate accepted, scorer unresolved" count is reported;
+- actual GPU-hours;
+- a per-task breakdown of what failed and why;
+- the comparison with the planning test's 78% edit rate on the old harness.

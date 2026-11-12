@@ -116,11 +116,15 @@ class SharedTools:
     NAMES = ("read_file", "list_dir", "grep", "edit_file", "run_tests", "done")
 
     def __init__(self, workdir: str, env, visible_tests: list[str], tokenizer_path: str | None = None,
-                 explicit: bool = False):
+                 explicit: bool = False, expected: dict[str, list[str]] | None = None):
         """`explicit`: amendment R4-SANITY-3's tool messages (a cut read says so and where to continue; edit errors show
         the closest lines, the duplicates' lines, and what an empty `old` means). Off for R3a and sanity runs 1-2."""
         self.work, self.env, self.visible = os.path.abspath(workdir), env, list(visible_tests)
         self.explicit = explicit
+        # R4-SANITY-4 (bug 3): the tests each visible file ran at the start (delete: visible_start_pass; feature: the
+        # listed tests), and the most each file has reported in this run, so that tests which stop running are named
+        self.expected = expected or {}
+        self._seen: dict[str, int] = {}
         self.done_summary = None
         self._tok = None
         if tokenizer_path:
@@ -229,6 +233,16 @@ class SharedTools:
         n = occurrences(text, old)
         if n == 0:
             near = whitespace_matches(text, old)
+            if len(near) == 1 and self.explicit:
+                # R4-SANITY-4 (bug 1): show the file's own lines, so the indentation can be copied, not guessed
+                lines = text.splitlines()
+                n_old = max(1, len(old.rstrip("\n").split("\n")))
+                lo, hi = near[0] - 1, min(len(lines), near[0] - 1 + min(n_old, CLOSEST_MAX_LINES))
+                shown = "\n".join(f"{i + 1}\t{lines[i]}" for i in range(lo, hi))
+                raise ToolCallError(
+                    f"the text to replace was not found in {path}: it matches once apart from whitespace (indentation), "
+                    f"at line {near[0]}. These are the file's lines there (each is its number, a tab, then the text; "
+                    f"copy the text exactly, with its spaces):\n{shown}")
             if len(near) == 1:
                 raise ToolCallError(
                     f"the text to replace was not found in {path}, but it matches once apart from whitespace, at line "
@@ -270,11 +284,31 @@ class SharedTools:
                 continue
             failing = [t for t, s in (r.get("tests") or {}).items() if s == "failed"]
             line = f"{rel}: {r['passed']} passed, {r['failed']} failed, {r['skipped']} skipped"
+            if self.explicit:
+                line += self._vanished(rel, r)
             if failing:
                 line += "\nfailing:\n" + "\n".join(f"- {t}" for t in failing[:30])
                 line += "\n" + re.sub(r"\x1b\[[0-9;]*m", "", r.get("tail", ""))[-FAIL_TAIL_CHARS:]
             out.append(line)
         return "\n\n".join(out)
+
+    def _vanished(self, rel: str, r: dict) -> str:
+        """R4-SANITY-4 (bug 3): a warning when tests that ran before did not run now."""
+        from harness.experiments.r3.runner import id_status
+        tests = r.get("tests") or {}
+        gone = [t for t in self.expected.get(rel, []) if id_status(tests, t, self.work) == "missing"]
+        n_now = len(tests)
+        prev = self._seen.get(rel)
+        self._seen[rel] = max(prev or 0, n_now)
+        out = ""
+        if gone:
+            out += (f"\nwarning: {len(gone)} tests in this file that ran at the start did not run now (e.g. "
+                    f"{', '.join(gone[:3])}). The file, or code it imports, may fail to load or compile; a test that "
+                    f"did not run is not a pass")
+        elif prev is not None and n_now < prev:
+            out += (f"\nwarning: this file reported {prev} tests earlier in this task and {n_now} now. The file, or "
+                    f"code it imports, may fail to load or compile")
+        return out
 
     def _done(self, summary: str = "") -> str:
         self.done_summary = summary or "(no summary)"

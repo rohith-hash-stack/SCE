@@ -197,6 +197,20 @@ def _gate(task: dict, work: str, env, start_tree: str):
     return DoneGate(task, work, env, start_tree)
 
 
+def _expected_tests(task: dict) -> dict[str, list[str]]:
+    """The tests each visible file is known to run at the start: delete's `visible_start_pass`, or a feature task's
+    listed tests (fail-to-pass and pass-to-pass). Empty for R3a's tasks."""
+    if not task.get("explicit_tools"):
+        return {}
+    if task.get("visible_start_pass"):
+        return task["visible_start_pass"]
+    out: dict[str, list[str]] = {}
+    for group in ("fail_to_pass", "pass_to_pass"):
+        for f, ids in (task.get(group) or {}).items():
+            out.setdefault(f, []).extend(ids)
+    return out
+
+
 def _restore(work: str, tree: str, files: list[str]) -> None:
     """These files as they are in `tree` (absent there: removed)."""
     present = set(_git("ls-tree", "-r", "--name-only", tree, "--", *files, cwd=work).stdout.split("\n")) if files else set()
@@ -233,7 +247,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         start_tree = snapshot_tree(work)      # the start state, after setup: what the agent changes is diffed from it
         layer = ToolLayer(wi, TOKENIZER)
         shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER,
-                             explicit=bool(task.get("explicit_tools")))      # R4-SANITY-3
+                             explicit=bool(task.get("explicit_tools")),      # R4-SANITY-3
+                             expected=_expected_tests(task))                 # R4-SANITY-4 (bug 3)
         stage = "loop"
         summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
                            gate=_gate(task, work, env, start_tree)).run(out)
