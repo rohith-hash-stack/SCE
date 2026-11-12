@@ -174,3 +174,41 @@ calibration, not model config. (6) If edits <50% → bugs weren't the only probl
   the decision above, there are no comparison runs unless it fails.
 - **Also reported:** how often a turn's plan contradicts the ledger's facts, for example planning an edit that is
   already applied, or claiming tests pass after a failing run.
+
+## Post-Sanity-4 ablation plan (pre-registered 2026-11-12, while sanity 4 runs, before any of its results were seen)
+
+Recorded verbatim (user, 2026-11-12):
+
+"Post-Sanity-4 ablation plan (conditional on S4 outcome):
+- If S4 fails all thresholds: no ablation, return to diagnosis.
+- If S4 passes: run A4 first (bugs + summary, current model, no thinking/planning, 40 runs, ~3.5 hrs).
+  - A4 passes → R4 on A4 config. Skip thinking entirely. Best outcome — 4–8× cheaper.
+  - A4 fails → run A1 (bugs + planning + summary, current model, no thinking, 40 runs, ~3.5 hrs).
+  - A1 passes → R4 on A1. Skip thinking.
+  - A1 fails → thinking essential. Run A2 (bugs + thinking + summary, no planning) and A3 (bugs + thinking + planning,
+    no summary). R4 on minimal winning config.
+- Pass = edit rate ≥78% + solves ≥4 of 20 + loops <30%. Same as S4.
+- All configs use fixed harness, same 20 tasks, seed 42.
+- The order is fixed: A4 → A1 → A2/A3. Not reordered after seeing S4 results."
+
+**Why pre-registered:** to prevent post-hoc ordering bias. Looking at S4 first invites testing "the variable that
+looks good"; a fixed order removes that.
+
+**The configurations, in terms of the harness flags** (all with the fixed harness, the gate, `tasks_v3.json`, both
+arms, seed 42, turn cap 28):
+
+| Config | Model | `--think` | `--plan` | `--ledger` |
+|---|---|---|---|---|
+| S4 (running) | qwen3:14b-q8_0 | on | yes | yes |
+| A4 | qwen2.5-coder:14b-instruct-q8_0 (the current model) | — | no | yes |
+| A1 | qwen2.5-coder:14b-instruct-q8_0 | — | yes | yes |
+| A2 | qwen3:14b-q8_0 | on | no | yes |
+| A3 | qwen3:14b-q8_0 | on | yes | no |
+
+**Measures,** as defined for S4: the edit rate is applied / attempted `edit_file` calls over all 40 runs; "solves"
+counts tasks resolved out of 20, per arm; the loop rate is the share of runs with a loop (R3's `turn_flags` rule).
+
+**Open, flagged before the results (not resolved here):** the plan defines "S4 passes" (all three thresholds) and "S4
+fails all thresholds", but not a partial result, for example edits ≥78% and loops <30% but solves <4. S4's own
+recorded rules give a reading for some of those cases (rule (5): edits ≥60% with solves <4 means task difficulty).
+Which branch a partial S4 result takes is for the user to decide, ideally before the S4 results are read.
