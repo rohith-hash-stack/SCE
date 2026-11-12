@@ -122,3 +122,13 @@ def test_a_test_the_model_removed_from_the_file_still_counts_as_deleted(tmp_path
     open(os.path.join(w, "pkg/m.py"), "w").write("def keep():\n    return 1\n")
     open(os.path.join(w, "tests/t.txt"), "w").write("test_keep: ok\n")
     assert DoneGate(_delete_task(), w, Env(w), st).check() == (True, "done")
+
+
+def test_a_parametrised_case_the_model_removed_counts_as_deleted(tmp_path):
+    """litestar delete-09: the developer drops two parametrize cases; the test function stays and its other cases run."""
+    w, st = _repo(tmp_path, {"pkg/m.py": SRC, "tests/t.txt": "test_p[a]: ok\ntest_p[b]: ok\ntest_p[c]: ok\n"})
+    task = {"family": "delete", "must_be_absent": "pkg/m.py::gone",
+            "visible_start_pass": {"tests/t.txt": ["test_p[a]", "test_p[b]", "test_p[c]"]}}
+    open(os.path.join(w, "pkg/m.py"), "w").write("def keep():\n    return 1\n")
+    open(os.path.join(w, "tests/t.txt"), "w").write("test_p[c]: ok\n")
+    assert DoneGate(task, w, Env(w), st).check() == (True, "done")

@@ -30,6 +30,11 @@ def _git(*args, cwd):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, errors="replace")
 
 
+def _base(test_id: str) -> str:
+    """A test id without its parametrisation suffix ("test_x[a-b]" -> "test_x")."""
+    return test_id.split("[", 1)[0]
+
+
 def _name_in(test_id: str, text: str) -> bool:
     """Whether a test's own name still appears in its file's text (pytest: the function name, parameters stripped;
     vitest/jest: the full name, or its last part)."""
@@ -100,7 +105,9 @@ class DoneGate:
             # file and the test's name is gone from it. Otherwise it vanished: e.g. a syntax error that breaks one of
             # the suite's projects (zod's type-checked copy) while the plain copy still passes.
             text = open(os.path.join(self.work, f), errors="replace").read() if f in changed else None
-            gone = [t for t in absent if text is None or _name_in(t, text)]
+            # a missing parametrised case of a test whose other cases still ran was edited out by the model (litestar)
+            ran_bases = {_base(t) for t in tests}
+            gone = [t for t in absent if text is None or (_name_in(t, text) and not ("[" in t and _base(t) in ran_bases))]
             if not r.get("parsed") or (not present and (r.get("failed") or gone)):
                 broken.append(f)                           # the file no longer loads or runs
                 errs += error_lines(r.get("text") or r.get("tail", ""))
