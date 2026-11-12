@@ -125,6 +125,7 @@ class SharedTools:
         # listed tests), and the most each file has reported in this run, so that tests which stop running are named
         self.expected = expected or {}
         self._seen: dict[str, int] = {}
+        self.last_results: dict[str, dict] = {}   # R4-SANITY-4 ledger: each file's latest run_tests result
         self.done_summary = None
         self._tok = None
         if tokenizer_path:
@@ -279,6 +280,7 @@ class SharedTools:
                 out.append(f"{rel}: no such test file")
                 continue
             r = self.env.run_test(rel)
+            self.last_results[rel] = r
             if not r.get("parsed"):
                 out.append(f"{rel}: the test run produced no results (exit {r.get('rc')})\n{r.get('tail', '')[-FAIL_TAIL_CHARS:]}")
                 continue

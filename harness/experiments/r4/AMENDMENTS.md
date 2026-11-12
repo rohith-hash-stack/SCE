@@ -152,13 +152,18 @@ calibration, not model config. (6) If edits <50% → bugs weren't the only probl
 
 ### Addition before the run (user, 2026-11-12): the per-turn progress summary (ledger)
 
-- **What it is** (`progress_ledger.py`): every turn after the first, the harness appends a short summary to the newest
-  message. It is rebuilt from tool results each turn, never written by the model, so it survives the window rule:
-  - the turn count ("turn N of 28");
-  - the edits applied (file and line) and rejected (file and reason);
-  - the model's own last `run_tests` result, with any vanished-test warning;
-  - done rejections, with the first unmet item;
-  - for delete, the target's current status: the gate's file check, a parse of one file.
+- **What it is** (`progress_ledger.py`): every turn after the first, the harness appends a short summary (~200
+  tokens) to the newest message. It is rebuilt from tool results each turn, never written by the model, so it
+  survives the window rule. It has seven deterministic items (user, 2026-11-12):
+  1. the turn number (N of 28);
+  2. the files read so far, with the line ranges shown;
+  3. the edits applied (file:line, and what changed, e.g. "replaced 7 lines with 1");
+  4. the edits failed (the count, and the last 3 with turn, file and reason);
+  5. the latest test result against the start state, per file: "M of the N tests that ran at the start pass now; K
+     fail or did not run". It comes from the model's own last `run_tests`;
+  6. task progress: for delete, the target still defined, at which line (the gate's file check); for feature, how
+     many listed tests still fail (tests in files not yet run are counted apart);
+  7. a one-line reminder of the goal.
 - **What it never does:** run tests by itself, name callers or places to fix, or use the hidden tests. It is the same
   in both arms.
 - **Why:** the model loses its earlier results once outputs are stubbed, and its earlier thinking is never kept (the

@@ -162,10 +162,41 @@ def test_progress_ledger_is_appended_every_turn_from_tool_results_and_survives_t
     assert not any("Progress so far" in msg["content"] for msg in m.seen[0])          # turn 1: nothing done yet
     last = m.seen[-1][-1]["content"]
     assert "Progress so far (from the tool results, not from you). This is turn 4 of 10." in last
-    assert "edits applied (1): a line 1" in last and "tests: you have not run them yet" in last
+    assert "edits applied (1): a:1 (replaced 1 lines with 1)" in last and "tests: you have not run them yet" in last
     m2 = Model([edit, json.dumps({"tool": "done", "args": {}})])
     L.AgentRun(task(), "BASELINE", 42, m2, EditShared()).run(str(tmp_path / "m"))     # off: R3a
     assert not any("Progress so far" in msg["content"] for turn in m2.seen for msg in turn)
+
+
+def test_progress_ledger_has_the_seven_items():
+    """R4-SANITY-4: turn, files read with ranges, edits applied with what changed, edits failed (count + last 3),
+    tests against the start, task progress, and the goal line."""
+    from harness.experiments.r4.progress_ledger import ProgressLedger
+
+    class S:
+        work = "."
+        expected = {"t.py": ["a", "b", "c"]}
+        last_results = {}
+    sh = S()
+    task = {"family": "feature", "fail_to_pass": {"t.py": ["a", "b"]}, "pass_to_pass": {"t.py": ["c"]}}
+    lg = ProgressLedger(28, None, task, sh)
+    assert "listed tests: 2 to make pass; not run yet" in lg.render(2) and "tests: you have not run them yet" in lg.render(2)
+    lg.update(1, "read_file", {"path": "m.py"}, "m.py (lines 1-212 of 3265 shown (cut at 4,000 tokens); continue")
+    lg.update(2, "read_file", {"path": "m.py"}, "m.py (lines 213-400 of 3265)\n1\tx")
+    lg.update(3, "edit_file", {"path": "m.py"}, "edited m.py at line 375: replaced 7 lines with 1")
+    lg.update(4, "edit_file", {"path": "n.py"}, "created n.py (40 lines)")
+    for t in (5, 6, 7, 8):
+        lg.update(t, "edit_file", {"path": "m.py"}, "error: the text to replace was not found in m.py. ...")
+    sh.last_results = {"t.py": {"parsed": True, "passed": 2, "failed": 1, "tests": {"a": "passed", "c": "passed", "b": "failed"}}}
+    lg.update(9, "run_tests", {}, "t.py: 2 passed, 1 failed, 0 skipped")
+    r = lg.render(10)
+    assert "This is turn 10 of 28." in r and "Goal: make the 2 listed tests pass" in r
+    assert "files read: m.py lines 1-400 (of 3265)" in r
+    assert "m.py:375 (replaced 7 lines with 1); n.py (created, 40 lines)" in r
+    assert "edits failed (4); the last 3: turn 6, m.py: not found; turn 7, m.py: not found; turn 8, m.py: not found" in r
+    assert "t.py: 2 of the 3 tests that ran at the start pass now; 1 fail or did not run" in r
+    assert "listed tests: 1 of 2 still fail (as of your last run)" in r
+    assert "caller" not in r.lower()
 
 
 def test_progress_ledger_records_rejections_tests_and_done():
@@ -177,7 +208,20 @@ def test_progress_ledger_records_rejections_tests_and_done():
     lg.update(4, "done", {}, "Done rejected", {"accepted": False, "message": "Done rejected: x\n- `f` is still defined in "
                                                                              "h.py at line 7\nContinue."})
     r = lg.render(5)
-    assert "edits applied: none yet" in r and "h.py: duplicate match ×1" in r
-    assert "your last test run (turn 3): t.py: 3 passed, 1 failed, 0 skipped | warning: 2 tests" in r
+    assert "edits applied: none yet" in r and "edits failed (1); the last 1: turn 2, h.py: duplicate match" in r
+    assert "tests: you have not run them yet" in r          # no SharedTools given: no per-test results to compare
     assert "done rejected 1× (last at turn 4: `f` is still defined in h.py at line 7)" in r
     assert "caller" not in r.lower()
+
+
+def test_progress_ledger_counts_listed_tests_in_unrun_files_as_not_run():
+    from harness.experiments.r4.progress_ledger import ProgressLedger
+
+    class S:
+        work = "."
+        expected = {}
+        last_results = {"a.py": {"parsed": True, "tests": {"x": "passed"}}}
+    task = {"family": "feature", "fail_to_pass": {"a.py": ["x"], "b.py": ["y", "z"]}}
+    lg = ProgressLedger(28, None, task, S())
+    lg.update(1, "run_tests", {}, "a.py: 1 passed")
+    assert "listed tests: 0 of 3 still fail (as of your last run); 2 of them are in files you have not run: b.py" in lg.render(2)

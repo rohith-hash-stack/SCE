@@ -254,7 +254,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         progress = None
         if ledger:                                        # R4-SANITY-4: the per-turn progress summary
             from harness.experiments.r4.progress_ledger import ProgressLedger
-            progress = ProgressLedger(turn_cap, gate)
+            progress = ProgressLedger(turn_cap, gate, task, shared)
         summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
                            gate=gate, ledger=progress).run(out)
         result = {**summary}
