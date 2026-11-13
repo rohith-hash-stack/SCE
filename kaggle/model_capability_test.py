@@ -3,10 +3,10 @@
 # Standalone: no repository, no GitHub token, no PRISM harness. Settings: Accelerator GPU T4 x2, Internet ON.
 #
 # STAGE controls what runs (set it below, then Run):
-#   "load"     (default) Q1/Q2/Q5: pull each model, load it with the Phase 0 context (num_ctx = 20,480) and report
+#   "load"     Q1/Q2/Q5: pull each model, load it with the Phase 0 context (num_ctx = 20,480) and report
 #              VRAM per GPU, load time, GPU/CPU split. Also tries one-GPU loads for models whose weights could fit
 #              on one T4. NO GENERATION beyond loading.
-#   "generate" Q3/Q4/Q6: a ~16K-token prompt with a 500-token answer (completes? VRAM peak? tok/s), then a 10-turn
+#   "generate" (default since the load results were reviewed) the load steps not yet done, then Q3/Q4/Q6: a ~16K-token prompt with a 500-token answer (completes? VRAM peak? tok/s), then a 10-turn
 #              tool-calling loop on a small synthetic repository. Run only after the "load" results are reviewed.
 # Resumable: results go to RESULTS after every step; a rerun skips finished steps. No step starts within
 # STOP_MARGIN_MIN of the session limit. Disk: a finished model is removed before the next is pulled if space is
@@ -24,7 +24,7 @@ import threading
 import time
 import urllib.request
 
-STAGE = "load"                       # "load" first; "generate" only after review
+STAGE = "generate"                   # the load results were reviewed (2026-11-13); set "load" to re-run them alone
 MODELS = [                           # exact Ollama IDs (verified on the registry, 2026-11-13)
     "qwen3-coder:30b-a3b-q4_K_M",    # Qwen3-Coder-30B-A3B Instruct, MoE ~3.3B active, 18.56 GB
     "devstral-small-2:24b-instruct-2512-q4_K_M",   # Devstral Small 2 (24B, dense), 15.18 GB
