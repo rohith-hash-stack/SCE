@@ -362,6 +362,13 @@ for model in MODELS:
         stage_load(model, m)
         save(res)
         if STAGE == "generate":
+            have = {x["name"] for x in api(11434, "/api/tags", timeout=60).get("models", [])}
+            if model not in have:                   # removed for disk space, or a new session: pull it again
+                if free_disk_gb() < (m.get("download_gb") or 22) + 5:
+                    for other in have:
+                        sh(["ollama", "rm", other])
+                print(f"[pull] {model} again for the generate stage", flush=True)
+                m["repull_seconds"] = pull(model)
             api(11434, "/api/generate", {"model": model, "prompt": "", "keep_alive": "30m",
                                          "options": {"num_ctx": NUM_CTX}}, timeout=1800)
             for step in (stage_q3q4, stage_q6):
@@ -370,6 +377,8 @@ for model in MODELS:
                 step(model, m)
                 save(res)
             unload(11434, model)
+            if "q6" in m:                           # finished with this model: free its disk for the next
+                sh(["ollama", "rm", model])
     except Exception as exc:
         m.setdefault("errors", []).append(f"{type(exc).__name__}: {str(exc)[:300]}")
         print(f"[error] {model}: {exc}", flush=True)
