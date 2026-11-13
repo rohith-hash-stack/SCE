@@ -26,6 +26,7 @@ its token count, the refresh (rebuild, gated files), and the elapsed time.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -285,6 +286,8 @@ class AgentRun:
                     end = "budget"
                     break
                 turn += 1
+                # Phase 0b: the exact prompt sent, as a hash, so a replay can be compared byte for byte
+                prompt_sha = hashlib.sha256(json.dumps(msgs, ensure_ascii=False).encode()).hexdigest()
                 try:
                     reply = self.model(msgs, self.seed)
                 except Exception as exc:  # an infrastructure failure: recorded; the run ends (counts as not resolved)
@@ -293,7 +296,7 @@ class AgentRun:
                 used += reply["prompt_tokens"] + reply["answer_tokens"]
                 rec = {"turn": turn, "prompt_tokens": reply["prompt_tokens"], "answer_tokens": reply["answer_tokens"],
                        "done_reason": reply["done_reason"], "model_seconds": reply["seconds"], "stubbed": stubbed,
-                       "used_tokens": used, "reply": reply["text"]}
+                       "used_tokens": used, "reply": reply["text"], "prompt_sha": prompt_sha}
                 if reply.get("thinking"):
                     rec["thinking"], rec["thinking_tokens"] = reply["thinking"], self.n(reply["thinking"])
                 plan = _plan_of(reply["text"]) if self.plan else None
@@ -321,6 +324,7 @@ class AgentRun:
                     rejected_in_a_row = 0
                 rec.update(tool_seconds=round(time.time() - t, 1), output_tokens=self.n(res["output"]),
                            output_head=res["output"][:OUTPUT_HEAD_CHARS],
+                           output_sha=hashlib.sha256(res["output"].encode()).hexdigest(),   # Phase 0b
                            output_cut="[cut at 4,000 tokens]" in res["output"], rss_mb=_rss_mb(),
                            **{k: v for k, v in res.items() if k != "output"})
                 if self.ledger is not None:

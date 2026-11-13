@@ -225,3 +225,15 @@ def test_progress_ledger_counts_listed_tests_in_unrun_files_as_not_run():
     lg = ProgressLedger(28, None, task, S())
     lg.update(1, "run_tests", {}, "a.py: 1 passed")
     assert "listed tests: 0 of 3 still fail (as of your last run); 2 of them are in files you have not run: b.py" in lg.render(2)
+
+
+def test_turn_log_records_full_prompt_and_output_hashes(tmp_path):
+    """Phase 0b: every turn records sha256 of the exact prompt and of the full tool output."""
+    import hashlib
+    m = Model([json.dumps({"tool": "read_file", "args": {"path": "a", "size": 50}}),
+               json.dumps({"tool": "done", "args": {}})])
+    L.AgentRun(task(), "BASELINE", 42, m, Shared()).run(str(tmp_path / "h"))
+    log = [json.loads(ln) for ln in open(tmp_path / "h" / "t1__BASELINE__42.jsonl")]
+    assert log[0]["prompt_sha"] == hashlib.sha256(json.dumps(m.seen[0], ensure_ascii=False).encode()).hexdigest()
+    assert log[0]["output_sha"] == hashlib.sha256(("x" * 50).encode()).hexdigest()
+    assert log[1]["prompt_sha"] != log[0]["prompt_sha"]
