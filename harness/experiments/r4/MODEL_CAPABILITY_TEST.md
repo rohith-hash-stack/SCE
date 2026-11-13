@@ -1,6 +1,10 @@
 # Phase 0 model candidates on Kaggle 2× T4: capability test (2026-11-13)
 
-**Status:** the analysis and the test cell are done. **No generation has been run.**
+**Status:** the `load` and `generate` stages have both run on Kaggle 2× T4 (2026-11-13). **The measured results are
+in §9, which replaces the estimates in §5 and the recommendation in §7.** Raw data:
+`results/model_capability_results.json`.
+
+The original pre-measurement text follows unchanged.
 - **Verified from the Ollama registry,** without a GPU: model IDs, quantisations, download sizes and architecture
   (from each GGUF header, read through 16 MB range requests).
 - **Computed, not measured:** VRAM fit and the single-T4 test. Those numbers come from the cell's `load` stage on
@@ -136,3 +140,59 @@ lanes.**
 - **What waits for the user's go-ahead after the `load` results:** the `generate` stage (Q3/Q4/Q6).
 - **Generation-heavy step:** none expected to exceed 10 minutes per model. The 16K call is one prompt plus 500
   tokens; the loop is at most 10 short turns.
+
+## 9. Measured results (Kaggle 2× T4, `STAGE = "generate"`, cell commit `548b9d2a`, 2026-11-13)
+
+Ollama 0.34.0, flash attention, q8_0 KV cache, `num_ctx` 20,480, one model loaded at a time. **One run per model,
+seed 42**: each row is n = 1.
+
+### Load and the 16K call (Q2–Q4)
+
+| Model | VRAM on load (GPU0 / GPU1, MB) | Peak during the 16K call | On GPU | Prompt tokens | Prompt tok/s | **Gen tok/s** | 16K + 500 wall |
+|---|---|---|---|---|---|---|---|
+| qwen3-coder 30B-A3B | 9,979 / 9,517 | 10,017 / 9,549 | 100% | 14,845 | 251 | **20.9** | 83.7 s |
+| devstral-small-2 24B | 9,257 / 8,219 | 9,293 / 8,255 | 100% | 15,683 | 399 | **12.1** | 81.7 s |
+| qwen3.8 27B (think off) | 9,415 / 8,861 | 9,441 / 8,879 | 100% | 16,013 | 410 | **11.3** | 83.8 s |
+| ornith 35B (think off) | 10,869 / 10,353 | 10,901 / 10,385 | 100% | 16,071 | 1,336 | **54.6** | 21.8 s |
+
+- **All four complete a ~16K prompt plus a 500-token answer** (`done_reason` = length: the full 500 tokens), entirely
+  on the GPUs. The peak is ≤ 40 MB per GPU above the loaded size, leaving ≥ 4.4 GB free per T4.
+- **All four clear the 5 tok/s bar.**
+- **Estimates that were wrong:**
+  - **qwen3-coder:** I estimated 30–50 tok/s; it measured 20.9 tok/s, with the slowest prompt processing of the four
+    (251 tok/s).
+  - **ornith:** at the top of its estimate, and 3–5× faster than the others at prompt processing.
+- **Two lanes:** confirmed impossible. Every model's weights exceed one T4 (the single-T4 load was skipped for all
+  four).
+
+### The 10-turn tool loop (Q6)
+
+| Model | Turns | Tools used | Parse failures | Ended with `done` | **Tests pass at end** | s / turn |
+|---|---|---|---|---|---|---|
+| qwen3-coder 30B-A3B | 10 (cap) | read ×7, run_tests ×3, **edit ×0** | 0 | no | **no** | 1.1 |
+| devstral-small-2 24B | 5 | read, edit, edit, run_tests, done | 0 | yes | **yes** | 5.4 |
+| qwen3.8 27B (think off) | 5 | read, edit, edit, run_tests, done | 0 | yes | **yes** | 3.5 |
+| ornith 35B (think off) | 10 (cap) | read ×7, run_tests ×2... **edit ×0** | 0 | no | **no** | 1.0 |
+
+- **devstral-small-2 and qwen3.8 solved the task optimally:** one read, one edit per bug, one test run, then done.
+- **qwen3-coder and ornith never attempted an edit in 10 turns.** Each produced valid JSON on every turn (0 parse
+  failures) but cycled through reading `calc.py` and running the tests.
+- **Why they stalled cannot be told from this data.** The cell logs neither the reply texts nor the tool outputs.
+  A plausible cause: Ollama's grammar-constrained `format: "json"` combined with how these two models were trained
+  to emit tool calls. That is a hypothesis, not a finding.
+- **This loop never stressed long context:** no model read the 9K-token `notes.py`, and the largest prompt was
+  1,042 tokens. Long context is covered by the single 16K call only.
+- **Infrastructure:** no failures or timeouts in any of the 30 loop turns, or in the four 16K calls.
+
+### What this changes
+
+- **The pre-measurement recommendation (qwen3-coder first) is withdrawn.** It is the only candidate that is both
+  slower than expected and failed Q6.
+- **Ornith is the fastest by far but failed Q6,** and its provenance is still unverified.
+- **The two models that passed Q6, devstral-small-2 and qwen3.8, are also the two slowest** (11–12 tok/s, about
+  400 tok/s prompt). One trivial task cannot separate them.
+- **Phase 0 wall time with either of them,** estimated from the measured rates: about 5–9 min per run, about 4–6 h
+  for 40 runs on one lane. That fits one Kaggle session. It is still an estimate: the harness's turns are larger than
+  Q6's.
+
+**Phase 0 on either model still needs the amendment described in §7** (model and client) before any run.
