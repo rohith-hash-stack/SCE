@@ -212,3 +212,95 @@ counts tasks resolved out of 20, per arm; the loop rate is the share of runs wit
 fails all thresholds", but not a partial result, for example edits ≥78% and loops <30% but solves <4. S4's own
 recorded rules give a reading for some of those cases (rule (5): edits ≥60% with solves <4 means task difficulty).
 Which branch a partial S4 result takes is for the user to decide, ideally before the S4 results are read.
+
+## Phase 0: model capability check, pre-registered (2026-11-13, before any Phase 0 run)
+
+**Status:**
+- **Approved by the user** (2026-11-12/13). Phase 0 runs in the cloud environment, launched by the assistant, with
+  three checkpoints at which it pauses for the user's go-ahead.
+- **Paused** until the user upgrades the Groq plan or confirms another provider. The account's limit for
+  `openai/gpt-oss-120b` is 8,000 tokens per minute (from Groq's rate-limit headers, 2026-11-13). That is below one
+  agent turn's prompt, which triggers stop condition (a) below.
+
+**Question:** a capability claim, not a PRISM claim. Can this model complete the sanity tasks on the fixed harness?
+
+**Protocol:**
+- **Model:** `openai/gpt-oss-120b`, reasoning effort `medium`.
+  - Provider: Groq, or the one the user confirms. The provider and model ID are recorded per call.
+  - Seed 42 is passed and recorded, though the provider may not honour it.
+- **Client** (Phase 0a, `r3/loop.OpenAIChat`):
+  - the tools as native function schemas (`--native-tools`; `r3/loop.native_tools`): one schema table, the same for
+    both arms; the model's call is mapped back to the loop's text format; `tool_choice` required, no parallel calls;
+  - JSON mode off. Groq's JSON mode returned `json_validate_failed` with an empty generation in the 0a smoke test;
+  - answer limit 8,192 tokens, reasoning included; 300 s per call;
+  - up to 3 retries on HTTP 429/5xx, waiting for Retry-After; retries are not turns.
+- **Run endings:**
+  - a call that still fails after its retries ends the run as an infrastructure death;
+  - a provider-refused tool call (HTTP 400 `tool_use_failed`) is a bad reply that costs the model its turn.
+- **Harness:** the fixed sanity-4 harness without the plan field:
+  - the gate (R4-SANITY-2) and the three bug fixes (R4-SANITY-4);
+  - the explicit tool messages and the delete prompt (R4-SANITY-3);
+  - the progress summary (ledger) on;
+  - the full-prompt and full-output hashes in every turn record (Phase 0b, committed before any Phase 0 run).
+
+  Turn cap 28; window and budget unchanged.
+- **Tasks:** `sanity/tasks_v3.json`, the same 20 tasks, both arms: 40 runs.
+
+**Measurements:**
+1. infrastructure deaths;
+2. parse errors per turn, with provider-refused tool calls counted apart;
+3. edit rate: applied non-churn edits over attempted, with churn (re-edits of the same lines with no test run in
+   between) reported separately;
+4. false dones: gate rejections, `stuck_done`, and what follows a rejection;
+5. tests run after the last edit and before done;
+6. solves per family per arm;
+7. loop rate: R3's rule, plus churn;
+8. gate accepted, scorer unresolved;
+9. tokens, dollars and wall time per run, and the rate-limit headers.
+
+**Pass bar (all four):**
+- ≤ 2 of 40 infrastructure deaths;
+- parse errors < 2% of turns;
+- ≥ 4 of 20 tasks solved in at least one arm;
+- a non-churn edit rate ≥ 60%.
+
+**Readings:**
+- **Pass:** go to Phase 1.
+- **Infrastructure fail:** fix the client or limits and re-run; nothing about capability is concluded.
+- **Infrastructure fine, 0–1 solves:** the ceiling check (gpt-oss-120b at `high` effort, BASELINE arm, the 20
+  tasks).
+  - If it also solves ≤ 1, the tasks are the limit, and task validity is next.
+  - If it passes, the next decision is effort or model size.
+- **2–3 solves:** pre-declared as not a pass. Reported; the user decides.
+
+**Rate limits (user, 2026-11-12):**
+- **Serial without approval** if the pilot shows parallel lanes are throttled.
+- **Stop and report** if:
+  - (a) a single call exceeds the per-minute limit;
+  - (b) the projected serial time is over 12 hours;
+  - (c) the projected tokens exceed the daily cap.
+- **(b) and (c)** are the user's decisions (upgrade the tier, or spread the run over days).
+
+**Checkpoints (user, 2026-11-13), each a pause for the user's go-ahead:**
+1. 0a and 0b ready, before the pilot.
+2. After the 2-run pilot: rate limits, anomalies, projected serial time and tokens.
+3. After 10 of 40 runs: infrastructure deaths, parse errors, the edit rate so far, surprises.
+
+### Phase 0b: "identical" for replays (user, 2026-11-12)
+
+"'Identical' means same Python version, same installed package versions (recorded in the replay record), same OS,
+same environment variables. Comparison across machines is out of scope."
+
+**How the replay tool applies it** (`harness/experiments/r4/replay.py`):
+- **The environment record:** every replay writes `replay.json`, with Python version and implementation, OS and
+  machine, every package with its version, environment variable names and one hash of their values (secret-looking
+  values left out), and the code commit.
+- **Different environments:** two replays whose records differ compare as `not_comparable`, with the differences
+  listed.
+- **Within one environment:** each turn's tool, arguments, prompt, output and gate decision are compared, then the
+  outcome and the scores per test ID.
+- **The results:**
+  - `identical`: byte for byte;
+  - `identical_normalized`: equal once per-run temporary worktree paths and test timings are masked, since these
+    differ between any two runs;
+  - `different`: the first difference is given.
