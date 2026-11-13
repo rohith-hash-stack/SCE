@@ -117,3 +117,97 @@ def test_json_format_and_effort_are_optional():
     c = OpenAIChat("http://x", "m", "K", json_format=False)
     body = c.payload([{"role": "user", "content": "u"}], 3)
     assert "response_format" not in body and "reasoning_effort" not in body
+
+
+# ------------------------------------------------------------------ native tool calling (Phase 0a fix)
+from harness.experiments.r3.loop import BASELINE_DOC, PRISM_DOC, SHARED_DOC, native_tools, parse_call
+
+
+def test_native_schemas_cover_every_tool_and_shared_tools_are_identical_in_both_arms():
+    p, b = native_tools("PRISM"), native_tools("BASELINE")
+    names = lambda ts: [t["function"]["name"] for t in ts]
+    assert names(p) == list({**SHARED_DOC, **PRISM_DOC}) and names(b) == list({**SHARED_DOC, **BASELINE_DOC})
+    shared_p = [t for t in p if t["function"]["name"] in SHARED_DOC]
+    shared_b = [t for t in b if t["function"]["name"] in SHARED_DOC]
+    assert shared_p == shared_b                                   # no asymmetry in the shared tools
+    for t in p + b:
+        f = t["function"]
+        assert t["type"] == "function" and f["parameters"]["type"] == "object"
+        assert set(f["parameters"]["required"]) <= set(f["parameters"]["properties"])
+        assert f["description"] == {**SHARED_DOC, **PRISM_DOC, **BASELINE_DOC}[f["name"]][1]
+    ef = next(t for t in b if t["function"]["name"] == "edit_file")["function"]["parameters"]
+    assert ef["required"] == ["path", "old", "new"]
+
+
+def _native(msg):
+    return {"model": "m", "choices": [{"message": msg, "finish_reason": "tool_calls"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5}}
+
+
+def test_a_native_tool_call_comes_back_as_the_loops_text_and_the_request_forces_one_call(key):
+    call = {"tool_calls": [{"id": "c1", "type": "function", "function": {
+        "name": "edit_file", "arguments": json.dumps({"path": "a.py", "old": "x", "new": "y"})}},
+        {"id": "c2", "type": "function", "function": {"name": "done", "arguments": "{}"}}]}
+    s = _Server([(200, {}, _native(call))])
+    try:
+        c = OpenAIChat(s.url, "m", "FAKE_KEY", tools=native_tools("BASELINE"))
+        r = c([{"role": "user", "content": "u"}], 1)
+        body = s.requests[0]["body"]
+        assert body["tools"] == native_tools("BASELINE") and body["tool_choice"] == "required"
+        assert body["parallel_tool_calls"] is False and "response_format" not in body
+        assert parse_call(r["text"]) == ("edit_file", {"path": "a.py", "old": "x", "new": "y"})
+        assert r["meta"]["tool_calls"] == 2                     # the loop takes the first; the count is logged
+    finally:
+        s.close()
+
+
+def test_malformed_native_arguments_stay_malformed_text_for_the_loops_reminder(key):
+    bad = {"tool_calls": [{"function": {"name": "grep", "arguments": "{not json"}}]}
+    s = _Server([(200, {}, _native(bad)), (200, {}, _native({"content": "plain words"}))])
+    try:
+        c = OpenAIChat(s.url, "m", "FAKE_KEY", tools=native_tools("PRISM"))
+        assert parse_call(c([{"role": "user", "content": "u"}], 1)["text"]) is None
+        assert c([{"role": "user", "content": "u"}], 1)["text"] == "plain words"   # no call: the content as before
+    finally:
+        s.close()
+
+
+def test_a_refused_tool_call_is_a_bad_reply_not_an_infrastructure_death(key):
+    """The smoke test's case: gpt-oss called a tool it was not given (`repo_browser.print_tree`); Groq answered 400."""
+    err = {"error": {"message": "Tool choice is none, but model called a tool", "type": "invalid_request_error",
+                     "code": "tool_use_failed",
+                     "failed_generation": '{"name": "repo_browser.print_tree", "arguments": {"path": ""}}'}}
+    s = _Server([(400, {}, err), (400, {}, {"error": {"code": "json_validate_failed"}})])
+    try:
+        c = OpenAIChat(s.url, "m", "FAKE_KEY", tools=native_tools("BASELINE"))
+        r = c([{"role": "user", "content": "u"}], 1)
+        assert r["done_reason"] == "tool_use_failed" and "repo_browser.print_tree" in r["text"]
+        assert parse_call(r["text"]) is None and "tool_use_failed" in r["meta"]["provider_error"]
+        with pytest.raises(RuntimeError, match="HTTP 400"):                     # any other 400 still propagates
+            c([{"role": "user", "content": "u"}], 1)
+    finally:
+        s.close()
+
+
+def test_native_tool_replies_drive_the_real_loop(tmp_path, key):
+    """End to end through AgentRun: a native call is executed by the loop like a text call."""
+    from harness.experiments.r3 import loop as L
+    calls = [_native({"tool_calls": [{"function": {"name": "read_file", "arguments": '{"path": "a"}'}}]}),
+             _native({"tool_calls": [{"function": {"name": "done", "arguments": '{"summary": "ok"}'}}]})]
+    s = _Server([(200, {}, x) for x in calls])
+
+    class Shared:
+        done_summary = None
+
+        def call(self, tool, **args):
+            if tool == "done":
+                self.done_summary = args.get("summary")
+            return f"{tool} ran"
+    try:
+        c = OpenAIChat(s.url, "m", "FAKE_KEY", tools=native_tools("BASELINE"))
+        out = L.AgentRun({"id": "t1", "prompt": "p"}, "BASELINE", 42, c, Shared()).run(str(tmp_path))
+        assert out["end"] == "done" and out["turns"] == 2 and out["done_summary"] == "ok"
+        log = [json.loads(ln) for ln in open(tmp_path / "t1__BASELINE__42.jsonl")]
+        assert [t["tool"] for t in log] == ["read_file", "done"] and log[0]["model_meta"]["tool_calls"] == 1
+    finally:
+        s.close()

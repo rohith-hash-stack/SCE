@@ -307,15 +307,19 @@ def main(argv=None) -> int:
     p.add_argument("--api-key-env", default=None, help="the environment variable holding the API key (openai)")
     p.add_argument("--reasoning-effort", choices=("low", "medium", "high"), default=None)
     p.add_argument("--timeout", type=int, default=None, help="seconds per model call")
+    p.add_argument("--native-tools", action="store_true", help="openai: the tools as native function schemas")
     a = p.parse_args(argv)
-    from harness.experiments.r3.loop import ANSWER_TOKENS, MODEL, OllamaChat, OpenAIChat
+    from harness.experiments.r3.loop import ANSWER_TOKENS, MODEL, OllamaChat, OpenAIChat, native_tools
     task = json.load(open(a.task))
     if a.provider == "openai":
         if not (a.model and a.api_key_env):
             p.error("--provider openai needs --model and --api-key-env")
         chat = OpenAIChat(a.base_url, a.model, a.api_key_env, timeout=a.timeout or 300,
                           answer_tokens=a.answer_tokens or ANSWER_TOKENS, reasoning_effort=a.reasoning_effort,
-                          json_format=not a.no_json_format)
+                          json_format=not a.no_json_format,
+                          tools=native_tools(a.version) if a.native_tools else None)
+        if a.native_tools and a.plan:
+            p.error("--native-tools cannot carry the plan field (it lives in the JSON text reply)")
     else:
         chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
                           answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format,

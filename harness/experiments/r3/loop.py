@@ -87,6 +87,39 @@ FORMAT_REMINDER = ('Your reply was not one JSON tool call. Reply with exactly on
                    '{"tool": "<name>", "args": {...}}.')
 
 
+# Phase 0a: the same tools as JSON schemas, for providers whose models call tools natively (gpt-oss-120b). One table
+# for both arms: a shared tool has the same schema in both, and an arm's list differs only as its text prompt does.
+_S, _I = {"type": "string"}, {"type": "integer"}
+PARAM_SCHEMAS = {
+    "read_file": ({"path": _S, "start": _I, "end": {"type": ["integer", "null"]}}, ["path"]),
+    "list_dir": ({"path": _S}, []),
+    "grep": ({"pattern": _S, "path": _S}, ["pattern"]),
+    "edit_file": ({"path": _S, "old": _S, "new": _S}, ["path", "old", "new"]),
+    "run_tests": ({"files": {"type": ["array", "null"], "items": _S}}, []),
+    "done": ({"summary": _S}, []),
+    "prism_change_context": ({"symbol": _S}, ["symbol"]),
+    "prism_blast_radius": ({"symbol": _S}, ["symbol"]),
+    "prism_new_function_context": ({"file": _S, "name": _S, "signature": _S, "purpose": _S,
+                                    "cls": {"type": ["string", "null"]}}, ["file", "name"]),
+    "prism_ask": ({"question": _S}, ["question"]),
+    "prism_digest": ({"symbols": {"type": "array", "items": _S}}, ["symbols"]),
+    "related_code": ({"query": _S}, ["query"]),
+}
+
+
+def native_tools(version: str) -> list[dict]:
+    """The version's tools in the OpenAI function-calling format, in the text prompt's order and with its
+    descriptions."""
+    docs = {**SHARED_DOC, **(PRISM_DOC if version == "PRISM" else BASELINE_DOC)}
+    out = []
+    for name, (_sig, what) in docs.items():
+        props, required = PARAM_SCHEMAS[name]
+        out.append({"type": "function", "function": {
+            "name": name, "description": what,
+            "parameters": {"type": "object", "properties": props, "required": required}}})
+    return out
+
+
 def tool_docs(version: str) -> str:
     docs = {**SHARED_DOC, **(PRISM_DOC if version == "PRISM" else BASELINE_DOC)}
     return "\n".join(f"- {name} {sig}: {what}" for name, (sig, what) in docs.items())
@@ -145,10 +178,14 @@ class OpenAIChat:
                     "x-ratelimit-remaining-tokens", "x-ratelimit-reset-requests", "x-ratelimit-reset-tokens")
 
     def __init__(self, base_url: str, model: str, api_key_env: str, timeout: int = 300,
-                 answer_tokens: int = ANSWER_TOKENS, reasoning_effort: str | None = None, json_format: bool = True):
+                 answer_tokens: int = ANSWER_TOKENS, reasoning_effort: str | None = None, json_format: bool = True,
+                 tools: list[dict] | None = None):
+        """`tools` (`native_tools(version)`): the model calls tools natively; its call is returned to the loop as the
+        same `{"tool": ..., "args": ...}` text `parse_call` reads. JSON mode is not combined with it."""
         self.url, self.model, self.timeout = base_url.rstrip("/"), model, timeout
         self.api_key_env, self.answer_tokens = api_key_env, answer_tokens
-        self.reasoning_effort, self.json_format = reasoning_effort, json_format
+        self.reasoning_effort, self.tools = reasoning_effort, tools
+        self.json_format = json_format and not tools
         self.sleep = time.sleep                   # replaced in tests
 
     def payload(self, messages: list[dict], seed: int) -> dict:
@@ -158,7 +195,27 @@ class OpenAIChat:
             body["response_format"] = {"type": "json_object"}
         if self.reasoning_effort:
             body["reasoning_effort"] = self.reasoning_effort
+        if self.tools:
+            body.update(tools=self.tools, tool_choice="required", parallel_tool_calls=False)
         return body
+
+    @staticmethod
+    def _as_text(msg: dict) -> tuple[str, int]:
+        """The model's native tool call as the loop's text (`{"tool": name, "args": {...}}`), and how many calls it
+        made (the loop takes the first). Arguments that are not a JSON object are kept as text, so the loop's
+        format reminder answers them as it answers any malformed reply."""
+        calls = msg.get("tool_calls") or []
+        if not calls:
+            return msg.get("content") or "", 0
+        fn = calls[0].get("function") or {}
+        raw = fn.get("arguments")
+        try:
+            args = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except ValueError:
+            return f'{{"tool": {json.dumps(fn.get("name"))}, "args": {raw}}}', len(calls)
+        if not isinstance(args, dict):
+            return f'{{"tool": {json.dumps(fn.get("name"))}, "args": {json.dumps(args)}}}', len(calls)
+        return json.dumps({"tool": fn.get("name"), "args": args}), len(calls)
 
     def __call__(self, messages: list[dict], seed: int) -> dict:
         import urllib.error
@@ -190,17 +247,40 @@ class OpenAIChat:
                     waited += wait
                     self.sleep(wait)
                     continue
-                body = exc.read().decode("utf8", "replace")[:300] if hasattr(exc, "read") else ""
-                raise RuntimeError(f"HTTP {exc.code} after {retries} retries: {body}") from exc
+                body = exc.read().decode("utf8", "replace") if hasattr(exc, "read") else ""
+                failed = self._tool_use_failed(exc.code, body)
+                if failed is not None:
+                    # the provider refused the model's tool call (e.g. a tool it was not given): a bad reply that
+                    # costs the model its turn, as a malformed text reply does, not an infrastructure death
+                    return {"text": failed, "thinking": None, "prompt_tokens": 0, "answer_tokens": 0,
+                            "done_reason": "tool_use_failed", "seconds": round(time.time() - t - waited, 1),
+                            "meta": {"model": self.model, "retries": retries, "retry_wait_s": round(waited, 1),
+                                     "provider_error": body[:300]}}
+                raise RuntimeError(f"HTTP {exc.code} after {retries} retries: {body[:300]}") from exc
         choice = (out.get("choices") or [{}])[0]
         msg = choice.get("message") or {}
         usage = out.get("usage") or {}
-        return {"text": msg.get("content") or "", "thinking": msg.get("reasoning"),
+        text, n_calls = self._as_text(msg) if self.tools else (msg.get("content") or "", 0)
+        return {"text": text, "thinking": msg.get("reasoning"),
                 "prompt_tokens": int(usage.get("prompt_tokens") or 0),
                 "answer_tokens": int(usage.get("completion_tokens") or 0),
                 "done_reason": choice.get("finish_reason"), "seconds": round(time.time() - t - waited, 1),
                 "meta": {"model": out.get("model"), "system_fingerprint": out.get("system_fingerprint"),
-                         "retries": retries, "retry_wait_s": round(waited, 1), "rate": headers}}
+                         "retries": retries, "retry_wait_s": round(waited, 1), "rate": headers,
+                         **({"tool_calls": n_calls} if self.tools else {})}}
+
+    @staticmethod
+    def _tool_use_failed(code: int, body: str) -> str | None:
+        """For HTTP 400 `tool_use_failed`: the generation the provider refused, else None."""
+        if code != 400:
+            return None
+        try:
+            err = json.loads(body).get("error") or {}
+        except (ValueError, AttributeError):
+            return None
+        if not isinstance(err, dict) or err.get("code") != "tool_use_failed":
+            return None
+        return err.get("failed_generation") or ""
 
 
 OUTPUT_HEAD_CHARS = 300      # the start of each tool output, kept in the turn log for diagnosis (never shown again)

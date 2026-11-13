@@ -48,13 +48,15 @@ def main(argv=None) -> int:
     p.add_argument("--reasoning-effort", choices=("low", "medium", "high"), default=None)
     p.add_argument("--timeout", type=int, default=None)
     p.add_argument("--no-json-format", action="store_true")
+    p.add_argument("--native-tools", action="store_true")
     a = p.parse_args(argv)
     extra = ((["--model", a.model] if a.model else []) + (["--think", a.think] if a.think else [])
              + (["--plan"] if a.plan else []) + (["--answer-tokens", str(a.answer_tokens)] if a.answer_tokens else [])
              + (["--ledger"] if a.ledger else [])
              + (["--provider", a.provider] if a.provider else []) + (["--api-key-env", a.api_key_env] if a.api_key_env else [])
              + (["--reasoning-effort", a.reasoning_effort] if a.reasoning_effort else [])
-             + (["--timeout", str(a.timeout)] if a.timeout else []) + (["--no-json-format"] if a.no_json_format else []))
+             + (["--timeout", str(a.timeout)] if a.timeout else []) + (["--no-json-format"] if a.no_json_format else [])
+             + (["--native-tools"] if a.native_tools else []))
     from harness.experiments.r3.memtest import leftovers
     clones = dict(r.split("=", 1) for r in a.repos)
     tasks = json.load(open(a.tasks))["tasks"]
