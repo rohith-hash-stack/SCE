@@ -172,7 +172,7 @@ seed 42**: each row is n = 1.
 | qwen3-coder 30B-A3B | 10 (cap) | read ×7, run_tests ×3, **edit ×0** | 0 | no | **no** | 1.1 |
 | devstral-small-2 24B | 5 | read, edit, edit, run_tests, done | 0 | yes | **yes** | 5.4 |
 | qwen3.8 27B (think off) | 5 | read, edit, edit, run_tests, done | 0 | yes | **yes** | 3.5 |
-| ornith 35B (think off) | 10 (cap) | read ×7, run_tests ×2... **edit ×0** | 0 | no | **no** | 1.0 |
+| ornith 35B (think off) | 10 (cap) | read ×8, run_tests ×2, **edit ×0** | 0 | no | **no** | 1.0 |
 
 - **devstral-small-2 and qwen3.8 solved the task optimally:** one read, one edit per bug, one test run, then done.
 - **qwen3-coder and ornith never attempted an edit in 10 turns.** Each produced valid JSON on every turn (0 parse
