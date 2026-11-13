@@ -358,13 +358,14 @@ def parse_call(text: str) -> tuple[str, dict] | None:
 class AgentRun:
     def __init__(self, task: dict, version: str, seed: int, model, shared, index_tools=None,
                  tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False,
-                 gate=None, ledger=None):
+                 gate=None, ledger=None, record_full: bool = False):
         """`gate`: amendment R4-SANITY-2's verification at done (`r4/done_gate.DoneGate`), or None (R3a).
         `ledger`: amendment R4-SANITY-4's per-turn progress summary (`r4/progress_ledger.ProgressLedger`), or None."""
         """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's five tools, or `related_code`)."""
         self.task, self.version, self.seed, self.model = task, version, seed, model
         self.shared, self.index_tools, self.turn_cap, self.plan = shared, index_tools, turn_cap, plan
         self.gate, self.ledger = gate, ledger
+        self.record_full = record_full    # Phase 0b replays: the full prompt and output in the turn log
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
         self.allowed = set(SHARED_DOC) | set(PRISM_DOC if version == "PRISM" else BASELINE_DOC)
@@ -451,6 +452,8 @@ class AgentRun:
                        "used_tokens": used, "reply": reply["text"], "prompt_sha": prompt_sha}
                 if reply.get("meta"):
                     rec["model_meta"] = reply["meta"]
+                if self.record_full:
+                    rec["prompt"] = msgs
                 if reply.get("thinking"):
                     rec["thinking"], rec["thinking_tokens"] = reply["thinking"], self.n(reply["thinking"])
                 plan = _plan_of(reply["text"]) if self.plan else None
@@ -479,6 +482,7 @@ class AgentRun:
                 rec.update(tool_seconds=round(time.time() - t, 1), output_tokens=self.n(res["output"]),
                            output_head=res["output"][:OUTPUT_HEAD_CHARS],
                            output_sha=hashlib.sha256(res["output"].encode()).hexdigest(),   # Phase 0b
+                           **({"output": res["output"]} if self.record_full else {}),
                            output_cut="[cut at 4,000 tokens]" in res["output"], rss_mb=_rss_mb(),
                            **{k: v for k, v in res.items() if k != "output"})
                 if self.ledger is not None:

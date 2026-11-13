@@ -222,7 +222,7 @@ def _restore(work: str, tree: str, files: list[str]) -> None:
 
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
-             score_run: bool = True, plan: bool = False, ledger: bool = False) -> dict:
+             score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False) -> dict:
     from harness.experiments.r3.loop import AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
@@ -256,7 +256,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
             from harness.experiments.r4.progress_ledger import ProgressLedger
             progress = ProgressLedger(turn_cap, gate, task, shared)
         summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
-                           gate=gate, ledger=progress).run(out)
+                           gate=gate, ledger=progress, record_full=record_full).run(out)
         result = {**summary}
         if score_run:
             stage = "scoring"
