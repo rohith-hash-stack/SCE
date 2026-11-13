@@ -196,3 +196,46 @@ seed 42**: each row is n = 1.
   Q6's.
 
 **Phase 0 on either model still needs the amendment described in §7** (model and client) before any run.
+
+## 10. Ornith diagnostic: JSON mode or the model? (pre-registered 2026-11-13, before it runs)
+
+**The user's decision (2026-11-13):**
+- **Run the diagnostic** for ornith only; qwen3-coder is skipped (slower than devstral, and it failed the same way).
+- **Ornith becomes the Phase 0 model only if the diagnostic proves JSON-mode interference.** Otherwise devstral
+  stays.
+
+**A lead from the Q6 token counts** (a hypothesis to check, not a finding):
+- **What the counts show:** each of ornith's `read_file` turns grew the prompt by ~33 tokens, of which ~15 were its
+  own reply. That leaves ~18 tokens for the tool output. qwen3-coder's reads were the same size.
+- **What a real read costs:** reading `calc.py` returns ~45 tokens, which is what devstral's first read added.
+- **What that suggests:** the two models' reads may have returned errors, for example from a wrong argument name, and
+  never shown them the code.
+- **What decides it:** the diagnostic logs the outputs.
+
+**The cell: `kaggle/ornith_json_diagnostic.py`** (standalone, 2× T4, ~15–25 min).
+- **The loop:** the same as Q6, with three reply modes × three seeds (42, 43, 44):
+  - **A `json`:** Ollama `format: "json"`, as in Q6 and `OllamaChat`'s default;
+  - **B `free`:** no format constraint; the JSON object is parsed from free text (`OllamaChat` with
+    `json_format=False`);
+  - **C `native`:** Ollama native tool calling with the four tools as function schemas.
+- **Logged per turn:** the reply text, the thinking text, the native tool calls, the parsed call, the tool output,
+  and the token counts.
+- **The control:** devstral runs the same 9 loops.
+
+**Verdict, applied by the cell's code:**
+- **A mode passes** when at least 2 of its 3 seeds end with `done` and the tests passing.
+
+| Ornith A (`json`) | B (`free`) | C (`native`) | Verdict | Phase 0 model |
+|---|---|---|---|---|
+| passes | any | any | the Q6 failure did not reproduce | devstral (nothing proven) |
+| fails | passes | any | **JSON-mode interference confirmed** | ornith, variant B (`--no-json-format`) |
+| fails | fails | passes | tool-protocol interference: fixable, but not JSON mode | devstral, unless the user decides otherwise (variant B would need a native Ollama tool client first) |
+| fails | fails | fails | the model itself | devstral |
+
+- **The control:** if devstral fails modes B or C, the rig is suspect in that mode and the verdict is reported with
+  that caveat.
+
+**Checked locally (no GPU)**, against a fake Ollama server that stalls in JSON mode with a wrong argument name:
+- the cell logs each turn;
+- it scores the 18 loops;
+- it prints "JSON-mode interference confirmed".

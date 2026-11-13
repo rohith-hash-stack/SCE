@@ -304,3 +304,96 @@ same environment variables. Comparison across machines is out of scope."
   - `identical_normalized`: equal once per-run temporary worktree paths and test timings are masked, since these
     differ between any two runs;
   - `different`: the first difference is given.
+
+## Phase 0 on a local model (DRAFT, 2026-11-13; not in force until the user confirms the model)
+
+**Status:** drafted at the user's direction (2026-11-13).
+- **Not in force:** it takes effect when the user confirms the model, after the ornith diagnostic
+  (`MODEL_CAPABILITY_TEST.md` §10).
+- **Variant A (devstral-small-2)** is the default. **Variant B (ornith)** replaces it only if the diagnostic confirms
+  JSON-mode interference.
+- **Everything in "Phase 0: model capability check" above stands** unless changed here.
+
+**Model change:**
+- **From:** `openai/gpt-oss-120b` (Groq, reasoning effort `medium`).
+- **To (variant A):** `devstral-small-2:24b-instruct-2512-q4_K_M`. Ollama 0.34.0 on Kaggle 2× T4, one lane split
+  across both GPUs, flash attention, q8_0 KV cache.
+
+**Rationale:**
+- **Groq is unviable.** It caps `openai/gpt-oss-120b` at 8,000 tokens per minute for this account (from Groq's
+  rate-limit headers, 2026-11-13). That is below one agent turn's prompt, so stop condition (a) above holds for every
+  run.
+- **A local model is the only available path.**
+- **Why devstral-small-2** (capability test, `MODEL_CAPABILITY_TEST.md` §9):
+  - it fits 2× T4 at `num_ctx` 20,480 (17.2 GB, 100% on GPU);
+  - it completed a ~16K-token prompt with a 500-token answer (12.1 tok/s generation, 399 tok/s prompt);
+  - it solved the 10-turn tool loop in 5 turns;
+  - it is built for agentic coding;
+  - it has no thinking mode (qwen3.8 with thinking on is estimated at 27–33 h for 40 runs; with it off, 4–6 h).
+
+**Client:** `r3/loop.OllamaChat` (the client of every Kaggle round) replaces Phase 0a's `OpenAIChat`:
+- `format: "json"` (the capability test's mode, which devstral passed);
+- the `think` field is not sent;
+- 4,096 answer tokens; 900 s per call;
+- a call that fails is an infrastructure death;
+- no retries; there is no rate limit.
+
+The native-tool client (Phase 0a) is not used.
+
+**Unchanged:**
+- the harness (the sanity-4 fixes, the gate, explicit tool messages, the ledger on, no plan field, the Phase 0b
+  hashes);
+- the 20 tasks of `sanity/tasks_v3.json`, both arms, 40 runs;
+- turn cap 28; the window and budget;
+- the nine measurements, except that dollars become GPU-hours.
+
+**Pass bar, unchanged (all four):**
+- ≤ 2 of 40 infrastructure deaths;
+- parse errors < 2% of turns;
+- ≥ 4 of 20 tasks solved in at least one arm;
+- a non-churn edit rate ≥ 60%.
+
+**Claim wording:** "With devstral-small-2, the fixed harness solves ≥ 4 of 20."
+- **The claim is about this model on this harness.** It says nothing about PRISM versus BASELINE, and nothing about
+  other models.
+
+**Comparability caveat:**
+- **Every earlier round failed** with other models (Qwen2.5-Coder-14B, Qwen3-14B), so no result is being compared.
+- **This tests whether the harness plus a capable model can solve at all.**
+- **A model change has always meant partial comparability with earlier rounds.** It does again here.
+
+**Context gap:**
+- **What the capability test verified:** single calls at ~16K tokens, and a short tool loop whose prompts stayed under
+  1,100 tokens.
+- **What it did not verify:** a multi-turn loop at 16K-token prompts.
+- **How Phase 0 checks it:** its first 10 runs (checkpoint 3) are where any degradation would appear. For each turn,
+  checkpoint 3 reports parse errors, edit applies and answer quality against prompt size.
+
+**Readings, changed:**
+- **The ceiling check is not available.** gpt-oss-120b at `high` effort was to be the ceiling check after 0–1 solves,
+  and it runs on Groq.
+  - **If Phase 0 has 0–1 solves with infrastructure fine:** the reading goes to the user. The candidates are a
+    thinking-on run of qwen3.8 on the BASELINE arm (multi-session), or a paid provider.
+- **The rate-limit stop rules** (a) and (c) do not apply.
+- **Rule (b) becomes:** stop and report if the projected time exceeds two Kaggle sessions.
+
+**Where and how it runs:**
+- **Where:** on Kaggle, not the cloud environment. The model needs the GPUs. The user runs the cell
+  `kaggle/r4_phase0_cell.py`; the assistant analyses the pushed results.
+- **The checkpoints become the cell's stages,** each followed by the user's go-ahead:
+  1. 0a/0b ready (done);
+  2. `STAGE = "pilot"`: 1 task, both arms (2 runs);
+  3. `STAGE = "first10"`: 5 tasks (one per family in turn), 10 runs;
+  4. `STAGE = "all"`: the remaining 30 runs.
+- **Finished runs are kept** across stages and sessions.
+
+**Variant B (ornith), only if the diagnostic confirms JSON-mode interference:**
+- **Model:** `ornith:35b-q4_K_M`, `think` off.
+- **Client:** `OllamaChat` with JSON mode off (`--no-json-format`); the loop parses the JSON object out of free text.
+  - **If the diagnostic instead shows tool-protocol interference** (it passes only with native tool calls): a native
+    Ollama tool path in `OllamaChat` must be built and tested before variant B can run. That is a further change.
+- **Claim wording:** "With ornith-35B, the fixed harness solves ≥ 4 of 20."
+- **Provisional:** ornith's origin is unverified, so the claim stays provisional until Phase 0 shows it working.
+- **Speed:** 4.5× faster generation (54.6 tok/s) and 3.3× faster prompt processing (1,336 tok/s) than devstral, on
+  the same test rig.
+- **Everything else as in variant A.**
