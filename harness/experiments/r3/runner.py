@@ -302,11 +302,24 @@ def main(argv=None) -> int:
     p.add_argument("--answer-tokens", type=int, default=None, help="the answer limit, thinking included")
     p.add_argument("--no-json-format", action="store_true", help="do not constrain the answer to JSON")
     p.add_argument("--ledger", action="store_true", help="R4-SANITY-4: the per-turn progress summary")
+    # Phase 0a: an OpenAI-compatible provider (gpt-oss-120b on Groq); the default stays R3a's Ollama
+    p.add_argument("--provider", choices=("ollama", "openai"), default="ollama")
+    p.add_argument("--api-key-env", default=None, help="the environment variable holding the API key (openai)")
+    p.add_argument("--reasoning-effort", choices=("low", "medium", "high"), default=None)
+    p.add_argument("--timeout", type=int, default=None, help="seconds per model call")
     a = p.parse_args(argv)
-    from harness.experiments.r3.loop import ANSWER_TOKENS, MODEL, OllamaChat
+    from harness.experiments.r3.loop import ANSWER_TOKENS, MODEL, OllamaChat, OpenAIChat
     task = json.load(open(a.task))
-    chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
-                      answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format)
+    if a.provider == "openai":
+        if not (a.model and a.api_key_env):
+            p.error("--provider openai needs --model and --api-key-env")
+        chat = OpenAIChat(a.base_url, a.model, a.api_key_env, timeout=a.timeout or 300,
+                          answer_tokens=a.answer_tokens or ANSWER_TOKENS, reasoning_effort=a.reasoning_effort,
+                          json_format=not a.no_json_format)
+    else:
+        chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
+                          answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format,
+                          **({"timeout": a.timeout} if a.timeout else {}))
     res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan,
                    ledger=a.ledger)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))

@@ -131,6 +131,78 @@ class OllamaChat:
                 "seconds": round(time.time() - t, 1)}
 
 
+class OpenAIChat:
+    """Phase 0a: one chat call to an OpenAI-compatible endpoint (gpt-oss-120b on Groq), returning what the loop reads
+    from `OllamaChat`. The request shape is `harness/llm.ChatLLM`'s (`/chat/completions`), plus:
+    - the API key from an environment variable (never logged);
+    - up to RETRIES retries on HTTP 429 and 5xx, waiting for Retry-After when given (else 2, 4, 8 s); retries are not
+      turns. Any other error, a timeout included, or a 429/5xx after the retries, propagates (an infrastructure death);
+    - the model's `reasoning` field as `thinking`;
+    - per call: the model id and fingerprint returned, retries made, and the rate-limit headers, as `meta`."""
+
+    RETRIES = 3
+    RATE_HEADERS = ("x-ratelimit-limit-requests", "x-ratelimit-limit-tokens", "x-ratelimit-remaining-requests",
+                    "x-ratelimit-remaining-tokens", "x-ratelimit-reset-requests", "x-ratelimit-reset-tokens")
+
+    def __init__(self, base_url: str, model: str, api_key_env: str, timeout: int = 300,
+                 answer_tokens: int = ANSWER_TOKENS, reasoning_effort: str | None = None, json_format: bool = True):
+        self.url, self.model, self.timeout = base_url.rstrip("/"), model, timeout
+        self.api_key_env, self.answer_tokens = api_key_env, answer_tokens
+        self.reasoning_effort, self.json_format = reasoning_effort, json_format
+        self.sleep = time.sleep                   # replaced in tests
+
+    def payload(self, messages: list[dict], seed: int) -> dict:
+        body = {"model": self.model, "messages": messages, "temperature": TEMPERATURE, "seed": seed,
+                "max_tokens": self.answer_tokens}
+        if self.json_format:
+            body["response_format"] = {"type": "json_object"}
+        if self.reasoning_effort:
+            body["reasoning_effort"] = self.reasoning_effort
+        return body
+
+    def __call__(self, messages: list[dict], seed: int) -> dict:
+        import urllib.error
+        key = os.environ.get(self.api_key_env)
+        if not key:
+            raise RuntimeError(f"environment variable {self.api_key_env} is not set")
+        data = json.dumps(self.payload(messages, seed)).encode()
+        retries, waited = 0, 0.0
+        t = time.time()
+        while True:
+            req = urllib.request.Request(f"{self.url}/chat/completions", data=data, headers={
+                "Content-Type": "application/json", "Authorization": f"Bearer {key}",
+                # Groq's edge refuses Python's default urllib User-Agent (Cloudflare error 1010)
+                "User-Agent": "prism-harness/1.0"})
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                    out = json.loads(r.read())
+                    headers = {h: r.headers.get(h) for h in self.RATE_HEADERS if r.headers.get(h) is not None}
+                break
+            except urllib.error.HTTPError as exc:
+                if (exc.code == 429 or 500 <= exc.code < 600) and retries < self.RETRIES:
+                    ra = exc.headers.get("retry-after") if exc.headers else None
+                    try:
+                        wait = float(ra) if ra else 2.0 * 2 ** retries
+                    except ValueError:
+                        wait = 2.0 * 2 ** retries
+                    wait = min(wait, 120.0)
+                    retries += 1
+                    waited += wait
+                    self.sleep(wait)
+                    continue
+                body = exc.read().decode("utf8", "replace")[:300] if hasattr(exc, "read") else ""
+                raise RuntimeError(f"HTTP {exc.code} after {retries} retries: {body}") from exc
+        choice = (out.get("choices") or [{}])[0]
+        msg = choice.get("message") or {}
+        usage = out.get("usage") or {}
+        return {"text": msg.get("content") or "", "thinking": msg.get("reasoning"),
+                "prompt_tokens": int(usage.get("prompt_tokens") or 0),
+                "answer_tokens": int(usage.get("completion_tokens") or 0),
+                "done_reason": choice.get("finish_reason"), "seconds": round(time.time() - t - waited, 1),
+                "meta": {"model": out.get("model"), "system_fingerprint": out.get("system_fingerprint"),
+                         "retries": retries, "retry_wait_s": round(waited, 1), "rate": headers}}
+
+
 OUTPUT_HEAD_CHARS = 300      # the start of each tool output, kept in the turn log for diagnosis (never shown again)
 
 
@@ -297,6 +369,8 @@ class AgentRun:
                 rec = {"turn": turn, "prompt_tokens": reply["prompt_tokens"], "answer_tokens": reply["answer_tokens"],
                        "done_reason": reply["done_reason"], "model_seconds": reply["seconds"], "stubbed": stubbed,
                        "used_tokens": used, "reply": reply["text"], "prompt_sha": prompt_sha}
+                if reply.get("meta"):
+                    rec["model_meta"] = reply["meta"]
                 if reply.get("thinking"):
                     rec["thinking"], rec["thinking_tokens"] = reply["thinking"], self.n(reply["thinking"])
                 plan = _plan_of(reply["text"]) if self.plan else None
