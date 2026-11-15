@@ -304,3 +304,69 @@ def test_degeneration_check_classifies_and_summarises_calls():
     s = summarise(rows)
     assert s["before"]["parse_errors"] == 1 and s["before"]["degenerate_tails"] == 1
     assert s["after"]["parse_errors"] == 0 and s["after"]["cut"] == 1 and s["after"]["repaired"] == 1
+
+
+# ------------------------------------------------------------------ native tool calling through Ollama (devstral's own format)
+class _OllamaNative:
+    """Answers /api/chat non-streamed with a fixed `message` and records the request."""
+
+    def __init__(self, message):
+        self.message, self.requests = message, []
+        outer = self
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                outer.requests.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({"message": outer.message, "done": True, "done_reason": "stop",
+                                             "prompt_eval_count": 90, "eval_count": 12}).encode())
+
+            def log_message(self, *a):
+                pass
+
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.httpd.server_port}"
+
+    def close(self):
+        self.httpd.shutdown()
+
+
+def test_native_messages_frame_calls_and_their_outputs_and_leave_the_rest():
+    msgs = [{"role": "system", "content": "s"}, {"role": "user", "content": "task"},
+            {"role": "assistant", "content": '{"tool": "read_file", "args": {"path": "a.py"}}'},
+            {"role": "user", "content": "a.py (lines 1-2 of 2)\n1\tx"},
+            {"role": "assistant", "content": "not a call"}, {"role": "user", "content": L.FORMAT_REMINDER}]
+    out = L.native_messages(msgs)
+    assert out[2] == {"role": "assistant", "content": "",
+                      "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "a.py"}}}]}
+    assert out[3] == {"role": "tool", "content": "a.py (lines 1-2 of 2)\n1\tx"}
+    assert out[4] == msgs[4] and out[5] == msgs[5] and out[:2] == msgs[:2]
+
+
+def test_ollama_native_tools_request_and_reply_mapping():
+    s = _OllamaNative({"content": "", "tool_calls": [
+        {"function": {"name": "edit_file", "arguments": {"path": "a.py", "old": "x", "new": "y"}}},
+        {"function": {"name": "done", "arguments": {}}}]})
+    try:
+        c = L.OllamaChat(s.url, "m", tools=L.native_tools("BASELINE"), stream_cut=True)
+        r = c([{"role": "user", "content": "u"}, {"role": "assistant", "content": CALL},
+               {"role": "user", "content": "edited a.py at line 1: replaced 1 lines with 1"}], 7)
+        body = s.requests[0]
+        assert "format" not in body and body["stream"] is False and body["tools"] == L.native_tools("BASELINE")
+        assert body["messages"][1]["tool_calls"][0]["function"]["name"] == "edit_file"
+        assert body["messages"][2]["role"] == "tool"
+        assert L.parse_call(r["text"]) == ("edit_file", {"path": "a.py", "old": "x", "new": "y"})
+        assert r["meta"]["tool_calls"] == 2 and r["prompt_tokens"] == 90
+    finally:
+        s.close()
+
+
+def test_ollama_native_reply_without_a_call_falls_back_to_its_text():
+    s = _OllamaNative({"content": '{"tool": "run_tests", "args": {}}'})
+    try:
+        r = L.OllamaChat(s.url, "m", tools=L.native_tools("PRISM"))([{"role": "user", "content": "u"}], 1)
+        assert L.parse_call(r["text"]) == ("run_tests", {}) and r["meta"]["tool_calls"] == 0
+    finally:
+        s.close()

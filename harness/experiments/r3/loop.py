@@ -160,12 +160,20 @@ class OllamaChat:
     is recorded in `meta`. Ollama sends no token counts for a cut reply (the loop then estimates them)."""
 
     def __init__(self, base_url: str, model: str = MODEL, timeout: int = 900, think: bool | None = None,
-                 answer_tokens: int = ANSWER_TOKENS, json_format: bool = True, stream_cut: bool = False):
+                 answer_tokens: int = ANSWER_TOKENS, json_format: bool = True, stream_cut: bool = False,
+                 tools: list[dict] | None = None):
         """`think` and `answer_tokens`: the planning investigation's reasoning-model runs (off by default). The prompt
-        window stays NUM_CTX - ANSWER_TOKENS, as for every run; a longer answer (thinking included) widens num_ctx."""
+        window stays NUM_CTX - ANSWER_TOKENS, as for every run; a longer answer (thinking included) widens num_ctx.
+
+        `tools` (`native_tools(version)`, Phase 1): the model's native tool calling (Ollama's `tools`; devstral's
+        template renders them as `[AVAILABLE_TOOLS]` / `[TOOL_CALLS]name[ARGS]{...}` / `[TOOL_RESULTS]`). JSON mode is
+        off with it. The loop's text history is translated for the request (`native_messages`), and the model's call
+        is returned as the loop's `{"tool": ..., "args": ...}` text, as `OpenAIChat` does."""
         self.url, self.model, self.timeout = base_url.rstrip("/"), model, timeout
-        self.think, self.answer_tokens, self.json_format = think, answer_tokens, json_format
-        self.stream_cut = stream_cut
+        self.think, self.answer_tokens = think, answer_tokens
+        self.tools = tools
+        self.json_format = json_format and not tools
+        self.stream_cut = stream_cut and not tools
 
     def _stream(self, req: urllib.request.Request) -> tuple[dict, dict]:
         """Read a streamed reply; returns (the final data, as the non-streamed API would give it, and meta)."""
@@ -201,12 +209,16 @@ class OllamaChat:
         return final, meta
 
     def __call__(self, messages: list[dict], seed: int) -> dict:
+        if self.tools:
+            messages = native_messages(messages)
         req_body = {"model": self.model, "messages": messages, "stream": self.stream_cut,
                     "options": {"temperature": TEMPERATURE, "seed": seed,
                                 "num_ctx": NUM_CTX - ANSWER_TOKENS + self.answer_tokens,
                                 "num_predict": self.answer_tokens}}
         if self.json_format:
             req_body["format"] = "json"
+        if self.tools:
+            req_body["tools"] = self.tools
         if self.think is not None:
             req_body["think"] = self.think
         body = json.dumps(req_body).encode()
@@ -219,6 +231,9 @@ class OllamaChat:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 data = json.loads(r.read())
         text, thinking = data.get("message", {}).get("content", ""), data.get("message", {}).get("thinking")
+        if self.tools:
+            text, n_calls = OpenAIChat._as_text(data.get("message") or {})
+            meta["tool_calls"] = n_calls
         if "</think>" in text:          # a model that writes its reasoning into the answer: the tool call follows it
             head, text = text.rsplit("</think>", 1)
             thinking = (thinking or "") + head.replace("<think>", "")
@@ -229,6 +244,29 @@ class OllamaChat:
         if meta:
             out["meta"] = meta
         return out
+
+
+def native_messages(messages: list[dict]) -> list[dict]:
+    """The loop's text history in the native tool-calling shape: an assistant message that is one tool call becomes
+    `tool_calls`, and the user message right after it (the tool's output) becomes a `tool` message. Anything else (the
+    task, a reply that was not a call, the format reminder after it) is unchanged. The text the model sees is the same;
+    only its framing follows the model's own template."""
+    out, after_call = [], False
+    for m in messages:
+        if m["role"] == "assistant":
+            call = parse_call(m["content"])
+            if call is not None:
+                out.append({"role": "assistant", "content": "",
+                            "tool_calls": [{"function": {"name": call[0], "arguments": call[1]}}]})
+                after_call = True
+                continue
+        elif m["role"] == "user" and after_call:
+            out.append({"role": "tool", "content": m["content"]})
+            after_call = False
+            continue
+        after_call = False
+        out.append(dict(m))
+    return out
 
 
 class OpenAIChat:

@@ -643,3 +643,46 @@ recorded replies and real tools.
 **No change mid-run.** Results go to `reports/r4/phase1e`.
 
 **Step 1e launched by the user on Kaggle (2026-11-15)** with `kaggle/r4_phase1e_cell.py` (code `9e46c23c`).
+
+## Phase 1 step 1f: the reply format (pre-registered 2026-11-15, before the run)
+
+**Why:**
+- **Step 1e part A:** the cut-off fix did not meet its criterion. The broken replies are short, stop inside a JSON
+  string, and come back from Ollama with no stop reason or token counts.
+- **The user's reading** (Mistral's documentation): devstral is a function-calling model. Forcing JSON mode keeps it
+  from its native tool format.
+- **Confirmed from Ollama's registry:** devstral-small-2's chat template renders tools as `[AVAILABLE_TOOLS]`, calls
+  as `[TOOL_CALLS]name[ARGS]{...}`, and results as `[TOOL_RESULTS]` (the `tool` role).
+- **Not established:** the server-side reason replies stop. This step saves Ollama's log to check it.
+
+**Built (no model calls; tests pass):**
+- **`OllamaChat(tools=native_tools(version))`:**
+  - Ollama native tool calling, with JSON mode off;
+  - the loop's text history is framed natively (`native_messages`): a call becomes `tool_calls`, its output becomes a
+    `tool` message;
+  - the first call comes back as the loop's text, as `OpenAIChat` does;
+  - the same schemas in both arms.
+- **The runner:** `--native-tools` now applies to Ollama.
+- **Free-text mode:** already `--no-json-format`.
+
+**The check:** `kaggle/r4_phase1f_cell.py`.
+- **The prompts:** step 1e's 17 turns, rebuilt the same way (7 faithful to Phase 0).
+- **The calls:** 10 per turn (seeds 42–51), under 4 conditions:
+
+| Condition | Prompts | Reply format |
+|---|---|---|
+| `before` | Phase 0 | JSON mode |
+| `free` | Phase 0 | JSON mode off |
+| `native` | Phase 0 | native tools |
+| `native_p1` | Phase 1 (hygiene + compaction) | native tools |
+
+**Decision rule, recorded before the run:**
+- **The primary comparison:** parse-error rate per condition, paired on the same prompts. It is reported on all 17
+  turns, and separately on the 7 faithful ones.
+- **A format replaces JSON mode for the re-baseline** if its parse-error rate is:
+  - at most 5% over all 17 turns;
+  - below `before`'s on both the 17 turns and the 7 faithful ones.
+- **If both qualify, `native` is preferred** (the model's own format), unless `free` is lower by more than 5 points.
+- **If neither qualifies:** JSON mode stays, with the step 1c history cut (which stops the repeats), and the server log
+  decides what is tried next.
+- **Also reported:** whether a valid reply calls a tool from the arm's list, and seconds per call.

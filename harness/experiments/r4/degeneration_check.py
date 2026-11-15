@@ -18,6 +18,13 @@ For one Phase 0 run whose turns `--turns` were parse errors (a reply that traile
 3. **Record per call:** a valid tool call or not, cut for a degenerate tail, repaired, tail length, answer tokens,
    seconds. `summary.json` gives the parse-error rate per condition.
 
+**Conditions** (`--conditions`, default `before after`):
+- `before`: Phase 0's prompts, Phase 0's client (JSON mode);
+- `after`: the Phase 1 prompts (`--compact --hygiene`), the streaming client that cuts a degenerate tail (JSON mode);
+- `free`: Phase 0's prompts, JSON mode off (the reply's JSON object is extracted from free text);
+- `native`: Phase 0's prompts, the model's native tool calling (`OllamaChat(tools=...)`, JSON mode off);
+- `native_p1`: the Phase 1 prompts with native tool calling.
+
 **Limit:** the trajectory is Phase 0's. In a real Phase 1 run an earlier degenerate reply might have been repaired and
 the run gone elsewhere; this check holds the history fixed to isolate the reply itself.
 """
@@ -29,7 +36,10 @@ import os
 import sys
 import time
 
-from harness.experiments.r3.loop import OllamaChat, degenerate_tail, parse_call
+from harness.experiments.r3.loop import OllamaChat, degenerate_tail, native_tools, parse_call
+
+CONDITIONS = ("before", "after", "free", "native", "native_p1")
+PROMPTS_OF = {"before": "before", "after": "after", "free": "before", "native": "before", "native_p1": "after"}
 
 
 def rebuild(log: str, task: str, out: str, clone: str, cache: str, version: str, turn_cap: int, phase1: bool) -> dict:
@@ -72,7 +82,7 @@ def classify(reply: dict) -> dict:
 
 def summarise(rows: list[dict]) -> dict:
     out = {}
-    for cond in ("before", "after"):
+    for cond in CONDITIONS:
         r = [x for x in rows if x["condition"] == cond]
         if not r:
             continue
@@ -99,6 +109,7 @@ def main(argv=None) -> int:
     p.add_argument("--model", required=True)
     p.add_argument("--seeds", type=int, nargs="+", default=list(range(42, 52)))
     p.add_argument("--turn-cap", type=int, default=28)
+    p.add_argument("--conditions", nargs="+", choices=CONDITIONS, default=["before", "after"])
     a = p.parse_args(argv)
     os.makedirs(a.out, exist_ok=True)
     orig = {t["turn"]: t for t in map(json.loads, open(a.log))}
@@ -108,14 +119,18 @@ def main(argv=None) -> int:
     json.dump(check, open(os.path.join(a.out, "rebuild.json"), "w"), indent=1)
     print(json.dumps({"faithful_turns": sum(c["faithful"] for c in check.values()), "of": len(a.turns),
                       "exact_prompt_sha": sum(c["prompt_sha_equal"] for c in check.values())}), flush=True)
-    clients = {"before": OllamaChat(a.base_url, a.model), "after": OllamaChat(a.base_url, a.model, stream_cut=True)}
+    tools = native_tools(a.version)
+    clients = {"before": OllamaChat(a.base_url, a.model), "after": OllamaChat(a.base_url, a.model, stream_cut=True),
+               "free": OllamaChat(a.base_url, a.model, json_format=False),
+               "native": OllamaChat(a.base_url, a.model, tools=tools),
+               "native_p1": OllamaChat(a.base_url, a.model, tools=tools)}
     res_path = os.path.join(a.out, "calls.jsonl")
     done = {(r["condition"], r["turn"], r["seed"]) for r in map(json.loads, open(res_path))} \
         if os.path.exists(res_path) else set()
     with open(res_path, "a") as fh:
         for t in a.turns:
-            for cond in ("before", "after"):
-                msgs = prompts[cond].get(t)
+            for cond in a.conditions:
+                msgs = prompts[PROMPTS_OF[cond]].get(t)
                 if msgs is None:
                     continue
                 for seed in a.seeds:
@@ -137,7 +152,7 @@ def main(argv=None) -> int:
     summary = {"run": os.path.basename(a.log), "turns": a.turns, "seeds": a.seeds, **summarise(rows),
                "rebuild_fidelity": {t: c["faithful"] for t, c in check.items()}}
     json.dump(summary, open(os.path.join(a.out, "summary.json"), "w"), indent=1)
-    print(json.dumps({k: v for k, v in summary.items() if k in ("before", "after")}, indent=1))
+    print(json.dumps({k: v for k, v in summary.items() if k in CONDITIONS}, indent=1))
     return 0
 
 

@@ -309,7 +309,8 @@ def main(argv=None) -> int:
     p.add_argument("--api-key-env", default=None, help="the environment variable holding the API key (openai)")
     p.add_argument("--reasoning-effort", choices=("low", "medium", "high"), default=None)
     p.add_argument("--timeout", type=int, default=None, help="seconds per model call")
-    p.add_argument("--native-tools", action="store_true", help="openai: the tools as native function schemas")
+    p.add_argument("--native-tools", action="store_true",
+                   help="the tools as native function schemas (openai; and ollama, Phase 1: JSON mode off)")
     # Phase 1 (r4/PHASE1_PLAN.md): items 2 and 3, both arms
     p.add_argument("--phase1", action="store_true",
                    help="ollama: stream and cut degenerate replies; hygiene (cut invalid replies in the history, count "
@@ -329,7 +330,8 @@ def main(argv=None) -> int:
     else:
         chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
                           answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format,
-                          stream_cut=a.phase1, **({"timeout": a.timeout} if a.timeout else {}))
+                          stream_cut=a.phase1, tools=native_tools(a.version) if a.native_tools else None,
+                          **({"timeout": a.timeout} if a.timeout else {}))
     res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan,
                    ledger=a.ledger, hygiene=a.phase1, compact=a.phase1)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))
