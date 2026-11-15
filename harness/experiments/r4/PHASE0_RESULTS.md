@@ -198,3 +198,8 @@ to the 16K window. Time per turn rises with prompt size, but tool errors and fai
 then used valid names.
 
 **Projection:** 5.6 min per run, so about 3.8 h for 40 runs plus per-repository setup. One Kaggle session.
+
+**Set-aside lists for the other 15 tasks:** fixed before the `all` stage (AMENDMENTS.md).
+- **Clean:** 11 tasks have nothing to set aside.
+- **Not established:** delete-04, delete-05, delete-07 and delete-08 have no unchanged run.
+- **Flagged:** three of those four have tests broken in every earlier run (4, 13 and 10 tests).

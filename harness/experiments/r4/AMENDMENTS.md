@@ -472,3 +472,21 @@ result that matches a branch's label but not its intent goes to the user, not to
 | delete-03 (pydantic-ai) | **not established**: no unchanged run exists. Secondary = primary until a start-state run is made | – |
 
 **The other 15 tasks:** the same rule. Their lists are fixed before the `all` stage's results are read.
+
+**The lists for the other 15 tasks, fixed 2026-11-15, after checkpoint 3 and before any `all`-stage run:**
+- **Same rule:** unchanged runs from sanity 1–4 only.
+
+| Tasks | Unchanged runs | Set aside |
+|---|---|---|
+| delete-06, delete-09, delete-10, feature-03 … feature-10 (11 tasks) | 2–6 each | **none**: 0 pass-to-pass failures in every unchanged run |
+| delete-04 (hono), delete-05 (multidict), delete-07 (scrapy), delete-08 (werkzeug) | **0** | **not established**: secondary = primary unless a start-state scoring run is made before the `all` results are read |
+
+- **Flagged, not set aside:** three of the four unestablished tasks have pass-to-pass tests broken in every earlier
+  (edited) run:
+  - delete-04: 4 tests;
+  - delete-05: 13 tests;
+  - delete-07: 10 tests;
+  - delete-08: 0 tests.
+- **Two explanations remain:** these may be pre-existing failures like delete-01's and delete-02's, or the
+  unavoidable fallout of every agent's deletion.
+- **Only a start-state run can tell them apart.** Without one, they stay scored.
