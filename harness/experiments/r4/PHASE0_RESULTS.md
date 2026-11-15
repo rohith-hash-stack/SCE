@@ -203,3 +203,111 @@ then used valid names.
 - **Clean:** 11 tasks have nothing to set aside.
 - **Not established:** delete-04, delete-05, delete-07 and delete-08 have no unchanged run.
 - **Flagged:** three of those four have tests broken in every earlier run (4, 13 and 10 tests).
+
+## Final: all 40 runs (2026-11-15)
+
+**The run:**
+- 20 tasks × 2 arms, seed 42, code `ac0d77ac`, devstral-small-2.
+- 4.05 run-hours (6.1 min per run), in one Kaggle session.
+- Results in `reports/r4/phase0/`.
+- Every run exited normally (`rc` 0 for all 40).
+
+### The pass bar (pre-registered; all four must hold): **PASS**
+
+| Criterion | Result | Bar | |
+|---|---|---|---|
+| Infrastructure deaths | **0 of 40** | ≤ 2 | pass |
+| Parse errors | **18 of 999 turns = 1.80%** | < 2% | pass, narrowly |
+| Tasks solved in at least one arm | **7 of 20** | ≥ 4 | pass |
+| Non-churn edit rate | **123 of 183 attempted = 67.2%** (126 applied, 3 churn) | ≥ 60% | pass |
+
+**Claim (amendment wording):** "With devstral-small-2, the fixed harness solves ≥ 4 of 20": **7 of 20.**
+- **What it covers:** a capability result for this model on this harness.
+- **What it does not cover:** PRISM against BASELINE.
+
+### Solves
+
+| Task | PRISM | BASELINE | Notes |
+|---|---|---|---|
+| delete-06 (pydantic) | – | **yes** | BASELINE resolved at the turn cap, without calling done |
+| delete-08 (werkzeug) | **yes** | **yes** | |
+| delete-09 (litestar) | – | **yes** | BASELINE resolved when its token budget ran out, without calling done |
+| delete-10 (prettier) | **yes** | **yes** | BASELINE in 5 turns |
+| feature-02 (litestar) | **yes** | **yes** | a single fail-to-pass test |
+| feature-05 (h3) | – | **yes** | a single fail-to-pass test |
+| feature-09 (scrapy) | **yes** | – | 3/3 fail-to-pass |
+| **Tasks per arm** | **4** | **6** | |
+
+- **By family:** delete 4 of 10 tasks; feature 3 of 10.
+- **Secondary (diagnostic) score:** 8 of 20. delete-01 PRISM is added once its pre-existing failure is set aside.
+- **PRISM against BASELINE (4 tasks against 6):** n = 1 seed per task, and Phase 0 is not a PRISM comparison. No
+  inference is drawn.
+
+### Endings and false dones
+
+| End | PRISM | BASELINE | All |
+|---|---|---|---|
+| done (gate accepted) | 6 | 5 | 11 |
+| turn cap (28) | 9 | 11 | 20 |
+| token budget (300,000) | 5 | 4 | **9** |
+
+- **Gate rejections:** 9 across the 40 runs.
+- **Done accepted by the gate, unresolved by the scorer:** 3 runs.
+  - delete-01 PRISM: the pre-existing failure.
+  - delete-02 PRISM: 3 hidden tests broken by its own edit.
+  - delete-04 BASELINE: exactly the 4 tests flagged before the stage (see below).
+- **Turns after the last edit:** every `done` ran the tests after its last edit.
+
+### Token-budget endings: a known limitation of this model on this harness
+
+- **How many:** 9 of 40 runs (22.5%) ended on the 300K run budget, at turns 23–27.
+- **Why:** devstral's prompts run at 12–17K tokens late in a run.
+- **What they cost:**
+  - one budget ending still resolved (delete-09 BASELINE);
+  - two were cut off while making progress (feature-04 PRISM, 4/6 fail-to-pass; feature-06 PRISM, 15/41);
+  - two spent the whole budget without an applied edit (feature-01 BASELINE, feature-03 BASELINE).
+- **The turn cap ended more runs (20 of 40) than the budget did.**
+- **Unchanged during the run, as decided.** Recorded for the final report.
+
+### Parse errors (18)
+
+- **Where:** concentrated in 2 runs. feature-08 PRISM had 11, the same broken `edit_file` reply repeated. delete-05
+  PRISM had 6, feature-04 BASELINE had 1.
+- **What went wrong:**
+  - **17 degenerate replies:** a well-formed start, then runs of whitespace or `\n` until the reply became invalid
+    JSON. Ollama returned no token counts for these (`prompt_tokens` 0, no `done_reason`), so they cannot be placed
+    by prompt size.
+  - **1 reply hit the 4,096-token answer limit** (feature-04 BASELINE, turn 27).
+- **Effect on the result:** without the two worst runs, the rate is 1 of 960 turns.
+
+### Context by prompt size (all 40 runs)
+
+| Prompt size | Turns | Edits (failed) | Tool errors | Mean model s |
+|---|---|---|---|---|
+| 0–4K | 257 | 27 (7) | 4% | 5.0 |
+| 4–8K | 208 | 40 (16) | 10% | 7.2 |
+| 8–12K | 230 | 52 (12) | 6% | 8.0 |
+| 12–16K | 225 | 49 (16) | 8% | 15.7 |
+| 16K+ | 62 | 15 (6) | 10% | 27.6 |
+| unknown (the 17 degenerate replies) | 17 | – | – | 25.0 |
+
+- **Error rates:** no clear trend with prompt size (4–10%).
+- **Time:** grows about 5× from the smallest prompts to the largest.
+
+### PRISM symbol names
+
+- **Totals:** 38 PRISM calls; 35 returned results; 3 were rejected as invalid names. All 3 rejections were in the
+  pilot (delete-01), none after it.
+
+### The flagged tasks (delete-04, -05, -07): exploratory, not a pre-registered reading
+
+- **Scored strictly, as decided.** Under both readings they count as unresolved.
+- **What Phase 0 adds:**
+  - **delete-05 and delete-07:** the broken pass-to-pass set equals the flagged set exactly in both arms, whatever the
+    agent did.
+  - **delete-04 BASELINE:** its broken set equals the flagged set exactly. That run passed the visible tests and the
+    gate.
+- **If the flagged tests were set aside** (exploratory only; the rule requires a start-state run and none was made),
+  5 more runs would resolve: delete-04 BASELINE, delete-05 both arms, delete-07 both arms. Tasks solved would be
+  **11 of 20**.
+- **The start-state check** (deferred) is what would turn this into a measured secondary reading.
