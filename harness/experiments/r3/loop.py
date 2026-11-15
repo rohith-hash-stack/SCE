@@ -130,18 +130,78 @@ def system_prompt(version: str, plan: bool = False) -> str:
     return (SYSTEM + (PLAN_ADDENDUM if plan else "")).format(tools=tool_docs(version))
 
 
+DEGENERATE_TAIL_CHARS = 400   # Phase 1 item 3: a reply ending in this many characters of whitespace / escaped newlines
+_DEGENERATE_TAIL = re.compile(r"(?:\s|\\[nrt])+\Z")
+
+
+def degenerate_tail(text: str) -> int:
+    """Length of the reply's trailing run of whitespace and escaped `\\n`/`\\r`/`\\t` sequences."""
+    m = _DEGENERATE_TAIL.search(text)
+    return len(m.group(0)) if m else 0
+
+
+def repair_unclosed(text: str, max_braces: int = 2) -> tuple[str, int] | None:
+    """A reply cut after a degenerate tail, with only its final closing braces missing: the text with 1..max_braces
+    `}` appended, if that makes exactly one valid tool call; else None. Never changes what the model wrote."""
+    s = text.rstrip()
+    for k in range(1, max_braces + 1):
+        if parse_call(s + "}" * k) is not None:
+            return s + "}" * k, k
+    return None
+
+
 class OllamaChat:
-    """One chat call to an Ollama server; the answer is constrained to JSON (`format: json`)."""
+    """One chat call to an Ollama server; the answer is constrained to JSON (`format: json`).
+
+    `stream_cut` (Phase 1 item 3, off by default): the reply is streamed, and a reply that degenerates into a run of
+    more than DEGENERATE_TAIL_CHARS whitespace characters or escaped newlines is cut there (the stream is closed, so
+    the server stops generating). The cut text, without its tail, is returned with `done_reason` "degenerate_cut";
+    if appending one or two closing braces makes it one valid tool call, that repaired text is returned and the repair
+    is recorded in `meta`. Ollama sends no token counts for a cut reply (the loop then estimates them)."""
 
     def __init__(self, base_url: str, model: str = MODEL, timeout: int = 900, think: bool | None = None,
-                 answer_tokens: int = ANSWER_TOKENS, json_format: bool = True):
+                 answer_tokens: int = ANSWER_TOKENS, json_format: bool = True, stream_cut: bool = False):
         """`think` and `answer_tokens`: the planning investigation's reasoning-model runs (off by default). The prompt
         window stays NUM_CTX - ANSWER_TOKENS, as for every run; a longer answer (thinking included) widens num_ctx."""
         self.url, self.model, self.timeout = base_url.rstrip("/"), model, timeout
         self.think, self.answer_tokens, self.json_format = think, answer_tokens, json_format
+        self.stream_cut = stream_cut
+
+    def _stream(self, req: urllib.request.Request) -> tuple[dict, dict]:
+        """Read a streamed reply; returns (the final data, as the non-streamed API would give it, and meta)."""
+        text, thinking, final, meta, chunks = "", [], {}, {}, 0
+        deadline = time.time() + self.timeout
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            for line in r:
+                if not line.strip():
+                    continue
+                chunk = json.loads(line)
+                chunks += 1
+                msg = chunk.get("message") or {}
+                text += msg.get("content") or ""
+                if msg.get("thinking"):
+                    thinking.append(msg["thinking"])
+                if chunk.get("done"):
+                    final = chunk
+                    break
+                if time.time() > deadline:
+                    raise TimeoutError(f"no complete reply within {self.timeout} s")
+                if degenerate_tail(text[-(DEGENERATE_TAIL_CHARS + 8):]) > DEGENERATE_TAIL_CHARS:
+                    cut = degenerate_tail(text)
+                    meta = {"degenerate_cut": True, "tail_chars": cut, "chunks": chunks}
+                    final = {"done_reason": "degenerate_cut", "_cut": True}
+                    text = text[: len(text) - cut]
+                    break                                         # leaving `with` closes the stream: Ollama stops
+        if final.pop("_cut", False):
+            fixed = repair_unclosed(text)
+            if fixed is not None:
+                text, meta["repaired_closing_braces"] = fixed[0], fixed[1]
+        final.setdefault("message", {})
+        final["message"] = {"content": text, "thinking": "".join(thinking) or None}
+        return final, meta
 
     def __call__(self, messages: list[dict], seed: int) -> dict:
-        req_body = {"model": self.model, "messages": messages, "stream": False,
+        req_body = {"model": self.model, "messages": messages, "stream": self.stream_cut,
                     "options": {"temperature": TEMPERATURE, "seed": seed,
                                 "num_ctx": NUM_CTX - ANSWER_TOKENS + self.answer_tokens,
                                 "num_predict": self.answer_tokens}}
@@ -152,16 +212,23 @@ class OllamaChat:
         body = json.dumps(req_body).encode()
         req = urllib.request.Request(f"{self.url}/api/chat", data=body, headers={"Content-Type": "application/json"})
         t = time.time()
-        with urllib.request.urlopen(req, timeout=self.timeout) as r:
-            data = json.loads(r.read())
+        meta = {}
+        if self.stream_cut:
+            data, meta = self._stream(req)
+        else:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                data = json.loads(r.read())
         text, thinking = data.get("message", {}).get("content", ""), data.get("message", {}).get("thinking")
         if "</think>" in text:          # a model that writes its reasoning into the answer: the tool call follows it
             head, text = text.rsplit("</think>", 1)
             thinking = (thinking or "") + head.replace("<think>", "")
-        return {"text": text, "thinking": thinking,
-                "prompt_tokens": data.get("prompt_eval_count", 0),
-                "answer_tokens": data.get("eval_count", 0), "done_reason": data.get("done_reason"),
-                "seconds": round(time.time() - t, 1)}
+        out = {"text": text, "thinking": thinking,
+               "prompt_tokens": data.get("prompt_eval_count", 0),
+               "answer_tokens": data.get("eval_count", 0), "done_reason": data.get("done_reason"),
+               "seconds": round(time.time() - t, 1)}
+        if meta:
+            out["meta"] = meta
+        return out
 
 
 class OpenAIChat:
@@ -283,6 +350,7 @@ class OpenAIChat:
         return err.get("failed_generation") or ""
 
 
+PARSE_ERROR_KEEP_CHARS = 400  # Phase 1 item 3 (`hygiene`): how much of an invalid reply goes back into the history
 OUTPUT_HEAD_CHARS = 300      # the start of each tool output, kept in the turn log for diagnosis (never shown again)
 
 
@@ -358,14 +426,19 @@ def parse_call(text: str) -> tuple[str, dict] | None:
 class AgentRun:
     def __init__(self, task: dict, version: str, seed: int, model, shared, index_tools=None,
                  tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False,
-                 gate=None, ledger=None, record_full: bool = False):
+                 gate=None, ledger=None, record_full: bool = False, hygiene: bool = False, compact: bool = False):
         """`gate`: amendment R4-SANITY-2's verification at done (`r4/done_gate.DoneGate`), or None (R3a).
-        `ledger`: amendment R4-SANITY-4's per-turn progress summary (`r4/progress_ledger.ProgressLedger`), or None."""
+        `ledger`: amendment R4-SANITY-4's per-turn progress summary (`r4/progress_ledger.ProgressLedger`), or None.
+        `hygiene` (Phase 1 item 3, both arms): a reply that is not one tool call goes back into the history cut to
+        PARSE_ERROR_KEEP_CHARS; a call the server returned without token counts is counted with the tokenizer.
+        `compact` (Phase 1 item 2, both arms): the history compaction rules (`r3/compaction.py`) before the window
+        rule."""
         """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's five tools, or `related_code`)."""
         self.task, self.version, self.seed, self.model = task, version, seed, model
         self.shared, self.index_tools, self.turn_cap, self.plan = shared, index_tools, turn_cap, plan
         self.gate, self.ledger = gate, ledger
         self.record_full = record_full    # Phase 0b replays: the full prompt and output in the turn log
+        self.hygiene, self.compact = hygiene, compact
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
         self.allowed = set(SHARED_DOC) | set(PRISM_DOC if version == "PRISM" else BASELINE_DOC)
@@ -433,7 +506,11 @@ class AgentRun:
                     end = "turn_cap"
                     break
                 tail = self.ledger.render(turn + 1) if self.ledger is not None and history else ""
-                msgs, stubbed = self.window(system, task_msg, history, tail)
+                shown, compaction = history, None
+                if self.compact:                                     # Phase 1 item 2: before the window rule
+                    from harness.experiments.r3.compaction import compact
+                    shown, compaction = compact(history, self.n)
+                msgs, stubbed = self.window(system, task_msg, shown, tail)
                 est = sum(self.n(m["content"]) for m in msgs) + ANSWER_TOKENS
                 if used + est > BUDGET_TOKENS:
                     end = "budget"
@@ -446,12 +523,23 @@ class AgentRun:
                 except Exception as exc:  # an infrastructure failure: recorded; the run ends (counts as not resolved)
                     end = f"model_error: {type(exc).__name__}: {exc}"
                     break
+                estimated = False
+                if self.hygiene and not reply["prompt_tokens"]:      # Phase 1: no counts from the server
+                    reply = {**reply, "prompt_tokens": est - ANSWER_TOKENS}
+                    estimated = True
+                if self.hygiene and not reply["answer_tokens"] and (reply["text"] or reply.get("thinking")):
+                    reply = {**reply, "answer_tokens": self.n(reply["text"]) + self.n(reply.get("thinking") or "")}
+                    estimated = True
                 used += reply["prompt_tokens"] + reply["answer_tokens"]
                 rec = {"turn": turn, "prompt_tokens": reply["prompt_tokens"], "answer_tokens": reply["answer_tokens"],
                        "done_reason": reply["done_reason"], "model_seconds": reply["seconds"], "stubbed": stubbed,
                        "used_tokens": used, "reply": reply["text"], "prompt_sha": prompt_sha}
+                if compaction is not None:
+                    rec["compaction"] = compaction
                 if reply.get("meta"):
                     rec["model_meta"] = reply["meta"]
+                if estimated:
+                    rec["tokens_estimated"] = True
                 if self.record_full:
                     rec["prompt"] = msgs
                 if reply.get("thinking"):
@@ -462,7 +550,11 @@ class AgentRun:
                 call = parse_call(reply["text"])
                 if call is None:
                     rec["parse_error"] = True
-                    history += [{"role": "assistant", "content": reply["text"]},
+                    said = reply["text"]
+                    if self.hygiene and len(said) > PARSE_ERROR_KEEP_CHARS:     # Phase 1: not copied back in full
+                        said = (said[:PARSE_ERROR_KEEP_CHARS].rstrip()
+                                + f" … [reply cut here: {len(said)} characters, not one valid JSON tool call]")
+                    history += [{"role": "assistant", "content": said},
                                 {"role": "user", "content": FORMAT_REMINDER}]
                     log.write(json.dumps(rec) + "\n")
                     continue
@@ -492,7 +584,8 @@ class AgentRun:
                 log.flush()
                 said = {"plan": plan, "tool": tool, "args": args} if plan else {"tool": tool, "args": args}
                 history += [{"role": "assistant", "content": json.dumps(said)},
-                            {"role": "user", "content": res["output"], "tool_output": True, "tool": tool}]
+                            {"role": "user", "content": res["output"], "tool_output": True, "tool": tool,
+                             "args": args, "turn": turn}]
                 if tool == "done" and not (res.get("gate") and not res["gate"]["accepted"]):
                     end = "done"
                     break

@@ -51,16 +51,20 @@ class ReplayExhausted(RuntimeError):
 class ReplayModel:
     """Serves a logged run's recorded replies in order; raises when they run out."""
 
-    def __init__(self, turns: list[dict]):
+    def __init__(self, turns: list[dict], count_prompt=None):
+        """`count_prompt` (Phase 1 counterfactual accounting): a function of the messages that replaces the recorded
+        prompt size with the size of the prompt actually built in the replay (for example with compaction on)."""
         self.turns = [t for t in turns if "reply" in t]
         self.i = 0
+        self.count_prompt = count_prompt
 
     def __call__(self, msgs, seed):
         if self.i >= len(self.turns):
             raise ReplayExhausted(f"replay: no recorded reply for turn {self.i + 1}")
         t = self.turns[self.i]
         self.i += 1
-        return {"text": t["reply"], "thinking": t.get("thinking"), "prompt_tokens": t.get("prompt_tokens", 0),
+        pt = self.count_prompt(msgs) if self.count_prompt else t.get("prompt_tokens", 0)
+        return {"text": t["reply"], "thinking": t.get("thinking"), "prompt_tokens": pt,
                 "answer_tokens": t.get("answer_tokens", 0), "done_reason": t.get("done_reason"), "seconds": 0.0}
 
 
@@ -83,16 +87,27 @@ def environment() -> dict:
 
 
 def run(log: str, task_path: str, out: str, clone: str, cache: str, version: str, seed: int = 42,
-        turn_cap: int = 28, ledger: bool = False, plan: bool = False) -> dict:
+        turn_cap: int = 28, ledger: bool = False, plan: bool = False, compact: bool = False, hygiene: bool = False,
+        count_prompts: bool = False) -> dict:
+    """`compact`/`hygiene`: the Phase 1 harness switches. `count_prompts`: prompt sizes counted with the tokenizer on
+    the replay's own prompts (counterfactual accounting; use it on both sides of a comparison)."""
     from harness.experiments.r3.runner import run_task
     turns = [json.loads(ln) for ln in open(log)]
     task = json.load(open(task_path))
     os.makedirs(out, exist_ok=True)
-    res = run_task(task, version, seed, os.path.abspath(clone), out, cache, ReplayModel(turns), turn_cap,
-                   plan=plan, ledger=ledger, record_full=True)
+    counter = None
+    if count_prompts:
+        from tokenizers import Tokenizer
+        from harness.experiments.r3.runner import TOKENIZER
+        tok = Tokenizer.from_file(TOKENIZER)
+        counter = lambda msgs: sum(len(tok.encode(m["content"]).ids) for m in msgs) + 8 * len(msgs)
+    res = run_task(task, version, seed, os.path.abspath(clone), out, cache, ReplayModel(turns, counter), turn_cap,
+                   plan=plan, ledger=ledger, record_full=True, compact=compact, hygiene=hygiene)
     meta = {"source_log": os.path.abspath(log), "source_sha": hashlib.sha256(open(log, "rb").read()).hexdigest(),
             "task": task["id"], "task_sha": hashlib.sha256(json.dumps(task, sort_keys=True).encode()).hexdigest(),
-            "version": version, "seed": seed, "turn_cap": turn_cap, "flags": {"ledger": ledger, "plan": plan},
+            "version": version, "seed": seed, "turn_cap": turn_cap,
+            "flags": {"ledger": ledger, "plan": plan, "compact": compact, "hygiene": hygiene,
+                      "count_prompts": count_prompts},
             "run": res.get("run"), "outcome": res.get("outcome"), "environment": environment()}
     json.dump(meta, open(os.path.join(out, "replay.json"), "w"), indent=1)
     return meta
@@ -183,13 +198,17 @@ def main(argv=None) -> int:
     r.add_argument("--turn-cap", type=int, default=28)
     r.add_argument("--ledger", action="store_true")
     r.add_argument("--plan", action="store_true")
+    r.add_argument("--compact", action="store_true", help="Phase 1: history compaction")
+    r.add_argument("--hygiene", action="store_true", help="Phase 1: invalid replies cut in the history")
+    r.add_argument("--count-prompts", action="store_true", help="prompt sizes from the replay's own prompts")
     c = sub.add_parser("compare")
     c.add_argument("a")
     c.add_argument("b")
     c.add_argument("--out")
     a = p.parse_args(argv)
     if a.cmd == "run":
-        meta = run(a.log, a.task, a.out, a.clone, a.cache, a.version, a.seed, a.turn_cap, a.ledger, a.plan)
+        meta = run(a.log, a.task, a.out, a.clone, a.cache, a.version, a.seed, a.turn_cap, a.ledger, a.plan,
+                   a.compact, a.hygiene, a.count_prompts)
         print(json.dumps({k: meta[k] for k in ("run", "outcome")}))
         return 0
     rep = compare(a.a, a.b)

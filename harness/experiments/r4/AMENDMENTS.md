@@ -508,3 +508,28 @@ result that matches a branch's label but not its intent goes to the user, not to
 - **Broken tasks are a known issue for future task mining:** delete-01, -02 confirmed; delete-04, -05, -07 flagged.
   The list is in `PHASE1_PLAN.md` §8.
 - **Phase 1:** planning only (`PHASE1_PLAN.md`); nothing built yet.
+
+### Phase 1 decisions (user, 2026-11-15)
+
+1. **Budget accounting is unchanged.** Every prompt token counts, for comparability with earlier rounds. Prompt size
+   is reduced by compaction (pointers and summaries), not by changing the counting.
+2. **PRISM symbols:** a clearer error message only. File paths are not accepted. Whether the message alone changes
+   the model's behaviour is seen first.
+3. **The comparison's target is a 10–15% relative improvement in solve rate.** No new task mining before the
+   re-baseline.
+4. **Seed noise (H5) is measured after the harness fixes,** on the harness the comparison will use.
+5. **Go-ahead for steps 1a–1d** (no model calls). Built and tested locally; reported in `PHASE1_BUILD.md` before any
+   Kaggle cell.
+
+**Assistant's note on decision 3:** this is a size calculation, recorded so the comparison's design is settled before
+any run.
+- **What the target means:** on Phase 0's BASELINE rate (6 of 20 tasks, 30%), a 10–15% relative gain is 3–4.5
+  percentage points (30% → 33–34.5%).
+- **What detecting it takes:** at α = 0.05 and 80% power, a two-proportion test needs about 1,700 runs per arm for
+  4.5 points, and about 3,800 for 3 points. A paired design (the same tasks and seeds in both arms) lowers this, but
+  it stays in the thousands of runs.
+- **What that costs:** at 6 minutes a run, that is hundreds of GPU-hours, against 4 hours for Phase 0.
+- **The design question for after the re-baseline:**
+  - **(a)** a larger effect as the confirmatory target, for example 30% → 45%;
+  - **(b)** a cheaper outcome measure with less noise than solve rate, such as tests passing per task;
+  - **(c)** more tasks.

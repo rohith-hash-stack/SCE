@@ -222,7 +222,8 @@ def _restore(work: str, tree: str, files: list[str]) -> None:
 
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
-             score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False) -> dict:
+             score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False,
+             hygiene: bool = False, compact: bool = False) -> dict:
     from harness.experiments.r3.loop import AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
@@ -256,7 +257,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
             from harness.experiments.r4.progress_ledger import ProgressLedger
             progress = ProgressLedger(turn_cap, gate, task, shared)
         summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
-                           gate=gate, ledger=progress, record_full=record_full).run(out)
+                           gate=gate, ledger=progress, record_full=record_full, hygiene=hygiene,
+                           compact=compact).run(out)
         result = {**summary}
         if score_run:
             stage = "scoring"
@@ -308,6 +310,10 @@ def main(argv=None) -> int:
     p.add_argument("--reasoning-effort", choices=("low", "medium", "high"), default=None)
     p.add_argument("--timeout", type=int, default=None, help="seconds per model call")
     p.add_argument("--native-tools", action="store_true", help="openai: the tools as native function schemas")
+    # Phase 1 (r4/PHASE1_PLAN.md): items 2 and 3, both arms
+    p.add_argument("--phase1", action="store_true",
+                   help="ollama: stream and cut degenerate replies; hygiene (cut invalid replies in the history, count "
+                        "replies without token counts); history compaction")
     a = p.parse_args(argv)
     from harness.experiments.r3.loop import ANSWER_TOKENS, MODEL, OllamaChat, OpenAIChat, native_tools
     task = json.load(open(a.task))
@@ -323,9 +329,9 @@ def main(argv=None) -> int:
     else:
         chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
                           answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format,
-                          **({"timeout": a.timeout} if a.timeout else {}))
+                          stream_cut=a.phase1, **({"timeout": a.timeout} if a.timeout else {}))
     res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan,
-                   ledger=a.ledger)
+                   ledger=a.ledger, hygiene=a.phase1, compact=a.phase1)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))
     return 0
 
