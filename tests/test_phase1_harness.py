@@ -288,3 +288,19 @@ def test_compact_run_sends_smaller_prompts_and_logs_what_it_did(tmp_path):
         assert ("compaction" in log[-1]) is flag
     assert sizes[True][:2] == sizes[False][:2]              # nothing to compact yet
     assert sizes[True][3] < sizes[False][3] * 0.7           # the two older reads are superseded by the full read
+
+
+# ------------------------------------------------------------------ step 1e part A: the degeneration check
+def test_degeneration_check_classifies_and_summarises_calls():
+    from harness.experiments.r4.degeneration_check import classify, summarise
+    good = classify({"text": CALL, "answer_tokens": 20, "seconds": 1.0})
+    trailing = classify({"text": CALL[:-1] + " \n" * 300, "answer_tokens": 4096, "seconds": 90.0})
+    fixed = classify({"text": CALL, "meta": {"degenerate_cut": True, "tail_chars": 450, "repaired_closing_braces": 1},
+                      "done_reason": "degenerate_cut", "seconds": 3.0})
+    assert good["valid"] and not trailing["valid"] and trailing["tail_chars"] > 400
+    assert fixed["valid"] and fixed["cut"] and fixed["repaired"] == 1
+    rows = [dict(trailing, condition="before", turn=8, seed=42), dict(good, condition="before", turn=8, seed=43),
+            dict(fixed, condition="after", turn=8, seed=42), dict(good, condition="after", turn=8, seed=43)]
+    s = summarise(rows)
+    assert s["before"]["parse_errors"] == 1 and s["before"]["degenerate_tails"] == 1
+    assert s["after"]["parse_errors"] == 0 and s["after"]["cut"] == 1 and s["after"]["repaired"] == 1

@@ -533,3 +533,111 @@ any run.
   - **(a)** a larger effect as the confirmatory target, for example 30% → 45%;
   - **(b)** a cheaper outcome measure with less noise than solve rate, such as tests passing per task;
   - **(c)** more tasks.
+
+## Phase 1: the primary metric changes to "share of target tests passed" (user, 2026-11-15)
+
+**The decision:** solve rate needs too many runs for a 10–15% relative effect. From the re-baseline on, the primary
+metric is the share of each task's target tests passed. Solve rate becomes a secondary metric.
+
+**The exact definition, proposed now and to be confirmed when the re-baseline is designed:**
+- **Each run gets a score from 0 to 1.** The score is 1 exactly when the run is resolved.
+- **A feature task:**
+
+  score = (fail-to-pass tests passing ÷ fail-to-pass tests) × (pass-to-pass tests still passing ÷ pass-to-pass tests).
+
+  Without the second factor, a run could pass the new tests by breaking the old ones.
+- **A delete task:** score = 0 if the target is still defined; otherwise, the share of pass-to-pass tests still
+  passing.
+  - **Why the target condition:** a delete task names no fail-to-pass tests, and doing nothing keeps 100% of the
+    pass-to-pass tests.
+  - **"Still passing":** in the scorer's sense. A test the agent deleted is not counted.
+- **Strict lists, as for the primary solve score.** delete-01's and delete-02's pre-existing failures keep those
+  tasks below 1. The secondary set-aside reading applies to the score too.
+- **Unit of analysis:** the task, as the mean of its runs' scores, paired across arms.
+
+**The size of the comparison:**
+- **Still to be set,** from the within-task, across-seed variance that step 1e part B measures.
+- **What the continuous score adds:** partial progress counts. Phase 0's feature-06 PRISM (15 of 41 target tests)
+  scores 0.37, where solve rate gives it 0.
+- **Not a guarantee:** a smaller required sample is expected, not certain.
+
+## Phase 1 step 1e: degeneration check and seed noise (pre-registered 2026-11-15, before the run)
+
+**Approved by the user (2026-11-15).**
+- **Model:** devstral-small-2:24b-instruct-2512-q4_K_M.
+- **Where:** one Kaggle session, about 3–4 h, in the cell `kaggle/r4_phase1e_cell.py`.
+- **Code:** pinned in the cell, with every Phase 1 build step at that commit.
+
+### Part A: do the trailing-off parse errors go away?
+
+**The material:** the 17 Phase 0 turns whose reply trailed off: delete-05 PRISM, turns 18–21, 24 and 27; feature-08
+PRISM, turns 8, 15 and 19–27.
+
+**Rebuilding the prompts:** each turn's prompt is rebuilt by the replay tool (`r4/degeneration_check.py`), from the
+recorded replies and real tools.
+- **The fidelity check:** every earlier tool output is byte-identical to Phase 0's, except `run_tests` outputs. Those
+  carry per-run temporary paths and must match Phase 0's logged head.
+- **Checked locally on delete-05:** 6 of 6 target turns pass.
+- **A turn that fails the fidelity check** is reported and excluded from the comparison.
+
+**The two conditions:** each turn is sent 10 times (seeds 42–51) in each.
+
+| | Harness | Client |
+|---|---|---|
+| **before** | Phase 0 | `OllamaChat` as in Phase 0 |
+| **after** | `--phase1`: hygiene + compaction, the same trajectory | `OllamaChat(stream_cut=True)` |
+
+340 calls in all.
+
+**Recorded per call:**
+- a valid tool call or not;
+- a degenerate tail (over 400 characters) or not;
+- cut;
+- repaired;
+- seconds;
+- answer tokens.
+
+**Expectations, recorded before the run:**
+1. **before** reproduces the problem: a parse-error rate of at least 30% over its 170 calls. If it does not, the
+   problem was not reproduced and nothing is concluded about the fix.
+2. **after**, the main criterion:
+   - every degenerate tail is cut (no call returns over 400 characters of tail);
+   - the parse-error rate is at most a quarter of before's.
+3. **The feature-08 shape** (`args` complete, the final brace missing) should end up valid, repaired.
+   - **The delete-05 shape** (escaped newlines inside a string) cannot be repaired. Its calls can stay parse errors,
+     but the reply sent back into the history is cut to 400 characters. So "gone" is expected for the first shape
+     only; the second becomes cheap, not absent.
+4. **after's mean seconds per call is below before's.**
+
+**Limit:** the trajectory is Phase 0's.
+- **In a live Phase 1 run,** an earlier repaired reply would change everything after it.
+- **What part A isolates:** the reply given a fixed history.
+
+### Part B: seed noise on the Phase 1 harness (H5)
+
+**The runs:** the 4 tasks whose arms disagreed in Phase 0 (delete-06, delete-09, feature-05, feature-09) × seeds 42,
+43 and 44 × both arms = 24 runs.
+- **Settings:** `--phase1`; turn cap 28; ledger on; gate on; budget unchanged (every prompt token counts).
+
+**Reported:**
+- **Per task and arm:**
+  - solves out of 3;
+  - the continuous score (mean and spread across seeds);
+  - endings;
+  - budget endings;
+  - parse errors;
+  - compaction counts;
+  - re-reads of compacted reads.
+- **Per arm:** the share of PRISM output in the prompt.
+
+**Readings, recorded before the run:**
+- **H5 is supported (the Phase 0 discordance was noise)** if either holds:
+  - for at least 3 of the 4 tasks, an arm's outcome differs across its own seeds, with solves 1 or 2 of 3;
+  - the arm that won a task in Phase 0 does not win it on solves across the 3 seeds.
+- **Otherwise the discordance is treated as real,** and the diagnosis's H1 (PRISM output volume) is followed up first.
+- **The across-seed variance of the continuous score sizes the re-baseline comparison.** No PRISM-versus-BASELINE
+  claim is made from 4 tasks.
+- **Also checked:** whether compaction caused extra re-reads or stale edits against Phase 0. This is descriptive;
+  there is no bar.
+
+**No change mid-run.** Results go to `reports/r4/phase1e`.
