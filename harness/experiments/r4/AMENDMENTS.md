@@ -539,7 +539,7 @@ any run.
 **The decision:** solve rate needs too many runs for a 10–15% relative effect. From the re-baseline on, the primary
 metric is the share of each task's target tests passed. Solve rate becomes a secondary metric.
 
-**The exact definition, proposed now and to be confirmed when the re-baseline is designed:**
+**The exact definition (approved by the user, 2026-11-15):**
 - **Each run gets a score from 0 to 1.** The score is 1 exactly when the run is resolved.
 - **A feature task:**
 
@@ -641,3 +641,5 @@ recorded replies and real tools.
   there is no bar.
 
 **No change mid-run.** Results go to `reports/r4/phase1e`.
+
+**Step 1e launched by the user on Kaggle (2026-11-15)** with `kaggle/r4_phase1e_cell.py` (code `9e46c23c`).
