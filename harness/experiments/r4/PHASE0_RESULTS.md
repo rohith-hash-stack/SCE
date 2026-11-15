@@ -126,3 +126,75 @@ The 99 earlier errors were "not found" lookups.
 - or the tool layer maps `path/to/file.ext` plus a name onto the dotted form.
 
 **Tracked through Phase 0:** the share of PRISM calls rejected as invalid names, per run.
+
+## Checkpoint 3: the first 10 runs (2026-11-15)
+
+**Runs:** 5 tasks × 2 arms, code `ac0d77ac`. Results in `reports/r4/phase0/`; 0.94 run-hours in total.
+
+| Task | Arm | End | Turns | Primary | Secondary | Pass-to-pass broken (after set-aside) | Fail-to-pass | Edits applied / attempted | PRISM calls ok / invalid name |
+|---|---|---|---|---|---|---|---|---|---|
+| delete-01 zod | PRISM | done (gate accepted) | 13 | no | **yes** | 1 (0) | – | 3/4 | 0/3 |
+| delete-01 zod | BASELINE | turn cap | 28 | no | no | 49 (48) | – | 5/7 | – |
+| delete-02 instructor | PRISM | done (gate accepted) | 28 | no | no | 60 (3) | – | 7/10 | 1/0 |
+| delete-02 instructor | BASELINE | turn cap | 28 | no | no | 58 (1) | – | 7/12 | – |
+| delete-03 pydantic-ai | PRISM | token budget | 25 | no | no | 69 (69, all missing) | – | 3/3 | 3/0 |
+| delete-03 pydantic-ai | BASELINE | turn cap | 28 | no | no | 1 (1) | – | 4/4 | – |
+| feature-01 hono | PRISM | turn cap | 28 | no | no | 0 | 0/18 | 3/3 | 2/0 |
+| feature-01 hono | BASELINE | token budget | 23 | no | no | 0 | 0/18 | 0/0 | – |
+| **feature-02 litestar** | **PRISM** | done | 22 | **yes** | yes | 0 | 1/1 | 4/4 | 1/0 |
+| **feature-02 litestar** | **BASELINE** | done | 25 | **yes** | yes | 0 | 1/1 | 4/5 | – |
+
+**The pass bar so far** (bar for all 40 runs in brackets):
+
+| Measure | So far | Bar |
+|---|---|---|
+| Infrastructure deaths | 0 of 10 | ≤ 2 of 40 |
+| Parse errors | 0 of 248 turns | < 2% of turns |
+| Non-churn edit rate | 38 of 52 attempted (73%); churn 2 | ≥ 60% |
+| Tasks solved, primary | **1 of 5** (feature-02, both arms) | ≥ 4 of 20 |
+| Tasks solved, secondary | 2 of 5 (plus delete-01 PRISM) | – |
+
+**The first solves of R4:**
+- **feature-02 (litestar) was resolved in both arms:** the fail-to-pass test passes, no pass-to-pass test broke, and
+  the hidden tests applied.
+- **Both arms changed the same four files**, with function F1 = 1.0 against the developer's change.
+- **A caveat on the task:** its fail-to-pass check is a single test (the HTML contains the new JavaScript functions),
+  so it is the least demanding feature check in the batch.
+
+**Near-misses, each from the agent's own edits:**
+- **delete-02 BASELINE** broke 1 test once the pre-existing 57 are set aside; **PRISM** broke 3, all
+  `test_legacy_prepare_parse_still_infers_stream`. Both also edited a test file (`tests/coverage/...`).
+- **delete-02 PRISM's done was gate-accepted but unresolved:** the 3 broken tests are hidden-patch tests the gate
+  cannot see.
+- **delete-03 BASELINE** broke only `test_import_errors`.
+
+**delete-03's earlier `missing` results were agent-caused:**
+- **The evidence:** this BASELINE run got results for all 69 tests, 68 of them passing. So the environment produces
+  them, and the earlier all-`missing` runs had broken an import.
+- **Not a pre-existing failure:** its secondary score stays equal to the primary. No unchanged run exists to set
+  anything aside, and nothing needs to be.
+
+**Endings:**
+- **4 dones,** all gate-accepted, with 0 gate rejections. Each ran the tests after its last edit.
+- **4 turn caps.**
+- **2 token-budget endings** (the 300,000-token run budget, unchanged). These are new with devstral: its prompts run
+  at 12–17K tokens late in a run, so 300K is spent in 18–25 turns. feature-01 BASELINE spent its budget on 23 turns
+  of grep and read without an edit.
+
+**The context gap (amendment: "the first 10 runs will reveal any degradation")** — no quality degradation is seen up
+to the 16K window. Time per turn rises with prompt size, but tool errors and failed edits do not:
+
+| Prompt size | Turns | Edits (failed) | Tool errors | Mean model seconds |
+|---|---|---|---|---|
+| 0–4K | 63 | 9 (5) | 8% | 4.7 |
+| 4–8K | 63 | 16 (5) | 13% | 7.2 |
+| 8–12K | 72 | 14 (1) | 1% | 8.4 |
+| 12–16K | 43 | 11 (1) | 2% | 17.0 |
+| 16K+ | 7 | 2 (0) | 0% | 24.3 |
+
+- **Truncation:** delete-03 PRISM had 2 cut outputs and 8 stubbed turns (the window rule). That is its only run.
+
+**PRISM invalid symbol names:** 3 of 11 PRISM calls in the 10 runs, all in delete-01 (the pilot). The 8 calls since
+then used valid names.
+
+**Projection:** 5.6 min per run, so about 3.8 h for 40 runs plus per-repository setup. One Kaggle session.
