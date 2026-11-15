@@ -43,8 +43,7 @@ STAGE = "pilot"                       # "pilot" (2 runs) -> "first10" (10 runs) 
 STAGE_TASKS = {"pilot": 1, "first10": 5, "all": None}
 SUMMARIZER = "devstral-small-2:24b-instruct-2512-q4_K_M"   # Phase 0 model (amendment); JSON mode, no think flag
 MODEL_FLAGS = ["--model", SUMMARIZER, "--ledger"]
-# If the ornith diagnostic confirms JSON-mode interference and the user switches models (amendment, variant B):
-# SUMMARIZER = "ornith:35b-q4_K_M"; MODEL_FLAGS = ["--model", SUMMARIZER, "--think", "off", "--no-json-format", "--ledger"]
+# devstral confirmed 2026-11-15 (AMENDMENTS.md: Phase 0 on a local model; the ornith rule overridden)
 OLLAMA_VERSION = "0.34.0"
 PORTS = (11434,)
 GPU_GROUPS = ("0,1",)

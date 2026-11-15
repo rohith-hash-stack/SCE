@@ -305,13 +305,14 @@ same environment variables. Comparison across machines is out of scope."
     differ between any two runs;
   - `different`: the first difference is given.
 
-## Phase 0 on a local model (DRAFT, 2026-11-13; not in force until the user confirms the model)
+## Phase 0 on a local model (in force 2026-11-15, before the pilot)
 
-**Status:** drafted at the user's direction (2026-11-13).
-- **Not in force:** it takes effect when the user confirms the model, after the ornith diagnostic
-  (`MODEL_CAPABILITY_TEST.md` §10).
-- **Variant A (devstral-small-2)** is the default. **Variant B (ornith)** replaces it only if the diagnostic confirms
-  JSON-mode interference.
+**Status:**
+- **Drafted** 2026-11-13; **finalized** 2026-11-15, when the user confirmed devstral-small-2 after the ornith
+  diagnostic (`MODEL_CAPABILITY_TEST.md` §10.1). That confirmation overrides the diagnostic's pre-registered rule; see
+  "Override" below.
+- **The Phase 0 model is variant A, devstral-small-2.** Variant B (ornith) was not taken; it is kept below as a
+  record.
 - **Everything in "Phase 0: model capability check" above stands** unless changed here.
 
 **Model change:**
@@ -372,8 +373,13 @@ The native-tool client (Phase 0a) is not used.
 **Readings, changed:**
 - **The ceiling check is not available.** gpt-oss-120b at `high` effort was to be the ceiling check after 0–1 solves,
   and it runs on Groq.
-  - **If Phase 0 has 0–1 solves with infrastructure fine:** the reading goes to the user. The candidates are a
-    thinking-on run of qwen3.8 on the BASELINE arm (multi-session), or a paid provider.
+  - **If Phase 0 has 0–1 solves with infrastructure fine: accept the finding** (user's decision, 2026-11-15,
+    recorded before the pilot).
+    - **No ceiling check is run.** The result is reported as: "with devstral-small-2, the fixed harness solves 0–1
+      of 20".
+    - **Task validity is examined next,** as the pre-registration's "tasks are the limit" branch.
+    - **Not chosen:** qwen3.8 with thinking on (BASELINE arm, ~13–17 h), a paid Groq tier for gpt-oss-120b at
+      `high`, or deciding at the results (that risked post-hoc rationalization).
 - **The rate-limit stop rules** (a) and (c) do not apply.
 - **Rule (b) becomes:** stop and report if the projected time exceeds two Kaggle sessions.
 
@@ -387,7 +393,7 @@ The native-tool client (Phase 0a) is not used.
   4. `STAGE = "all"`: the remaining 30 runs.
 - **Finished runs are kept** across stages and sessions.
 
-**Variant B (ornith), only if the diagnostic confirms JSON-mode interference:**
+**Variant B (ornith): not taken** (override below). Recorded as drafted:
 - **Model:** `ornith:35b-q4_K_M`, `think` off.
 - **Client:** `OllamaChat` with JSON mode off (`--no-json-format`); the loop parses the JSON object out of free text.
   - **If the diagnostic instead shows tool-protocol interference** (it passes only with native tool calls): a native
@@ -397,3 +403,36 @@ The native-tool client (Phase 0a) is not used.
 - **Speed:** 4.5× faster generation (54.6 tok/s) and 3.3× faster prompt processing (1,336 tok/s) than devstral, on
   the same test rig.
 - **Everything else as in variant A.**
+
+### Override of the ornith diagnostic's rule (user, 2026-11-15)
+
+**The user's decision, verbatim:**
+
+"The pre-registered rule returned 'JSON-mode interference confirmed' (ornith: json 1/3, free 2/3). Override
+decision: keep devstral. Rationale: the diagnostic shows the actual cause is a call-shape habit — path at top level
+instead of under args — not JSON mode. Free mode still failed 1/3 (seed 43, 10/10 turns, fenced JSON, no
+constraint). JSON mode amplifies but doesn't cause. If ornith runs with JSON off, expected ~27 failures across 80
+runs from this bug alone, confounding Phase 0's interpretation. Devstral passed 9/9 in all modes with no call-format
+issues. The rule's label matches but its intent doesn't — the rule was designed to distinguish 'JSON mode is
+fixable' from 'model is broken,' and this is a third case neither branch anticipated. This is the only override of
+this pre-registration; future rules must distinguish 'label matches' from 'intent matches.'"
+
+**Assistant's note on the arithmetic,** which leaves the decision unchanged:
+- **Phase 0 has 40 runs** (20 tasks × 2 arms).
+- **At free mode's observed rate** (1 of 3 runs stuck on this bug), the expectation is about 13 affected runs, not
+  27 of 80.
+- **The rate rests on n = 3 on a toy rig.** The harness's error message for the bug is more informative
+  (`bad arguments for read_file: ... missing ... 'path'`), so the real rate in Phase 0 is unknown.
+- **The confound argument holds at either figure.**
+
+**The evidence:** `MODEL_CAPABILITY_TEST.md` §10.1.
+
+**For future pre-registered decision rules:** each branch states the intent it serves, not only its label. A
+result that matches a branch's label but not its intent goes to the user, not to the branch's action.
+
+### Deferred to Phase 1: ornith with native tool calling (not built)
+
+- **Why consider it:** ornith passed 3/3 with native tool calling, where the schema carries the argument structure.
+  It is 4.5× faster at generation and 3.3× faster at prompt processing than devstral.
+- **What it needs:** a native Ollama tool path in `r3/loop.OllamaChat`, with tests, and its own amendment.
+- **When:** a future option for Phase 1, if ornith's speed becomes valuable. Nothing is built now.
