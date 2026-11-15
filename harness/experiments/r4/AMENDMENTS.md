@@ -436,3 +436,39 @@ result that matches a branch's label but not its intent goes to the user, not to
   It is 4.5× faster at generation and 3.3× faster at prompt processing than devstral.
 - **What it needs:** a native Ollama tool path in `r3/loop.OllamaChat`, with tests, and its own amendment.
 - **When:** a future option for Phase 1, if ornith's speed becomes valuable. Nothing is built now.
+
+### Phase 0 scoring: the primary score and a secondary, diagnostic score (user, 2026-11-15; before the first10 stage)
+
+**Recorded:** after the pilot (checkpoint 2), before any of the first10 stage's 8 further runs exist.
+
+**Primary (official) score:** strict, unchanged.
+- **The rule:** each task's fail-to-pass and pass-to-pass tests exactly as in `sanity/tasks_v3.json`.
+- **Pre-existing failures count:** a run broken only by a test that was already failing counts as unresolved. delete-01
+  is the example.
+- **The pass bar and the claim use only this score.**
+
+**Secondary (diagnostic) score:** the runs re-scored with each task's pre-existing failures set aside.
+- **What it tells us:** whether the model would have solved the task if the task were not broken.
+- **It never changes the pass bar or the claim.** It is reported next to the primary score.
+
+**The set-aside list, per task:**
+- **Which tests:** the task's pass-to-pass tests that are not `passed` in a scored run that left the repository
+  unchanged (empty `agent_files`) on the Kaggle run environment.
+  - **With several such runs:** their intersection.
+- **Where it comes from:** only runs made before Phase 0 (sanity 1–4), or a dedicated start-state scoring run. Never
+  the tests a Phase 0 run broke.
+- **Without such a run:** the secondary score equals the primary until a start-state run measures the list.
+- **Otherwise the same as the primary:** a delete task also needs its target absent; a feature task needs its
+  fail-to-pass tests passing.
+
+**The lists for the first10 tasks, fixed now** (evidence: `PHASE0_RESULTS.md`, "Task validity, first10 batch"):
+
+| Task | Set aside | Evidence |
+|---|---|---|
+| delete-01 (zod) | 1 test: `recursive-types.test.ts::recursive type with \`id\` meta` (its duplicate ID, prefixed with the file path, passes and stays scored) | 4 unchanged runs (sanity 1 and 2, both arms), all with exactly this test failed |
+| delete-02 (instructor) | 57 tests in `tests/v2/test_request_local_streaming.py` | 2 unchanged runs (sanity 2 PRISM, sanity 3 BASELINE), identical 57-test sets |
+| feature-01 (hono) | none | 4 unchanged runs, 0 pass-to-pass failures |
+| feature-02 (litestar) | none | 4 unchanged runs, 0 pass-to-pass failures |
+| delete-03 (pydantic-ai) | **not established**: no unchanged run exists. Secondary = primary until a start-state run is made | – |
+
+**The other 15 tasks:** the same rule. Their lists are fixed before the `all` stage's results are read.
