@@ -239,3 +239,37 @@ seed 42**: each row is n = 1.
 - the cell logs each turn;
 - it scores the 18 loops;
 - it prints "JSON-mode interference confirmed".
+
+### 10.1 Result (Kaggle 2× T4, 2026-11-15; the user sent the summary lines and the JSON-mode turn logs)
+
+| Mode | ornith passes | devstral passes (control) |
+|---|---|---|
+| A `json` | 1/3 (seeds 42 and 44 fail; 43 passes in 9 turns) | 3/3 |
+| B `free` | 2/3 (seeds 42 and 44 pass in 5 turns; 43 fails) | 3/3 |
+| C `native` | 3/3 (42 and 44 in 5 turns; 43 in 8, with one parse failure and two tool errors) | 3/3 |
+
+- **Infrastructure:** no failures in any of the 18 loops.
+- **The pre-registered verdict, applied by the code: "JSON-mode interference confirmed"** (A fails, B passes).
+
+**What the logs show:** every failing ornith run failed the same way, in JSON mode and in free mode.
+- **The arguments at the top level:** ornith wrote `{"tool": "read_file", "path": "calc.py"}` instead of
+  `{"tool": "read_file", "args": {"path": "calc.py"}}`.
+- **What the rig did with it:** the parser (like the harness's `parse_call`) reads only `args`, so the tool got no
+  path and answered `error: no file None`.
+- **Its intent was right throughout.** It named the right file each time, then varied the path (`/calc.py`,
+  `./calc.py`, `/tmp/diag_repo/calc.py`, `repo/calc.py`) and ran the tests, but never changed the call's shape. Seed
+  43 in JSON mode is the exception: it switched to `args` on turn 4.
+- **Free-mode seed 43 used the flat shape on all 10 turns,** inside a ```` ```json ```` fence. So the flat shape is
+  not caused by the JSON format constraint. The constraint makes it more frequent: 2 of 3 seeds against 1 of 3, with
+  n = 3 per mode.
+- **Native tool calling removes it** (3/3): the schema carries the argument structure.
+
+**Reading:**
+- **The rule's label holds:** JSON mode does interfere.
+- **The underlying cause is a protocol habit of the model,** the flat arguments, which turning JSON mode off reduces
+  but does not remove.
+- **Its error-recovery weakness also shows** under an uninformative error message: it never changed the call's shape
+  in response.
+- **The harness's message would differ.** It says `error: bad arguments for read_file: ... missing 1 required
+  positional argument: 'path'`, which is more informative. Whether ornith recovers from it is untested.
+- **devstral used the protocol correctly in all 9 loops,** in all three modes.
