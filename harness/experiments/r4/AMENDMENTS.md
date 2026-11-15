@@ -500,3 +500,11 @@ result that matches a branch's label but not its intent goes to the user, not to
 - **No change mid-run:** not to the harness, and not to the 300,000-token run budget.
 - **Budget endings are tracked per run.** If the budget is a major factor across the 40 runs, the final report
   records it as a known limitation of this model on this harness.
+
+### After Phase 0 (user, 2026-11-15)
+
+- **Phase 0 passed:** 7 of 20 solved.
+- **The start-state check is skipped.** The secondary reading stays as recorded.
+- **Broken tasks are a known issue for future task mining:** delete-01, -02 confirmed; delete-04, -05, -07 flagged.
+  The list is in `PHASE1_PLAN.md` §8.
+- **Phase 1:** planning only (`PHASE1_PLAN.md`); nothing built yet.
