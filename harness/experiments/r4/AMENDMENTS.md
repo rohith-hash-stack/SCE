@@ -490,3 +490,13 @@ result that matches a branch's label but not its intent goes to the user, not to
 - **Two explanations remain:** these may be pre-existing failures like delete-01's and delete-02's, or the
   unavoidable fallout of every agent's deletion.
 - **Only a start-state run can tell them apart.** Without one, they stay scored.
+
+### Before the `all` stage (user, 2026-11-15)
+
+- **Start-state scoring is skipped for now.** It affects only the secondary score.
+  - **Why:** the full 40-run dataset comes first.
+  - **When it would run:** after the final results, only if the primary result is borderline, to explain the gap.
+- **The three flagged tasks** (delete-04, -05, -07) **stay scored strictly** in both readings.
+- **No change mid-run:** not to the harness, and not to the 300,000-token run budget.
+- **Budget endings are tracked per run.** If the budget is a major factor across the 40 runs, the final report
+  records it as a known limitation of this model on this harness.
