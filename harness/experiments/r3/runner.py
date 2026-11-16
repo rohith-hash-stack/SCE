@@ -223,7 +223,7 @@ def _restore(work: str, tree: str, files: list[str]) -> None:
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
              score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False,
-             hygiene: bool = False, compact: bool = False, native: bool = False) -> dict:
+             hygiene: bool = False, compact: bool = False) -> dict:
     from harness.experiments.r3.loop import AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
@@ -258,7 +258,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
             progress = ProgressLedger(turn_cap, gate, task, shared)
         summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
                            gate=gate, ledger=progress, record_full=record_full, hygiene=hygiene,
-                           compact=compact, native=native).run(out)
+                           compact=compact).run(out)
         result = {**summary}
         if score_run:
             stage = "scoring"
@@ -333,8 +333,7 @@ def main(argv=None) -> int:
                           stream_cut=a.phase1, tools=native_tools(a.version) if a.native_tools else None,
                           **({"timeout": a.timeout} if a.timeout else {}))
     res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan,
-                   ledger=a.ledger, hygiene=a.phase1, compact=a.phase1,
-                   native=a.native_tools and a.provider == "ollama")
+                   ledger=a.ledger, hygiene=a.phase1, compact=a.phase1)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))
     return 0
 

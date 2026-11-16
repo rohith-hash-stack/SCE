@@ -372,21 +372,17 @@ def test_ollama_native_reply_without_a_call_falls_back_to_its_text():
         s.close()
 
 
-# ------------------------------------------------------------------ the native-mode prompt (both arms)
-def test_native_system_prompt_states_the_rule_and_differs_between_arms_only_in_the_tool_list():
-    p, b = L.system_prompt("PRISM", native=True), L.system_prompt("BASELINE", native=True)
-    assert "call exactly\none of the given tools; never reply in prose" in p and "JSON object" not in p
-    assert p.replace(L.tool_docs("PRISM"), "") == b.replace(L.tool_docs("BASELINE"), "")
-    with pytest.raises(ValueError):
-        L.system_prompt("PRISM", plan=True, native=True)
-    assert L.system_prompt("PRISM") == (L.SYSTEM).format(tools=L.tool_docs("PRISM"))      # the default is unchanged
-
-
-def test_a_native_run_uses_the_native_prompt_and_reminder(tmp_path):
+# ------------------------------------------------------------------ no prompt change for native tool calling
+def test_native_tool_calling_changes_no_prompt_text(tmp_path):
+    """The user's decision (2026-11-16): native tools, no prompt wording added. The model sees the same system prompt
+    and the same format reminder as in Phase 0, in both arms; only the client's framing differs."""
+    import inspect
+    assert "native" not in inspect.signature(L.system_prompt).parameters
+    assert not hasattr(L, "SYSTEM_NATIVE") and not hasattr(L, "FORMAT_REMINDER_NATIVE")
     model = _Scripted([("I will read the file first.", 10, 5), (DONE, 10, 5)])
-    L.AgentRun({"id": "t", "prompt": "p"}, "BASELINE", 42, model, _Shared(), native=True).run(str(tmp_path))
-    assert model.seen[0][0]["content"] == L.system_prompt("BASELINE", native=True)
-    assert model.seen[1][-1]["content"] == L.FORMAT_REMINDER_NATIVE
+    L.AgentRun({"id": "t", "prompt": "p"}, "BASELINE", 42, model, _Shared()).run(str(tmp_path))
+    assert model.seen[0][0]["content"] == L.system_prompt("BASELINE")
+    assert model.seen[1][-1]["content"] == L.FORMAT_REMINDER
 
 
 # ------------------------------------------------------------------ the re-baseline's continuous score

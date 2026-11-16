@@ -697,8 +697,9 @@ recorded replies and real tools.
 
 **Not established:** the cut-off's server-side cause. JSON mode is ruled out: free text fails as often.
 
-**Added at the user's direction, both arms:** the native-mode system prompt (`loop.SYSTEM_NATIVE`) says "each turn,
-call exactly one of the given tools; never reply in prose". The format reminder after an invalid reply says the same
+**Added at the user's direction, both arms (withdrawn the same day, before any run; see "No prompt changes" below):**
+the native-mode system prompt (`loop.SYSTEM_NATIVE`) said "each turn, call exactly one of the given tools; never reply
+in prose". The format reminder after an invalid reply says the same
 (`FORMAT_REMINDER_NATIVE`).
 - **Tested:** in unit tests only. The re-baseline's first wave is its first contact with the model, and the wave-1
   health check covers it.
@@ -716,7 +717,8 @@ call exactly one of the given tools; never reply in prose". The format reminder 
 - results in `reports/r4/rebaseline`.
 
 **The harness, fixed for the whole run:**
-- native tool calling (`--native-tools`) with the native system prompt;
+- native tool calling (`--native-tools`), with **no prompt change**: the system prompt and the format reminder are
+  Phase 0's, in both arms (see "No prompt changes" below);
 - `--phase1` (history hygiene and compaction);
 - ledger on, gate on, no plan field;
 - turn cap 28; budget 300,000 tokens (every prompt token counts, as decided).
@@ -769,3 +771,29 @@ call exactly one of the given tools; never reply in prose". The format reminder 
 
 **Cost:** about 40 GPU-hours, or 4 Kaggle sessions. Kaggle's weekly GPU quota (about 30 hours) means this likely
 spans two weeks.
+
+### No prompt changes for native tool calling (user, 2026-11-16, before any re-baseline run)
+
+**The user's decision:**
+- **The strict line is removed** ("call exactly one of the given tools; never reply in prose"), from the system prompt
+  and from the format reminder.
+- **Why:** prompt-engineering one behaviour is brittle and would not generalise across tasks or models. The harness
+  should be robust without it.
+- **The formatting errors are left to** native tool calling and the Phase 1 history cut.
+- **The residual failure rate is accepted** (8.8% of calls in step 1f, against JSON mode's 70%).
+
+**The result:**
+- **No prompt text was changed in either arm.** The system prompt (`loop.SYSTEM`) and the format reminder
+  (`loop.FORMAT_REMINDER`) are Phase 0's, byte for byte.
+- **What does differ is the client's framing:**
+  - Ollama's `tools` field;
+  - past calls sent back as native calls and their outputs as `tool` messages;
+  - JSON mode off.
+- **This is exactly the configuration step 1f measured** (`native_p1`, 8.8%).
+
+**In the code:**
+- `SYSTEM_NATIVE`, `FORMAT_REMINDER_NATIVE` and the loop's `native` switch are removed.
+- A test pins that native tool calling adds no prompt text.
+- The re-baseline cell's smoke test uses a plain request ("Use the read_file tool to read the file a.py.") and no
+  system prompt.
+

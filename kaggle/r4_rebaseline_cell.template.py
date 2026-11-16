@@ -291,8 +291,7 @@ _tools = [{"type": "function", "function": {"name": "read_file", "description": 
 _req = urllib.request.Request(f"http://127.0.0.1:{PORTS[0]}/api/chat", data=json.dumps({
     "model": SUMMARIZER, "stream": False, "tools": _tools,
     "options": {"num_predict": 256, "num_ctx": 8192, "temperature": 0.2},
-    "messages": [{"role": "system", "content": "Each turn, call exactly one of the given tools; never reply in prose."},
-                 {"role": "user", "content": "Read the file a.py."}]}).encode(),
+    "messages": [{"role": "user", "content": "Use the read_file tool to read the file a.py."}]}).encode(),
     headers={"Content-Type": "application/json"})
 with urllib.request.urlopen(_req, timeout=900) as _r:
     _m = json.loads(_r.read())["message"]
