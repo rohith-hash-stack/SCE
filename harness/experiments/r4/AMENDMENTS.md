@@ -845,3 +845,55 @@ spans two weeks.
   - model seconds per turn: 25.7 against 21.8 (PRISM's prompts are about 13% larger).
 - **So in both arms the turns go to exploration and failed edits,** not to PRISM output. The re-baseline's turn
   efficiency will test this properly.
+
+### Post-PRISM behaviour metric (user, 2026-11-16, after the re-baseline cell was launched, before any of its results were read)
+
+**Analysis only:** `rebaseline_report.post_prism`, descriptive, no test. The pinned run is unchanged; the cell's own
+`report.json` comes from the pinned script, so this metric is computed from the pushed turn logs afterwards.
+
+**Per PRISM call, the next action:**
+- an edit;
+- another PRISM call;
+- a `grep` for the same symbol;
+- a `read_file` of the file PRISM named;
+- something else.
+
+The last two named actions count as a "post-PRISM search".
+
+**Per run:** the turn of the first PRISM call, the exploration turns before it, and whether PRISM is called at all.
+
+**Limit:** logs keep each output's first 300 characters, so only the target symbol and its file are checked; callers
+PRISM lists further down are not.
+
+**The historical distinction, checked against the repository:**
+- **R1/R2 were single-shot:** one prompt, one answer, no tools in either arm (`harness/experiments/r1/README.md`,
+  `r2/run.py`).
+- **The harness did the retrieval up front:** PRISM's context in one arm, file, grep or BM25 context of the same size
+  in the other.
+- **Neither arm searched,** so PRISM was not replacing the model's search. It was one retrieval method against
+  another, chosen by the harness.
+- **Since R3, PRISM is an optional tool** the model must choose to call, next to `read_file` and `grep`.
+
+**What the existing logs show** (descriptive; Phase 0 and wave 1, PRISM arm, 20 runs each):
+
+| | Phase 0 | Wave 1 |
+|---|---|---|
+| Runs that never call PRISM | 3 | 4 |
+| First PRISM call (mean turn) | 9.1 | 7.9 |
+| Exploration turns before it | 7.8 | 6.2 |
+| PRISM calls | 38 | 36 |
+| Next action an edit | 32% | 6% |
+| Next action another PRISM call | 29% | 33% |
+| Next action a post-PRISM search | 13% | 19% |
+
+**Reading:**
+- **The model mostly explores on its own first** and calls PRISM late, if at all.
+- **A same-target search right after PRISM is a minority** of what follows a call.
+- **Most turns of exploration happen before any PRISM call,** not after it.
+- **A `read_file` before an edit is often required anyway:** `edit_file` needs the file's exact text.
+
+**What this does not change:** the re-baseline. It measures PRISM as an optional tool in an agent loop, as designed
+and pre-registered.
+
+**A different question, for later:** "PRISM as the context source" (R1/R2's setting) would need a different design.
+For example, an arm that gets PRISM's context for the task's target in the first message.

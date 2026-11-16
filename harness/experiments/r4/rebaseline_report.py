@@ -26,6 +26,13 @@ first applied edit, the turns spent between a PRISM call and the next applied ed
 and the mean prompt size. Reported per arm, per task (paired PRISM - BASELINE), and for solved runs only (turns and
 model seconds to the end of a solved run).
 
+**Post-PRISM behaviour** (user, 2026-11-16, added after the re-baseline was launched, before any of its results were
+read; descriptive, no test): for each PRISM call, the next action: an edit (PRISM's context used directly), another
+PRISM call, a `grep` for the same symbol, a `read_file` of the file PRISM named (a "post-PRISM search"), or something
+else. Also: the turn of the first PRISM call, the exploration turns before it, and the runs that never call PRISM.
+Limit: the turn log keeps the first 300 characters of each output, which name the target symbol and its file but not
+the callers listed further down, so "the same thing PRISM already answered" is judged for the target only.
+
 `--health`: the check the cell runs after its first wave (amendment: stop if infrastructure deaths > 2 of the wave's
 runs or parse errors >= 2% of its turns). Exit code 0 = continue, 4 = stop.
 """
@@ -36,6 +43,7 @@ import glob
 import json
 import os
 import random
+import re
 import statistics as st
 import sys
 
@@ -116,6 +124,43 @@ def efficiency(turns: list[dict]) -> dict:
             "mean_prompt_tokens": sum(t.get("prompt_tokens") or 0 for t in turns) / n}
 
 
+_PRISM_FILE = re.compile(r"\n(\S+\.\w+), lines (\d+)-(\d+)")
+
+
+def post_prism(turns: list[dict]) -> dict:
+    """What follows each PRISM call (see the module docstring)."""
+    nxt = {"edit": 0, "prism": 0, "grep_same_symbol": 0, "read_named_file": 0, "other": 0, "end": 0}
+    first, before = None, 0
+    for i, t in enumerate(turns):
+        tool = str(t.get("tool") or "")
+        if not tool.startswith("prism_"):
+            if first is None and tool in ("read_file", "grep", "list_dir"):
+                before += 1
+            continue
+        first = first or t.get("turn")
+        a = t.get("args") or {}
+        sym = a.get("symbol") or (a.get("symbols") or [""])[0] or a.get("name") or ""
+        short = sym.split(".")[-1] if sym else ""
+        m = _PRISM_FILE.search(str(t.get("output_head") or ""))
+        named = m.group(1) if m else a.get("file")
+        n = turns[i + 1] if i + 1 < len(turns) else None
+        nt, na = (str(n.get("tool") or ""), n.get("args") or {}) if n else ("", {})
+        if n is None:
+            nxt["end"] += 1
+        elif nt == "edit_file":
+            nxt["edit"] += 1
+        elif nt.startswith("prism_"):
+            nxt["prism"] += 1
+        elif nt == "grep" and short and short in str(na.get("pattern", "")):
+            nxt["grep_same_symbol"] += 1
+        elif nt == "read_file" and named and na.get("path") == named:
+            nxt["read_named_file"] += 1
+        else:
+            nxt["other"] += 1
+    return {"prism_calls": sum(nxt.values()), "next_action": nxt, "first_prism_turn": first,
+            "exploration_before_first_prism": before if first else None}
+
+
 def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
     rows = []
     for path in sorted(glob.glob(os.path.join(results, "r4s-*__*__*.score.json"))):
@@ -133,7 +178,7 @@ def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
                                          and not str(t.get("output_head", "")).startswith(("edited", "created"))),
                      "prism_output_tokens": sum(t.get("output_tokens") or 0 for t in turns
                                                 if str(t.get("tool") or "").startswith("prism_")),
-                     "efficiency": efficiency(turns)})
+                     "efficiency": efficiency(turns), "post_prism": post_prism(turns)})
     return rows
 
 
@@ -234,6 +279,19 @@ def turn_efficiency(rows: list[dict], per_task: dict) -> dict:
                            - st.mean(r["efficiency"]["model_seconds"] for r in b),
                            "prism_turns": st.mean(r["efficiency"]["turns_by_kind"]["prism"] for r in a)}
     out["per_task_paired"] = paired
+    pr = [r["post_prism"] for r in rows if r["arm"] == "PRISM"]
+    if pr:
+        calls = sum(x["prism_calls"] for x in pr)
+        nxt = {k: sum(x["next_action"][k] for x in pr) for k in pr[0]["next_action"]}
+        firsts = [x["first_prism_turn"] for x in pr if x["first_prism_turn"]]
+        out["post_prism"] = {
+            "prism_calls": calls, "next_action": nxt,
+            "post_prism_search_share": (nxt["grep_same_symbol"] + nxt["read_named_file"]) / calls if calls else None,
+            "edit_next_share": nxt["edit"] / calls if calls else None,
+            "runs_never_calling_prism": sum(1 for x in pr if not x["first_prism_turn"]), "runs": len(pr),
+            "first_prism_turn": st.mean(firsts) if firsts else None,
+            "exploration_before_first_prism": st.mean(x["exploration_before_first_prism"] for x in pr
+                                                      if x["first_prism_turn"]) if firsts else None}
     if paired:
         out["mean_turns_diff"] = st.mean(v["turns_diff"] for v in paired.values())
         out["mean_model_seconds_diff"] = st.mean(v["model_seconds_diff"] for v in paired.values())
