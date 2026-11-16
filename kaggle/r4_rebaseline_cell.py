@@ -1,14 +1,19 @@
 # ============================================================
-# PRISM R4 Phase 1 re-baseline (harness/experiments/r4/AMENDMENTS.md, "Phase 1 re-baseline"): PRISM vs BASELINE on
-# the 20 tasks of sanity/tasks_v3.json x 10 seeds (42-51) x both arms = 400 runs, devstral-small-2, the Phase 1
+# PRISM R4 Phase 1 re-baseline, 3 arms (harness/experiments/r4/AMENDMENTS.md, "Phase 1 re-baseline, 3 arms"): on the
+# 20 tasks of sanity/tasks_v3.json x 10 seeds (42-51) x 3 arms = 600 runs, devstral-small-2:
+#   BASELINE  the agent loop with the shared tools and related_code; no PRISM
+#   PRISM     the same, with PRISM's tools available (the agent chooses when to call them)
+#   INJECTED  BASELINE's tools and prompt; PRISM's context for the task, retrieved by the harness before the agent
+#             starts (r4/inject.py), prepended to the task message
+# The Phase 1
 # harness: native tool calling read by the harness (--raw-tools: devstral's template rendered and its [TOOL_CALLS]
 # parsed by r3/mistral_raw.py, so no reply is discarded unseen), history hygiene + compaction (--phase1), ledger,
-# gate, turn cap 28, budget 300,000 (every prompt token counts). About 40 GPU-hours: 4 Kaggle sessions.
+# gate, turn cap 28, budget 300,000 (every prompt token counts). About 60 GPU-hours: 6 Kaggle sessions.
 #
 # Before any run, a pre-flight (`r4/raw_preflight`) sends the same messages to Ollama's /api/chat (Ollama renders the
 # template) and to /api/generate raw (the harness renders it): the prompt token counts must match, or the cell stops.
 #
-# The runs go in waves, one seed at a time over all 20 tasks (40 runs a wave, ~4 h), so stopping at any point leaves a
+# The runs go in waves, one seed at a time over all 20 tasks and 3 arms (60 runs a wave, ~6 h), so stopping at any point leaves a
 # balanced design. After the first wave (seed 42) a health check runs (`rebaseline_report --health`): if more than 2
 # of its runs died on infrastructure, or parse errors reach 2% of its turns, the cell stops for review.
 # Finished runs are kept and never repeated: run the cell again in a new session to continue.
@@ -29,12 +34,13 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "5fd392b44c1ba219ea2a1b906bf2eea4161a2d27"
+CODE_COMMIT = "12b0f9c82339c1cf84986233f15be9ee4345fdf0"
 CODE_TREES = {"src": "d771ea693a48da16bfc79e4e11bfe2a368a281c6",
-              "harness": "a2a4034296388bc42fb7e16ce3d4689488b41e38"}
+              "harness": "f32aa67a61d9929231266f62e82230374334de74"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
-STAGE = "rebaseline"
+STAGE = "rebaseline3"
+ARMS = ("BASELINE", "PRISM", "INJECTED")
 SUMMARIZER = "devstral-small-2:24b-instruct-2512-q4_K_M"   # Phase 0 model (amendment); JSON mode, no think flag
 MODEL_FLAGS = ["--model", SUMMARIZER, "--ledger", "--phase1", "--raw-tools"]
 OLLAMA_VERSION = "0.34.0"
@@ -57,13 +63,13 @@ CHECKPOINT_MIN = 10
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
-RESULTS_PATH = "reports/r4/rebaseline2"
-BIG = "/tmp/r4rb2"
+RESULTS_PATH = "reports/r4/rebaseline3"
+BIG = "/tmp/r4rb3"
 CACHE = f"{BIG}/cache"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 print("=" * 64)
-print(f"PRISM R4 Phase 1 re-baseline ({SUMMARIZER}): 20 tasks x {len(SEEDS)} seeds x 2 arms")
+print(f"PRISM R4 Phase 1 re-baseline ({SUMMARIZER}): 20 tasks x {len(SEEDS)} seeds x {len(ARMS)} arms")
 print("=" * 64, flush=True)
 
 
@@ -181,7 +187,7 @@ REPOS = doc["repo_urls"]
 if {t["repo"] for t in STASKS} - set(REPOS):
     abort("a task's repository has no URL")
 ALL_TASKS = STASKS
-N_RUNS = len(STASKS) * 2 * len(SEEDS)
+N_RUNS = len(STASKS) * len(ARMS) * len(SEEDS)
 print(f"[ok] {len(STASKS)} tasks ({', '.join(sorted({t['family'] for t in STASKS}))}), {N_RUNS} runs, "
       f"sha {got_sha[:12]}", flush=True)
 os.makedirs(BIG, exist_ok=True)
@@ -199,7 +205,7 @@ def clear_caches(why):
 
 
 def run_ids(t, seeds=SEEDS):
-    return [f"{t['id']}__{v}__{s}" for s in seeds for v in ("PRISM", "BASELINE")]
+    return [f"{t['id']}__{v}__{s}" for s in seeds for v in ARMS]
 
 
 def finished(t, seeds=SEEDS):
@@ -355,7 +361,7 @@ for wave, seed in enumerate(SEEDS, 1):
         json.dump({"tasks": todo}, open(part, "w"))
         r = module([part, OUT, "--cache-py", f"{CACHE}/py", "--cache-js", f"{CACHE}/js",
                     "--base-url", f"http://127.0.0.1:{PORTS[0]}", "--seeds", str(seed), "--turn-cap", str(TURN_CAP),
-                    "--deadline", str(deadline), *MODEL_FLAGS, f"{name}={clone}"], f"runs_{name}",
+                    "--deadline", str(deadline), "--versions", *ARMS, *MODEL_FLAGS, f"{name}={clone}"], f"runs_{name}",
                    "harness.experiments.r3.pilot_run", push_while=True)
         os.remove(part)
         if r == 3:
@@ -377,7 +383,7 @@ for wave, seed in enumerate(SEEDS, 1):
 module([OUT, os.path.join(SCE_DIR, TASKS), "--root", SCE_DIR, "--out", os.path.join(OUT, "report.json")],
        "rebaseline_report", "harness.experiments.r4.rebaseline_report")
 open(os.path.join(OUT, "progress.json"), "w").write(json.dumps({
-    "stage": STAGE, "runs_done": n_done(), "runs_total": N_RUNS, "seeds": SEEDS, "code": CODE_COMMIT,
+    "stage": STAGE, "arms": ARMS, "runs_done": n_done(), "runs_total": N_RUNS, "seeds": SEEDS, "code": CODE_COMMIT,
     "tasks_sha256": TASKS_SHA, "model": SUMMARIZER, "model_flags": MODEL_FLAGS,
     "run_hours": round(sum(json.loads(l)["seconds"] for l in open(os.path.join(OUT, "pilot_runs.jsonl"))) / 3600, 2)
     if os.path.exists(os.path.join(OUT, "pilot_runs.jsonl")) else None}, indent=1))
