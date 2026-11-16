@@ -51,6 +51,8 @@ def main(argv=None) -> int:
     p.add_argument("--native-tools", action="store_true")
     p.add_argument("--phase1", action="store_true")                               # Phase 1 items 2 and 3
     p.add_argument("--raw-tools", action="store_true")                            # Phase 1, re-baseline fix (A)
+    p.add_argument("--versions", nargs="+", choices=("PRISM", "BASELINE", "INJECTED"), default=list(VERSIONS),
+                   help="the arms to run, in this order within a task (the 3-arm re-baseline adds INJECTED)")
     a = p.parse_args(argv)
     extra = ((["--model", a.model] if a.model else []) + (["--think", a.think] if a.think else [])
              + (["--plan"] if a.plan else []) + (["--answer-tokens", str(a.answer_tokens)] if a.answer_tokens else [])
@@ -69,7 +71,7 @@ def main(argv=None) -> int:
     for t in tasks:
         task_path = os.path.join(a.out, "tasks", t["id"] + ".json")
         json.dump(t, open(task_path, "w"))
-        for seed, v in [(s, v) for s in a.seeds for v in VERSIONS]:
+        for seed, v in [(s, v) for s in a.seeds for v in a.versions]:
             run_id = f"{t['id']}__{v}__{seed}"
             if os.path.exists(os.path.join(a.out, run_id + ".score.json")):
                 continue

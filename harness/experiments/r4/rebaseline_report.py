@@ -9,8 +9,10 @@
 - delete task: 0 if the target is still defined, else (pass-to-pass passing / pass-to-pass).
 A test counts as passing only with the scorer's status `passed` (strict lists: pre-existing failures stay in).
 
-**Primary analysis:** per task, the mean score over its seeds in each arm; the paired difference d_t = PRISM - BASELINE
-over the 20 tasks. Reported: the mean difference with a 95% bootstrap interval (tasks resampled, 10,000 draws, fixed
+**Primary analysis (3 arms: BASELINE, PRISM = PRISM tools available, INJECTED = PRISM context injected up front):**
+per task, the mean score over its seeds in each arm; two paired comparisons over the 20 tasks, each against BASELINE:
+d_t = PRISM - BASELINE ("does the tool help?") and d_t = INJECTED - BASELINE ("does injected context help?"), Holm-
+corrected over the two. INJECTED - PRISM is reported descriptively. Reported: the mean difference with a 95% bootstrap interval (tasks resampled, 10,000 draws, fixed
 seed), the Wilcoxon signed-rank test (two-sided, zero differences dropped) and the paired t-test, and how many tasks
 favour each arm. The pre-registered test is the Wilcoxon signed-rank test at alpha 0.05.
 
@@ -188,6 +190,52 @@ def bootstrap_ci(diffs: list[float], draws: int = 10_000, seed: int = 20261116) 
     return means[int(0.025 * draws)], means[int(0.975 * draws) - 1]
 
 
+ARMS = ("BASELINE", "PRISM", "INJECTED")
+# The pre-registered comparisons (3-arm design, AMENDMENTS "Phase 1 re-baseline, 3 arms"): each arm against BASELINE,
+# Holm-corrected over the two. INJECTED against PRISM is reported descriptively.
+COMPARISONS = (("PRISM", "BASELINE"), ("INJECTED", "BASELINE"))
+DESCRIPTIVE = (("INJECTED", "PRISM"),)
+
+
+def compare(rows: list[dict], per_task: dict, arm: str, ref: str) -> dict | None:
+    """The paired comparison `arm` - `ref` over tasks (see the module docstring)."""
+    paired = [c for c in per_task.values() if arm in c and ref in c]
+    if len(paired) < 2:
+        return None
+    from scipy import stats
+    d = [c[arm]["score"] - c[ref]["score"] for c in paired]
+    nz = [x for x in d if abs(x) > 1e-12]
+    wil = stats.wilcoxon(nz, alternative="two-sided") if len(nz) >= 2 else None
+    tt = stats.ttest_1samp(d, 0.0)
+    lo, hi = bootstrap_ci(d)
+    ds = [c[arm]["score_setaside"] - c[ref]["score_setaside"] for c in paired]
+    pairs = {}
+    for r in rows:
+        if r["arm"] in (arm, ref):
+            pairs.setdefault((r["task"], r["seed"]), {})[r["arm"]] = r["solved"]
+    b = sum(1 for v in pairs.values() if v.get(arm) and v.get(ref) is False)
+    c_ = sum(1 for v in pairs.values() if v.get(ref) and v.get(arm) is False)
+    return {"tasks": len(paired),
+            "mean_score": {arm: st.mean(c[arm]["score"] for c in paired), ref: st.mean(c[ref]["score"] for c in paired)},
+            "mean_diff": st.mean(d), "ci95_bootstrap": [lo, hi],
+            "wilcoxon_p": float(wil.pvalue) if wil else None, "nonzero_diffs": len(nz), "paired_t_p": float(tt.pvalue),
+            "tasks_favouring": {arm: sum(x > 1e-12 for x in d), ref: sum(x < -1e-12 for x in d),
+                                "tie": sum(abs(x) <= 1e-12 for x in d)},
+            "setaside": {"mean_diff": st.mean(ds), "ci95_bootstrap": list(bootstrap_ci(ds))},
+            "solves": {"mcnemar_exact_p": float(stats.binomtest(b, b + c_, 0.5).pvalue) if b + c_ else None,
+                       "discordant": {f"{arm}_only": b, f"{ref}_only": c_}}}
+
+
+def holm(pvalues: dict) -> dict:
+    """Holm's step-down adjustment over the named p-values (None stays None)."""
+    named = sorted(((p, k) for k, p in pvalues.items() if p is not None))
+    out, run = {k: None for k in pvalues}, 0.0
+    for i, (p, k) in enumerate(named):
+        run = max(run, min(1.0, (len(named) - i) * p))
+        out[k] = run
+    return out
+
+
 def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root: str = ".") -> dict:
     doc = json.load(open(tasks_path))
     tasks = {t["id"]: t for t in doc["tasks"]}
@@ -198,61 +246,56 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
         r["score"] = run_score(t, r["score_doc"])
         r["score_setaside"] = run_score(t, r["score_doc"], aside.get(r["task"], set()))
         r["solved"] = bool(r["score_doc"].get("resolved"))
+    arms = [a for a in ARMS if any(r["arm"] == a for r in rows)]
     per_task = {}
     for tid in sorted(tasks):
         cell = {}
-        for arm in ("PRISM", "BASELINE"):
+        for arm in arms:
             rs = [r for r in rows if r["task"] == tid and r["arm"] == arm]
             if rs:
                 cell[arm] = {"n": len(rs), "score": st.mean(r["score"] for r in rs),
                              "score_setaside": st.mean(r["score_setaside"] for r in rs),
                              "solves": sum(r["solved"] for r in rs)}
-        if len(cell) == 2:
-            cell["diff"] = cell["PRISM"]["score"] - cell["BASELINE"]["score"]
-            cell["diff_setaside"] = cell["PRISM"]["score_setaside"] - cell["BASELINE"]["score_setaside"]
         per_task[tid] = cell
-    paired = [c for c in per_task.values() if "diff" in c]
-    rep = {"runs": len(rows), "tasks_paired": len(paired), "seeds": sorted({r["seed"] for r in rows}),
-           "per_task": per_task}
-    if len(paired) >= 2:
-        d = [c["diff"] for c in paired]
-        from scipy import stats
-        nz = [x for x in d if abs(x) > 1e-12]
-        wil = stats.wilcoxon(nz, alternative="two-sided") if len(nz) >= 2 else None
-        tt = stats.ttest_1samp(d, 0.0)
-        lo, hi = bootstrap_ci(d)
-        rep["primary"] = {
-            "mean_score": {arm: st.mean(c[arm]["score"] for c in paired) for arm in ("PRISM", "BASELINE")},
-            "mean_diff": st.mean(d), "ci95_bootstrap": [lo, hi],
-            "wilcoxon_p": float(wil.pvalue) if wil else None, "nonzero_diffs": len(nz),
-            "paired_t_p": float(tt.pvalue),
-            "tasks_favouring": {"PRISM": sum(x > 1e-12 for x in d), "BASELINE": sum(x < -1e-12 for x in d),
-                                "tie": sum(abs(x) <= 1e-12 for x in d)}}
-        ds = [c["diff_setaside"] for c in paired]
-        rep["secondary_setaside"] = {"mean_diff": st.mean(ds), "ci95_bootstrap": list(bootstrap_ci(ds))}
-        pairs = {}
-        for r in rows:
-            pairs.setdefault((r["task"], r["seed"]), {})[r["arm"]] = r["solved"]
-        b = sum(1 for v in pairs.values() if v.get("PRISM") and v.get("BASELINE") is False)
-        c = sum(1 for v in pairs.values() if v.get("BASELINE") and v.get("PRISM") is False)
-        rep["secondary_solves"] = {
-            arm: {"runs_solved": sum(r["solved"] for r in rows if r["arm"] == arm),
-                  "runs": sum(1 for r in rows if r["arm"] == arm),
-                  "tasks_solved_once": sum(1 for c_ in paired if c_[arm]["solves"] > 0)}
-            for arm in ("PRISM", "BASELINE")}
-        rep["secondary_solves"]["mcnemar_exact_p"] = (float(stats.binomtest(b, b + c, 0.5).pvalue)
-                                                      if b + c else None)
-        rep["secondary_solves"]["discordant"] = {"PRISM_only": b, "BASELINE_only": c}
-        rep["by_family"] = {fam: {arm: st.mean(r["score"] for r in rows if r["family"] == fam and r["arm"] == arm)
-                                  for arm in ("PRISM", "BASELINE")
-                                  if any(r["family"] == fam and r["arm"] == arm for r in rows)}
-                            for fam in sorted({r["family"] for r in rows})}
-    rep["process"] = process(rows)
-    rep["turn_efficiency"] = turn_efficiency(rows, per_task)
+    rep = {"runs": len(rows), "arms": arms, "seeds": sorted({r["seed"] for r in rows}), "per_task": per_task}
+    comps = {f"{a} vs {b}": compare(rows, per_task, a, b) for a, b in COMPARISONS if a in arms and b in arms}
+    adj = holm({k: (v or {}).get("wilcoxon_p") for k, v in comps.items()})
+    for k, v in comps.items():
+        if v:
+            v["wilcoxon_p_holm"] = adj[k]
+    rep["primary"] = comps
+    rep["descriptive"] = {f"{a} vs {b}": compare(rows, per_task, a, b) for a, b in DESCRIPTIVE
+                          if a in arms and b in arms}
+    rep["solve_rates"] = {arm: {"runs_solved": sum(r["solved"] for r in rows if r["arm"] == arm),
+                                "runs": sum(1 for r in rows if r["arm"] == arm),
+                                "tasks_solved_once": sum(1 for c in per_task.values() if c.get(arm, {}).get("solves"))}
+                          for arm in arms}
+    rep["by_family"] = {fam: {arm: st.mean(r["score"] for r in rows if r["family"] == fam and r["arm"] == arm)
+                              for arm in arms if any(r["family"] == fam and r["arm"] == arm for r in rows)}
+                        for fam in sorted({r["family"] for r in rows})}
+    rep["injection"] = injection_summary(results, rows)
+    rep["process"] = process(rows, arms)
+    rep["turn_efficiency"] = turn_efficiency(rows, per_task, arms)
     return rep
 
 
-def turn_efficiency(rows: list[dict], per_task: dict) -> dict:
+def injection_summary(results: str, rows: list[dict]) -> dict | None:
+    """What Arm 3 was given: the retrieval used, errors and fallbacks, and its size."""
+    recs = []
+    for r in rows:
+        if r["arm"] != "INJECTED":
+            continue
+        s = json.load(open(os.path.join(results, r["run"] + ".score.json")))
+        if s.get("injected"):
+            recs.append(s["injected"])
+    if not recs:
+        return None
+    return {"runs": len(recs), "tools": {t: sum(1 for x in recs if x["tool"] == t) for t in {x["tool"] for x in recs}},
+            "fallbacks": sum(1 for x in recs if x.get("fallback_from")), "errors": sum(1 for x in recs if x.get("error")),
+            "mean_tokens": st.mean(x.get("tokens") or 0 for x in recs)}
+
+
+def turn_efficiency(rows: list[dict], per_task: dict, arms) -> dict:
     """Descriptive (no test): where the turns and the model time go, per arm, per task, and in solved runs."""
     def summary(rs):
         if not rs:
@@ -266,19 +309,25 @@ def turn_efficiency(rows: list[dict], per_task: dict) -> dict:
                 "model_seconds": st.mean(x["model_seconds"] for x in e),
                 "model_seconds_per_turn": st.mean(x["model_seconds_per_turn"] for x in e),
                 "mean_prompt_tokens": st.mean(x["mean_prompt_tokens"] for x in e)}
-    out = {"per_arm": {arm: summary([r for r in rows if r["arm"] == arm]) for arm in ("PRISM", "BASELINE")},
-           "solved_runs": {arm: summary([r for r in rows if r["arm"] == arm and r["solved"]])
-                           for arm in ("PRISM", "BASELINE")}}
+    out = {"per_arm": {arm: summary([r for r in rows if r["arm"] == arm]) for arm in arms},
+           "solved_runs": {arm: summary([r for r in rows if r["arm"] == arm and r["solved"]]) for arm in arms}}
     paired = {}
-    for tid in per_task:
-        a = [r for r in rows if r["task"] == tid and r["arm"] == "PRISM"]
-        b = [r for r in rows if r["task"] == tid and r["arm"] == "BASELINE"]
-        if a and b:
-            paired[tid] = {"turns_diff": st.mean(r["turns"] for r in a) - st.mean(r["turns"] for r in b),
-                           "model_seconds_diff": st.mean(r["efficiency"]["model_seconds"] for r in a)
-                           - st.mean(r["efficiency"]["model_seconds"] for r in b),
-                           "prism_turns": st.mean(r["efficiency"]["turns_by_kind"]["prism"] for r in a)}
-    out["per_task_paired"] = paired
+    for arm, ref in COMPARISONS:
+        if arm not in arms or ref not in arms:
+            continue
+        per = {}
+        for tid in per_task:
+            a = [r for r in rows if r["task"] == tid and r["arm"] == arm]
+            b = [r for r in rows if r["task"] == tid and r["arm"] == ref]
+            if a and b:
+                per[tid] = {"turns_diff": st.mean(r["turns"] for r in a) - st.mean(r["turns"] for r in b),
+                            "model_seconds_diff": st.mean(r["efficiency"]["model_seconds"] for r in a)
+                            - st.mean(r["efficiency"]["model_seconds"] for r in b)}
+        if per:
+            paired[f"{arm} vs {ref}"] = {"per_task": per,
+                                         "mean_turns_diff": st.mean(v["turns_diff"] for v in per.values()),
+                                         "mean_model_seconds_diff": st.mean(v["model_seconds_diff"] for v in per.values())}
+    out["paired"] = paired
     pr = [r["post_prism"] for r in rows if r["arm"] == "PRISM"]
     if pr:
         calls = sum(x["prism_calls"] for x in pr)
@@ -292,23 +341,20 @@ def turn_efficiency(rows: list[dict], per_task: dict) -> dict:
             "first_prism_turn": st.mean(firsts) if firsts else None,
             "exploration_before_first_prism": st.mean(x["exploration_before_first_prism"] for x in pr
                                                       if x["first_prism_turn"]) if firsts else None}
-    if paired:
-        out["mean_turns_diff"] = st.mean(v["turns_diff"] for v in paired.values())
-        out["mean_model_seconds_diff"] = st.mean(v["model_seconds_diff"] for v in paired.values())
     return out
 
 
-def process(rows: list[dict]) -> dict:
+def process(rows: list[dict], arms=ARMS) -> dict:
     out = {}
-    for arm in ("PRISM", "BASELINE"):
+    for arm in arms:
         rs = [r for r in rows if r["arm"] == arm]
         if not rs:
             continue
         turns = sum(r["turns"] for r in rs) or 1
         ends = {}
         for r in rs:
-            ends[r["end"] if not str(r["end"]).startswith("model_error") else "model_error"] = \
-                ends.get(r["end"] if not str(r["end"]).startswith("model_error") else "model_error", 0) + 1
+            k = "model_error" if str(r["end"]).startswith("model_error") else r["end"]
+            ends[k] = ends.get(k, 0) + 1
         out[arm] = {"runs": len(rs), "infra_deaths": sum(r["infra"] for r in rs), "turns": turns,
                     "parse_error_rate": sum(r["parse_errors"] for r in rs) / turns, "ends": ends,
                     "mean_tokens": st.mean(r["used_tokens"] or 0 for r in rs),

@@ -228,6 +228,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
     from harness.experiments.r3.working_index import WorkingIndex
+    from tokenizers import Tokenizer
     run_id = f"{task['id']}__{version}__{seed}"
     final = os.path.join(out, run_id + ".score.json")
     if os.path.exists(final):
@@ -250,16 +251,24 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER,
                              explicit=bool(task.get("explicit_tools")),      # R4-SANITY-3
                              expected=_expected_tests(task))                 # R4-SANITY-4 (bug 3)
+        injected = None
+        if version == "INJECTED":                         # the 3-arm re-baseline's Arm 3 (r4/inject.py)
+            stage = "injection"
+            from harness.experiments.r4.inject import injected_context
+            block, injected = injected_context(task, layer)
+            injected["tokens"] = len(Tokenizer.from_file(TOKENIZER).encode(block).ids) if TOKENIZER and \
+                os.path.exists(TOKENIZER) else len(block) // 4
         stage = "loop"
         gate = _gate(task, work, env, start_tree)
         progress = None
         if ledger:                                        # R4-SANITY-4: the per-turn progress summary
             from harness.experiments.r4.progress_ledger import ProgressLedger
             progress = ProgressLedger(turn_cap, gate, task, shared)
-        summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
+        agent_task = {**task, "prompt": block + task["prompt"]} if injected is not None else task
+        summary = AgentRun(agent_task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
                            gate=gate, ledger=progress, record_full=record_full, hygiene=hygiene,
                            compact=compact).run(out)
-        result = {**summary}
+        result = {**summary, **({"injected": injected} if injected is not None else {})}
         if score_run:
             stage = "scoring"
             result["score"] = score(task, work, env, start_tree)
@@ -290,7 +299,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     p.add_argument("task")
-    p.add_argument("version", choices=("PRISM", "BASELINE"))
+    p.add_argument("version", choices=("PRISM", "BASELINE", "INJECTED"))
     p.add_argument("seed", type=int)
     p.add_argument("--clone", required=True)
     p.add_argument("--out", required=True)

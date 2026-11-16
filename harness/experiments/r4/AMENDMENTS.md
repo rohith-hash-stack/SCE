@@ -897,3 +897,70 @@ and pre-registered.
 
 **A different question, for later:** "PRISM as the context source" (R1/R2's setting) would need a different design.
 For example, an arm that gets PRISM's context for the task's target in the first message.
+
+## Phase 1 re-baseline, 3 arms (pre-registered 2026-11-16, before any run of this design)
+
+**Approved by the user (2026-11-16):**
+- **The question:** an agentic-tool arm and an upfront-context arm, each compared with the baseline.
+- **This supersedes the two-arm design** above. Everything not changed here stands:
+  - the harness: the raw tool path with its pre-flight gate, `--phase1`, ledger, gate, turn cap 28, budget 300,000
+    with every prompt token counting, no prompt changes;
+  - the tasks, the 10 seeds, the continuous primary metric and its strict lists;
+  - the secondary readings and the turn-efficiency and post-PRISM metrics;
+  - the wave-1 health check.
+
+**The arms (versions):**
+
+| Arm | Version | Tools | Task message |
+|---|---|---|---|
+| 1 | `BASELINE` | shared tools + `related_code` | the task |
+| 2 | `PRISM` | shared tools + the five PRISM tools; the agent chooses when to call them | the task |
+| 3 | `INJECTED` | **BASELINE's**: same tools, same system prompt | PRISM's context for the task, then the task |
+
+**What Arm 3 gets** (`harness/experiments/r4/inject.py`): the retrieval runs once, before the first turn, through the
+same `ToolLayer` call Arm 2's tools use, with the same 4,000-token cap.
+- **The query uses only what the agent is told:**
+  - **delete:** `prism_change_context` on the target the prompt names, as PRISM's dotted symbol. If PRISM cannot
+    resolve it, `prism_ask` with the target's name and file.
+  - **feature:** `prism_ask` with the feature description from the prompt (first 400 characters).
+- **The block** is headed "Context from the code index (PRISM), retrieved for this task before you started:" and
+  ends with a `---` line before the task. This label is the only text Arm 3 adds.
+- **Recorded per run:** the tool, the query, any fallback or error, and the size in tokens.
+- **Checked locally:**
+  - delete-09 (litestar): `prism_change_context` on `litestar.params.Dependency`;
+  - feature-04 (typer): `prism_ask`;
+  - each about 1.3K tokens.
+- **Its cost:** the block sits in the task message, which the window rule always keeps, so it is re-sent every turn.
+  At about 1.3K tokens over 28 turns that is about 36K of the 300K budget, and up to about 112K at the 4K cap. This is
+  part of what Arm 3 measures, as in R1/R2, where the whole prompt was the context.
+
+**Primary analysis** (`rebaseline_report.py`, fixed in this commit):
+- **The comparisons:** per task, each arm's mean score over the 10 seeds, then two paired comparisons over the 20
+  tasks:
+  - **H-tool:** `PRISM` − `BASELINE` ("does the tool help?");
+  - **H-inject:** `INJECTED` − `BASELINE` ("does injected context help?").
+- **The test for each:** the two-sided Wilcoxon signed-rank test, with p-values Holm-adjusted over the two
+  comparisons (family-wise α = 0.05).
+- **Reported for each:** the mean difference with a 95% bootstrap interval, the paired t-test, the tasks favouring each
+  arm, the set-aside score, and McNemar's test on solves.
+- **Descriptive only:** `INJECTED` − `PRISM`.
+
+**Readings, recorded before the run, per comparison:**
+- **The arm is better than BASELINE on these 20 tasks** if the Holm-adjusted p < 0.05 with the mean difference > 0.
+- **The arm is worse** if the Holm-adjusted p < 0.05 with the mean difference < 0.
+- **No detectable difference** otherwise, with the interval reported.
+- **The detectable difference** is about 0.08–0.09 (about 15–17% relative), slightly larger than the two-arm design's
+  because of the Holm correction. As before, it was estimated on step 1e's 4 tasks.
+- **Every claim is limited** to these 20 tasks and this model.
+
+**The order:** waves of one seed over all 20 tasks and the 3 arms. Each wave is 60 runs, about 6 h. Within a task the
+arms run BASELINE, PRISM, INJECTED.
+- **The wave-1 health check** (seed 42, 60 runs) stops the cell for review if there are more than 2 infrastructure
+  deaths, or parse errors at 2% of turns or more.
+
+**Cost:** 600 runs, about 60 GPU-hours, or 6 Kaggle sessions. With Kaggle's weekly quota of about 30 hours, that is
+about two weeks or more.
+
+**Results:** `reports/r4/rebaseline3`.
+- **Not part of this design:** the stopped wave-1 runs in `reports/r4/rebaseline`, and any runs of the two-arm cell in
+  `reports/r4/rebaseline2`.
