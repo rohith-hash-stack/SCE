@@ -686,3 +686,86 @@ recorded replies and real tools.
 - **If neither qualifies:** JSON mode stays, with the step 1c history cut (which stops the repeats), and the server log
   decides what is tried next.
 - **Also reported:** whether a valid reply calls a tool from the arm's list, and seconds per call.
+
+### Override of the step 1f rule: native tool calling adopted (user, 2026-11-16)
+
+**The user's decision:**
+- **What was overridden:** the pre-registered 5% bar. The rule's intent was to find a format that fixes the cut-off
+  problem, and the drop from 70% to 8.8% (native tools with the Phase 1 harness, all 17 turns) meets it.
+- **The new default:** native tool calling with the Phase 1 harness.
+- **Evidence:** `PHASE1F_RESULTS.md`.
+
+**Not established:** the cut-off's server-side cause. JSON mode is ruled out: free text fails as often.
+
+**Added at the user's direction, both arms:** the native-mode system prompt (`loop.SYSTEM_NATIVE`) says "each turn,
+call exactly one of the given tools; never reply in prose". The format reminder after an invalid reply says the same
+(`FORMAT_REMINDER_NATIVE`).
+- **Tested:** in unit tests only. The re-baseline's first wave is its first contact with the model, and the wave-1
+  health check covers it.
+- **The rule from the earlier override applied:** a result matching a rule's label but not its intent went to the
+  user, who decided.
+
+## Phase 1 re-baseline: PRISM against BASELINE (pre-registered 2026-11-16, before any run)
+
+**Approved by the user (2026-11-16).**
+
+**The design:**
+- the 20 tasks of `sanity/tasks_v3.json` (sha `a187478c…`) × seeds 42–51 × both arms = **400 runs**;
+- devstral-small-2:24b-instruct-2512-q4_K_M on Kaggle 2× T4;
+- cell `kaggle/r4_rebaseline_cell.py`;
+- results in `reports/r4/rebaseline`.
+
+**The harness, fixed for the whole run:**
+- native tool calling (`--native-tools`) with the native system prompt;
+- `--phase1` (history hygiene and compaction);
+- ledger on, gate on, no plan field;
+- turn cap 28; budget 300,000 tokens (every prompt token counts, as decided).
+
+**The order:** waves of one seed over all 20 tasks (40 runs, about 4 h).
+- **If the run stops early,** the completed waves form a balanced design.
+- **The analysis then uses the complete waves only,** and says so.
+
+**Primary metric:** the approved continuous score (amendment "the primary metric changes").
+- **Feature:** (fail-to-pass passing share) × (pass-to-pass passing share).
+- **Delete:** 0 with the target present; else the pass-to-pass passing share.
+- **Strict lists.**
+- **Code:** `harness/experiments/r4/rebaseline_report.py`, fixed in this commit.
+
+**Primary analysis:**
+- **The unit:** per task, each arm's mean score over the 10 seeds, and the paired difference d = PRISM − BASELINE
+  over the 20 tasks.
+- **The test:** the two-sided Wilcoxon signed-rank test on d (zero differences dropped), at α = 0.05.
+- **Also reported:**
+  - the mean difference with a 95% bootstrap interval (tasks resampled);
+  - the paired t-test;
+  - the tasks favouring each arm.
+
+**Readings, recorded before the run:**
+- **PRISM is better on these 20 tasks** if the Wilcoxon test gives p < 0.05 with mean d > 0.
+- **BASELINE is better** if p < 0.05 with mean d < 0.
+- **No detectable difference** otherwise. The bootstrap interval is then reported as the range of effects the data
+  allow.
+  - **The design can detect** a difference of about 0.08 (about 15% relative), from step 1e's spread. That was
+    estimated on 4 unstable tasks, so it is approximate.
+- **Every claim is limited** to these 20 tasks and this model. The tasks include the known broken ones (delete-01,
+  delete-02, with pre-existing failures), scored strictly.
+
+**Secondary:**
+- **Solve rate per arm:** all runs, and tasks solved at least once. McNemar's exact test on the task-seed pairs.
+- **The set-aside score:** delete-01's 1 test and delete-02's 57 tests set aside.
+- **Per family.**
+- **Process:**
+  - infrastructure deaths;
+  - parse errors per turn;
+  - endings (done / turn cap / budget / stuck);
+  - tokens per run;
+  - PRISM output tokens per run;
+  - failed edits per turn (step 1e's possible compaction side-effect).
+
+**Stop rules:**
+- **The wave-1 health check:** the cell stops for review if wave 1 (seed 42, 40 runs) has more than 2 infrastructure
+  deaths, or parse errors at 2% of its turns or more.
+- **Otherwise no change of any kind mid-run.** A stop at a session limit is not a change.
+
+**Cost:** about 40 GPU-hours, or 4 Kaggle sessions. Kaggle's weekly GPU quota (about 30 hours) means this likely
+spans two weeks.

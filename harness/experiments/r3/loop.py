@@ -83,6 +83,16 @@ Planning: every reply also states your plan, first, inside the same JSON object:
 {{"plan": "I will <action> because <reason>. Then <next step>.", "tool": "<name>", "args": {{...}}}}
 Base the plan on what the tools have shown you so far."""
 
+# Phase 1 (native tool calling, amendment "Phase 1: native tools adopted"): the same prompt, with the reply rule
+# stated for native calls instead of a JSON text object. The same in both arms.
+SYSTEM_NATIVE = """You are a software engineer working in a code repository. You work in turns: each turn, call exactly
+one of the given tools; never reply in prose. When your changes are complete, call "done".
+
+Tools:
+{tools}
+Symbols are fully qualified names as the repository's index writes them (e.g. `pkg.module.Class.method`)."""
+FORMAT_REMINDER_NATIVE = "Your reply was not one tool call. Call exactly one of the given tools; never reply in prose."
+
 FORMAT_REMINDER = ('Your reply was not one JSON tool call. Reply with exactly one JSON object: '
                    '{"tool": "<name>", "args": {...}}.')
 
@@ -125,8 +135,12 @@ def tool_docs(version: str) -> str:
     return "\n".join(f"- {name} {sig}: {what}" for name, (sig, what) in docs.items())
 
 
-def system_prompt(version: str, plan: bool = False) -> str:
-    """Identical in both versions except the tool list (parity table)."""
+def system_prompt(version: str, plan: bool = False, native: bool = False) -> str:
+    """Identical in both versions except the tool list (parity table). `native`: the native-tool-calling wording."""
+    if native:
+        if plan:
+            raise ValueError("the plan field needs JSON text replies, not native tool calls")
+        return SYSTEM_NATIVE.format(tools=tool_docs(version))
     return (SYSTEM + (PLAN_ADDENDUM if plan else "")).format(tools=tool_docs(version))
 
 
@@ -464,19 +478,22 @@ def parse_call(text: str) -> tuple[str, dict] | None:
 class AgentRun:
     def __init__(self, task: dict, version: str, seed: int, model, shared, index_tools=None,
                  tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False,
-                 gate=None, ledger=None, record_full: bool = False, hygiene: bool = False, compact: bool = False):
+                 gate=None, ledger=None, record_full: bool = False, hygiene: bool = False, compact: bool = False,
+                 native: bool = False):
         """`gate`: amendment R4-SANITY-2's verification at done (`r4/done_gate.DoneGate`), or None (R3a).
         `ledger`: amendment R4-SANITY-4's per-turn progress summary (`r4/progress_ledger.ProgressLedger`), or None.
         `hygiene` (Phase 1 item 3, both arms): a reply that is not one tool call goes back into the history cut to
         PARSE_ERROR_KEEP_CHARS; a call the server returned without token counts is counted with the tokenizer.
         `compact` (Phase 1 item 2, both arms): the history compaction rules (`r3/compaction.py`) before the window
-        rule."""
+        rule.
+        `native` (Phase 1): the model calls tools natively (`OllamaChat(tools=...)`); the system prompt and the format
+        reminder say so (`SYSTEM_NATIVE`, `FORMAT_REMINDER_NATIVE`), in both arms."""
         """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's five tools, or `related_code`)."""
         self.task, self.version, self.seed, self.model = task, version, seed, model
         self.shared, self.index_tools, self.turn_cap, self.plan = shared, index_tools, turn_cap, plan
         self.gate, self.ledger = gate, ledger
         self.record_full = record_full    # Phase 0b replays: the full prompt and output in the turn log
-        self.hygiene, self.compact = hygiene, compact
+        self.hygiene, self.compact, self.native = hygiene, compact, native
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
         self.allowed = set(SHARED_DOC) | set(PRISM_DOC if version == "PRISM" else BASELINE_DOC)
@@ -533,7 +550,7 @@ class AgentRun:
             with open(summary_path) as fh:
                 return json.load(fh)
         log_path = os.path.join(out_dir, run_id + ".jsonl")
-        system, task_msg = system_prompt(self.version, self.plan), self.task["prompt"]
+        system, task_msg = system_prompt(self.version, self.plan, self.native), self.task["prompt"]
         history: list[dict] = []
         used, turn, end = 0, 0, None
         rejected_in_a_row = rejections = 0
@@ -593,7 +610,7 @@ class AgentRun:
                         said = (said[:PARSE_ERROR_KEEP_CHARS].rstrip()
                                 + f" … [reply cut here: {len(said)} characters, not one valid JSON tool call]")
                     history += [{"role": "assistant", "content": said},
-                                {"role": "user", "content": FORMAT_REMINDER}]
+                                {"role": "user", "content": FORMAT_REMINDER_NATIVE if self.native else FORMAT_REMINDER}]
                     log.write(json.dumps(rec) + "\n")
                     continue
                 tool, args = call

@@ -370,3 +370,34 @@ def test_ollama_native_reply_without_a_call_falls_back_to_its_text():
         assert L.parse_call(r["text"]) == ("run_tests", {}) and r["meta"]["tool_calls"] == 0
     finally:
         s.close()
+
+
+# ------------------------------------------------------------------ the native-mode prompt (both arms)
+def test_native_system_prompt_states_the_rule_and_differs_between_arms_only_in_the_tool_list():
+    p, b = L.system_prompt("PRISM", native=True), L.system_prompt("BASELINE", native=True)
+    assert "call exactly\none of the given tools; never reply in prose" in p and "JSON object" not in p
+    assert p.replace(L.tool_docs("PRISM"), "") == b.replace(L.tool_docs("BASELINE"), "")
+    with pytest.raises(ValueError):
+        L.system_prompt("PRISM", plan=True, native=True)
+    assert L.system_prompt("PRISM") == (L.SYSTEM).format(tools=L.tool_docs("PRISM"))      # the default is unchanged
+
+
+def test_a_native_run_uses_the_native_prompt_and_reminder(tmp_path):
+    model = _Scripted([("I will read the file first.", 10, 5), (DONE, 10, 5)])
+    L.AgentRun({"id": "t", "prompt": "p"}, "BASELINE", 42, model, _Shared(), native=True).run(str(tmp_path))
+    assert model.seen[0][0]["content"] == L.system_prompt("BASELINE", native=True)
+    assert model.seen[1][-1]["content"] == L.FORMAT_REMINDER_NATIVE
+
+
+# ------------------------------------------------------------------ the re-baseline's continuous score
+def test_run_score_feature_and_delete_definitions():
+    from harness.experiments.r4.rebaseline_report import run_score
+    feat = {"family": "feature", "fail_to_pass": {"t.py": ["a", "b"]}, "pass_to_pass": {"t.py": ["c", "d", "e", "f"]}}
+    s = {"hidden_patch_applied": True, "tests": {"t.py::a": "passed", "t.py::b": "failed", "t.py::c": "passed",
+                                                  "t.py::d": "passed", "t.py::e": "passed", "t.py::f": "missing"}}
+    assert run_score(feat, s) == 0.5 * 0.75
+    dele = {"family": "delete", "fail_to_pass": {}, "pass_to_pass": {"t.py": ["c", "d", "e", "f"]}}
+    assert run_score(dele, {**s, "target_absent": False}) == 0.0          # doing nothing keeps every test passing
+    assert run_score(dele, {**s, "target_absent": True}) == 0.75
+    assert run_score(dele, {**s, "target_absent": True}, {"t.py::f"}) == 1.0          # the set-aside reading
+    assert run_score(feat, {"hidden_patch_applied": False, "tests": {}}) == 0.0
