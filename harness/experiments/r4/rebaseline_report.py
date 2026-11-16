@@ -20,6 +20,12 @@ the score with pre-existing failures set aside (delete-01: 1 test; delete-02: 57
 **Process:** infrastructure deaths, parse errors per turn, endings (done / turn cap / budget / stuck), tokens per run,
 PRISM-output share of the prompt, compaction counts, failed edits per turn.
 
+**Turn efficiency** (user, 2026-11-16; descriptive, no test): per run, the turns by kind (PRISM calls; exploration:
+`read_file`, `grep`, `list_dir`, `related_code`; edits applied and failed; test runs; parse errors), the turn of the
+first applied edit, the turns spent between a PRISM call and the next applied edit, model seconds per turn and per run,
+and the mean prompt size. Reported per arm, per task (paired PRISM - BASELINE), and for solved runs only (turns and
+model seconds to the end of a solved run).
+
 `--health`: the check the cell runs after its first wave (amendment: stop if infrastructure deaths > 2 of the wave's
 runs or parse errors >= 2% of its turns). Exit code 0 = continue, 4 = stop.
 """
@@ -74,6 +80,42 @@ def set_aside(root: str, tasks: dict) -> dict[str, set[str]]:
     return out
 
 
+EXPLORE = ("read_file", "grep", "list_dir", "related_code")
+
+
+def efficiency(turns: list[dict]) -> dict:
+    """Turn efficiency of one run, from its turn log."""
+    kinds = {"prism": 0, "explore": 0, "edit_applied": 0, "edit_failed": 0, "test": 0, "parse_error": 0, "other": 0}
+    first_edit, after_prism, pending = None, 0, False
+    for t in turns:
+        tool = str(t.get("tool") or "")
+        applied = tool == "edit_file" and str(t.get("output_head", "")).startswith(("edited", "created"))
+        if t.get("parse_error"):
+            kinds["parse_error"] += 1
+        elif tool.startswith("prism_"):
+            kinds["prism"] += 1
+        elif tool in EXPLORE:
+            kinds["explore"] += 1
+        elif tool == "edit_file":
+            kinds["edit_applied" if applied else "edit_failed"] += 1
+        elif tool == "run_tests":
+            kinds["test"] += 1
+        else:
+            kinds["other"] += 1
+        if pending and not tool.startswith("prism_"):
+            after_prism += 1
+        if tool.startswith("prism_"):
+            pending = True
+        if applied:
+            pending = False
+            first_edit = first_edit or t.get("turn")
+    n = len(turns) or 1
+    secs = sum(t.get("model_seconds") or 0 for t in turns)
+    return {"turns_by_kind": kinds, "first_edit_turn": first_edit, "turns_after_prism_before_edit": after_prism,
+            "model_seconds": secs, "model_seconds_per_turn": secs / n,
+            "mean_prompt_tokens": sum(t.get("prompt_tokens") or 0 for t in turns) / n}
+
+
 def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
     rows = []
     for path in sorted(glob.glob(os.path.join(results, "r4s-*__*__*.score.json"))):
@@ -90,7 +132,8 @@ def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
                      "failed_edits": sum(1 for t in turns if t.get("tool") == "edit_file"
                                          and not str(t.get("output_head", "")).startswith(("edited", "created"))),
                      "prism_output_tokens": sum(t.get("output_tokens") or 0 for t in turns
-                                                if str(t.get("tool") or "").startswith("prism_"))})
+                                                if str(t.get("tool") or "").startswith("prism_")),
+                     "efficiency": efficiency(turns)})
     return rows
 
 
@@ -160,7 +203,41 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
                                   if any(r["family"] == fam and r["arm"] == arm for r in rows)}
                             for fam in sorted({r["family"] for r in rows})}
     rep["process"] = process(rows)
+    rep["turn_efficiency"] = turn_efficiency(rows, per_task)
     return rep
+
+
+def turn_efficiency(rows: list[dict], per_task: dict) -> dict:
+    """Descriptive (no test): where the turns and the model time go, per arm, per task, and in solved runs."""
+    def summary(rs):
+        if not rs:
+            return None
+        e = [r["efficiency"] for r in rs]
+        kinds = {k: st.mean(x["turns_by_kind"][k] for x in e) for k in e[0]["turns_by_kind"]}
+        fe = [x["first_edit_turn"] for x in e if x["first_edit_turn"]]
+        return {"runs": len(rs), "turns": st.mean(r["turns"] for r in rs), "turns_by_kind": kinds,
+                "first_edit_turn": st.mean(fe) if fe else None, "runs_without_an_edit": len(e) - len(fe),
+                "turns_after_prism_before_edit": st.mean(x["turns_after_prism_before_edit"] for x in e),
+                "model_seconds": st.mean(x["model_seconds"] for x in e),
+                "model_seconds_per_turn": st.mean(x["model_seconds_per_turn"] for x in e),
+                "mean_prompt_tokens": st.mean(x["mean_prompt_tokens"] for x in e)}
+    out = {"per_arm": {arm: summary([r for r in rows if r["arm"] == arm]) for arm in ("PRISM", "BASELINE")},
+           "solved_runs": {arm: summary([r for r in rows if r["arm"] == arm and r["solved"]])
+                           for arm in ("PRISM", "BASELINE")}}
+    paired = {}
+    for tid in per_task:
+        a = [r for r in rows if r["task"] == tid and r["arm"] == "PRISM"]
+        b = [r for r in rows if r["task"] == tid and r["arm"] == "BASELINE"]
+        if a and b:
+            paired[tid] = {"turns_diff": st.mean(r["turns"] for r in a) - st.mean(r["turns"] for r in b),
+                           "model_seconds_diff": st.mean(r["efficiency"]["model_seconds"] for r in a)
+                           - st.mean(r["efficiency"]["model_seconds"] for r in b),
+                           "prism_turns": st.mean(r["efficiency"]["turns_by_kind"]["prism"] for r in a)}
+    out["per_task_paired"] = paired
+    if paired:
+        out["mean_turns_diff"] = st.mean(v["turns_diff"] for v in paired.values())
+        out["mean_model_seconds_diff"] = st.mean(v["model_seconds_diff"] for v in paired.values())
+    return out
 
 
 def process(rows: list[dict]) -> dict:

@@ -1,8 +1,12 @@
 # ============================================================
 # PRISM R4 Phase 1 re-baseline (harness/experiments/r4/AMENDMENTS.md, "Phase 1 re-baseline"): PRISM vs BASELINE on
 # the 20 tasks of sanity/tasks_v3.json x 10 seeds (42-51) x both arms = 400 runs, devstral-small-2, the Phase 1
-# harness: native tool calling (--native-tools), history hygiene + compaction (--phase1), ledger, gate, turn cap 28,
-# budget 300,000 (every prompt token counts). About 40 GPU-hours: 4 Kaggle sessions.
+# harness: native tool calling read by the harness (--raw-tools: devstral's template rendered and its [TOOL_CALLS]
+# parsed by r3/mistral_raw.py, so no reply is discarded unseen), history hygiene + compaction (--phase1), ledger,
+# gate, turn cap 28, budget 300,000 (every prompt token counts). About 40 GPU-hours: 4 Kaggle sessions.
+#
+# Before any run, a pre-flight (`r4/raw_preflight`) sends the same messages to Ollama's /api/chat (Ollama renders the
+# template) and to /api/generate raw (the harness renders it): the prompt token counts must match, or the cell stops.
 #
 # The runs go in waves, one seed at a time over all 20 tasks (40 runs a wave, ~4 h), so stopping at any point leaves a
 # balanced design. After the first wave (seed 42) a health check runs (`rebaseline_report --health`): if more than 2
@@ -32,7 +36,7 @@ REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 STAGE = "rebaseline"
 SUMMARIZER = "devstral-small-2:24b-instruct-2512-q4_K_M"   # Phase 0 model (amendment); JSON mode, no think flag
-MODEL_FLAGS = ["--model", SUMMARIZER, "--ledger", "--phase1", "--native-tools"]
+MODEL_FLAGS = ["--model", SUMMARIZER, "--ledger", "--phase1", "--raw-tools"]
 OLLAMA_VERSION = "0.34.0"
 PORTS = (11434,)
 GPU_GROUPS = ("0,1",)
@@ -54,7 +58,7 @@ WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
 RESULTS_PATH = "@@RESULTS_PATH@@"
-BIG = "/tmp/r4rb"
+BIG = "/tmp/r4rb2"
 CACHE = f"{BIG}/cache"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
@@ -284,23 +288,15 @@ for port in PORTS:
         print(f"[ok] port {port}: {json.loads(r.read())['message']['content']!r}", flush=True)
 
 
-print("\n[smoke] one native tool call", flush=True)
-_tools = [{"type": "function", "function": {"name": "read_file", "description": "Read a file.",
-                                            "parameters": {"type": "object", "properties": {"path": {"type": "string"}},
-                                                           "required": ["path"]}}}]
-_req = urllib.request.Request(f"http://127.0.0.1:{PORTS[0]}/api/chat", data=json.dumps({
-    "model": SUMMARIZER, "stream": False, "tools": _tools,
-    "options": {"num_predict": 256, "num_ctx": 8192, "temperature": 0.2},
-    "messages": [{"role": "user", "content": "Use the read_file tool to read the file a.py."}]}).encode(),
-    headers={"Content-Type": "application/json"})
-with urllib.request.urlopen(_req, timeout=900) as _r:
-    _m = json.loads(_r.read())["message"]
-_calls = _m.get("tool_calls") or []
-_ok = bool(_calls) and (_calls[0].get("function") or {}).get("name") == "read_file"
-open(os.path.join(OUT, "smoke_tool_call.json"), "w").write(json.dumps({"ok": _ok, "message": _m}, default=str)[:2000])
-if not _ok:
-    abort(f"the model did not return one native tool call: {_m}")
-print("[ok] native tool call", flush=True)
+print("\n[preflight] the harness renders devstral's template as Ollama does", flush=True)
+_pf = subprocess.run([sys.executable, "-m", "harness.experiments.r4.raw_preflight", "--base-url",
+                      f"http://127.0.0.1:{PORTS[0]}", "--model", SUMMARIZER, "--out", os.path.join(OUT, "preflight.json")],
+                     cwd=SCE_DIR, env=child_env, capture_output=True, text=True)
+print(_pf.stdout[-3000:], _pf.stderr[-2000:], flush=True)
+if _pf.returncode != 0:
+    push_results(f"r4 rebaseline: STOPPED by the raw-template pre-flight @ {CODE_COMMIT[:7]}")
+    abort("the pre-flight found a prompt mismatch (or failed) - see preflight.json; report back")
+print("[ok] pre-flight: prompt token counts match", flush=True)
 
 
 def module(args, label, name, push_while=False):

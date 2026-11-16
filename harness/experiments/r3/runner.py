@@ -312,6 +312,9 @@ def main(argv=None) -> int:
     p.add_argument("--native-tools", action="store_true",
                    help="the tools as native function schemas (openai; and ollama, Phase 1: JSON mode off)")
     # Phase 1 (r4/PHASE1_PLAN.md): items 2 and 3, both arms
+    p.add_argument("--raw-tools", action="store_true",
+                   help="ollama: native tool calling with the prompt rendered and the reply parsed by the harness "
+                        "(r3/mistral_raw.py; devstral-small-2's template)")
     p.add_argument("--phase1", action="store_true",
                    help="ollama: stream and cut degenerate replies; hygiene (cut invalid replies in the history, count "
                         "replies without token counts); history compaction")
@@ -327,6 +330,10 @@ def main(argv=None) -> int:
                           tools=native_tools(a.version) if a.native_tools else None)
         if a.native_tools and a.plan:
             p.error("--native-tools cannot carry the plan field (it lives in the JSON text reply)")
+    elif a.raw_tools:
+        from harness.experiments.r3.mistral_raw import OllamaRawChat
+        chat = OllamaRawChat(a.base_url, a.model or MODEL, native_tools(a.version),
+                             answer_tokens=a.answer_tokens or ANSWER_TOKENS, **({"timeout": a.timeout} if a.timeout else {}))
     else:
         chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
                           answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format,

@@ -797,3 +797,51 @@ spans two weeks.
 - The re-baseline cell's smoke test uses a plain request ("Use the read_file tool to read the file a.py.") and no
   system prompt.
 
+
+### Re-baseline wave 1 stopped; restart with the raw tool path (user, 2026-11-16)
+
+**What happened:** wave 1 (seed 42, 40 runs, code `a1d8d0dc`) was stopped by the pre-registered health check.
+- **Parse errors:** 7.1% of turns, against the 2% bar. Infrastructure deaths: 0.
+- **The cause** (`REBASELINE_WAVE1_STOP.md`): all 76 were empty replies. Ollama's tool parser discards a `[TOOL_CALLS]`
+  reply it cannot complete, and `Parser.Content()` returns "" for that tag. The model's output was lost.
+- **The wave-1 runs are kept** in `reports/r4/rebaseline` as a record. They are **not part of the re-baseline:** the
+  harness changes.
+
+**The user's decision: Option A, the raw tool path** (`--raw-tools`, `harness/experiments/r3/mistral_raw.py`).
+- **The prompt:** the harness renders devstral-small-2's Ollama template itself, from the registry template and the
+  same native message list. The JSON it prints is reproduced as Go writes it.
+- **The call:** the harness calls `/api/generate` with `raw: true`.
+- **The parsing:** the harness parses `[TOOL_CALLS]name[ARGS]{...}` itself. A malformed call becomes a visible parse
+  error with its text, so nothing is discarded unseen.
+- **No prompt wording changes.** Everything else in the re-baseline pre-registration stands.
+
+**The gate before any run** (`r4/raw_preflight.py`):
+- **The check:** the same messages (each arm's real system prompt; past calls whose arguments contain `<`, `>`, `&`,
+  quotes and newlines; tool outputs; a reminder) go to Ollama's `/api/chat` and to the raw path.
+- **The bar:** the prompt token counts must be equal, or the cell stops.
+- **Also recorded:** whether the two give the same first call.
+
+**The restart:**
+- **From wave 1,** under a new pin, with results in `reports/r4/rebaseline2`.
+- **The wave-1 health check stands as pre-registered:** stop if more than 2 infrastructure deaths, or parse errors at
+  2% or more.
+
+**Added at the user's request: turn efficiency** (descriptive, no test; `rebaseline_report.turn_efficiency`).
+- **Per run:**
+  - turns by kind (PRISM calls; exploration with `read_file`/`grep`/`list_dir`/`related_code`; edits applied and
+    failed; test runs; parse errors);
+  - the turn of the first applied edit;
+  - turns between a PRISM call and the next applied edit;
+  - model seconds per turn and per run;
+  - mean prompt tokens.
+- **Reported:** per arm, per task paired, and for solved runs only.
+
+**Assistant's note on the premise** (`turns 20–28 because of PRISM`): it does not hold.
+- **Both arms take that many turns.** Phase 0: 25 per run in each arm. Wave 1: PRISM 544 turns over 20 runs,
+  BASELINE 527.
+- **Wave-1 turn efficiency** (broken client, so indicative only):
+  - per run, PRISM made 1.8 PRISM calls, 14.2 exploration turns, 1.7 applied and 5.4 failed edits;
+  - BASELINE made 15.6 exploration turns, 2.4 applied and 5.3 failed edits;
+  - model seconds per turn: 25.7 against 21.8 (PRISM's prompts are about 13% larger).
+- **So in both arms the turns go to exploration and failed edits,** not to PRISM output. The re-baseline's turn
+  efficiency will test this properly.
