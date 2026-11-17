@@ -21,9 +21,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "e045bcb6e8c169a632badc50d38854b27ea0909f"
+CODE_COMMIT = "2cb587570d117f2b3d362dfdb27d0df1e8f8c711"
 CODE_TREES = {"src": "d771ea693a48da16bfc79e4e11bfe2a368a281c6",
-              "harness": "dc3c390e046dc528099480587b87891c09a85ade"}
+              "harness": "49abcf5d674739931c8e4f2e402c151cea290b27"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 STAGE = "smoke4"
