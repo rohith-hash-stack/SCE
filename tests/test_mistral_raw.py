@@ -99,3 +99,15 @@ def test_raw_client_request_and_reply():
         assert L.parse_call(r["text"]) == ("read_file", {"path": "a.py"}) and r["prompt_tokens"] == 50
     finally:
         srv.shutdown()
+
+
+def test_preflight_reads_a_json_format_reply_as_the_loop_does():
+    """The smoke-4 pre-flight: after a history of JSON-format calls, devstral replied in that format; `/api/chat` read
+    it as a call, and so does a run (`parse_raw` keeps the text, the loop's `parse_call` reads it)."""
+    from harness.experiments.r3.loop import native_tools, parse_call
+    from harness.experiments.r3.mistral_raw import parse_raw
+    names = [t["function"]["name"] for t in native_tools("PRISM")]
+    text, meta = parse_raw('{"tool":"read_file","args":{"path":"src/a.ts"}}', names)
+    assert meta["tool_calls"] == 0 and parse_call(text) == ("read_file", {"path": "src/a.ts"})
+    text, _ = parse_raw('read_file{"path": "src/a.ts"}', names)
+    assert parse_call(text) == ("read_file", {"path": "src/a.ts"})

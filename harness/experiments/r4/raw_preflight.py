@@ -9,7 +9,8 @@ renders it). Ollama's prompt token counts must be equal: the same template appli
 tokens. Between the two, a short unrelated request clears the server's prompt cache, so each count is the full prompt.
 Both replies (seed fixed, 64 tokens) must also give the same first call wherever `/api/chat` returned one: the same
 prompt and seed generate the same text, so this checks the harness's parser on the real model's output (the first
-Kaggle pre-flight found `/api/generate` drops the `[TOOL_CALLS]`/`[ARGS]` tokens). Exit 0 if every count and every
+Kaggle pre-flight found `/api/generate` drops the `[TOOL_CALLS]`/`[ARGS]` tokens). The raw reply is read as a run reads
+it: `parse_raw`, then the loop's `parse_call`. Exit 0 if every count and every
 call matches, 5 otherwise.
 """
 from __future__ import annotations
@@ -19,7 +20,7 @@ import json
 import sys
 import urllib.request
 
-from harness.experiments.r3.loop import native_messages, native_tools, system_prompt
+from harness.experiments.r3.loop import native_messages, native_tools, parse_call, system_prompt
 from harness.experiments.r3.mistral_raw import parse_raw, render
 
 
@@ -69,12 +70,12 @@ def main(argv=None) -> int:
                                            "stream": False, "options": opts})
         calls = (chat.get("message") or {}).get("tool_calls") or []
         chat_call = [calls[0]["function"]["name"], calls[0]["function"].get("arguments")] if calls else None
-        raw_text, raw_meta = parse_raw(raw.get("response") or "", [t["function"]["name"] for t in tools])
-        try:
-            rc = json.loads(raw_text) if raw_meta.get("tool_calls") else None
-        except ValueError:
-            rc = None
-        raw_call = [rc["tool"], rc["args"]] if rc else None
+        # The call a run would execute: `OllamaRawChat` returns `parse_raw`'s text and the loop reads it with
+        # `parse_call`, which also takes a reply written in the harness's JSON format (`{"tool": ..., "args": ...}`;
+        # the smoke-4 pre-flight: devstral wrote that after a history of such calls, and `/api/chat` read it as a call).
+        raw_text, _meta = parse_raw(raw.get("response") or "", [t["function"]["name"] for t in tools])
+        rc = parse_call(raw_text)
+        raw_call = [rc[0], rc[1]] if rc else None
         same = chat.get("prompt_eval_count") == raw.get("prompt_eval_count")
         ok = ok and same and (chat_call is None or chat_call == raw_call)
         rows.append({"case": name, "prompt_tokens_chat": chat.get("prompt_eval_count"),

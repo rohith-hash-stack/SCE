@@ -1140,3 +1140,31 @@ pre-flight's PRISM cases therefore cover Arm 3's tool rendering.
 
 **Re-pinned:** the smoke test and the 600-run cell, at the same code. Results still go to `reports/r4/smoke4` and
 `reports/r4/rebaseline5`; neither holds any run.
+
+### The smoke-4 pre-flight stopped the cell: its call check read replies more narrowly than a run (2026-11-17)
+
+**What it found** (`reports/r4/smoke4/preflight.json`, code `e045bcb6`):
+- **Token counts:** raw and `/api/chat` matched in all 4 cases. The rendering, including the six-tool PRISM list, is
+  right.
+- **Calls:** one case did not match, "PRISM: two calls and a reminder".
+  - **The reply:** devstral wrote the call in the harness's JSON format,
+    `{"tool":"read_file","args":{"path":"src/a.ts"}}`, as the case's history shows earlier calls.
+  - **`/api/chat`** read it as a `read_file` call.
+  - **The pre-flight** counted a raw call only when `parse_raw` found the `name{...}` form, so it saw none.
+
+**A run would have executed that call:**
+- `OllamaRawChat` returns `parse_raw`'s text unchanged when it finds no `name{...}` call.
+- The loop's `parse_call` then reads the JSON format, as it always has.
+- So the mismatch was in the pre-flight's own reading, not in the harness.
+
+**The fix** (`raw_preflight.py`):
+- **The raw reply is read as a run reads it:** `parse_raw`, then `parse_call`.
+- **The gate is otherwise unchanged:** equal token counts in every case, and wherever `/api/chat` returns a call, the
+  same call.
+- **Checked:**
+  - the stopped pre-flight's 4 replies all match under the fixed check;
+  - a test pins the JSON-format case;
+  - the local Ollama pre-flight passes.
+
+**Nothing in the design changes.** Both cells are re-pinned. Results still go to `reports/r4/smoke4` (the cell
+overwrites `preflight.json`; the stopped one stays in git history) and `reports/r4/rebaseline5`.
