@@ -8,11 +8,17 @@ Wave 1 of the re-baseline lost 76 replies this way (`REBASELINE_WAVE1_STOP.md`).
 **What this does instead:**
 1. `render(messages, tools)` builds the prompt exactly as devstral-small-2's Ollama template does: the registry
    template, applied to the same message list `/api/chat` would get (`native_messages`). The JSON that the template
-   prints (`{{ $.Tools }}`, `{{ .Function.Arguments }}`) is reproduced as Go's `json.Marshal` writes it: compact,
-   object keys in insertion order (Ollama keeps them in ordered maps), `<`, `>`, `&`, U+2028 and U+2029 escaped.
+   prints (`{{ $.Tools }}`, `{{ .Function.Arguments }}`) is reproduced as Ollama v0.34.0 writes it: compact; `<`, `>`,
+   `&`, U+2028 and U+2029 escaped; tool fields in `api.Tool`'s order; **parameter property names sorted
+   alphabetically**; call arguments in their original order. (Measured against Ollama itself: the first pre-flight
+   on Kaggle found 1-2 tokens' difference with properties in insertion order; a local Ollama v0.34.0 with devstral's
+   template on a small model then matched `/api/chat`'s prompt token count on every tool and every pre-flight case
+   only with sorted property names and unsorted arguments.)
 2. `OllamaRawChat` sends it to `/api/generate` with `raw: true` (no template applied by the server), with the same
    options as `OllamaChat` (temperature, seed, num_ctx, num_predict; no JSON mode).
-3. `parse_raw(text)` reads `[TOOL_CALLS]name[ARGS]{...}` itself. A well-formed first call becomes the loop's
+3. `parse_raw(text, names)` reads the call itself. `/api/generate` drops special tokens from its text, so the reply
+   arrives as `name{...}` (seen in the first pre-flight: `read_file{"path": "src/a.ts"}`), with `[TOOL_CALLS]` and
+   `[ARGS]` present only if the server keeps them; both forms are read. A well-formed first call becomes the loop's
    `{"tool": ..., "args": ...}` text; anything else is returned as written, so the loop records it as a parse error
    with its text visible (and the step 1c history cut applies). Nothing is discarded unseen.
 
@@ -21,6 +27,7 @@ No prompt wording is added: the prompt is the model's own template around the ha
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.request
 
@@ -70,8 +77,8 @@ def _go_tool(tool: dict) -> dict:
             p[k] = params[k]
     if params.get("required"):
         p["required"] = params["required"]
-    p["properties"] = {name: _go_property(prop) for name, prop in (params.get("properties") or {}).items()} \
-        if params.get("properties") is not None else None
+    props = params.get("properties")
+    p["properties"] = {name: _go_property(props[name]) for name in sorted(props)} if props is not None else None
     f = {"name": fn.get("name", "")}
     if fn.get("description"):
         f["description"] = fn["description"]
@@ -104,7 +111,7 @@ def _go_property(prop: dict) -> dict:
         if prop.get(k):
             out[k] = prop[k]
     if prop.get("properties"):
-        out["properties"] = {n: _go_property(v) for n, v in prop["properties"].items()}
+        out["properties"] = {n: _go_property(prop["properties"][n]) for n in sorted(prop["properties"])}
     if prop.get("required"):
         out["required"] = prop["required"]
     return out
@@ -144,24 +151,35 @@ def render(messages: list[dict], tools: list[dict]) -> str:
     return "".join(out)
 
 
-def parse_raw(text: str) -> tuple[str, dict]:
+def parse_raw(text: str, names=()) -> tuple[str, dict]:
     """The model's raw reply as the loop's text, and what was found. A complete first call -> its JSON text; anything
-    else -> the reply as written (stripped of surrounding whitespace)."""
+    else -> the reply as written (stripped of surrounding whitespace).
+
+    A call is `[TOOL_CALLS]name[ARGS]{...}` or, as `/api/generate` returns it with special tokens dropped,
+    `name{...}` where `name` is one of the tool names given (`names`), directly followed by a JSON object."""
     i = text.find(CALL_TAG)
-    if i < 0:
-        return text.strip(), {"tool_calls": 0, "raw_tag": False}
-    rest = text[i + len(CALL_TAG):]
-    j = rest.find(ARGS_TAG)
-    name = rest[:j].strip() if j >= 0 else ""
-    if j < 0 or not name:
-        return text.strip(), {"tool_calls": 0, "raw_tag": True, "malformed": "no name/[ARGS]"}
+    if i >= 0:
+        rest = text[i + len(CALL_TAG):]
+        j = rest.find(ARGS_TAG)
+        name = rest[:j].strip() if j >= 0 else ""
+        if j < 0 or not name:
+            return text.strip(), {"tool_calls": 0, "raw_tag": True, "malformed": "no name/[ARGS]"}
+        body, tagged = rest[j + len(ARGS_TAG):], True
+    else:
+        m = re.search(r"(?<![\w.])(" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")\s*(?=\{)",
+                      text) if names else None
+        if not m:
+            return text.strip(), {"tool_calls": 0, "raw_tag": False}
+        name, body, tagged = m.group(1), text[m.end():], False
     try:
-        args, end = json.JSONDecoder().raw_decode(rest[j + len(ARGS_TAG):].lstrip())
+        args, _end = json.JSONDecoder().raw_decode(body.lstrip())
     except ValueError as exc:
-        return text.strip(), {"tool_calls": 0, "raw_tag": True, "malformed": f"arguments: {str(exc)[:80]}"}
+        return text.strip(), {"tool_calls": 0, "raw_tag": tagged, "malformed": f"arguments: {str(exc)[:80]}"}
     if not isinstance(args, dict):
-        return text.strip(), {"tool_calls": 0, "raw_tag": True, "malformed": "arguments not an object"}
-    return json.dumps({"tool": name, "args": args}), {"tool_calls": text.count(CALL_TAG), "raw_tag": True}
+        return text.strip(), {"tool_calls": 0, "raw_tag": tagged, "malformed": "arguments not an object"}
+    calls = text.count(CALL_TAG) if tagged else len(re.findall(
+        r"(?<![\w.])(?:" + "|".join(map(re.escape, names)) + r")\s*\{", text))
+    return json.dumps({"tool": name, "args": args}), {"tool_calls": calls, "raw_tag": tagged}
 
 
 class OllamaRawChat:
@@ -184,7 +202,7 @@ class OllamaRawChat:
         with urllib.request.urlopen(req, timeout=self.timeout) as r:
             data = json.loads(r.read())
         raw = data.get("response") or ""
-        text, meta = parse_raw(raw)
+        text, meta = parse_raw(raw, [t["function"]["name"] for t in self.tools])
         meta["raw_chars"] = len(raw)
         if text != raw.strip() or meta.get("malformed"):
             meta["raw_head"] = raw[:600]

@@ -7,8 +7,10 @@ has `<`, `>`, `&`, quotes and newlines in their arguments, tool outputs, a forma
 tools go once to `/api/chat` (Ollama renders the template) and once to `/api/generate` with `raw: true` (the harness
 renders it). Ollama's prompt token counts must be equal: the same template applied to the same messages gives the same
 tokens. Between the two, a short unrelated request clears the server's prompt cache, so each count is the full prompt.
-Also recorded: whether both replies (seed fixed, 64 tokens) give the same first call. Exit 0 if every count matches,
-5 otherwise.
+Both replies (seed fixed, 64 tokens) must also give the same first call wherever `/api/chat` returned one: the same
+prompt and seed generate the same text, so this checks the harness's parser on the real model's output (the first
+Kaggle pre-flight found `/api/generate` drops the `[TOOL_CALLS]`/`[ARGS]` tokens). Exit 0 if every count and every
+call matches, 5 otherwise.
 """
 from __future__ import annotations
 
@@ -67,14 +69,14 @@ def main(argv=None) -> int:
                                            "stream": False, "options": opts})
         calls = (chat.get("message") or {}).get("tool_calls") or []
         chat_call = [calls[0]["function"]["name"], calls[0]["function"].get("arguments")] if calls else None
-        raw_text, raw_meta = parse_raw(raw.get("response") or "")
+        raw_text, raw_meta = parse_raw(raw.get("response") or "", [t["function"]["name"] for t in tools])
         try:
             rc = json.loads(raw_text) if raw_meta.get("tool_calls") else None
         except ValueError:
             rc = None
         raw_call = [rc["tool"], rc["args"]] if rc else None
         same = chat.get("prompt_eval_count") == raw.get("prompt_eval_count")
-        ok = ok and same
+        ok = ok and same and (chat_call is None or chat_call == raw_call)
         rows.append({"case": name, "prompt_tokens_chat": chat.get("prompt_eval_count"),
                      "prompt_tokens_raw": raw.get("prompt_eval_count"), "counts_match": same,
                      "chat_call": chat_call, "raw_call": raw_call, "raw_head": (raw.get("response") or "")[:200],

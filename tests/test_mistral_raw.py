@@ -19,9 +19,10 @@ def test_render_follows_the_template_exactly():
             {"role": "assistant", "content": json.dumps({"tool": "read_file", "args": {"path": "a<b>.ts", "end": 3}})},
             {"role": "user", "content": "OUT1"},
             {"role": "assistant", "content": "not a call"}, {"role": "user", "content": "REMIND"}]
+    # property names sorted (Ollama v0.34.0, measured); the call's arguments keep their order
     tools_json = ('[{"type":"function","function":{"name":"read_file","description":"Read \\u003ca\\u003e \\u0026 b.",'
-                  '"parameters":{"type":"object","required":["path"],"properties":{"path":{"type":"string"},'
-                  '"end":{"type":["integer","null"]},"files":{"type":["array","null"],"items":{"type":"string"}}}}}}]')
+                  '"parameters":{"type":"object","required":["path"],"properties":{"end":{"type":["integer","null"]},'
+                  '"files":{"type":["array","null"],"items":{"type":"string"}},"path":{"type":"string"}}}}}]')
     expected = ("[SYSTEM_PROMPT]SYS[/SYSTEM_PROMPT][INST]TASK[/INST]"
                 '[TOOL_CALLS]read_file[ARGS]{"path":"a\\u003cb\\u003e.ts","end":3}</s>'
                 "[TOOL_RESULTS]OUT1[/TOOL_RESULTS]"
@@ -41,6 +42,20 @@ def test_tools_go_before_the_last_user_message_only():
 def test_go_json_escapes_like_go():
     assert go_json({"a": "x<y>&\"\\\n\t\x08 é", "n": [1, 2.0, None, True]}) == \
         '{"a":"x\\u003cy\\u003e\\u0026\\"\\\\\\n\\t\\u0008\\u2028é","n":[1,2,null,true]}'
+
+
+NAMES = ["read_file", "grep", "edit_file", "done", "run_tests"]
+
+
+def test_parse_raw_reads_calls_without_their_special_tokens():
+    """/api/generate drops [TOOL_CALLS]/[ARGS] (first Kaggle pre-flight: `read_file{"path": "src/a.ts"}`)."""
+    assert L.parse_call(parse_raw('read_file{"path": "src/a.ts"}', NAMES)[0]) == ("read_file", {"path": "src/a.ts"})
+    two = parse_raw('read_file{"path":"a"}grep{"pattern":"x"}', NAMES)
+    assert L.parse_call(two[0]) == ("read_file", {"path": "a"}) and two[1]["tool_calls"] == 2
+    assert parse_raw("Use read_file to read", NAMES)[0] == "Use read_file to read"
+    bad = parse_raw('edit_file{"path": "a", "new": "unterminated', NAMES)
+    assert L.parse_call(bad[0]) is None and bad[1]["malformed"].startswith("arguments")
+    assert parse_raw('my_read_file{"a": 1}', NAMES)[1]["tool_calls"] == 0          # only whole tool names
 
 
 def test_parse_raw_cases():

@@ -964,3 +964,34 @@ about two weeks or more.
 **Results:** `reports/r4/rebaseline3`.
 - **Not part of this design:** the stopped wave-1 runs in `reports/r4/rebaseline`, and any runs of the two-arm cell in
   `reports/r4/rebaseline2`.
+
+### The 3-arm cell's pre-flight stopped it; two rendering fixes (2026-11-17, before any run)
+
+**What the pre-flight found** on Kaggle (`reports/r4/rebaseline3/preflight.json`, code `12b0f9c8`). It worked as
+designed and stopped the cell before any run:
+1. **Prompt token counts 1–2 short** (raw against `/api/chat`): PRISM cases −2, BASELINE cases −1.
+2. **Calls not recognised:** `/api/generate` drops the special tokens from its text, so a call came back as
+   `read_file{"path": "src/a.ts"}`, without `[TOOL_CALLS]`/`[ARGS]`. The parser would have made every call a parse
+   error.
+
+**How fix 1 was found:**
+- **The setup:** Ollama v0.34.0 run locally (CPU), with devstral-small-2's registry template on a small model
+  (`smollm2:135m`).
+- **What it showed:** both endpoints send the engine prompts of identical length, yet the token counts differ. Tool by
+  tool, only `read_file` and `prism_new_function_context` differed: the two tools whose parameter names are not
+  already in alphabetical order with the property that tips the tokenisation.
+- **The cause:** Ollama writes **parameter property names sorted alphabetically**, and keeps **call arguments in
+  their original order**.
+- **The check:** with that rule, the raw and chat token counts match on all 12 tools and all 4 pre-flight cases.
+
+**The fixes** (`harness/experiments/r3/mistral_raw.py`):
+1. **Rendering:** property names are sorted when rendering tools; arguments are unchanged.
+2. **Parsing:** `parse_raw(text, names)` also reads `name{...}`, where `name` is one of the arm's tool names directly
+   followed by a JSON object, as well as the tagged form. A known name followed by invalid JSON is a visible parse
+   error.
+
+**The pre-flight is stricter:** wherever `/api/chat` returns a call, the raw path must parse the same call (same
+prompt and seed), as well as matching the token counts. This checks the parser on the real model.
+
+**Nothing else changes** in the 3-arm pre-registration. The cell is re-pinned, and results still go to
+`reports/r4/rebaseline3` (it holds only the pre-flight file).
