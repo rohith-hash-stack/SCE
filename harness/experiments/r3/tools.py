@@ -28,7 +28,8 @@ import os
 CAP_TOKENS = 4000
 DIGEST_MAX = 10
 RELATED_MAX = 40
-PRISM_TOOLS = ("prism_change_context", "prism_blast_radius", "prism_ask", "prism_new_function_context", "prism_digest")
+PRISM_TOOLS = ("prism_change_context", "prism_blast_radius", "prism_ask", "prism_read_code", "prism_new_function_context",
+               "prism_digest")
 BASELINE_TOOLS = ("related_code",)
 
 
@@ -138,6 +139,66 @@ class ToolLayer:
         from prism.mcp import server
         out = self._mcp(server.prism_ask, question=question, top_k=10)
         return json.dumps(out, indent=1, sort_keys=True, default=str)
+
+    def _prism_read_code(self, symbol: str) -> str:
+        """The exact code of one indexed definition, as its file holds it: every line (blank lines and indentation
+        kept), each numbered as `read_file` numbers it (the number, a tab, the text), so the text can be copied into
+        `edit_file`'s `old` as is.
+
+        `symbol` is what `prism_ask` / `prism_change_context` return: a qualified name (`hits[].qname`; a partial
+        name that exactly one symbol ends with is resolved as `prism_change_context` resolves it), a location
+        (`hits[].location`, `path:line`: the innermost definition containing that line), or a file path (the whole
+        file). The bytes are the shadow's (what PRISM may show, R3-5): for a file the agent has not left unparsable,
+        the same bytes as the working file."""
+        from prism.mcp import server
+        b, root = self.wi.builder, self.wi.shadow
+        target = symbol.strip().strip("`")
+        path, _, line = target.rpartition(":")
+        rel = target
+        if path and line.isdigit():
+            rel = path
+        rel = rel.replace("\\", "/").removeprefix("./")
+        abs_path = os.path.join(root, rel)
+        if os.path.isfile(abs_path) and os.path.realpath(abs_path).startswith(os.path.realpath(root) + os.sep):
+            lines = self._lines(abs_path)
+            if rel != target:                                      # path:line -> the innermost definition there
+                n = int(line)
+                if not 1 <= n <= len(lines):
+                    raise ToolError(f"{rel} has {len(lines)} lines; line {n} is outside it")
+                inside = [(s.line_range[1] - s.line_range[0], q) for q in b._def_nodes
+                          if (s := b.symbol_table.get(q)) is not None and os.path.abspath(s.file) == abs_path
+                          and s.line_range[0] <= n <= s.line_range[1]]
+                if inside:
+                    return self._code_block(min(inside)[1])
+                return self._numbered(rel, lines, n, n, f"line {n} (no indexed definition contains it)")
+            return self._numbered(rel, lines, 1, len(lines), "whole file")
+        ctx = server._cache._entries.get(self._key)
+        try:
+            qname = server._resolve_seed_or_raise(ctx, target)
+        except Exception as exc:                                   # MCPError: unknown or ambiguous name
+            data = getattr(exc, "data", None) or {}
+            cands = data.get("candidates") if isinstance(data, dict) else None
+            msg = getattr(exc, "message", None) or str(exc)
+            raise ToolError(msg.replace(root + os.sep, "").replace(root, ".")
+                            + (f"; candidates: {', '.join(cands)}" if cands else "")) from exc
+        return self._code_block(qname)
+
+    def _code_block(self, qname: str) -> str:
+        s = self.wi.builder.symbol_table.get(qname)
+        lines = self._lines(s.file)
+        lo, hi = s.line_range
+        rel = os.path.relpath(s.file, self.wi.shadow).replace(os.sep, "/")
+        return self._numbered(rel, lines, lo, min(hi, len(lines)), f"`{qname}`, {s.kind}")
+
+    @staticmethod
+    def _lines(path: str) -> list[str]:
+        with open(path, "rb") as fh:
+            return fh.read().decode("utf8", "replace").splitlines()
+
+    @staticmethod
+    def _numbered(rel: str, lines: list[str], lo: int, hi: int, what: str) -> str:
+        body = "\n".join(f"{i}\t{lines[i - 1]}" for i in range(lo, hi + 1))
+        return f"{rel} (lines {lo}-{hi} of {len(lines)}: {what})\n{body}"
 
     def _prism_new_function_context(self, file: str, name: str, signature: str = "", purpose: str = "",
                                     cls: str | None = None) -> str:

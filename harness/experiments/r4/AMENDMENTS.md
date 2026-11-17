@@ -1035,3 +1035,71 @@ cell's plumbing works.
 - **The paired tests need at least two tasks,** so they show as `null` here.
 
 **Not part of any result.** Results go to `reports/r4/smoke3`. The 3-arm pre-registration is unchanged.
+
+### A sixth PRISM tool, `prism_read_code` (user, 2026-11-17, before the 600-run launch)
+
+**Why** (the smoke test's PRISM run, `reports/r4/smoke3`, traced in `harness/experiments/r4/SMOKE3_FORENSICS.md`):
+- **`prism_ask` returns no code:** the turn-1 answer was 1,308 tokens of ranked names, locations and score legs.
+- **The agent read the files itself:**
+  - 6 `read_file` calls and 1 `list_dir` before its first edit;
+  - the code `prism_change_context` serves drops blank lines and has no line numbers, so it cannot be copied into
+    `edit_file` either.
+- **Its first edit failed:**
+  - **The cause:** `old` held a docstring the file does not have ("Create HTML response content for an exception."
+    against the real "Given an exception, produces its traceback in HTML.").
+  - **Why:** by turn 10, compaction had reduced the whole-file read of turn 2 to a one-line summary (rule 4, more
+    than 6 outputs back), so the agent wrote `old` from memory.
+  - **The cost:** 2 turns and about 106 s of model time.
+
+**What the tool does** (`ToolLayer._prism_read_code`, `harness/experiments/r3/tools.py`):
+- **Input:** `{"symbol": str}`, any of what `prism_ask` / `prism_change_context` return:
+  - a qualified name (`hits[].qname`). A partial name that exactly one indexed symbol ends with resolves as
+    `prism_change_context` resolves it (`_resolve_seed_or_raise`). An unknown or ambiguous name is an error that
+    lists the candidates.
+  - a location `path:line` (`hits[].location`): the innermost indexed definition containing that line.
+  - a file path: the whole file.
+- **Output:**
+  - a header (`path (lines a-b of N: `qname`, kind)`), then every line of the definition, decorators included,
+    exactly as the file holds it, blank lines and indentation kept;
+  - each line numbered as `read_file` numbers it (the number, a tab, the text).
+- **The bytes are the shadow's** (R3-5: what PRISM may show). For a file the agent has not left unparsable, they are
+  the working file's current bytes.
+- **The same `ToolLayer.call` path as the other PRISM tools:** refresh, the gated-file notice, the 4,000-token cap.
+- **Compaction treats it as an index tool** (rule 4: its first lines once old), as it treats the other `prism_*`
+  tools. The read-specific rules (superseded, stale) stay `read_file`'s.
+- **Description in the tool list** (descriptive only, no instruction on when to use it): "The exact code of a symbol,
+  a location (path:line) or a file that prism_ask or prism_change_context named, with line numbers."
+- **Nothing else changes:** `prism_change_context` and the other PRISM tools are unchanged; no prompt wording is
+  added.
+
+**The arms after this change:**
+- **Arm 2 (`PRISM`):** shared tools + six PRISM tools.
+- **Arm 3 (`INJECTED`): unchanged, without `prism_read_code`.**
+  - **Why:** Arm 3 is defined as BASELINE's tools with PRISM's context prepended once ("does injected context
+    help?"). An agent-callable PRISM tool there would make it a second tool arm and blur H-inject.
+  - **Its injected block is also unchanged** (the `prism_ask` / `prism_change_context` answer).
+  - **The user may override this before the launch.**
+- **Arm 1 (`BASELINE`):** unchanged.
+
+**Checked before the re-pin:**
+- **On the smoke task's commit** (litestar `6e432d0d6b4a`):
+  - `create_html_response_content` returns lines 128-160 exactly, including line 129's real docstring;
+  - the location `_debug_response.py:59` from `prism_ask` returns `create_line_html`;
+  - a template path returns the whole file;
+  - `get` returns the ambiguity error with its 19 candidates.
+- **Tests:** `tests/test_prism_read_code.py` covers:
+  - exact lines with blank lines;
+  - decorators;
+  - partial names, locations, files;
+  - errors, including a path outside the repository;
+  - a file edited after indexing;
+  - the tool in the PRISM arm only.
+- **Template rendering** (local Ollama v0.34.0, devstral's template): raw and `/api/chat` token counts match in all 4
+  pre-flight cases with the new tool list. The Kaggle pre-flight gate checks this again on the real model.
+
+**A change to Arm 2's tools, so a new pin:**
+- **The smoke test runs again first:** results to `reports/r4/smoke4`.
+- **Then the 600-run cell:** results to `reports/r4/rebaseline5`. `reports/r4/rebaseline4` holds no runs of this
+  design.
+- **The rest of the 3-arm pre-registration stands:** the tasks, the seeds, the metric, the comparisons, the
+  readings, the health check.

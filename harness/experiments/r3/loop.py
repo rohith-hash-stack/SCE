@@ -59,6 +59,8 @@ PRISM_DOC = {
                                    "Before writing a new function: the existing helpers to reuse, conventions, and "
                                    "the closest existing functions."),
     "prism_ask": ('{"question": str}', "Ask where something is in the code: ranked functions."),
+    "prism_read_code": ('{"symbol": str}', "The exact code of a symbol, a location (path:line) or a file that "
+                        "prism_ask or prism_change_context named, with line numbers."),
     "prism_digest": ('{"symbols": [str]}', "Line-cited summaries of up to 10 functions (parameters, calls, raises, "
                      "returns)."),
 }
@@ -102,6 +104,7 @@ PARAM_SCHEMAS = {
     "prism_new_function_context": ({"file": _S, "name": _S, "signature": _S, "purpose": _S,
                                     "cls": {"type": ["string", "null"]}}, ["file", "name"]),
     "prism_ask": ({"question": _S}, ["question"]),
+    "prism_read_code": ({"symbol": _S}, ["symbol"]),
     "prism_digest": ({"symbols": {"type": "array", "items": _S}}, ["symbols"]),
     "related_code": ({"query": _S}, ["query"]),
 }
