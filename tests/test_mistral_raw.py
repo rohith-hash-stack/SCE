@@ -56,6 +56,9 @@ def test_parse_raw_reads_calls_without_their_special_tokens():
     bad = parse_raw('edit_file{"path": "a", "new": "unterminated', NAMES)
     assert L.parse_call(bad[0]) is None and bad[1]["malformed"].startswith("arguments")
     assert parse_raw('my_read_file{"a": 1}', NAMES)[1]["tool_calls"] == 0          # only whole tool names
+    # wave 1 of the 3-arm re-baseline: prose ending in a full stop, then the call
+    prose = parse_raw('I need to read more. Let me continue reading the file.read_file{"path":"a.py","start":1}', NAMES)
+    assert L.parse_call(prose[0]) == ("read_file", {"path": "a.py", "start": 1}) and prose[1]["tool_calls"] == 1
 
 
 def test_parse_raw_cases():

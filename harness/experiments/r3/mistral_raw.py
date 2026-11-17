@@ -156,7 +156,9 @@ def parse_raw(text: str, names=()) -> tuple[str, dict]:
     else -> the reply as written (stripped of surrounding whitespace).
 
     A call is `[TOOL_CALLS]name[ARGS]{...}` or, as `/api/generate` returns it with special tokens dropped,
-    `name{...}` where `name` is one of the tool names given (`names`), directly followed by a JSON object."""
+    `name{...}` where `name` is one of the tool names given (`names`), directly followed by a JSON object. The name may
+    follow any non-word character, including the full stop that ends a sentence of prose before the call (wave 1 of
+    the 3-arm re-baseline: "...Let me continue reading the file.read_file{...}"; Ollama's own parser reads those)."""
     i = text.find(CALL_TAG)
     if i >= 0:
         rest = text[i + len(CALL_TAG):]
@@ -166,7 +168,7 @@ def parse_raw(text: str, names=()) -> tuple[str, dict]:
             return text.strip(), {"tool_calls": 0, "raw_tag": True, "malformed": "no name/[ARGS]"}
         body, tagged = rest[j + len(ARGS_TAG):], True
     else:
-        m = re.search(r"(?<![\w.])(" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")\s*(?=\{)",
+        m = re.search(r"(?<![\w])(" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")\s*(?=\{)",
                       text) if names else None
         if not m:
             return text.strip(), {"tool_calls": 0, "raw_tag": False}
@@ -178,7 +180,7 @@ def parse_raw(text: str, names=()) -> tuple[str, dict]:
     if not isinstance(args, dict):
         return text.strip(), {"tool_calls": 0, "raw_tag": tagged, "malformed": "arguments not an object"}
     calls = text.count(CALL_TAG) if tagged else len(re.findall(
-        r"(?<![\w.])(?:" + "|".join(map(re.escape, names)) + r")\s*\{", text))
+        r"(?<![\w])(?:" + "|".join(map(re.escape, names)) + r")\s*\{", text))
     return json.dumps({"tool": name, "args": args}), {"tool_calls": calls, "raw_tag": tagged}
 
 

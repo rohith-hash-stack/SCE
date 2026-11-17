@@ -995,3 +995,27 @@ prompt and seed), as well as matching the token counts. This checks the parser o
 
 **Nothing else changes** in the 3-arm pre-registration. The cell is re-pinned, and results still go to
 `reports/r4/rebaseline3` (it holds only the pre-flight file).
+
+### 3-arm wave 1 stopped by the health check: a harness parser bug (2026-11-17)
+
+**What happened:**
+- **The pre-flight passed** (token counts and calls matched in all 4 cases).
+- **Wave 1 then ran** (seed 42, 60 runs, code `3f4bcafd`), with no infrastructure deaths.
+- **The health check stopped the cell:** parse errors at 11.0% of turns (161 of 1,459), against the 2% bar.
+
+**The cause was in the harness, not the model.**
+- **The replies:** 155 of the 161 were prose followed by a valid call, written as the model does: "…Let me continue
+  reading the file.read_file{"path": …}".
+- **The parser:** the untagged-call rule in `mistral_raw.parse_raw` refused a tool name directly after a `.`, which
+  was meant to keep out dotted names such as `pkg.read_file`. The full stop ending the prose matched that rule.
+- **Ollama's own parser** (the `native` path that step 1f measured) reads these replies as calls.
+- **The fix:** the name may now follow any non-word character. A test pins the prose-then-call form.
+- **Checked on wave 1's own replies:** the 155 parse as calls to tools in the arm's own list. The 6 left are 5
+  malformed `edit_file` calls (unterminated strings, 4 of them at or near the answer limit) and 1 other. That is
+  0.4% of turns.
+
+**Wave 1 is not used.**
+- **Why:** each misread call cost its run a turn and a format reminder, so the trajectories are not the harness's.
+- **Kept as a record** in `reports/r4/rebaseline3`.
+- **The 3-arm design restarts from wave 1** under a new pin, with results in `reports/r4/rebaseline4`.
+- **Nothing else changes,** the health check included.
