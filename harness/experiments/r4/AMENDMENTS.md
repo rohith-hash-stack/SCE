@@ -1019,3 +1019,19 @@ prompt and seed), as well as matching the token counts. This checks the parser o
 - **Kept as a record** in `reports/r4/rebaseline3`.
 - **The 3-arm design restarts from wave 1** under a new pin, with results in `reports/r4/rebaseline4`.
 - **Nothing else changes,** the health check included.
+
+### Smoke test before the 3-arm re-baseline (user, 2026-11-17)
+
+**Why:** Kaggle's execution queue is long, so a short cell (`kaggle/r4_smoke_test.py`) first shows that the full
+cell's plumbing works.
+
+**What it runs:**
+- **Scope:** one task (`r4s-feature-02`, litestar), seed 42, the three arms: 3 runs.
+- **Turn cap:** 12, for time; the full run keeps 28.
+- **Unchanged from the full cell:** the same code, the same pre-flight gate (token counts and calls), the raw tool
+  path, `--phase1`, ledger and gate.
+- **Then:** the analysis script on the 3 runs. Its output is printed: per run, per task, process, turn efficiency,
+  post-PRISM and injection.
+- **The paired tests need at least two tasks,** so they show as `null` here.
+
+**Not part of any result.** Results go to `reports/r4/smoke3`. The 3-arm pre-registration is unchanged.
