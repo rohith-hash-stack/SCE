@@ -21,12 +21,12 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "299e08f0543ab8787bb71a9128bb2344dcc1c428"
+CODE_COMMIT = "c307e1e90a8976eefd86d9a8d7b6da1fd0c4ae68"
 CODE_TREES = {"src": "d771ea693a48da16bfc79e4e11bfe2a368a281c6",
-              "harness": "1c144c585eed17cffc751532ee5cdb2ad2ce3589"}
+              "harness": "1269abcb123b1161dc9064d637e577d55e186fc0"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
-STAGE = "smoke3"
+STAGE = "smoke4"
 SMOKE_TASK = "r4s-feature-02"
 ARMS = ("BASELINE", "PRISM", "INJECTED")
 SUMMARIZER = "devstral-small-2:24b-instruct-2512-q4_K_M"   # Phase 0 model (amendment); JSON mode, no think flag
@@ -51,7 +51,7 @@ CHECKPOINT_MIN = 10
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
-RESULTS_PATH = "reports/r4/smoke3"
+RESULTS_PATH = "reports/r4/smoke4"
 BIG = "/tmp/r4smoke"
 CACHE = f"{BIG}/cache"
 PUSH_RESULTS = True

@@ -26,7 +26,7 @@ CODE_TREES = {"src": "@@SRC_TREE@@",
               "harness": "@@HARNESS_TREE@@"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
-STAGE = "smoke3"
+STAGE = "smoke4"
 SMOKE_TASK = "r4s-feature-02"
 ARMS = ("BASELINE", "PRISM", "INJECTED")
 SUMMARIZER = "devstral-small-2:24b-instruct-2512-q4_K_M"   # Phase 0 model (amendment); JSON mode, no think flag
