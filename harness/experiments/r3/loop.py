@@ -110,10 +110,19 @@ PARAM_SCHEMAS = {
 }
 
 
+# The arms with PRISM's tools: PRISM (the tools only) and INJECTED (the 3-arm re-baseline's Arm 3: PRISM's context
+# injected up front, and the same tools). BASELINE has `related_code` instead.
+PRISM_ARMS = ("PRISM", "INJECTED")
+
+
+def index_doc(version: str) -> dict:
+    return PRISM_DOC if version in PRISM_ARMS else BASELINE_DOC
+
+
 def native_tools(version: str) -> list[dict]:
     """The version's tools in the OpenAI function-calling format, in the text prompt's order and with its
     descriptions."""
-    docs = {**SHARED_DOC, **(PRISM_DOC if version == "PRISM" else BASELINE_DOC)}
+    docs = {**SHARED_DOC, **index_doc(version)}
     out = []
     for name, (_sig, what) in docs.items():
         props, required = PARAM_SCHEMAS[name]
@@ -124,7 +133,7 @@ def native_tools(version: str) -> list[dict]:
 
 
 def tool_docs(version: str) -> str:
-    docs = {**SHARED_DOC, **(PRISM_DOC if version == "PRISM" else BASELINE_DOC)}
+    docs = {**SHARED_DOC, **index_doc(version)}
     return "\n".join(f"- {name} {sig}: {what}" for name, (sig, what) in docs.items())
 
 
@@ -475,7 +484,7 @@ class AgentRun:
         `compact` (Phase 1 item 2, both arms): the history compaction rules (`r3/compaction.py`) before the window
         rule.
         The prompts are the same with native tool calling (`OllamaChat(tools=...)`): no wording is added for it."""
-        """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's five tools, or `related_code`)."""
+        """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's six tools, or `related_code`)."""
         self.task, self.version, self.seed, self.model = task, version, seed, model
         self.shared, self.index_tools, self.turn_cap, self.plan = shared, index_tools, turn_cap, plan
         self.gate, self.ledger = gate, ledger
@@ -483,7 +492,7 @@ class AgentRun:
         self.hygiene, self.compact = hygiene, compact
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
-        self.allowed = set(SHARED_DOC) | set(PRISM_DOC if version == "PRISM" else BASELINE_DOC)
+        self.allowed = set(SHARED_DOC) | set(index_doc(version))
 
     def n(self, text: str) -> int:
         return len(self.tok.encode(text).ids) if self.tok else len(text) // 4

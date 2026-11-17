@@ -1103,3 +1103,40 @@ cell's plumbing works.
   design.
 - **The rest of the 3-arm pre-registration stands:** the tasks, the seeds, the metric, the comparisons, the
   readings, the health check.
+
+### Arm 3 gets the PRISM tools (user, 2026-11-17, before any run of the 3-arm design)
+
+**The user's correction:** "For any arm, in any turn, the AI has the freedom to use PRISM tools. It is a PRISM
+experiment."
+- **Why it matters:** without the tools, Arm 3 is the baseline with a larger prompt, and it cannot refresh its map
+  of the code as the code changes.
+- **This supersedes** the previous amendment's "Arm 3 unchanged, without `prism_read_code`", and the 3-arm table's
+  "BASELINE's" tools for Arm 3.
+
+**The arms:**
+
+| Arm | Version | Tools | System prompt | Task message |
+|---|---|---|---|---|
+| 1 | `BASELINE` | shared tools + `related_code`; no PRISM tools | BASELINE's | the task |
+| 2 | `PRISM` (optional PRISM) | shared tools + the six PRISM tools | PRISM's | the task |
+| 3 | `INJECTED` (injected PRISM) | shared tools + the six PRISM tools | PRISM's | PRISM's context for the task, then the task |
+
+**What changed:**
+- **The code:** `loop.PRISM_ARMS = ("PRISM", "INJECTED")`. The tool list, the system prompt, the native tool
+  schemas and the allowed tools follow it.
+- **Arms 2 and 3 now differ only in the injected block.**
+- **The block is unchanged** (`r4/inject.py`: the same retrieval, label and cap).
+
+**What the comparisons now read:**
+- **H-tool** (`PRISM` − `BASELINE`): "do the PRISM tools help?"
+- **H-inject** (`INJECTED` − `BASELINE`): "do the PRISM tools, plus PRISM's context up front, help?"
+- **`INJECTED` − `PRISM`** (descriptive): the effect of the up-front context when the tools are there either way.
+- **Unchanged:** the tests, the Holm correction, the readings, the health check, the tasks and seeds.
+
+**The post-PRISM metric** is now also reported for `INJECTED` (`post_prism_by_arm`). `post_prism` stays PRISM's.
+
+**Pre-flight:** Arm 3's prompt is Arm 2's (the same system prompt and tool list) with a longer task message. The
+pre-flight's PRISM cases therefore cover Arm 3's tool rendering.
+
+**Re-pinned:** the smoke test and the 600-run cell, at the same code. Results still go to `reports/r4/smoke4` and
+`reports/r4/rebaseline5`; neither holds any run.

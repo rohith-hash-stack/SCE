@@ -9,7 +9,8 @@
 - delete task: 0 if the target is still defined, else (pass-to-pass passing / pass-to-pass).
 A test counts as passing only with the scorer's status `passed` (strict lists: pre-existing failures stay in).
 
-**Primary analysis (3 arms: BASELINE, PRISM = PRISM tools available, INJECTED = PRISM context injected up front):**
+**Primary analysis (3 arms: BASELINE, PRISM = PRISM tools available, INJECTED = PRISM context injected up front and
+the same PRISM tools):**
 per task, the mean score over its seeds in each arm; two paired comparisons over the 20 tasks, each against BASELINE:
 d_t = PRISM - BASELINE ("does the tool help?") and d_t = INJECTED - BASELINE ("does injected context help?"), Holm-
 corrected over the two. INJECTED - PRISM is reported descriptively. Reported: the mean difference with a 95% bootstrap interval (tasks resampled, 10,000 draws, fixed
@@ -32,6 +33,7 @@ model seconds to the end of a solved run).
 read; descriptive, no test): for each PRISM call, the next action: an edit (PRISM's context used directly), another
 PRISM call, a `grep` for the same symbol, a `read_file` of the file PRISM named (a "post-PRISM search"), or something
 else. Also: the turn of the first PRISM call, the exploration turns before it, and the runs that never call PRISM.
+Reported for both arms with PRISM tools (`post_prism_by_arm`: PRISM and INJECTED; `post_prism` stays PRISM's).
 Limit: the turn log keeps the first 300 characters of each output, which name the target symbol and its file but not
 the callers listed further down, so "the same thing PRISM already answered" is judged for the target only.
 
@@ -328,12 +330,21 @@ def turn_efficiency(rows: list[dict], per_task: dict, arms) -> dict:
                                          "mean_turns_diff": st.mean(v["turns_diff"] for v in per.values()),
                                          "mean_model_seconds_diff": st.mean(v["model_seconds_diff"] for v in per.values())}
     out["paired"] = paired
-    pr = [r["post_prism"] for r in rows if r["arm"] == "PRISM"]
+    for arm in ("PRISM", "INJECTED"):                     # both arms have the PRISM tools
+        s = _post_prism_summary([r["post_prism"] for r in rows if r["arm"] == arm])
+        if s:
+            out.setdefault("post_prism_by_arm", {})[arm] = s
+            if arm == "PRISM":
+                out["post_prism"] = s
+    return out
+
+
+def _post_prism_summary(pr: list[dict]) -> dict | None:
     if pr:
         calls = sum(x["prism_calls"] for x in pr)
         nxt = {k: sum(x["next_action"][k] for x in pr) for k in pr[0]["next_action"]}
         firsts = [x["first_prism_turn"] for x in pr if x["first_prism_turn"]]
-        out["post_prism"] = {
+        return {
             "prism_calls": calls, "next_action": nxt,
             "post_prism_search_share": (nxt["grep_same_symbol"] + nxt["read_named_file"]) / calls if calls else None,
             "edit_next_share": nxt["edit"] / calls if calls else None,
@@ -341,7 +352,7 @@ def turn_efficiency(rows: list[dict], per_task: dict, arms) -> dict:
             "first_prism_turn": st.mean(firsts) if firsts else None,
             "exploration_before_first_prism": st.mean(x["exploration_before_first_prism"] for x in pr
                                                       if x["first_prism_turn"]) if firsts else None}
-    return out
+    return None
 
 
 def process(rows: list[dict], arms=ARMS) -> dict:

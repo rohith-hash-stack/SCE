@@ -11,8 +11,9 @@ answer key.
 
 The same `ToolLayer` call the PRISM arm's tools make, so the same 4,000-token cap and refresh notices apply.
 
-**The arm otherwise is BASELINE's:** the same tools (shared tools and `related_code`; no PRISM tools), the same system
-prompt; only the task message starts with the block below.
+**The arm otherwise is PRISM's** (user, 2026-11-17: "for any arm, in any turn, the AI has the freedom to use PRISM
+tools"): the shared tools and the six PRISM tools, PRISM's system prompt; only the task message starts with the block
+below, so the agent has the map up front and can still query the index as the code changes.
 """
 from __future__ import annotations
 

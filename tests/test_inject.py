@@ -1,4 +1,4 @@
-"""The 3-arm re-baseline's Arm 3 (INJECTED): what is retrieved, and that the arm is otherwise BASELINE's."""
+"""The 3-arm re-baseline's Arm 3 (INJECTED): what is retrieved, and that the arm is otherwise PRISM's (its tools)."""
 import json
 
 from harness.experiments.r3 import loop as L
@@ -57,11 +57,13 @@ def test_injected_arm_gets_baselines_tools_and_system_prompt(tmp_path):
             return "done"
     m = Model()
     run = L.AgentRun({"id": "t", "prompt": "BLOCK\n\n---\n\nTASK"}, "INJECTED", 42, m, Shared())
-    assert run.allowed == set(L.SHARED_DOC) | set(L.BASELINE_DOC)
+    assert run.allowed == set(L.SHARED_DOC) | set(L.PRISM_DOC)
     run.run(str(tmp_path))
-    assert m.seen[0][0]["content"] == L.system_prompt("BASELINE") == L.system_prompt("INJECTED")
+    assert m.seen[0][0]["content"] == L.system_prompt("PRISM") == L.system_prompt("INJECTED")
     assert m.seen[0][1]["content"] == "BLOCK\n\n---\n\nTASK"
-    assert L.native_tools("INJECTED") == L.native_tools("BASELINE")
+    assert L.native_tools("INJECTED") == L.native_tools("PRISM")
+    assert "prism_read_code" in {t["function"]["name"] for t in L.native_tools("INJECTED")}
+    assert not {t["function"]["name"] for t in L.native_tools("BASELINE")} & set(L.PRISM_DOC)
 
 
 def test_three_arm_report_and_holm(tmp_path):
