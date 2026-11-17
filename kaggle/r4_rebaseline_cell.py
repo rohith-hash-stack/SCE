@@ -34,9 +34,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "3f4bcafdfa679dc4921c48cfcd41836e9b0086a1"
+CODE_COMMIT = "732d85288e467d5ffc980a792b9bbc9921c8f5bc"
 CODE_TREES = {"src": "d771ea693a48da16bfc79e4e11bfe2a368a281c6",
-              "harness": "2054db75922c63634276b52b17dd553a94081ad6"}
+              "harness": "122dafa870bfad3c5360f154ae33ed9e501034c1"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 STAGE = "rebaseline3"
@@ -63,7 +63,7 @@ CHECKPOINT_MIN = 10
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
-RESULTS_PATH = "reports/r4/rebaseline3"
+RESULTS_PATH = "reports/r4/rebaseline4"
 BIG = "/tmp/r4rb3"
 CACHE = f"{BIG}/cache"
 PUSH_RESULTS = True
