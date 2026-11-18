@@ -34,9 +34,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "2cb587570d117f2b3d362dfdb27d0df1e8f8c711"
+CODE_COMMIT = "fed054b3ecb440b096c7bb3d569d5fd74faf2e20"
 CODE_TREES = {"src": "d771ea693a48da16bfc79e4e11bfe2a368a281c6",
-              "harness": "49abcf5d674739931c8e4f2e402c151cea290b27"}
+              "harness": "71e9addca357146f2bd049c0298dfe9dcffa3982"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 STAGE = "rebaseline5"
@@ -152,7 +152,8 @@ if run(["git", "cat-file", "-e", f"origin/{BRANCH}:{RESULTS_PATH}"], cwd=SCE_DIR
     print(f"[resume] restored {sorted(os.listdir(OUT))[:20]}", flush=True)
 
 print("\n[setup] Install prism, the tokenizer library and uv", flush=True)
-run([sys.executable, "-m", "pip", "install", "-q", "-e", ".", "tokenizers", "uv", "packaging"], cwd=SCE_DIR, check=True)
+run([sys.executable, "-m", "pip", "install", "-q", "-e", ".", "tokenizers", "uv", "packaging",
+     "pyflakes==3.2.0"], cwd=SCE_DIR, check=True)
 child_env = dict(os.environ, PYTHONPATH=os.pathsep.join([SCE_DIR, os.path.join(SCE_DIR, "src")]),
                  PYTHONDONTWRITEBYTECODE="1",
                  PATH=os.pathsep.join([os.path.dirname(sys.executable), os.path.expanduser("~/.local/bin"),
