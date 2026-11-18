@@ -1,23 +1,29 @@
 # ============================================================
+# >>> SET THIS FOR EACH NEW KAGGLE SESSION: the shard to run, 1-10 (shard N runs seed 41 + N: 1 -> 42, ..., 10 -> 51)
+SHARD_ID = 1
+# ============================================================
 # PRISM R4 Phase 1 re-baseline, 3 arms (harness/experiments/r4/AMENDMENTS.md, "Phase 1 re-baseline, 3 arms"): on the
 # 20 tasks of sanity/tasks_v3.json x 10 seeds (42-51) x 3 arms = 600 runs, devstral-small-2:
 #   BASELINE  the agent loop with the shared tools and related_code; no PRISM
 #   PRISM     the same, with PRISM's tools available (the agent chooses when to call them)
-#   INJECTED  BASELINE's tools and prompt; PRISM's context for the task, retrieved by the harness before the agent
+#   INJECTED  PRISM's tools and prompt, and PRISM's context for the task, retrieved by the harness before the agent
 #             starts (r4/inject.py), prepended to the task message
 # The Phase 1
 # harness: native tool calling read by the harness (--raw-tools: devstral's template rendered and its [TOOL_CALLS]
 # parsed by r3/mistral_raw.py, so no reply is discarded unseen), history hygiene + compaction (--phase1), ledger,
-# gate, turn cap 28, budget 300,000 (every prompt token counts). About 60 GPU-hours: 6 Kaggle sessions.
+# gate, turn cap 28, budget 300,000 (every prompt token counts). About 9 GPU-hours per seed (wave 1: ~9 min a run).
+#
+# SEED SHARDS (amendment "Seed shards"): one cell run = one shard = one seed's 60 runs (20 tasks x 3 arms), results in
+# reports/r4/rebaseline5_seed<SEED>. Shards can run in parallel in different Kaggle sessions: each pushes only its own
+# folder. A shard stopped by the session limit continues when the same SHARD_ID is run again (finished runs are kept
+# and never repeated). The merged analysis reads every rebaseline5_seed* folder.
 #
 # Before any run, a pre-flight (`r4/raw_preflight`) sends the same messages to Ollama's /api/chat (Ollama renders the
 # template) and to /api/generate raw (the harness renders it): the prompt token counts must match, or the cell stops.
 #
-# The runs go in waves, one seed at a time over all 20 tasks and 3 arms (60 runs a wave, ~6 h), so stopping at any point leaves a
-# balanced design. After the first wave (seed 42) a health check runs (`rebaseline_report --health`): if more than 2
-# of its runs died on infrastructure, or parse errors reach 2% of its turns, the cell stops for review.
-# Finished runs are kept and never repeated: run the cell again in a new session to continue.
-# At the end: `rebaseline_report` (the pre-registered analysis) -> report.json.
+# When the shard's 60 runs are done, its health check runs (`rebaseline_report --health` on its seed): if more than 2
+# of its runs died on infrastructure, or parse errors reach 2% of its turns, the cell reports the shard as failed.
+# Then `rebaseline_report` on the shard alone -> its report.json (the pre-registered analysis runs on all shards merged).
 #
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
@@ -34,12 +40,15 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "fed054b3ecb440b096c7bb3d569d5fd74faf2e20"
+CODE_COMMIT = "c1ac42d38fe7675c4446185ae7028fd9915ac1c5"
 CODE_TREES = {"src": "d771ea693a48da16bfc79e4e11bfe2a368a281c6",
-              "harness": "71e9addca357146f2bd049c0298dfe9dcffa3982"}
+              "harness": "4685d448ccf6b459fdbf3c4399cf486568e9a177"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
-STAGE = "rebaseline5"
+if SHARD_ID not in range(1, 11):
+    raise SystemExit(f"SHARD_ID must be 1-10, got {SHARD_ID!r}")
+SEED = 41 + SHARD_ID                  # shard 1 -> seed 42, ..., shard 10 -> seed 51
+STAGE = f"rebaseline5_seed{SEED}"
 ARMS = ("BASELINE", "PRISM", "INJECTED")
 SUMMARIZER = "devstral-small-2:24b-instruct-2512-q4_K_M"   # Phase 0 model (amendment); JSON mode, no think flag
 MODEL_FLAGS = ["--model", SUMMARIZER, "--ledger", "--phase1", "--raw-tools"]
@@ -52,7 +61,7 @@ TOKENIZER_SHA = "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce8753
 TASKS = "harness/experiments/r4/sanity/tasks_v3.json"   # amendments R4-SANITY-2 (gate) and R4-SANITY-3 (fixes 1-4)
 TASKS_SHA = "a187478c05ffad4c85d63f5f693f3e4213eafcb90f743082e30f5c8e546f28da"           # sha256 of the task list (json, sorted keys); also stored in the file
 LAYER1_POOL = "harness/experiments/r4/sanity/layer1_pool.json"
-SEEDS = tuple(range(42, 52))          # 10 seeds; one wave per seed
+SEEDS = (SEED,)                       # this shard's seed only (the design: 10 seeds, 42-51, one shard each)
 TURN_CAP = 28                         # R3a's
 SESSION_HOURS = 11.5
 STOP_MARGIN_MIN = 30                  # no run starts later than this before the limit (non-thinking runs: ~5-10 min)
@@ -63,13 +72,15 @@ CHECKPOINT_MIN = 10
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
-RESULTS_PATH = "reports/r4/rebaseline5"
+RESULTS_BASE = "reports/r4/rebaseline5"
+RESULTS_PATH = f"{RESULTS_BASE}_seed{SEED}"     # one folder per seed: parallel shards never push the same files
 BIG = "/tmp/r4rb3"
 CACHE = f"{BIG}/cache"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 print("=" * 64)
-print(f"PRISM R4 Phase 1 re-baseline ({SUMMARIZER}): 20 tasks x {len(SEEDS)} seeds x {len(ARMS)} arms")
+print(f"PRISM R4 Phase 1 re-baseline ({SUMMARIZER}): SHARD {SHARD_ID} = seed {SEED}: 20 tasks x {len(ARMS)} arms "
+      f"-> {RESULTS_PATH}")
 print("=" * 64, flush=True)
 
 
@@ -89,7 +100,7 @@ def abort(msg):
     raise SystemExit(1)
 
 
-def push_results(message, max_attempts=4):
+def push_results(message, max_attempts=10):
     if not PUSH_RESULTS:
         return False
     for attempt in range(max_attempts):
@@ -109,7 +120,9 @@ def push_results(message, max_attempts=4):
             print("[push] ok", flush=True)
             return True
         print(f"[push] exit {r.returncode}: {mask((r.stderr or '') + (r.stdout or ''))[-800:]}", flush=True)
-        time.sleep(2 ** (attempt + 1))
+        # another shard pushed first (each shard writes only its own folder, so the retry on the new head never
+        # conflicts); waits differ by shard so two sessions do not retry in step
+        time.sleep(min(2 ** (attempt + 1), 60) + 3 * SHARD_ID)
     print(f"[push] FAILED - results are still in {OUT}", flush=True)
     return False
 
@@ -320,7 +333,7 @@ def module(args, label, name, push_while=False):
                                                             capture_output=True).returncode != 0:
                 clear_caches("during runs")
             if push_while and time.time() - last_push > CHECKPOINT_MIN * 60:
-                push_results(f"r4 rebaseline: {label} checkpoint @ {CODE_COMMIT[:7]}")
+                push_results(f"r4 rebaseline shard {SHARD_ID} (seed {SEED}): {label} checkpoint @ {CODE_COMMIT[:7]}")
                 last_push = time.time()
     print(open(os.path.join(OUT, f"{label}.log")).read()[-3000:], flush=True)
     print(f"[{label}] exit {proc.returncode} after {(time.time() - start) / 60:.0f} min", flush=True)
@@ -372,29 +385,33 @@ for wave, seed in enumerate(SEEDS, 1):
         clear_caches(f"after {name}")
         if free_gb() < 3 * DISK_STOP_GB:         # short on disk: drop the clone; the next wave fetches it again
             shutil.rmtree(clone, ignore_errors=True)
-    push_results(f"r4 rebaseline: wave {wave} (seed {seed}), {n_done()}/{N_RUNS} runs @ {CODE_COMMIT[:7]}")
-    if wave == 1 and rc != 3 and all(finished(t, (seed,)) for t in STASKS):
-        hc = module([OUT, os.path.join(SCE_DIR, TASKS), "--health", "--seeds", str(seed)], "health_wave1",
+    push_results(f"r4 rebaseline shard {SHARD_ID} (seed {seed}): {n_done()}/{N_RUNS} runs @ {CODE_COMMIT[:7]}")
+    if rc != 3 and all(finished(t, (seed,)) for t in STASKS):     # the shard's health check, once its runs are done
+        hc = module([OUT, os.path.join(SCE_DIR, TASKS), "--health", "--seeds", str(seed)], "health",
                     "harness.experiments.r4.rebaseline_report")
         if hc == 4:
-            push_results(f"r4 rebaseline: STOPPED by the wave-1 health check @ {CODE_COMMIT[:7]}")
-            abort("the wave-1 health check failed (infrastructure deaths > 2 or parse errors >= 2%) - see "
-                  "health_wave1.log; report back before continuing")
+            push_results(f"r4 rebaseline shard {SHARD_ID} (seed {seed}): FAILED the health check @ "
+                         f"{CODE_COMMIT[:7]}")
+            abort(f"shard {SHARD_ID} (seed {seed}) failed the health check (infrastructure deaths > 2 or parse "
+                  f"errors >= 2%) - see {RESULTS_PATH}/health.log; report back")
 
 module([OUT, os.path.join(SCE_DIR, TASKS), "--root", SCE_DIR, "--out", os.path.join(OUT, "report.json")],
        "rebaseline_report", "harness.experiments.r4.rebaseline_report")
 open(os.path.join(OUT, "progress.json"), "w").write(json.dumps({
-    "stage": STAGE, "arms": ARMS, "runs_done": n_done(), "runs_total": N_RUNS, "seeds": SEEDS, "code": CODE_COMMIT,
+    "stage": STAGE, "shard": SHARD_ID, "seed": SEED, "arms": ARMS, "runs_done": n_done(), "runs_total": N_RUNS, "seeds": SEEDS, "code": CODE_COMMIT,
     "tasks_sha256": TASKS_SHA, "model": SUMMARIZER, "model_flags": MODEL_FLAGS,
     "run_hours": round(sum(json.loads(l)["seconds"] for l in open(os.path.join(OUT, "pilot_runs.jsonl"))) / 3600, 2)
     if os.path.exists(os.path.join(OUT, "pilot_runs.jsonl")) else None}, indent=1))
-push_results(f"r4 rebaseline: {n_done()}/{N_RUNS} runs @ {CODE_COMMIT[:7]} ({SUMMARIZER})")
+push_results(f"r4 rebaseline shard {SHARD_ID} (seed {SEED}): {n_done()}/{N_RUNS} runs @ {CODE_COMMIT[:7]} "
+             f"({SUMMARIZER})")
 print(f"\n[rb] {n_done()}/{N_RUNS} runs done", flush=True)
 if rc == 3:
-    print("\n=== SESSION DONE: run the cell again in a new session to continue ===", flush=True)
+    print(f"\n=== SESSION LIMIT: shard {SHARD_ID} (seed {SEED}) is not finished; run the cell again with "
+          f"SHARD_ID = {SHARD_ID} to continue it ===", flush=True)
 elif failed:
     abort("some runs exited with an error - see pilot_runs.jsonl; run the cell again to retry them")
 elif n_done() < N_RUNS:
     abort("runs are missing - run the cell again")
 else:
-    print("\n=== RE-BASELINE DONE: report back ===", flush=True)
+    print(f"\n=== SHARD {SHARD_ID} DONE (seed {SEED}, {N_RUNS} runs, health check passed): start the next "
+          f"shard ===", flush=True)
