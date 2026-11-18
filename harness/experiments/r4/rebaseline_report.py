@@ -37,6 +37,10 @@ Reported for both arms with PRISM tools (`post_prism_by_arm`: PRISM and INJECTED
 Limit: the turn log keeps the first 300 characters of each output, which name the target symbol and its file but not
 the callers listed further down, so "the same thing PRISM already answered" is judged for the target only.
 
+**Code review** (user, 2026-11-18, added before the 3-arm launch; descriptive, no test): the deterministic review of
+each run's final code (`r4/code_review.py`: new undefined names, new syntax errors, helper reuse, escaping kept, API
+match against the developer's change, no regressions), per arm, for solved runs, and paired per task.
+
 `--health`: the check the cell runs after its first wave (amendment: stop if infrastructure deaths > 2 of the wave's
 runs or parse errors >= 2% of its turns). Exit code 0 = continue, 4 = stop.
 """
@@ -182,7 +186,8 @@ def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
                                          and not str(t.get("output_head", "")).startswith(("edited", "created"))),
                      "prism_output_tokens": sum(t.get("output_tokens") or 0 for t in turns
                                                 if str(t.get("tool") or "").startswith("prism_")),
-                     "efficiency": efficiency(turns), "post_prism": post_prism(turns)})
+                     "efficiency": efficiency(turns), "post_prism": post_prism(turns),
+                     "review": s.get("review")})
     return rows
 
 
@@ -278,6 +283,7 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
     rep["injection"] = injection_summary(results, rows)
     rep["process"] = process(rows, arms)
     rep["turn_efficiency"] = turn_efficiency(rows, per_task, arms)
+    rep["code_review"] = code_review(rows, arms)
     return rep
 
 
@@ -353,6 +359,46 @@ def _post_prism_summary(pr: list[dict]) -> dict | None:
             "exploration_before_first_prism": st.mean(x["exploration_before_first_prism"] for x in pr
                                                       if x["first_prism_turn"]) if firsts else None}
     return None
+
+
+def code_review(rows: list[dict], arms=ARMS) -> dict:
+    """The code-review score (`r4/code_review.py`; user, 2026-11-18; descriptive, no test, not part of the primary
+    analysis). Per arm, over the runs that changed a source file: the mean of each check where it applies, and of the
+    run's review score; the same for solved runs only; and per task, paired arm differences of the mean review score."""
+    from harness.experiments.r4.code_review import CHECKS, checks
+    keys = CHECKS + ("review_score",)
+    for r in rows:
+        r["_review"] = checks(r.get("review") or {}, r.get("score_doc") or {}) if (r.get("review") or {}).get(
+            "source_files") else None
+
+    def summary(rs):
+        rv = [r["_review"] for r in rs if r["_review"] is not None]
+        out = {"runs": len(rs), "runs_reviewed": len(rv),
+               "runs_no_source_change": sum(1 for r in rs if (r.get("review") or {}).get("source_files") == []),
+               "runs_review_missing": sum(1 for r in rs if not r.get("review") or "error" in r["review"])}
+        for k in keys:
+            vals = [x[k] for x in rv if x[k] is not None]
+            out[k] = {"mean": st.mean(vals) if vals else None, "applicable": len(vals)}
+        return out
+    out = {"by_arm": {a: summary([r for r in rows if r["arm"] == a]) for a in arms},
+           "solved_runs_by_arm": {a: summary([r for r in rows if r["arm"] == a and r.get("solved")]) for a in arms}}
+    paired = {}
+    for a, b in COMPARISONS + DESCRIPTIVE:
+        per = {}
+        for tid in sorted({r["task"] for r in rows}):
+            va = [r["_review"]["review_score"] for r in rows if r["task"] == tid and r["arm"] == a and r["_review"]
+                  and r["_review"]["review_score"] is not None]
+            vb = [r["_review"]["review_score"] for r in rows if r["task"] == tid and r["arm"] == b and r["_review"]
+                  and r["_review"]["review_score"] is not None]
+            if va and vb:
+                per[tid] = st.mean(va) - st.mean(vb)
+        paired[f"{a} vs {b}"] = {"tasks": len(per), "mean_diff": st.mean(per.values()) if per else None,
+                                 "tasks_favouring": [sum(1 for d in per.values() if d > 0),
+                                                     sum(1 for d in per.values() if d < 0)], "per_task": per}
+    out["paired_review_score"] = paired
+    for r in rows:
+        r.pop("_review", None)
+    return out
 
 
 def process(rows: list[dict], arms=ARMS) -> dict:

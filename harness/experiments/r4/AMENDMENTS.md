@@ -1168,3 +1168,58 @@ pre-flight's PRISM cases therefore cover Arm 3's tool rendering.
 
 **Nothing in the design changes.** Both cells are re-pinned. Results still go to `reports/r4/smoke4` (the cell
 overwrites `preflight.json`; the stopped one stays in git history) and `reports/r4/rebaseline5`.
+
+### A descriptive code-review score (user, 2026-11-18, before the 3-arm launch)
+
+**Why:** the review of one task's 28-turn runs (feature-02, `rebaseline3`, a voided wave):
+- **BASELINE's code crashed** every HTML debug page: `sys.exc_info()` with no `import sys`.
+- **PRISM's** put the traceback into the page unescaped.
+- **INJECTED's** was close to the developer's.
+
+Tests alone do not show this kind of difference.
+
+**What it is** (`harness/experiments/r4/code_review.py`):
+- **When it runs:** at scoring time, in `runner.run_task`, before `score` applies the hidden tests.
+- **Deterministic:** no model is called.
+- **What it looks at:** the agent's changes to source files (`.py`, JS/TS, `.html`, `.css`; test files left out),
+  against the start state and against the developer's change (the task's commit).
+
+| Check | Applies when | Value |
+|---|---|---|
+| No new undefined names | a Python file changed | 0/1: no name used but never defined or imported (`pyflakes` 3.2.0) that the start state's file did not already have |
+| No new syntax errors | a source file changed | 0/1: no changed file that parsed at the start fails to parse now (`ast`; tree-sitter for JS/TS) |
+| Helper reuse | the developer's added code calls a function defined in the repository before and after the change | share of those the agent's added code calls |
+| Escaping kept | the developer's added code calls an escaping/sanitising function | 0/1: the agent's added code calls one |
+| API match | the developer's added code calls other APIs (built-ins and its own new functions left out) | share the agent's added code calls |
+| No regressions | always (from the scorer) | 0/1: no pass-to-pass test broken |
+
+**The review score:**
+- **Per run:** the mean of the checks that apply, in [0, 1].
+- **A run that changed no source file** is not reviewed (every check is "not applicable").
+- **Calls are read** from added lines by one regular expression, the same in every arm.
+
+**Reported** (`rebaseline_report.code_review`):
+- per arm: each check's mean and the number of runs it applies to, and the review score;
+- the same for solved runs only;
+- per task, the paired differences of the mean review score for the three arm pairs.
+
+**Descriptive only:**
+- no test;
+- not part of the primary metric, the comparisons or their readings.
+
+**Limits, recorded before any data:**
+- **Checks 3–5 measure agreement with one correct solution,** not correctness. For example, API match counts a
+  fallback the developer also wrote as much as the main call: it scores PRISM's `document.execCommand` copy above
+  INJECTED's `navigator.clipboard.writeText`.
+- **Undefined names are checked for Python only.**
+
+**Checked:**
+- **On the three feature-02 runs above:** BASELINE 0.40, PRISM 0.77, INJECTED 0.90.
+  - BASELINE: `sys` flagged, helper not reused, a regression.
+  - PRISM: escaping missing.
+- **On multidict and typer runs:** a delete's own target is not counted as a helper, and runs with no source change
+  are not reviewed.
+- **Tests:** `tests/test_code_review.py`.
+
+**The cells install `pyflakes==3.2.0`.** Both cells are re-pinned. Results stay in `reports/r4/rebaseline5` (no runs
+yet).

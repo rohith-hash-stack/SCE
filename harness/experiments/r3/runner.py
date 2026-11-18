@@ -270,6 +270,13 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
                            compact=compact).run(out)
         result = {**summary, **({"injected": injected} if injected is not None else {})}
         if score_run:
+            stage = "review"
+            # the code-review score (`r4/code_review.py`, descriptive): before `score`, which applies the hidden tests
+            try:
+                from harness.experiments.r4.code_review import review
+                result["review"] = review(task, work, start_tree)
+            except Exception as exc:   # secondary: recorded, never fatal
+                result["review"] = {"error": f"{type(exc).__name__}: {exc}"[:500]}
             stage = "scoring"
             result["score"] = score(task, work, env, start_tree)
         result["outcome"] = outcome(result)

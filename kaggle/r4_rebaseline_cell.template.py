@@ -152,7 +152,8 @@ if run(["git", "cat-file", "-e", f"origin/{BRANCH}:{RESULTS_PATH}"], cwd=SCE_DIR
     print(f"[resume] restored {sorted(os.listdir(OUT))[:20]}", flush=True)
 
 print("\n[setup] Install prism, the tokenizer library and uv", flush=True)
-run([sys.executable, "-m", "pip", "install", "-q", "-e", ".", "tokenizers", "uv", "packaging"], cwd=SCE_DIR, check=True)
+run([sys.executable, "-m", "pip", "install", "-q", "-e", ".", "tokenizers", "uv", "packaging",
+     "pyflakes==3.2.0"], cwd=SCE_DIR, check=True)
 child_env = dict(os.environ, PYTHONPATH=os.pathsep.join([SCE_DIR, os.path.join(SCE_DIR, "src")]),
                  PYTHONDONTWRITEBYTECODE="1",
                  PATH=os.pathsep.join([os.path.dirname(sys.executable), os.path.expanduser("~/.local/bin"),
