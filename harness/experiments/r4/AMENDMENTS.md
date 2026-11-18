@@ -1223,3 +1223,46 @@ Tests alone do not show this kind of difference.
 
 **The cells install `pyflakes==3.2.0`.** Both cells are re-pinned. Results stay in `reports/r4/rebaseline5` (no runs
 yet).
+
+### Seed shards (user, 2026-11-18, after wave 1, before any further run)
+
+**Why:**
+- **Runs take longer than estimated:** wave 1 averaged about 9 minutes a run, so the 600 runs need about 91
+  GPU-hours, not about 60.
+- **A Kaggle session stops at 12 hours.**
+- **One session at a time would take about 3 weeks.** Shards let several sessions run at once.
+
+**The change** (`kaggle/r4_rebaseline_cell.py`):
+- **One shard = one seed.** `SHARD_ID` (1–10), at the top of the cell, selects seed `41 + SHARD_ID` (1 → 42, …,
+  10 → 51).
+  - **One cell run:** that seed's 60 runs (20 tasks × 3 arms).
+  - **Results:** `reports/r4/rebaseline5_seed<SEED>`.
+- **Parallel shards:**
+  - each pushes only its own folder;
+  - a push rejected because another shard pushed first is retried on the new head, up to 10 times, with waits
+    staggered by shard.
+- **Resume:** running the same `SHARD_ID` again restores that seed's folder and skips every finished run (as before).
+- **Health check, per shard:** when a shard's 60 runs are done, the same check runs on its seed (infrastructure deaths
+  ≤ 2, parse errors < 2% of turns). On failure, the cell pushes, says which shard failed, and stops.
+
+**The analysis:**
+- `rebaseline_report.py` accepts a glob (or a comma-separated list) of results folders and merges them:
+  `'reports/r4/rebaseline5_seed*'`.
+- **A run found in two folders stops the report,** so nothing is counted twice.
+- **The pre-registered analysis runs on all shards merged.** Each shard's own `report.json` is a progress view only.
+
+**Unchanged:** the design (20 tasks × 10 seeds × 3 arms), the arms, the harness, the metric, the tests, the readings.
+- **The code the runs use is unchanged:** since `fed054b3`, the only change under `src/` and `harness/` is
+  `rebaseline_report.py`.
+- **So runs from `fed054b3` and from the new pin are the same experiment.**
+
+**Existing runs moved, not repeated:**
+- **Seed 42:** all 60 runs from `reports/r4/rebaseline5` → `reports/r4/rebaseline5_seed42`, with:
+  - the wave-1 health check (passed: 0 deaths, 0.52% parse errors);
+  - the pre-flight;
+  - the `runs_*.log` files, which also hold seed 43's first runs.
+- **Seed 43:** its 8 finished runs → `reports/r4/rebaseline5_seed43`.
+- **`pilot_runs.jsonl`:** split by seed.
+- **Dropped:** the partial log of the run cut off by the session limit (`r4s-delete-03__INJECTED__43`; it reruns
+  from the start) and a leftover per-repository task file.
+- **Shard 1 (seed 42) is therefore complete;** shard 2 (seed 43) continues from 8 of 60.

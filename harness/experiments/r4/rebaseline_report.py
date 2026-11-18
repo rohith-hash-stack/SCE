@@ -2,6 +2,8 @@
 
     python -B -m harness.experiments.r4.rebaseline_report RESULTS_DIR TASKS.json [--seeds 42 ...] [--out report.json]
     python -B -m harness.experiments.r4.rebaseline_report RESULTS_DIR TASKS.json --health --seeds 42   # wave check
+    python -B -m harness.experiments.r4.rebaseline_report 'reports/r4/rebaseline5_seed*' TASKS.json --out report.json
+        # the seed shards (one folder per seed), merged: every run once, then the same analysis
 
 **Primary metric** (amendment "Phase 1: the primary metric changes", approved 2026-11-15): each run's score in [0, 1],
 1 exactly when the run is resolved:
@@ -169,15 +171,30 @@ def post_prism(turns: list[dict]) -> dict:
             "exploration_before_first_prism": before if first else None}
 
 
+def result_dirs(results: str) -> list[str]:
+    """The results folders: one folder, a comma-separated list, or a glob (the seed shards:
+    `reports/r4/rebaseline5_seed*`)."""
+    out = []
+    for part in [x for x in results.split(",") if x]:
+        out += sorted(d for d in glob.glob(part) if os.path.isdir(d)) if glob.has_magic(part) else [part]
+    if not out:
+        raise SystemExit(f"no results folder matches {results!r}")
+    return out
+
+
 def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
-    rows = []
-    for path in sorted(glob.glob(os.path.join(results, "r4s-*__*__*.score.json"))):
+    rows, seen = [], {}
+    paths = sorted(p for d in result_dirs(results) for p in glob.glob(os.path.join(d, "r4s-*__*__*.score.json")))
+    for path in paths:
         s = json.load(open(path))
         if s["task"] not in tasks or (seeds and s["seed"] not in seeds):
             continue
+        if s["run"] in seen:            # two shards with the same run: never counted twice
+            raise SystemExit(f"run {s['run']} is in two results folders: {seen[s['run']]} and {path}")
+        seen[s["run"]] = path
         log = path.replace(".score.json", ".jsonl")
         turns = [json.loads(ln) for ln in open(log)] if os.path.exists(log) else []
-        rows.append({"run": s["run"], "task": s["task"], "arm": s["version"], "seed": s["seed"],
+        rows.append({"run": s["run"], "path": path, "task": s["task"], "arm": s["version"], "seed": s["seed"],
                      "family": tasks[s["task"]]["family"], "end": s.get("end"), "outcome": s.get("outcome"),
                      "score_doc": s.get("score") or {}, "turns": s.get("turns", 0), "used_tokens": s.get("used_tokens"),
                      "parse_errors": s.get("parse_errors", 0),
@@ -293,7 +310,7 @@ def injection_summary(results: str, rows: list[dict]) -> dict | None:
     for r in rows:
         if r["arm"] != "INJECTED":
             continue
-        s = json.load(open(os.path.join(results, r["run"] + ".score.json")))
+        s = json.load(open(r["path"]))
         if s.get("injected"):
             recs.append(s["injected"])
     if not recs:
@@ -432,7 +449,8 @@ def health(results: str, tasks_path: str, seeds: list[int]) -> tuple[bool, dict]
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
-    p.add_argument("results")
+    p.add_argument("results", help="a results folder, a comma-separated list, or a glob such as "
+                                    "'reports/r4/rebaseline5_seed*' (the seed shards, merged)")
     p.add_argument("tasks")
     p.add_argument("--seeds", type=int, nargs="+", default=None)
     p.add_argument("--root", default=".", help="the repository root (for the set-aside evidence)")
