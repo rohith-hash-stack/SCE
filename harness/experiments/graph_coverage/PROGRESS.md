@@ -131,3 +131,41 @@ in full), not a bigger graph. Type annotations lose the most here because hub cl
 server, index cache, harness tool layer, golden outputs): 675 passed, 5 failed, 2 skipped, 8 xfailed. The 5 failures
 (`test_nlq_p1` ×2, `test_query_to_evidence` ×3) are among the 17 that fail before the reference pass (above); every
 other test has the same result as in the full run before B10. The 9 B10 tests are new and pass.
+
+## After the grouped listing: widely used symbols
+
+**The change** (`src/prism/impact/dependents.py`; `src/prism/impact/context.py`; `harness/experiments/r3/tools.py`):
+- **Section 4 of the change context** keeps 40% of the budget. When its one-by-one listing fits, it is unchanged.
+  When it does not, or there are more than 40 other uses:
+  - the nearest uses are given in full;
+  - the rest are grouped by file, with kinds, counts and names;
+  - a closing line counts the files past the budget;
+  - every use is named or counted.
+- **The anchor's code and digest** keep 30% of the budget. A longer anchor is given as an outline: its first line and
+  each definition's own line, with line numbers, and a pointer to `prism_read_code`.
+- **Why both:** on scrapy, `Request`'s code and digest (3,400 tokens) came before section 4 in a 4,000-token answer.
+- **The blast radius's list** keeps 55% of the cap and is grouped the same way.
+- **Unchanged:** small answers are listed exactly as before (the golden outputs do not change). Tests:
+  `tests/test_grouped_dependents.py`; the tool tests pass (221; the 7 xfails are Phase 2 requirements).
+
+**Shown, the same sample** (`after_grouped/shown/`):
+
+| | After B10 | With grouping |
+|---|---|---|
+| **Shown, all 2,817 sampled uses** | 61% | **63%** |
+| type annotation | 62% | 75% |
+| scrapy | 58% | 64% |
+| fastmcp | 57% | 63% |
+
+**Why a surfaced use is still not shown** (all 10 repositories, 155 uses):
+- **130: counted in a grouped listing, not named.** The used definition has more dependents than one answer can
+  name: `typer.run` (hundreds of docs examples), `Litestar` (its docs), scrapy's `Request`. Every one is counted by
+  file; the benchmark counts only named ones.
+- **25: PRISM counts its file as test code, and the harness leaves test code out.** `prism.scanner.entrypoint_gate.
+  is_test_file` treats:
+  - any `spec/` directory as tests (an RSpec/JS convention). This hides litestar's production package
+    `litestar/openapi/spec` (33 files);
+  - a module named `test.py` as tests. This hides werkzeug's public `werkzeug.test` (its test client).
+
+  This is not new, and it hides these files' callers too. A fix changes which code every arm treats as tests, so it
+  waits for a decision.
