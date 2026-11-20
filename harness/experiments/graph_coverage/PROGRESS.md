@@ -44,3 +44,24 @@ reference pass: the next B step.
 | multidict | 1.1 s | 1.2 s | 331 |
 | litestar | 15.5 s | 19.3 s (+25%) | 13,213 |
 | pydantic | 39.2 s | 40.2 s (+3%) | 8,486 |
+
+## PRISM's full test suite, before and after pass 2d
+
+Run on 2026-11-20, test by test from the junit files (`pytest tests`, about 1.5 h per run).
+- **Before** (code before the reference pass): 3,363 passed, 17 failed, 4 errors, 1 xpassed.
+- **After** (`dfaf570d`): 3,380 passed, 18 failed, 4 errors. The added passes are the 17 new reference tests
+  plus 1 fixture test.
+
+**The 17 failures and 4 errors are the same in both runs,** and they also fail when rerun on commit `0d20bc67`, before
+the reference pass. Their causes:
+- `transformers` is not installed in this container (the 4 TS-arm errors);
+- the external npm dependency is not found (the express etag cases);
+- packer budget and compression thresholds.
+
+**Two tests changed state, neither from the pass:**
+- `test_fuzzy_match_performance_on_real_corpus` took 0.0507 s against its 0.05 s limit. It passes when run alone, and
+  it only reads the symbol table, which pass 2d does not change.
+- `test_cached_and_uncached_feature_masks_identical_on_real_django_corpus` is a non-strict xfail. It is documented as
+  intermittent on minified vendor JavaScript; it xpassed before and xfailed after. Pass 2d only covers Python.
+
+**No regression.** The 7 Phase 2 requirement tests are strict xfails, as intended.
