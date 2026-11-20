@@ -476,7 +476,8 @@ def parse_call(text: str) -> tuple[str, dict] | None:
 class AgentRun:
     def __init__(self, task: dict, version: str, seed: int, model, shared, index_tools=None,
                  tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False,
-                 gate=None, ledger=None, record_full: bool = False, hygiene: bool = False, compact: bool = False):
+                 gate=None, ledger=None, record_full: bool = False, hygiene: bool = False, compact: bool = False,
+                 feedback: bool = False):
         """`gate`: amendment R4-SANITY-2's verification at done (`r4/done_gate.DoneGate`), or None (R3a).
         `ledger`: amendment R4-SANITY-4's per-turn progress summary (`r4/progress_ledger.ProgressLedger`), or None.
         `hygiene` (Phase 1 item 3, both arms): a reply that is not one tool call goes back into the history cut to
@@ -490,6 +491,12 @@ class AgentRun:
         self.gate, self.ledger = gate, ledger
         self.record_full = record_full    # Phase 0b replays: the full prompt and output in the turn log
         self.hygiene, self.compact = hygiene, compact
+        # Phase 2 C3 (`r3/feedback.py`; every arm, every tool): a note when a call repeats an earlier identical call
+        # and gets the identical answer
+        self.repeats = None
+        if feedback:
+            from harness.experiments.r3.feedback import Repeats
+            self.repeats = Repeats()
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
         self.allowed = set(SHARED_DOC) | set(index_doc(version))
@@ -613,6 +620,17 @@ class AgentRun:
                 rec.update(tool=tool, args=args)
                 t = time.time()
                 res = self.execute(tool, args)
+                if self.repeats is not None and tool != "done":
+                    prev = self.repeats.check(turn, tool, args, res["output"])
+                    if prev is not None:
+                        res = {**res, "output": res["output"] + self.repeats.note(prev), "repeat_of_turn": prev}
+                if self.repeats is not None:          # Phase 2 feedback in the turn log (outputs are kept only in part)
+                    if tool == "edit_file" and "no longer parses" in res["output"]:
+                        res = {**res, "edit_broke_syntax": True}
+                    elif tool == "edit_file" and "still does not parse" in res["output"]:
+                        res = {**res, "edit_left_syntax_error": True}
+                    if tool == "run_tests" and "first error in the output:" in res["output"]:
+                        res = {**res, "first_error_shown": True}
                 if tool == "done" and self.gate is not None:
                     ok, verdict = self.gate.check()
                     res = {**res, "gate": {"accepted": ok, "message": verdict[:1500]}}

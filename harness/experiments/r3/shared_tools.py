@@ -116,11 +116,14 @@ class SharedTools:
     NAMES = ("read_file", "list_dir", "grep", "edit_file", "run_tests", "done")
 
     def __init__(self, workdir: str, env, visible_tests: list[str], tokenizer_path: str | None = None,
-                 explicit: bool = False, expected: dict[str, list[str]] | None = None):
+                 explicit: bool = False, expected: dict[str, list[str]] | None = None, feedback: bool = False):
         """`explicit`: amendment R4-SANITY-3's tool messages (a cut read says so and where to continue; edit errors show
         the closest lines, the duplicates' lines, and what an empty `old` means). Off for R3a and sanity runs 1-2."""
         self.work, self.env, self.visible = os.path.abspath(workdir), env, list(visible_tests)
         self.explicit = explicit
+        # Phase 2 C1-C2 (`r3/feedback.py`; every arm): edit_file warns when an edit leaves a file that does not parse
+        # (the edit is applied), and run_tests shows the first real error of a failing run. Off for earlier runs.
+        self.feedback = feedback
         # R4-SANITY-4 (bug 3): the tests each visible file ran at the start (delete: visible_start_pass; feature: the
         # listed tests), and the most each file has reported in this run, so that tests which stop running are named
         self.expected = expected or {}
@@ -226,7 +229,7 @@ class SharedTools:
             os.makedirs(os.path.dirname(p), exist_ok=True)
             with open(p, "w", encoding="utf8") as fh:
                 fh.write(new)
-            return f"created {path} ({new.count(chr(10)) + 1} lines)"
+            return f"created {path} ({new.count(chr(10)) + 1} lines)" + self._edit_warning(path, None, new)
         if not os.path.isfile(p):
             raise ToolCallError(f"no file {path!r}")
         with open(p, encoding="utf8", errors="replace") as fh:
@@ -258,10 +261,28 @@ class SharedTools:
                 raise ToolCallError(f"the text to replace occurs {n} times in {path}, at lines "
                                     f"{', '.join(map(str, at[:20]))}. Include a line before or after it to pick one")
             raise ToolCallError(f"the text to replace occurs {n} times in {path}; give a longer, unique span")
+        after = text.replace(old, new, 1)
         with open(p, "w", encoding="utf8") as fh:
-            fh.write(text.replace(old, new, 1))
+            fh.write(after)
         line = text[:text.index(old)].count("\n") + 1
-        return f"edited {path} at line {line}: replaced {old.count(chr(10)) + 1} lines with {new.count(chr(10)) + 1}"
+        return (f"edited {path} at line {line}: replaced {old.count(chr(10)) + 1} lines with {new.count(chr(10)) + 1}"
+                + self._edit_warning(path, text, after))
+
+    def _edit_warning(self, path: str, before: str | None, after: str) -> str:
+        if not self.feedback:
+            return ""
+        from harness.experiments.r3.feedback import edit_warning
+        return edit_warning(path, before, after)
+
+    def _first_error(self, r: dict) -> str:
+        """Phase 2 C2: the run's first real error, when the output's tail does not already show it."""
+        if not self.feedback:
+            return ""
+        from harness.experiments.r3.feedback import first_error
+        fe = first_error(r.get("text") or r.get("tail") or "", self.work)
+        if not fe or fe.splitlines()[-1].strip() in (r.get("tail") or "")[-FAIL_TAIL_CHARS:]:
+            return ""
+        return "\nfirst error in the output:\n" + fe
 
     def _run_tests(self, files: list[str] | None = None) -> str:
         files = list(files) if files else list(self.visible)
@@ -282,7 +303,8 @@ class SharedTools:
             r = self.env.run_test(rel)
             self.last_results[rel] = r
             if not r.get("parsed"):
-                out.append(f"{rel}: the test run produced no results (exit {r.get('rc')})\n{r.get('tail', '')[-FAIL_TAIL_CHARS:]}")
+                out.append(f"{rel}: the test run produced no results (exit {r.get('rc')})" + self._first_error(r)
+                           + f"\n{r.get('tail', '')[-FAIL_TAIL_CHARS:]}")
                 continue
             failing = [t for t, s in (r.get("tests") or {}).items() if s == "failed"]
             line = f"{rel}: {r['passed']} passed, {r['failed']} failed, {r['skipped']} skipped"
@@ -290,6 +312,7 @@ class SharedTools:
                 line += self._vanished(rel, r)
             if failing:
                 line += "\nfailing:\n" + "\n".join(f"- {t}" for t in failing[:30])
+                line += self._first_error(r)
                 line += "\n" + re.sub(r"\x1b\[[0-9;]*m", "", r.get("tail", ""))[-FAIL_TAIL_CHARS:]
             out.append(line)
         return "\n\n".join(out)
