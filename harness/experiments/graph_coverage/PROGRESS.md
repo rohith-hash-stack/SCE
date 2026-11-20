@@ -126,3 +126,8 @@ the reference pass. Their causes:
 These are uses of hub classes (`Request`, `Spider`, `Crawler`): hundreds of callers and annotations, more than one
 answer holds. **The next fix for that is a grouped listing for hubs** (counts per file and kind, with the nearest rows
 in full), not a bigger graph. Type annotations lose the most here because hub classes are what gets annotated.
+
+**PRISM's tests after B10:** the 42 test files that touch the changed tools (change context, blast radius, MCP
+server, index cache, harness tool layer, golden outputs): 675 passed, 5 failed, 2 skipped, 8 xfailed. The 5 failures
+(`test_nlq_p1` ×2, `test_query_to_evidence` ×3) are among the 17 that fail before the reference pass (above); every
+other test has the same result as in the full run before B10. The 9 B10 tests are new and pass.
