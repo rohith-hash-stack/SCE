@@ -34,6 +34,12 @@ DEFAULT_BUDGET = 12000
 MAX_CALLER_CODE_LINES = 80
 #: Uses other than calls listed in section 4 (one line each); the rest are counted.
 MAX_REFERENCES = 40
+#: Shares of the budget: who depends on the anchor (section 4) and the anchor's own code and digest (section 3).
+#: Past them, section 4 is grouped by file (`prism.impact.dependents`) and the anchor's code is given as an outline,
+#: so a widely used class's dependents are not cut off by its own long code (scrapy's `Request`: 3,400 tokens of
+#: code and digest, then 2,200 of dependents, in a 4,000-token answer).
+DEPENDENTS_SHARE = 0.40
+ANCHOR_SHARE = 0.30
 
 
 @dataclass
@@ -63,6 +69,10 @@ class ChangeContext:
     #: uses other than calls (`prism.graph.references.references_to`): imports, type use, values, ...
     references: list = field(default_factory=list)
     references_total: int = 0
+    #: section 4 grouped by file (over its budget share); None: listed one by one
+    dependents_grouped: list | None = None
+    #: the anchor's code given as an outline (over its budget share): its full length in lines
+    anchor_outlined_lines: int = 0
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -101,6 +111,46 @@ class ChangeContextBuilder:
             rel = _rel(os.path.join(self.root, path) if not os.path.isabs(path) else path, self.root)
             out.setdefault(rel, []).extend(ranges or [(1, 10 ** 9)])
         return out
+
+    def _fit_anchor(self, ctx: "ChangeContext", anchor: str, budget: int) -> None:
+        """An anchor whose code and digest exceed `ANCHOR_SHARE` of the budget is given as an outline, its digest cut
+        to the rest of that share (both say so, and where the full text is)."""
+        share = int(budget * ANCHOR_SHARE)
+        if not ctx.anchor_code or count_tokens(ctx.anchor_code) + count_tokens(ctx.anchor_digest) <= share:
+            return
+        ctx.anchor_outlined_lines = ctx.anchor_code.count("\n") + 1
+        ctx.anchor_code = _outline(self.b, anchor, ctx.anchor_code)
+        left = share - count_tokens(ctx.anchor_code)
+        dl = ctx.anchor_digest.split("\n")
+        keep, used = [], 0
+        for ln in dl:
+            c = count_tokens(ln) + 1
+            if used + c > max(left, 200):
+                break
+            keep.append(ln)
+            used += c
+        if len(keep) < len(dl):
+            keep.append(f"... {len(dl) - len(keep)} more digest lines (prism_digest gives all)")
+        ctx.anchor_digest = "\n".join(keep)
+
+    def _fit_dependents(self, ctx: "ChangeContext", refs: list, budget: int) -> None:
+        """Section 4 grouped by file when its one-by-one listing exceeds `DEPENDENTS_SHARE` of the budget."""
+        from prism.impact.dependents import Row, listing
+        rows = []
+        for r in ctx.callers:
+            full = [render_caller(r)] + [f"  - L{d.line} {d.aspect}: {d.text}" for d in r.dependencies]
+            rows.append(Row(r.caller, r.file, ["calls" if r.certainty == CERTAIN else "calls (possible)"], full,
+                            is_test=r.is_test))
+        for r in refs:
+            rows.append(Row(r["source"], r["file"], list(r["kinds"]), [render_reference(r)], is_test=r["is_test"],
+                            is_module=r["is_module"]))
+        share = int(budget * DEPENDENTS_SHARE)
+        if len(refs) > MAX_REFERENCES:                    # one by one, the list would stop at MAX_REFERENCES
+            from prism.impact.dependents import grouped
+            ctx.dependents_grouped = grouped(rows, ctx.file, share, count_tokens, GROUPED_INTRO)
+            return
+        lines, was_grouped = listing(rows, ctx.file, share, count_tokens, GROUPED_INTRO)
+        ctx.dependents_grouped = lines if was_grouped else None
 
     def build(self, anchor: str, budget_tokens: int = DEFAULT_BUDGET, include_tests: bool = True,
               visible=None, new_code: str | None = None) -> ChangeContext:
@@ -149,8 +199,10 @@ class ChangeContextBuilder:
         from prism.graph.references import references_to
         refs = references_to(b, anchor, include_tests=include_tests, skip={r.caller for r in callers})
         ctx.references_total = len(refs)
-        ctx.references = [{**r, "file": _rel(r["file"], self.root) if r["file"] else None}
-                          for r in refs[:MAX_REFERENCES]]
+        all_refs = [{**r, "file": _rel(r["file"], self.root) if r["file"] else None} for r in refs]
+        ctx.references = all_refs[:MAX_REFERENCES]
+        self._fit_anchor(ctx, anchor, budget_tokens)
+        self._fit_dependents(ctx, all_refs, budget_tokens)
         # callers' code under the budget: certain callers first, nearest code first
         spent = count_tokens(render(ctx))
         omitted = 0
@@ -179,6 +231,26 @@ class ChangeContextBuilder:
             ctx.breaks = BreakChecker(self.deps).check(anchor, new_code, include_tests=include_tests)
         ctx.token_count = count_tokens(render(ctx))
         return ctx
+
+
+def _outline(builder, anchor: str, code: str) -> str:
+    """The anchor's first line and the first line of each definition inside it, with line numbers."""
+    sym = builder.symbol_table.get(anchor)
+    lo = sym.line_range[0]
+    lines = code.split("\n")
+    keep = {lo}
+    prefix = anchor + "."
+    for q in builder._def_nodes:
+        if q.startswith(prefix):
+            s = builder.symbol_table.get(q)
+            if s is None or s.file != sym.file or s.kind not in ("function", "method", "class"):
+                continue
+            first, last = s.line_range
+            n = first
+            while n < last and 0 <= n - lo < len(lines) and lines[n - lo].lstrip().startswith("@"):
+                n += 1                                      # its own line, not its decorators'
+            keep.add(n)
+    return "\n".join(f"{n}: {lines[n - lo]}" for n in sorted(keep) if 0 <= n - lo < len(lines))
 
 
 def parse_visible(specs) -> dict[str, list[tuple[int, int]] | None]:
@@ -215,6 +287,16 @@ def caller_excerpt(builder, report: CallerReport, context: int = 8) -> str:
     if previous < len(lines) - 1:
         out.append(f"    # ... lines {start + previous + 1}-{start + len(lines) - 1} not shown ...")
     return "\n".join(out)
+
+
+GROUPED_INTRO = ("{n} definitions and modules depend on it, in {files} files - more than this answer holds one by "
+                 "one: the nearest in full, the rest by file. Each place breaks if it is renamed, moved or removed.")
+
+
+def render_caller(r) -> str:
+    tag = " (test)" if r.is_test else ""
+    cert = "" if r.certainty == CERTAIN else " - linked by name only, possible"
+    return f"- `{r.caller}`{tag} ({r.file}){cert}"
 
 
 def render_reference(r: dict) -> str:
@@ -264,21 +346,25 @@ def render(ctx: ChangeContext) -> str:
     out += ["", "## 3. Anchor"]
     if ctx.anchor_in_view:
         out.append(f"Code: already in view ({ctx.file}, lines {ctx.lines[0]}-{ctx.lines[1]}).")
+    elif ctx.anchor_outlined_lines:
+        out += [f"Code: {ctx.anchor_outlined_lines} lines, too long for this answer; the first line of it and of each "
+                f"definition inside it follow (prism_read_code `{ctx.anchor}` gives the full code).",
+                f"```{fence}", ctx.anchor_code, "```"]
     else:
         out += [f"```{fence}", ctx.anchor_code, "```"]
     out += ["", "Digest (what its code does, line by line):", "```", ctx.anchor_digest, "```"]
 
     out += ["", "## 4. Who depends on it"]
-    if not ctx.callers:
+    if ctx.dependents_grouped is not None:
+        out += ctx.dependents_grouped
+    elif not ctx.callers:
         out.append("No callers in the index (an entry point, a callback, or unused)." if not ctx.references
                    else "No calls to it in the index; its other uses are listed below.")
-    for r in ctx.callers:
-        tag = " (test)" if r.is_test else ""
-        cert = "" if r.certainty == CERTAIN else " - linked by name only, possible"
-        out.append(f"- `{r.caller}`{tag} ({r.file}){cert}")
+    for r in ctx.callers if ctx.dependents_grouped is None else ():
+        out.append(render_caller(r))
         for d in r.dependencies:
             out.append(f"  - L{d.line} {d.aspect}: {d.text}")
-    if ctx.references:
+    if ctx.references and ctx.dependents_grouped is None:
         out += ["", "Other uses (not calls) - each place breaks if it is renamed, moved or removed:"]
         out += [render_reference(r) for r in ctx.references]
         if ctx.references_total > len(ctx.references):

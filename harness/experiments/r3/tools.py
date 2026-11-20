@@ -28,6 +28,9 @@ import os
 CAP_TOKENS = 4000
 DIGEST_MAX = 10
 RELATED_MAX = 40
+#: Share of the cap the blast radius's list of dependents may take before it is grouped by file
+#: (`prism.impact.dependents`); its code envelope follows.
+BLAST_LIST_SHARE = 0.55
 PRISM_TOOLS = ("prism_change_context", "prism_blast_radius", "prism_ask", "prism_read_code", "prism_new_function_context",
                "prism_digest")
 BASELINE_TOOLS = ("related_code",)
@@ -128,18 +131,34 @@ class ToolLayer:
         return out["context"]
 
     def _prism_blast_radius(self, symbol: str) -> str:
+        from prism.impact.context import MAX_REFERENCES, render_reference
+        from prism.impact.dependents import Row, grouped
         from prism.mcp import server
+        from prism.slicer.tokenizer import count_tokens
         out = self._mcp(server.prism_blast_radius, seed_symbol=symbol, budget_tokens=CAP_TOKENS, include_tests=False)
-        head = [f"Blast radius of `{out['seed']}`: {out['callers_total']} transitive callers"
-                + (" (list cut)" if out["callers_truncated"] else "") + ", nearest first:"]
-        head += [f"- hop {c['hop']}: `{c['symbol']}` ({c['file']}:{c['line']})" for c in out["callers"]]
-        if out.get("references"):
-            from prism.impact.context import MAX_REFERENCES, render_reference
-            head += ["", f"Other uses of `{out['seed']}` (not calls; {out['references_total']}) - each place breaks if it"
-                     " is renamed, moved or removed:"]
-            head += [render_reference(r) for r in out["references"][:MAX_REFERENCES]]
-            if out["references_total"] > MAX_REFERENCES:
-                head.append(f"- ... {out['references_total'] - MAX_REFERENCES} more")
+        callers = [f"- hop {c['hop']}: `{c['symbol']}` ({c['file']}:{c['line']})" for c in out["callers"]]
+        refs = [render_reference(r) for r in out.get("references", [])]
+        total = out["callers_total"] + out.get("references_total", 0)
+        listed = len(out["callers"]) + len(out.get("references", []))
+        full = callers + (["", f"Other uses of `{out['seed']}` (not calls; {out.get('references_total', 0)}) - each place "
+                           "breaks if it is renamed, moved or removed:"] + refs[:MAX_REFERENCES] if refs else [])
+        if (count_tokens("\n".join(full)) <= int(CAP_TOKENS * BLAST_LIST_SHARE) and len(refs) <= MAX_REFERENCES
+                and listed == total):
+            head = [f"Blast radius of `{out['seed']}`: {out['callers_total']} transitive callers"
+                    + (" (list cut)" if out["callers_truncated"] else "") + ", nearest first:"] + full
+            return "\n".join(head) + "\n\n" + out["envelope"]
+        seed = self.wi.builder.symbol_table.get(out["seed"])
+        seed_file = os.path.relpath(seed.file, self.wi.shadow) if seed is not None else None
+        rows = [Row(c["symbol"], c["file"], ["calls" if c["hop"] == 1 else f"hop {c['hop']}"], [line],
+                    is_test=c["is_test"], rank=(c["hop"],)) for c, line in zip(out["callers"], callers)]
+        rows += [Row(r["source"], r["file"], list(r["kinds"]), [line], is_test=r["is_test"], is_module=r["is_module"],
+                     rank=(1,)) for r, line in zip(out.get("references", []), refs)]
+        intro = (f"Blast radius of `{out['seed']}`: {out['callers_total']} transitive callers and "
+                 f"{out.get('references_total', 0)} other uses (imports, type use, values, ...)"
+                 + (f", {total - listed} past PRISM's list" if total > listed else "")
+                 + " - {n} listed here, in {files} files: the nearest in full, the rest by file. Each place breaks if"
+                 " it is renamed, moved or removed.")
+        head = grouped(rows, seed_file, int(CAP_TOKENS * BLAST_LIST_SHARE), count_tokens, intro)
         return "\n".join(head) + "\n\n" + out["envelope"]
 
     def _prism_ask(self, question: str) -> str:

@@ -366,6 +366,8 @@ def shown(repo: str, rev: str, label: str, sample: int = 300, seed: int = 0, tok
                 r["shown"] += as_caller or as_other
                 r["shown_as_caller"] += as_caller
                 r["shown_as_other_use"] += as_other and not as_caller
+                r["in_a_grouped_answer"] = r.get("in_a_grouped_answer", 0) + ((as_caller or as_other) and any(
+                    "By file (the rest" in dependents_part(a) for a in answers[u["target"]]))
         return {"label": label, "rev": rev, "sample": len(picked), "targets": len(answers), "seed": seed,
                 "tool_seconds": round(time.time() - t0, 1), "capped_by_tokenizer": layer._tok is not None,
                 "rows": dict(rows), "surfaced_not_shown": dict(missed),
