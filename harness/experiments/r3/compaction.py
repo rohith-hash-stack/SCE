@@ -29,6 +29,8 @@ import re
 
 KEEP_RECENT = 6            # tool outputs kept in full, counting back from the newest
 SUMMARY_LINES = {"grep": 8, "list_dir": 12, "index": 12}
+#: reads of numbered file lines: `prism_read` (Phase 2 D2) is `read_file`'s output with a PRISM footer
+READS = ("read_file", "prism_read")
 FAILING_NAMES = 5
 SHORT_CHARS = 400          # outputs this short are never compacted
 
@@ -55,10 +57,10 @@ def _summary(tool: str, output: str, ntok) -> str | None:
     """The kind-specific summary of an old output, or None to keep it."""
     if len(output) <= SHORT_CHARS or output.startswith("error"):
         return None
-    if tool == "read_file":
+    if tool in READS:
         r = _read_range(output)
         where = f"`{r[0]}` lines {r[1]}-{r[2]}" if r else "a file"
-        return f"(older output of read_file, {where}: {ntok(output)} tokens, omitted. Read it again if you need the text.)"
+        return f"(older output of {tool}, {where}: {ntok(output)} tokens, omitted. Read it again if you need the text.)"
     if tool == "run_tests":
         keep, names = [], 0
         for ln in output.splitlines():
@@ -97,7 +99,7 @@ def compact(history: list[dict], ntok, keep_recent: int = KEEP_RECENT) -> tuple[
         m = out[i]
         tool, text, turn = m.get("tool"), m["content"], m.get("turn", 0)
         new = None
-        if tool == "read_file":
+        if tool in READS:
             r = _read_range(text)
             if r:
                 path, a, b = r
@@ -115,7 +117,7 @@ def compact(history: list[dict], ntok, keep_recent: int = KEEP_RECENT) -> tuple[
             if e:
                 first = int(e.group(2))
                 later_edits.setdefault(e.group(1), []).append((turn, first, first + max(1, int(e.group(3))) - 1))
-        elif tool in ("grep", "list_dir"):
+        elif tool in ("grep", "list_dir", "prism_search"):
             k = _key(m)
             if k in later_keys and len(text) > SHORT_CHARS:
                 new, kind = f"(repeated: the same {tool} was run again at turn {later_keys[k]}; see below)", "repeated"

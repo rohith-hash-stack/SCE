@@ -1311,3 +1311,14 @@ what that run would inherit.
    - **Measured** (with a corrected benchmark, `harness/experiments/graph_coverage/PROGRESS.md`): shown to the
      agent 74.1% → 77.3% of sampled production uses.
    - **Arms affected:** PRISM and INJECTED.
+7. **Phase D, PRISM search and read:**
+   - **`prism_search`:** `grep` over the working files. Each hit is labelled with what it is (import, definition,
+     call, type annotation, decorator, base class, isinstance, except, string, comment), the definition it is in, and
+     its file's kind (test, docs, config, template). Labels come from the current text.
+   - **`prism_read`:** `read_file`'s exact output, plus a footer with the file's kind and the definitions in the lines
+     shown.
+   - **Arms affected:** both tools are added to the PRISM and INJECTED arms' tool lists, which changes their prompts.
+   - **A new arm, `PRISM_ONLY`:** PRISM's tools without `grep` or `read_file`. It is available
+     (`runner.py`/`pilot_run.py`) and runs only under its own pre-registration.
+   - **Known wording:** the shared tools' edit-error messages refer to "the line numbers read_file shows". In
+     PRISM_ONLY those are `prism_read`'s, which are numbered the same way.

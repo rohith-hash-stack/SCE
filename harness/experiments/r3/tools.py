@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 CAP_TOKENS = 4000
 DIGEST_MAX = 10
@@ -32,7 +33,10 @@ RELATED_MAX = 40
 #: (`prism.impact.dependents`); its code envelope follows.
 BLAST_LIST_SHARE = 0.55
 PRISM_TOOLS = ("prism_change_context", "prism_blast_radius", "prism_ask", "prism_read_code", "prism_new_function_context",
-               "prism_digest")
+               "prism_digest", "prism_search", "prism_read")
+#: `prism_search`'s hit lines (as `grep`'s); `prism_read`'s footer of definitions
+SEARCH_MAX_LINES = 200
+READ_MAX_DEFS = 12
 BASELINE_TOOLS = ("related_code",)
 
 
@@ -41,8 +45,11 @@ class ToolError(Exception):
 
 
 class ToolLayer:
-    def __init__(self, wi, tokenizer_path: str | None = None):
+    def __init__(self, wi, tokenizer_path: str | None = None, shared=None):
+        """`shared`: the run's SharedTools, which `prism_read` and `prism_search` read the working files through (the
+        current bytes, the same path rules and caps as `read_file`/`grep`)."""
         self.wi = wi
+        self.shared = shared
         self._ctx_builder = None
         self._key = None
         self._tok = None
@@ -208,6 +215,114 @@ class ToolLayer:
             raise ToolError(msg.replace(root + os.sep, "").replace(root, ".")
                             + (f"; candidates: {', '.join(cands)}" if cands else "")) from exc
         return self._code_block(qname)
+
+    # ------------------------------------------------------------------ Phase D: search and read (current text)
+    def _is_test(self, rel: str) -> bool:
+        from prism.scanner.entrypoint_gate import is_test_file
+        return is_test_file(rel.replace(os.sep, "/"), self.wi.workdir)
+
+    def _index_enclosing(self, rel: str, line: int) -> str | None:
+        """The innermost indexed definition at `rel:line` (PRISM's index; for files `ast` cannot read)."""
+        b, path = self.wi.builder, os.path.join(self.wi.shadow, rel)
+        inside = [(s.line_range[1] - s.line_range[0], q) for q in b._def_nodes
+                  if (s := b.symbol_table.get(q)) is not None and os.path.abspath(s.file) == path
+                  and s.line_range[0] <= line <= s.line_range[1]]
+        return min(inside)[1] if inside else None
+
+    def _prism_search(self, pattern: str, path: str = ".", kind: str | None = None) -> str:
+        """`grep` over the working files, each hit labelled: what the matching code is (import, definition, call,
+        type annotation, decorator, base class, isinstance, except, string, comment, code), the definition it is in,
+        and the file's kind (test, docs, config, template). `kind` keeps only hits of that kind (or file kind)."""
+        import subprocess
+        from harness.experiments.r3.search_labels import PythonFile, file_kind, other_kind
+        if self.shared is None:
+            raise ToolError("prism_search needs the working files")
+        work = self.shared.work
+        p = self.shared._path(path)
+        rel = os.path.relpath(p, work)
+        r = subprocess.run(["git", "-C", work, "grep", "-n", "--column", "-I", "-E", "--untracked", "-e", pattern, "--",
+                            rel if rel != "." else ":/", ":!node_modules"], capture_output=True, text=True,
+                           errors="replace")
+        if r.returncode not in (0, 1):
+            raise ToolError(f"bad pattern: {r.stderr.strip()[:200]}")
+        parsed: dict[str, PythonFile | None] = {}
+        hits = []
+        for ln in r.stdout.splitlines():
+            m = re.match(r"(.+?):(\d+):(\d+):(.*)$", ln)
+            if not m or "/.r3-" in ln or ln.startswith(".r3-"):
+                continue
+            f, line, col, text = m.group(1), int(m.group(2)), int(m.group(3)) - 1, m.group(4)
+            fk = file_kind(f, self._is_test)
+            if f.endswith(".py"):
+                if f not in parsed:
+                    try:
+                        parsed[f] = PythonFile(f, open(os.path.join(work, f), "rb").read().decode("utf8", "replace"))
+                    except OSError:
+                        parsed[f] = None
+                pf = parsed[f]
+                if pf is not None and pf.ok:
+                    what, where = pf.kind(line, col), pf.enclosing(line)
+                else:
+                    what, where = "code", self._index_enclosing(f, line)
+            elif fk in ("docs", "config", "template"):
+                what, where = None, None
+            else:
+                what, where = other_kind(text, col), self._index_enclosing(f, line)
+            hits.append((f, line, fk, what, where, text))
+        if kind:
+            hits = [h for h in hits if kind in (h[2], h[3])]
+        if not hits:
+            return f"no matches for {pattern!r}" + (f" of kind {kind!r}" if kind else "")
+        counts: dict[str, int] = {}
+        for h in hits:
+            for k in (h[3], h[2]):
+                if k:
+                    counts[k] = counts.get(k, 0) + 1
+        files = len({h[0] for h in hits})
+        head = (f"prism_search {pattern!r}: {len(hits)} hits in {files} files ("
+                + ", ".join(f"{k} {n}" for k, n in sorted(counts.items(), key=lambda x: -x[1])) + ")")
+        out = [head]
+        for f, line, fk, what, where, text in hits[:SEARCH_MAX_LINES]:
+            label = "; ".join(x for x in (fk, what, f"in `{where}`" if where else None) if x)
+            out.append(f"{f}:{line}: [{label}] {text.strip()[:240]}")
+        if len(hits) > SEARCH_MAX_LINES:
+            out.append(f"... ({len(hits) - SEARCH_MAX_LINES} more hits; narrow `path` or `kind`)")
+        return "\n".join(out)
+
+    def _prism_read(self, path: str, start: int = 1, end: int | None = None) -> str:
+        """`read_file` exactly (any file: code, tests, templates, configs; the working file's current bytes, numbered
+        lines, the same cut rule), then one line from PRISM: the file's kind and the definitions in the lines shown."""
+        from harness.experiments.r3.search_labels import PythonFile, file_kind
+        if self.shared is None:
+            raise ToolError("prism_read needs the working files")
+        from harness.experiments.r3.shared_tools import ToolCallError
+        try:
+            body = self.shared._read_file(path, start, end)
+        except ToolCallError as exc:
+            raise ToolError(str(exc)) from exc
+        m = re.match(r"(\S+) \((?:lines (\d+)-(\d+) of \d+|lines (\d+)-(\d+) of \d+ shown)", body)
+        if not m:
+            return body
+        rel = os.path.relpath(self.shared._path(path), self.shared.work).replace(os.sep, "/")
+        a, b = (int(m.group(2)), int(m.group(3))) if m.group(2) else (int(m.group(4)), int(m.group(5)))
+        defs: list[tuple[str, int, int]] = []
+        if rel.endswith(".py"):
+            pf = PythonFile(rel, open(self.shared._path(path), "rb").read().decode("utf8", "replace"))
+            defs = pf.definitions_in(a, b) if pf.ok else []
+        if not defs:
+            bb, full = self.wi.builder, os.path.join(self.wi.shadow, rel)
+            defs = sorted(((q, s.line_range[0], s.line_range[1]) for q in bb._def_nodes
+                           if (s := bb.symbol_table.get(q)) is not None and os.path.abspath(s.file) == full
+                           and s.kind in ("function", "method", "class")
+                           and s.line_range[0] <= b and s.line_range[1] >= a), key=lambda d: (d[1], d[0]))
+        fk = file_kind(rel, self._is_test)
+        parts = [f"{fk} file" if fk else None]
+        if defs:
+            listed = ", ".join(f"`{q}` ({lo}-{hi})" for q, lo, hi in defs[:READ_MAX_DEFS])
+            parts.append("definitions in these lines: " + listed
+                         + (f" +{len(defs) - READ_MAX_DEFS} more" if len(defs) > READ_MAX_DEFS else ""))
+        note = "; ".join(x for x in parts if x)
+        return body + (f"\n--- PRISM: {note}" if note else "")
 
     def _code_block(self, qname: str) -> str:
         s = self.wi.builder.symbol_table.get(qname)

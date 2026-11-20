@@ -252,6 +252,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
                              explicit=bool(task.get("explicit_tools")),      # R4-SANITY-3
                              expected=_expected_tests(task),                 # R4-SANITY-4 (bug 3)
                              feedback=feedback)                              # Phase 2 C1-C2, every arm
+        layer.shared = shared                             # Phase 2 D: prism_search / prism_read read the working files
         injected = None
         if version == "INJECTED":                         # the 3-arm re-baseline's Arm 3 (r4/inject.py)
             stage = "injection"
@@ -307,7 +308,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     p.add_argument("task")
-    p.add_argument("version", choices=("PRISM", "BASELINE", "INJECTED"))
+    p.add_argument("version", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY"))
     p.add_argument("seed", type=int)
     p.add_argument("--clone", required=True)
     p.add_argument("--out", required=True)

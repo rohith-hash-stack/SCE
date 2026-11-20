@@ -19,7 +19,8 @@ The forensic audit after it found four independent weaknesses:
    syntax errors and test logs; the only difference between arms is the PRISM tools.
 2. **A breaking edit is applied, with a warning.** The agent must learn to fix its own broken code; the edit is not
    refused.
-3. **No PRISM-only 4th arm yet.** First show whether the upgraded graph (Phase B) and harder tasks (Phase E) change the
+3. **No PRISM-only 4th arm yet** (revised by the user, 2026-11-20: build its tool-list support in Phase D, so it can be
+   run; whether it runs is a pre-registration decision). First show whether the upgraded graph (Phase B) and harder tasks (Phase E) change the
    standard 3-arm comparison; a PRISM-only arm is a Phase 3 question if the data warrants it.
 4. **Order:** A → B + C (in parallel) → D → E → F.
 
@@ -71,7 +72,13 @@ references have their own, lower target.
 |---|---|
 | D1 | `prism_search`: text/regex search over the repository, each hit labelled with its kind and enclosing symbol |
 | D2 | `prism_read`: any file (tests, templates, configs), always the current bytes, with line numbers |
-| D3 | (Phase 3, not now) an arm with PRISM tools only |
+| D3 | An arm with PRISM tools only (`PRISM_ONLY`): support built; run only under its own pre-registration |
+
+**Built (2026-11-20):**
+- **`prism_search` and `prism_read`** (`harness/experiments/r3/tools.py`, `search_labels.py`) are in every PRISM arm's
+  tool list (PRISM, INJECTED, PRISM_ONLY).
+- **`PRISM_ONLY`** (`harness/experiments/r3/loop.py`) has no `grep` and no `read_file`.
+- **Tests:** `tests/test_phase_d.py`.
 
 ## Phase E: tasks that test connections
 

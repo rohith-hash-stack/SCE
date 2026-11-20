@@ -50,7 +50,7 @@ class ProgressLedger:
     # ------------------------------------------------------------------ updates, after each tool call
     def update(self, turn: int, tool: str, args: dict, output: str, gate: dict | None = None) -> None:
         args = args or {}
-        if tool == "read_file":
+        if tool in ("read_file", "prism_read"):
             m = re.match(r"(\S+) \(lines (\d+)-(\d+) of (\d+)", output)
             if m:
                 self.read.setdefault(m.group(1), []).append((int(m.group(2)), int(m.group(3))))

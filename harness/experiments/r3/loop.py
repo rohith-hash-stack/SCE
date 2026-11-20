@@ -63,6 +63,14 @@ PRISM_DOC = {
                         "prism_ask or prism_change_context named, with line numbers."),
     "prism_digest": ('{"symbols": [str]}', "Line-cited summaries of up to 10 functions (parameters, calls, raises, "
                      "returns)."),
+    "prism_search": ('{"pattern": str, "path": str = ".", "kind": str | null}',
+                     "Search the repository's files for a regular expression; each hit says what it is (import, "
+                     "definition, call, type annotation, decorator, isinstance, except, string, comment), the "
+                     "function or class it is in, and whether its file is a test, docs, config or template. `kind` "
+                     "keeps one kind."),
+    "prism_read": ('{"path": str, "start": int = 1, "end": int | null}',
+                   "Read any file's lines (numbered; its current text, edits included), with the definitions in "
+                   "them."),
 }
 BASELINE_DOC = {
     "related_code": ('{"query": str}', "The functions a keyword search over the repository ranks highest, as code."),
@@ -106,23 +114,34 @@ PARAM_SCHEMAS = {
     "prism_ask": ({"question": _S}, ["question"]),
     "prism_read_code": ({"symbol": _S}, ["symbol"]),
     "prism_digest": ({"symbols": {"type": "array", "items": _S}}, ["symbols"]),
+    "prism_search": ({"pattern": _S, "path": _S, "kind": {"type": ["string", "null"]}}, ["pattern"]),
+    "prism_read": ({"path": _S, "start": _I, "end": {"type": ["integer", "null"]}}, ["path"]),
     "related_code": ({"query": _S}, ["query"]),
 }
 
 
 # The arms with PRISM's tools: PRISM (the tools only) and INJECTED (the 3-arm re-baseline's Arm 3: PRISM's context
 # injected up front, and the same tools). BASELINE has `related_code` instead.
-PRISM_ARMS = ("PRISM", "INJECTED")
+# PRISM_ONLY (Phase 2 D3; support only, run only under its own pre-registration): PRISM's tools with `prism_search`
+# and `prism_read` in place of `grep` and `read_file`, to test whether PRISM can replace standard search.
+PRISM_ARMS = ("PRISM", "INJECTED", "PRISM_ONLY")
+ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY")
+#: the shared tools an arm does without
+REMOVED_SHARED = {"PRISM_ONLY": ("read_file", "grep")}
 
 
 def index_doc(version: str) -> dict:
     return PRISM_DOC if version in PRISM_ARMS else BASELINE_DOC
 
 
+def shared_doc(version: str) -> dict:
+    return {k: v for k, v in SHARED_DOC.items() if k not in REMOVED_SHARED.get(version, ())}
+
+
 def native_tools(version: str) -> list[dict]:
     """The version's tools in the OpenAI function-calling format, in the text prompt's order and with its
     descriptions."""
-    docs = {**SHARED_DOC, **index_doc(version)}
+    docs = {**shared_doc(version), **index_doc(version)}
     out = []
     for name, (_sig, what) in docs.items():
         props, required = PARAM_SCHEMAS[name]
@@ -133,7 +152,7 @@ def native_tools(version: str) -> list[dict]:
 
 
 def tool_docs(version: str) -> str:
-    docs = {**SHARED_DOC, **index_doc(version)}
+    docs = {**shared_doc(version), **index_doc(version)}
     return "\n".join(f"- {name} {sig}: {what}" for name, (sig, what) in docs.items())
 
 
@@ -499,7 +518,7 @@ class AgentRun:
             self.repeats = Repeats()
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
-        self.allowed = set(SHARED_DOC) | set(index_doc(version))
+        self.allowed = set(shared_doc(version)) | set(index_doc(version))
 
     def n(self, text: str) -> int:
         return len(self.tok.encode(text).ids) if self.tok else len(text) // 4
