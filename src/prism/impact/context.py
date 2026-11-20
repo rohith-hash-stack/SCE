@@ -3,7 +3,8 @@
     1. Codebase      the largest groups, how they call each other, entry points            (layer 5)
     2. Group         the anchor's directory: API, dependencies, conventions                (layer 4)
     3. Anchor        its full code and its digest
-    4. Who depends on it   per caller: result use, errors caught or not, arguments, await  (layer 3)
+    4. Who depends on it   per caller: result use, errors caught or not, arguments, await  (layer 3);
+                           then the other uses: imports, `__all__`, type use, isinstance/except, values, decorators
     5. What it depends on  its callees' errors, empty returns and state changes            (layer 3)
     6. Style         conventions of its group and the full code of its closest siblings
     7. Callers' code full code of the direct callers that fit the budget, digests for the rest
@@ -31,6 +32,8 @@ from prism.summaries.digest import CERTAIN, DigestBuilder
 
 DEFAULT_BUDGET = 12000
 MAX_CALLER_CODE_LINES = 80
+#: Uses other than calls listed in section 4 (one line each); the rest are counted.
+MAX_REFERENCES = 40
 
 
 @dataclass
@@ -57,6 +60,9 @@ class ChangeContext:
     anchor_in_view: bool = False
     #: with `new_code`: the calls the proposed change breaks (`prism.impact.breaks`); None: not checked
     breaks: list | None = None
+    #: uses other than calls (`prism.graph.references.references_to`): imports, type use, values, ...
+    references: list = field(default_factory=list)
+    references_total: int = 0
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -140,6 +146,11 @@ class ChangeContextBuilder:
         ctx.impact = {"transitive_callers": len(walked), "by_hop": dict(sorted(by_hop.items())),
                       "tests": tests[:20], "tests_total": len(tests),
                       "entry_points_reached": sorted(q for q in walked if q in self.entries)[:10]}
+        from prism.graph.references import references_to
+        refs = references_to(b, anchor, include_tests=include_tests, skip={r.caller for r in callers})
+        ctx.references_total = len(refs)
+        ctx.references = [{**r, "file": _rel(r["file"], self.root) if r["file"] else None}
+                          for r in refs[:MAX_REFERENCES]]
         # callers' code under the budget: certain callers first, nearest code first
         spent = count_tokens(render(ctx))
         omitted = 0
@@ -206,6 +217,17 @@ def caller_excerpt(builder, report: CallerReport, context: int = 8) -> str:
     return "\n".join(out)
 
 
+def render_reference(r: dict) -> str:
+    """One use other than a call: `- `pkg.mod` (module, pkg/mod.py:3, 12): imports it; lists it in `__all__``."""
+    from prism.graph.references import describe_kinds
+    where = r["file"] or "?"
+    if r["lines"]:
+        where += ":" + ", ".join(str(n) for n in r["lines"]) + (" ..." if r["count"] > len(r["lines"]) else "")
+    tag = "module, " if r["is_module"] else ""
+    test = " (test)" if r["is_test"] else ""
+    return f"- `{r['source']}`{test} ({tag}{where}): {describe_kinds(r['kinds'])}"
+
+
 def _fence(lang: str) -> str:
     return {"python": "python", "javascript": "javascript", "typescript": "typescript", "tsx": "tsx",
             "java": "java", "csharp": "csharp", "go": "go"}.get(lang.lower().rsplit(".", 1)[-1], "")
@@ -248,13 +270,19 @@ def render(ctx: ChangeContext) -> str:
 
     out += ["", "## 4. Who depends on it"]
     if not ctx.callers:
-        out.append("No callers in the index (an entry point, a callback, or unused).")
+        out.append("No callers in the index (an entry point, a callback, or unused)." if not ctx.references
+                   else "No calls to it in the index; its other uses are listed below.")
     for r in ctx.callers:
         tag = " (test)" if r.is_test else ""
         cert = "" if r.certainty == CERTAIN else " - linked by name only, possible"
         out.append(f"- `{r.caller}`{tag} ({r.file}){cert}")
         for d in r.dependencies:
             out.append(f"  - L{d.line} {d.aspect}: {d.text}")
+    if ctx.references:
+        out += ["", "Other uses (not calls) - each place breaks if it is renamed, moved or removed:"]
+        out += [render_reference(r) for r in ctx.references]
+        if ctx.references_total > len(ctx.references):
+            out.append(f"- ... {ctx.references_total - len(ctx.references)} more")
 
     out += ["", "## 5. What it depends on"]
     if not ctx.callees:

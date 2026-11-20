@@ -699,7 +699,12 @@ def prism_blast_radius(
         format: "xml" (the `<prism_context>` envelope) or "json".
 
     Returns `{seed, callers, callers_total, callers_truncated,
-    callers_in_context, envelope, token_count, truncated}`. `callers` lists
+    callers_in_context, references, references_total, envelope, token_count,
+    truncated}`. `references` are the seed's uses other than calls (imports,
+    `__all__`, type annotations, isinstance/except, values, decorators,
+    attribute reads; `prism.graph.references.references_to`): each with its
+    `source` (a definition, or a module for module-level code), `kinds`,
+    `count`, `file` and `lines`. `callers` lists
     each caller's `symbol`, `hop`, `is_test`, `language`, `file` and `line`,
     nearest first, with no budget applied; `callers_in_context` are the
     ones whose code is in `envelope`.
@@ -748,12 +753,20 @@ def prism_blast_radius(
             "line": info.line_range[0] if info is not None else None,
         })
     in_context = sorted({n.id for n in pkg.nodes if n.role != "seed"} & set(walked))
+    from prism.graph.references import references_to
+    refs = references_to(builder, seed_symbol, include_tests=include_tests, skip=set(walked))
+    references = [{"source": r["source"], "is_module": r["is_module"], "kinds": r["kinds"], "count": r["count"],
+                   "is_test": r["is_test"], "lines": r["lines"],
+                   "file": _relative_path(repo_ctx.repo_root, r["file"]) if r["file"] else None}
+                  for r in refs[:BLAST_RADIUS_MAX_LISTED_CALLERS]]
     return {
         "seed": seed_symbol,
         "callers": callers,
         "callers_total": len(walked),
         "callers_truncated": len(walked) > BLAST_RADIUS_MAX_LISTED_CALLERS,
         "callers_in_context": in_context,
+        "references": references,
+        "references_total": len(refs),
         "envelope": envelope,
         "token_count": token_count,
         "truncated": token_count > budget_tokens,
@@ -805,7 +818,8 @@ def prism_change_context(
             keyword, a new required parameter, arguments that now land in another parameter, a new
             uncaught exception, a new empty return the call uses), each with its file and line.
 
-    Returns `{symbol, context, token_count, callers, transitive_callers, breaks}` (`breaks` with new_code).
+    Returns `{symbol, context, token_count, callers, transitive_callers, references, references_total, breaks}`
+    (`breaks` with new_code); `references` are the sources of its uses other than calls, listed in section 4.
     """
     from prism.impact.context import ChangeContextBuilder, parse_visible, render as render_change_context
     if not (1000 <= budget_tokens <= 128_000):
@@ -829,6 +843,8 @@ def prism_change_context(
         "token_count": change.token_count,
         "callers": [r.caller for r in change.callers],
         "transitive_callers": change.impact.get("transitive_callers", 0),
+        "references": [r["source"] for r in change.references],
+        "references_total": change.references_total,
         **({"breaks": [{"caller": x.caller, "file": x.file, "line": x.line, "severity": x.severity,
                         "problem": x.problem} for x in change.breaks]} if change.breaks is not None else {}),
     }

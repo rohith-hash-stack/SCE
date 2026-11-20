@@ -133,6 +133,13 @@ class ToolLayer:
         head = [f"Blast radius of `{out['seed']}`: {out['callers_total']} transitive callers"
                 + (" (list cut)" if out["callers_truncated"] else "") + ", nearest first:"]
         head += [f"- hop {c['hop']}: `{c['symbol']}` ({c['file']}:{c['line']})" for c in out["callers"]]
+        if out.get("references"):
+            from prism.impact.context import MAX_REFERENCES, render_reference
+            head += ["", f"Other uses of `{out['seed']}` (not calls; {out['references_total']}) - each place breaks if it"
+                     " is renamed, moved or removed:"]
+            head += [render_reference(r) for r in out["references"][:MAX_REFERENCES]]
+            if out["references_total"] > MAX_REFERENCES:
+                head.append(f"- ... {out['references_total'] - MAX_REFERENCES} more")
         return "\n".join(head) + "\n\n" + out["envelope"]
 
     def _prism_ask(self, question: str) -> str:

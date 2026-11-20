@@ -16,8 +16,11 @@ other ways one definition depends on another, in `builder.reference_graph`:
   `EXTENDS` edge), `attribute` (an attribute read on a definition, `Config.LIMIT`), `value` (passed, assigned,
   stored, returned, compared).
 
-The main graph is not changed: it keeps one edge per pair, and code across PRISM walks it as a call graph. Surfacing
-references in PRISM's tools is a later step (B10). Python here; JS/TS next.
+Each edge also keeps `lines` (the first lines of its uses, up to `MAX_EDGE_LINES`); a module node keeps its `file`.
+
+The main graph is not changed: it keeps one edge per pair, and code across PRISM walks it as a call graph. The tools
+show references through `references_to` (B10): `prism_change_context` and `prism_blast_radius` list them, labelled
+by kind, apart from the callers. Python here; JS/TS next.
 """
 from __future__ import annotations
 
@@ -33,18 +36,95 @@ def new_reference_graph() -> nx.DiGraph:
     return nx.DiGraph()
 
 
-def add_reference(g: nx.DiGraph, src: str, dst: str, kind: str, module_node: str | None = None) -> None:
+#: Lines kept per edge: where the uses are, for the tools to cite (the count keeps the total).
+MAX_EDGE_LINES = 5
+
+
+def add_reference(g: nx.DiGraph, src: str, dst: str, kind: str, module_node: str | None = None,
+                  line: int | None = None, file: str | None = None) -> None:
     if src == dst:
         return
     if module_node is not None and src == module_node and src not in g:
-        g.add_node(src, kind="module", synthetic=True)
+        g.add_node(src, kind="module", synthetic=True, **({"file": file} if file else {}))
     if g.has_edge(src, dst):
         e = g.edges[src, dst]
         if kind not in e["ref_kinds"]:
             e["ref_kinds"] = sorted({*e["ref_kinds"], kind})
         e["count"] += 1
+        if line is not None and line not in e["lines"] and len(e["lines"]) < MAX_EDGE_LINES:
+            e["lines"] = sorted({*e["lines"], line})
     else:
-        g.add_edge(src, dst, relation="REFERENCES", ref_kinds=[kind], count=1)
+        g.add_edge(src, dst, relation="REFERENCES", ref_kinds=[kind], count=1,
+                   lines=[line] if line is not None else [])
+
+
+# ---------------------------------------------------------------------------------------------- reading (B10)
+#: How PRISM's tools name each kind of use, in the order they are listed.
+KIND_LABELS = {
+    "import": "imports it",
+    "export": "lists it in `__all__`",
+    "base": "subclasses it",
+    "isinstance": "type-checks against it (isinstance)",
+    "except": "catches it (except)",
+    "annotation": "uses it as a type annotation",
+    "generic": "uses it as a type parameter",
+    "decorator": "uses it as a decorator",
+    "call": "calls it (outside a function)",
+    "value": "uses it as a value (passed, stored, assigned, returned)",
+    "attribute": "reads an attribute of it",
+}
+_KIND_ORDER = {k: i for i, k in enumerate(KIND_LABELS)}
+
+
+#: Main-graph relations that are uses of their target but not calls: listed with the references.
+_STRUCTURAL = {"EXTENDS": "base", "IMPLEMENTS": "base", "EMBEDS": "base"}
+
+
+def references_to(builder, qname: str, include_tests: bool = True, skip: set | None = None) -> list[dict]:
+    """The definitions and modules that use `qname` other than by calling it, nearest kinds first:
+    `{source, is_module, file, lines, kinds, count, is_test}` per source. Sources: the reference graph's edges into
+    `qname`, and the main graph's inheritance edges (`EXTENDS`/`IMPLEMENTS`/`EMBEDS`, kind `base`). Sources in
+    `skip` (the callers a tool already lists) are left out."""
+    skip = skip or set()
+    rows: dict[str, dict] = {}
+    g = getattr(builder, "reference_graph", None)
+    if g is not None and qname in g:
+        for src, _dst, e in g.in_edges(qname, data=True):
+            node = g.nodes[src]
+            is_module = node.get("kind") == "module"
+            rows[src] = {"source": src, "is_module": is_module, "file": node.get("file") if is_module else None,
+                         "lines": list(e.get("lines", ())), "kinds": list(e["ref_kinds"]), "count": e["count"]}
+    if qname in builder.graph:
+        for src, _dst, e in builder.graph.in_edges(qname, data=True):
+            kind = _STRUCTURAL.get(e.get("relation"))
+            if kind is None:
+                continue
+            r = rows.setdefault(src, {"source": src, "is_module": False, "file": None, "lines": [], "kinds": [],
+                                      "count": 0})
+            if kind not in r["kinds"]:
+                r["kinds"].append(kind)
+                r["count"] += 1
+                sym = builder.symbol_table.get(src)
+                if sym is not None and sym.line_range[0] not in r["lines"]:
+                    r["lines"] = sorted({*r["lines"], sym.line_range[0]})
+    out = []
+    for src, r in rows.items():
+        if src in skip:
+            continue
+        if not r["is_module"]:
+            sym = builder.symbol_table.get(src)
+            r["file"] = sym.file if sym is not None else None
+        r["is_test"] = bool(r["file"]) and builder._in_test_file(r["file"])
+        if r["is_test"] and not include_tests:
+            continue
+        r["kinds"] = sorted(r["kinds"], key=lambda k: _KIND_ORDER.get(k, 99))
+        out.append(r)
+    out.sort(key=lambda r: (r["is_test"], min(_KIND_ORDER.get(k, 99) for k in r["kinds"]), r["source"]))
+    return out
+
+
+def describe_kinds(kinds) -> str:
+    return "; ".join(KIND_LABELS.get(k, k) for k in kinds)
 
 
 # ---------------------------------------------------------------------------------------------- Python
@@ -193,7 +273,7 @@ class _PythonFile:
             return                                            # the main graph already holds this call
         if kind == "base" and self.b.graph.has_edge(src, tgt):
             return
-        add_reference(self.g, src, tgt, kind, self.module_node)
+        add_reference(self.g, src, tgt, kind, self.module_node, line=node.start_point[0] + 1, file=self.parsed.path)
 
     # -------------------------------------------------------------- the walk
     def run(self) -> None:

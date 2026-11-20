@@ -4,6 +4,8 @@ repository's definitions PRISM's graph connects, by the kind of use.
     python -B -m harness.experiments.graph_coverage.benchmark audit --repo CLONE --rev SHA --label NAME --out FILE.json
     python -B -m harness.experiments.graph_coverage.benchmark summarize FILE.json ... [--markdown OUT.md]
     python -B -m harness.experiments.graph_coverage.benchmark check --baseline DIR --new DIR   # exit 1 on a drop
+    python -B -m harness.experiments.graph_coverage.benchmark shown --repo CLONE --rev SHA --label NAME --out F.json
+    python -B -m harness.experiments.graph_coverage.benchmark shown-summary F.json ... [--markdown OUT.md]
 
 **What is measured** (Python files; JS/TS is the next step of A1):
 - **The definitions:** every function, method and class PRISM indexes whose simple name is unique among them
@@ -22,9 +24,14 @@ repository's definitions PRISM's graph connects, by the kind of use.
   (dotted module name), which PRISM does not build today. PRISM connects definitions, not lines, so a use counts as
   recorded when its definition has any edge to the target (`run` calling `f` also covers `getattr(self, "f")` in
   `run`): the question is whether PRISM knows that this definition depends on that one.
-- **Surfaced:** that edge's relation is one PRISM's caller views traverse (`prism.graph.concrete_builder.
-  TRAVERSABLE_RELATIONS`), so `prism_change_context` and `prism_blast_radius` can show it. Read from PRISM, so the
-  benchmark follows when Phase B widens it.
+- **Surfaced:** that edge is one `prism_change_context` and `prism_blast_radius` list: a main-graph relation PRISM's
+  caller views traverse (`prism.graph.concrete_builder.TRAVERSABLE_RELATIONS`), or, since B10, a reference-graph edge
+  (the tools list a symbol's other uses through `prism.graph.references.references_to`). Read from PRISM, so the
+  benchmark follows what PRISM can show; it ignores the tools' list lengths and token caps.
+- **Shown** (`shown`, sampled): what the agent actually gets. For a sample of uses outside test files, both tools are
+  called on the used definition through the harness's own tool layer (`harness.experiments.r3.tools.ToolLayer`:
+  tests left out, each answer cut at 4,000 tokens), and a use counts as shown when its source's name appears in an
+  answer; split by where (the callers' part of the answer, or the other-uses list B10 adds).
 - **Non-Python files:** for each unique name of 6+ characters, the non-Python tracked files that mention it as a word,
   by type (docs, C/C++, templates, config, JS/TS, other). PRISM indexes none of these today; counted, not matched.
 
@@ -73,8 +80,11 @@ class Index:
     """The definitions PRISM indexed in `root`, and its graph."""
 
     def __init__(self, builder, root: str):
+        from prism.graph import references as _refs
         from prism.graph.concrete_builder import TRAVERSABLE_RELATIONS
         self.graph, self.root, self.surfaced = builder.graph, root, set(TRAVERSABLE_RELATIONS)
+        if hasattr(_refs, "references_to"):          # B10: the tools list reference-graph edges
+            self.surfaced.add("REFERENCES")
         # Phase B: references other than calls and inheritance, in a graph of their own (PHASE2_B_DESIGN.md)
         self.refs = getattr(builder, "reference_graph", None)
         self.defs: dict[str, tuple[str, int, int, str]] = {}
@@ -201,7 +211,7 @@ def file_uses(rel: str, source: bytes, idx: Index) -> list[dict]:
             return
         src = idx.source(rel, node.lineno)
         rel_ = idx.edge(src, tgt)
-        out.append({"target": tgt, "kind": kind, "location": _location(node, parents, rel), "form": form,
+        out.append({"target": tgt, "source": src, "kind": kind, "location": _location(node, parents, rel), "form": form,
                     "recorded": rel_ is not None, "surfaced": rel_ in idx.surfaced if rel_ else False,
                     "where": f"{rel}:{node.lineno}"})
 
@@ -238,14 +248,20 @@ def non_python_mentions(root: str, idx: Index, limit: int = 400) -> dict:
 
 
 # ---------------------------------------------------------------------------------------------- the audit
-def audit_tree(root: str, builder) -> dict:
-    idx = Index(builder, root)
+def all_uses(root: str, builder, idx: "Index | None" = None) -> list[dict]:
+    idx = idx or Index(builder, root)
     uses = []
     for rel in _git(root, "ls-files", "*.py").split():
         try:
             uses += file_uses(rel, open(os.path.join(root, rel), "rb").read(), idx)
         except (OSError, RecursionError):
             continue
+    return uses
+
+
+def audit_tree(root: str, builder) -> dict:
+    idx = Index(builder, root)
+    uses = all_uses(root, builder, idx)
     cells = collections.defaultdict(lambda: {"uses": 0, "recorded": 0, "surfaced": 0, "examples": []})
     for u in uses:
         c = cells[f"{u['kind']}|{u['location']}|{u['form']}"]
@@ -280,6 +296,102 @@ def audit(repo: str, rev: str, label: str) -> dict:
         _git(repo, "worktree", "remove", "--force", work, check=False)
         shutil.rmtree(scratch, ignore_errors=True)
     return {"label": label, "rev": rev, **out}
+
+
+# ---------------------------------------------------------------------------------------------- shown (sampled)
+OTHER_USES_MARK = "Other uses"          # where B10's list starts in both tools' answers
+
+
+def dependents_part(answer: str) -> str:
+    """The part of a tool's answer that lists who depends on the symbol: the change context's section 4, or the blast
+    radius's list before its code envelope. A name elsewhere (a directory in section 1, a sibling) is not a listing."""
+    if "## 4. Who depends on it" in answer:
+        part = answer.split("## 4. Who depends on it", 1)[1]
+        return part.split("\n## 5.", 1)[0]
+    if "Blast radius of `" in answer:
+        return answer.split("\n\n<", 1)[0]
+    return ""
+
+
+def shown(repo: str, rev: str, label: str, sample: int = 300, seed: int = 0, tokenizer: str | None = None) -> dict:
+    """What the agent gets: `sample` uses outside test files, drawn at random; for each used definition both tools
+    are called once through the harness's tool layer, and a use is shown when its source appears in an answer."""
+    import random
+    import time
+    sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
+    from harness.experiments.r3.runner import TOKENIZER
+    from harness.experiments.r3.tools import ToolLayer
+    from harness.experiments.r3.working_index import WorkingIndex
+    scratch = tempfile.mkdtemp(prefix=f"gshow_{label}_")
+    work = os.path.join(scratch, "work")
+    _git(repo, "worktree", "add", "-q", "--detach", work, rev)
+    wi = layer = None
+    try:
+        wi = WorkingIndex(work, os.path.join(scratch, "shadow"))
+        tok = tokenizer or TOKENIZER
+        layer = ToolLayer(wi, tok if os.path.exists(tok) else None)
+        uses = [u for u in all_uses(wi.shadow, wi.builder) if u["location"] != "test file"]
+        rng = random.Random(seed)
+        picked = rng.sample(uses, min(sample, len(uses)))
+        answers: dict[str, tuple[str, str]] = {}
+        t0 = time.time()
+        for u in picked:
+            if u["target"] not in answers:
+                cc = layer.call("prism_change_context", symbol=u["target"])
+                br = layer.call("prism_blast_radius", symbol=u["target"])
+                answers[u["target"]] = (cc, br)
+        rows = collections.defaultdict(lambda: {"uses": 0, "recorded": 0, "surfaced": 0, "shown": 0,
+                                                "shown_as_caller": 0, "shown_as_other_use": 0})
+        for u in picked:
+            name = f"`{u['source']}`"
+            parts = [dependents_part(a).split(OTHER_USES_MARK, 1) for a in answers[u["target"]]]
+            as_caller = any(name in p[0] for p in parts)
+            as_other = any(len(p) > 1 and name in p[1] for p in parts)
+            for key in ("all", u["kind"]):
+                r = rows[key]
+                r["uses"] += 1
+                r["recorded"] += u["recorded"]
+                r["surfaced"] += u["surfaced"]
+                r["shown"] += as_caller or as_other
+                r["shown_as_caller"] += as_caller
+                r["shown_as_other_use"] += as_other and not as_caller
+        return {"label": label, "rev": rev, "sample": len(picked), "targets": len(answers), "seed": seed,
+                "tool_seconds": round(time.time() - t0, 1), "capped_by_tokenizer": layer._tok is not None,
+                "rows": dict(rows)}
+    finally:
+        if layer is not None:
+            layer.close()
+        if wi is not None:
+            wi.close()
+        _git(repo, "worktree", "prune", check=False)
+        _git(repo, "worktree", "remove", "--force", work, check=False)
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def shown_markdown(reports: list[dict]) -> str:
+    def pct(a, b):
+        return f"{a / b:.0%}" if b else "-"
+    lines = ["| Repository | Sampled uses | Recorded | Surfaced | Shown | as a caller | in the other-uses list |",
+             "|---|---|---|---|---|---|---|"]
+    tot = collections.Counter()
+    for r in reports:
+        a = r["rows"]["all"]
+        tot.update(a)
+        lines.append(f"| {r['label']} | {a['uses']} | {pct(a['recorded'], a['uses'])} | {pct(a['surfaced'], a['uses'])} "
+                     f"| {pct(a['shown'], a['uses'])} | {pct(a['shown_as_caller'], a['uses'])} "
+                     f"| {pct(a['shown_as_other_use'], a['uses'])} |")
+    lines.append(f"| **all** | {tot['uses']} | {pct(tot['recorded'], tot['uses'])} | {pct(tot['surfaced'], tot['uses'])} "
+                 f"| {pct(tot['shown'], tot['uses'])} | {pct(tot['shown_as_caller'], tot['uses'])} "
+                 f"| {pct(tot['shown_as_other_use'], tot['uses'])} |")
+    kinds = collections.defaultdict(collections.Counter)
+    for r in reports:
+        for k, v in r["rows"].items():
+            if k != "all":
+                kinds[k].update(v)
+    lines += ["", "| Kind | Sampled uses | Recorded | Shown |", "|---|---|---|---|"]
+    for k, v in sorted(kinds.items(), key=lambda x: -x[1]["uses"]):
+        lines.append(f"| {k} | {v['uses']} | {pct(v['recorded'], v['uses'])} | {pct(v['shown'], v['uses'])} |")
+    return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------------------------------------- summaries
@@ -357,7 +469,29 @@ def main(argv=None) -> int:
     c = sub.add_parser("check")
     c.add_argument("--baseline", required=True)
     c.add_argument("--new", required=True)
+    w = sub.add_parser("shown")
+    w.add_argument("--repo", required=True)
+    w.add_argument("--rev", required=True)
+    w.add_argument("--label", required=True)
+    w.add_argument("--out", required=True)
+    w.add_argument("--sample", type=int, default=300)
+    w.add_argument("--seed", type=int, default=0)
+    m = sub.add_parser("shown-summary")
+    m.add_argument("reports", nargs="+")
+    m.add_argument("--markdown")
     args = p.parse_args(argv)
+    if args.cmd == "shown":
+        rep = shown(os.path.abspath(args.repo), args.rev, args.label, args.sample, args.seed)
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        json.dump(rep, open(args.out, "w"), indent=1)
+        print(json.dumps({"label": rep["label"], **rep["rows"]["all"]}))
+        return 0
+    if args.cmd == "shown-summary":
+        md = shown_markdown(_load(args.reports))
+        if args.markdown:
+            open(args.markdown, "w").write(md)
+        print(md)
+        return 0
     if args.cmd == "audit":
         rep = audit(os.path.abspath(args.repo), args.rev, args.label)
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
