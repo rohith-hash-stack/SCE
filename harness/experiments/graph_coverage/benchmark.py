@@ -23,6 +23,9 @@ repository's definitions PRISM's graph connects, by the kind of use.
     definition's. Before, `client` (a parameter) counted as a use of an unrelated `client` fixture. These are
     counted apart (`local_names_excluded`); reports before this change include them, so compare a stage with the
     one before it under the same method.
+  - **Neither is a bare name bound by an import from outside the repository** (`from typing import Callable`,
+    `import json`, `from pprint import pformat`), that import itself, or a Python builtin the file does not define
+    or import (`type`): each is another object that shares the definition's name. Counted in the same number.
 - **Recorded:** the graph has an edge from the use's source node to the definition, any relation (the main graph,
   or the reference graph Phase B adds). The source node is
   the innermost indexed definition containing the use; for a use outside every definition, the module's own node
@@ -204,6 +207,39 @@ class _Shadow:
         return name in self.module_stores and not def_in_this_file
 
 
+_BUILTINS = set(dir(builtins))
+
+
+def _repo_packages(idx) -> set:
+    """The top-level package names the repository's own modules are imported by (`src.` layouts included)."""
+    if getattr(idx, "_packages", None) is None:
+        tops = set()
+        for q in idx.defs:
+            parts = q.split(".")
+            tops.add(parts[0])
+            if parts[0] in ("src", "lib") and len(parts) > 1:
+                tops.add(parts[1])
+        idx._packages = tops
+    return idx._packages
+
+
+def _is_external_import(node, idx) -> bool:
+    """An import from a module outside the repository (`typing`, `json`, a third-party package)."""
+    if isinstance(node, ast.ImportFrom):
+        return node.level == 0 and bool(node.module) and node.module.split(".")[0] not in _repo_packages(idx)
+    return all(a.name.split(".")[0] not in _repo_packages(idx) for a in node.names)
+
+
+def _external_bindings(tree, idx) -> set:
+    """Names a file binds by importing them from outside the repository."""
+    out = set()
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Import, ast.ImportFrom)) and _is_external_import(n, idx):
+            for a in n.names:
+                out.add((a.asname or a.name).split(".")[0])
+    return out
+
+
 def _location(node, parents, rel) -> str:
     if is_test(rel):
         return "test file"
@@ -279,6 +315,9 @@ def file_uses(rel: str, source: bytes, idx: Index) -> list[dict]:
     parents, out = _parents(tree), []
     shadow = _Shadow(tree, parents)
     local_names = [0]
+    external = _external_bindings(tree, idx)            # names this file imports from outside the repository
+    defined_here = {n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                                                       ast.ClassDef))} | shadow.module_stores
 
     def add(node, name, kind, form):
         tgt = idx.unique[name]
@@ -288,13 +327,24 @@ def file_uses(rel: str, source: bytes, idx: Index) -> list[dict]:
         if form == "bare" and isinstance(node, ast.Name) and shadow(node, name, d[0] == rel):
             local_names[0] += 1                                        # a local that shares the name: not a use
             return
+        if form == "bare" and d[0] != rel and (name in external or (
+                name in _BUILTINS and name not in defined_here and name not in imported_here)):
+            local_names[0] += 1                  # `typing.Callable`, `json`, the builtin `type`: another object
+            return
         src = idx.source(rel, node.lineno)
         rel_ = idx.edge(src, tgt)
         out.append({"target": tgt, "source": src, "kind": kind, "location": _location(node, parents, rel), "form": form,
                     "recorded": rel_ is not None, "surfaced": rel_ in idx.surfaced if rel_ else False,
                     "where": f"{rel}:{node.lineno}"})
 
+    imported_here = {(a.asname or a.name).split(".")[0] for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))
+                     for a in n.names}
     for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and _is_external_import(node, idx):
+            for a in node.names:
+                if a.name.rsplit(".", 1)[-1] in idx.unique:
+                    local_names[0] += 1                                 # `from pprint import pformat`
+            continue
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id in idx.unique:
             add(node, node.id, _kind(node, parents, idx.defs[idx.unique[node.id]][3]), "bare")
         elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load) and node.attr in idx.unique:
