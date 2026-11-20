@@ -313,6 +313,18 @@ def dependents_part(answer: str) -> str:
     return ""
 
 
+def miss_reason(u: dict, parts: list[str], answers: tuple, builder, root: str) -> str:
+    """Why a surfaced use is not named in either answer."""
+    rel = u["where"].rsplit(":", 1)[0]
+    if builder._in_test_file(os.path.join(root, rel)):
+        return "PRISM counts its file as test code (left out)"
+    if any("By file (the rest" in p and (f"- {rel} (" in p or "more files (" in p) for p in parts):
+        return "counted in a grouped listing, not named"
+    if any("[cut at" in a for a in answers):
+        return "answer cut at the token cap"
+    return "not listed"
+
+
 def shown(repo: str, rev: str, label: str, sample: int = 300, seed: int = 0, tokenizer: str | None = None) -> dict:
     """What the agent gets: `sample` uses outside test files, drawn at random; for each used definition both tools
     are called once through the harness's tool layer, and a use is shown when its source appears in an answer."""
@@ -350,11 +362,8 @@ def shown(repo: str, rev: str, label: str, sample: int = 300, seed: int = 0, tok
             as_caller = any(name in p[0] for p in parts)
             as_other = any(len(p) > 1 and name in p[1] for p in parts)
             if u["surfaced"] and not (as_caller or as_other):
-                cc_part = dependents_part(answers[u["target"]][0])
-                why = ("answer cut at the token cap" if any("[cut at" in a for a in answers[u["target"]])
-                       and not ("## 5." in answers[u["target"]][0] and "... " not in cc_part) else
-                       "beyond the listed rows" if "more\n" in cc_part or cc_part.rstrip().endswith("more") else
-                       "not listed")
+                why = miss_reason(u, [dependents_part(a) for a in answers[u["target"]]], answers[u["target"]],
+                                  wi.builder, wi.shadow)
                 missed[why] += 1
                 if len(missed_examples[why]) < 5:
                     missed_examples[why].append(f"{u['source']} -> {u['target']} ({u['kind']}, {u['where']})")
