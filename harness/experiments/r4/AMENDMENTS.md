@@ -1305,3 +1305,9 @@ what that run would inherit.
      - wherever PRISM decides what is test code.
 
      It changes no task, test or metric.
+6. **Variable-type tracking in the reference pass** (`6a20ee91`):
+   - **What it adds:** uses through a typed variable (`self.client.send`, an annotated parameter, a module-level
+     instance) are linked with call resolution's own resolver, clean resolutions only.
+   - **Measured** (with a corrected benchmark, `harness/experiments/graph_coverage/PROGRESS.md`): shown to the
+     agent 74.1% → 77.3% of sampled production uses.
+   - **Arms affected:** PRISM and INJECTED.
