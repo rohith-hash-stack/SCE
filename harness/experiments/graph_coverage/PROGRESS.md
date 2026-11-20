@@ -65,3 +65,64 @@ the reference pass. Their causes:
   intermittent on minified vendor JavaScript; it xpassed before and xfailed after. Pass 2d only covers Python.
 
 **No regression.** The 7 Phase 2 requirement tests are strict xfails, as intended.
+
+## After B10: the connections shown to the agent
+
+**B10** (`src/prism/graph/references.py` `references_to`; `src/prism/impact/context.py`; `src/prism/mcp/server.py`;
+`harness/experiments/r3/tools.py`):
+- **Both tools now list a symbol's uses other than calls:** `prism_change_context` in section 4, after the callers;
+  `prism_blast_radius` after the transitive callers.
+- **Each row gives** the source (a definition, or a module for module-level code), its file and lines, and a label
+  per kind: "imports it", "lists it in `__all__`", "uses it as a type annotation", "type-checks against it
+  (isinstance)", "catches it (except)", "uses it as a decorator", "calls it (outside a function)", "uses it as a
+  value", "reads an attribute of it", "subclasses it".
+- **Subclasses:** inheritance edges the caller list leaves out are listed as "subclasses it" (they were shown
+  nowhere).
+- **Limits:**
+  - 40 rows per tool, then "… N more";
+  - test code left out where test callers are (the harness: `include_tests=False`).
+- **A symbol with no calls but with other uses** now reads "No calls to it in the index; its other uses are listed
+  below", not "… or unused" (delete-05's misleading line).
+- **Reference edges keep their lines** (up to 5) and module nodes their file; index cache schema 7 → 8.
+- **Golden outputs:** 5 changed, the added list only (`tests/golden/py_repo`).
+
+**Full audit** (`after_B10/`, all 171,188 uses; tests included; list lengths and token caps ignored):
+- **Recorded:** 62.1% (unchanged).
+- **Surfaced:** 31.7% → **60.9%**. `check` against `after_B1-B5`: no drops.
+
+**Shown, sampled** (`after_B10/shown/`, `benchmark.py shown`): what the agent actually gets.
+- **Sample:** 300 uses outside test files per repository (seed 0; multidict has 117), 2,817 in all.
+- **How:** both tools called through the harness's tool layer (tests left out, each answer cut at 4,000 Qwen2.5
+  tokens). A use counts when its source's name is in the part of an answer that lists dependents.
+
+| | Share of sampled uses |
+|---|---|
+| Recorded | 68% |
+| Surfaced | 67% |
+| **Shown** | **61%** |
+| shown among the callers (what the agent got before B10, approximately) | 27% |
+| shown only in the new other-uses list | 34% |
+
+"Approximately": before B10 the callers' code had the budget the new list now takes. PRISM gives the callers' list
+(section 4) in full, ahead of the budgeted code; the harness's 4,000-token cut can still end it.
+
+| Kind (sample) | Recorded | Shown |
+|---|---|---|
+| import | 96% | 90% |
+| `__all__` entry | 93% | 92% |
+| except clause | 92% | 92% |
+| instantiation | 99% | 88% |
+| call | 77% | 76% |
+| isinstance/issubclass | 75% | 73% |
+| type annotation | 85% | **62%** |
+| passed as an argument | 21% | 15% |
+| attribute read on it | 27% | 18% |
+
+**Why a surfaced use is not shown** (scrapy, the largest gap: 75% surfaced, 58% shown; 55 uses):
+- **43: the answer is cut at the 4,000-token cap** before the row;
+- **11: beyond the 40 listed rows;**
+- 1: not listed.
+
+These are uses of hub classes (`Request`, `Spider`, `Crawler`): hundreds of callers and annotations, more than one
+answer holds. **The next fix for that is a grouped listing for hubs** (counts per file and kind, with the nearest rows
+in full), not a bigger graph. Type annotations lose the most here because hub classes are what gets annotated.

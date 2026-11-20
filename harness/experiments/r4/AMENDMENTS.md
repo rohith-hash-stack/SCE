@@ -1266,3 +1266,25 @@ yet).
 - **Dropped:** the partial log of the run cut off by the session limit (`r4s-delete-03__INJECTED__43`; it reruns
   from the start) and a leftover per-repository task file.
 - **Shard 1 (seed 42) is therefore complete;** shard 2 (seed 43) continues from 8 of 60.
+
+## Phase 2 changes to what the arms see (recorded 2026-11-20; not in force for any run yet)
+
+The Phase 2 work (`PHASE2_PLAN.md`) changes the agent's tool answers. None of the 600 re-baseline runs used it. A run
+on the new code is a new experiment and needs its own pre-registration, written before it starts; this entry lists
+what that run would inherit.
+
+1. **C1–C3, harness feedback, all arms** (`--feedback`; `harness/experiments/r3/feedback.py`):
+   - an edit that leaves a file unparseable is applied and warned about;
+   - a failing test run shows its first real error;
+   - a repeated identical call with an identical answer gets a note.
+
+   It is off unless `--feedback` is given.
+2. **Pass 2d, the reference graph** (`fc602f09`): PRISM records imports, `__all__`, type use, isinstance/except,
+   decorators, values and attribute reads. Before B10 this changed no tool answer: the main graph was untouched.
+3. **B10, the tools show the references** (`301db5a9`):
+   - `prism_change_context` (section 4) and `prism_blast_radius` list a symbol's uses other than calls, labelled by
+     kind, with files and lines;
+   - **arms affected:** PRISM and INJECTED (INJECTED's injected change context included); BASELINE has no PRISM
+     tools.
+
+   Measured (`harness/experiments/graph_coverage/PROGRESS.md`): 27% → 61% of sampled uses shown to the agent.

@@ -342,11 +342,22 @@ def shown(repo: str, rev: str, label: str, sample: int = 300, seed: int = 0, tok
                 answers[u["target"]] = (cc, br)
         rows = collections.defaultdict(lambda: {"uses": 0, "recorded": 0, "surfaced": 0, "shown": 0,
                                                 "shown_as_caller": 0, "shown_as_other_use": 0})
+        missed = collections.Counter()
+        missed_examples = collections.defaultdict(list)
         for u in picked:
             name = f"`{u['source']}`"
             parts = [dependents_part(a).split(OTHER_USES_MARK, 1) for a in answers[u["target"]]]
             as_caller = any(name in p[0] for p in parts)
             as_other = any(len(p) > 1 and name in p[1] for p in parts)
+            if u["surfaced"] and not (as_caller or as_other):
+                cc_part = dependents_part(answers[u["target"]][0])
+                why = ("answer cut at the token cap" if any("[cut at" in a for a in answers[u["target"]])
+                       and not ("## 5." in answers[u["target"]][0] and "... " not in cc_part) else
+                       "beyond the listed rows" if "more\n" in cc_part or cc_part.rstrip().endswith("more") else
+                       "not listed")
+                missed[why] += 1
+                if len(missed_examples[why]) < 5:
+                    missed_examples[why].append(f"{u['source']} -> {u['target']} ({u['kind']}, {u['where']})")
             for key in ("all", u["kind"]):
                 r = rows[key]
                 r["uses"] += 1
@@ -357,7 +368,8 @@ def shown(repo: str, rev: str, label: str, sample: int = 300, seed: int = 0, tok
                 r["shown_as_other_use"] += as_other and not as_caller
         return {"label": label, "rev": rev, "sample": len(picked), "targets": len(answers), "seed": seed,
                 "tool_seconds": round(time.time() - t0, 1), "capped_by_tokenizer": layer._tok is not None,
-                "rows": dict(rows)}
+                "rows": dict(rows), "surfaced_not_shown": dict(missed),
+                "surfaced_not_shown_examples": dict(missed_examples)}
     finally:
         if layer is not None:
             layer.close()
