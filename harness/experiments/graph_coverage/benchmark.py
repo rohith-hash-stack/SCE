@@ -211,15 +211,16 @@ _BUILTINS = set(dir(builtins))
 
 
 def _repo_packages(idx) -> set:
-    """The top-level package names the repository's own modules are imported by (`src.` layouts included)."""
+    """Every package or module name in the repository's own module paths: an import whose first name is one of them
+    may be the repository's (`src/werkzeug`, `pydantic_ai_slim/pydantic_ai` are imported as `werkzeug`,
+    `pydantic_ai`). Lenient: a repository module named `typing` makes `typing` count as its own."""
     if getattr(idx, "_packages", None) is None:
-        tops = set()
-        for q in idx.defs:
-            parts = q.split(".")
-            tops.add(parts[0])
-            if parts[0] in ("src", "lib") and len(parts) > 1:
-                tops.add(parts[1])
-        idx._packages = tops
+        names = set()
+        for rel, _lo, _hi, _k in idx.defs.values():
+            parts = rel[:-3].split("/")
+            names.update(parts[:-1])
+            names.add(parts[-1])
+        idx._packages = names
     return idx._packages
 
 
