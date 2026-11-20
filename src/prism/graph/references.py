@@ -218,6 +218,7 @@ class _PythonFile:
              if (s := builder.symbol_table.get(q)) is not None and s.file == parsed.path and s.kind in DEF_KINDS),
             key=lambda x: (x[0], -x[1]))
         self._locals: dict[int, set] = {}
+        self._typed_maps: dict = {}
 
     # -------------------------------------------------------------- resolution
     def source_of(self, node) -> str:
@@ -265,6 +266,53 @@ class _PythonFile:
             n_rest += 1
             if n_rest >= len(segments):                       # never resolve to a module or package prefix
                 return None
+        return None
+
+    # -------------------------------------------------------------- variable types
+    def _maps(self, src: str):
+        """The instance-type maps call resolution (2b) uses where `src`'s code runs: `(enclosing class, class map,
+        function map)`, built once per definition; a module's own bindings at module level."""
+        if src in self._typed_maps:
+            return self._typed_maps[src]
+        from prism.graph.symbol_table import InstanceTypeMap
+        b = self.b
+        sym = b.symbol_table.get(src)
+        empty = InstanceTypeMap()
+        if sym is None:                                   # module level
+            maps = (None, empty, b._module_instance_map(self.parsed, self.module, self.import_map))
+        elif sym.kind in ("function", "method"):
+            cls = sym.enclosing_class
+            class_map = b._build_class_instance_map(cls, self.parsed, self.module, self.import_map) if cls else empty
+            func_map = b._build_function_instance_map(b._def_nodes[src], self.parsed, self.module, self.import_map,
+                                                      cls, class_map)
+            b._seed_module_bindings(func_map, self.parsed, self.module, self.import_map)
+            maps = (cls, class_map, func_map)
+        else:                                             # a class body: its own attributes, no `self`
+            maps = (src, b._build_class_instance_map(src, self.parsed, self.module, self.import_map), empty)
+        self._typed_maps[src] = maps
+        return maps
+
+    def typed_target(self, node, segments: list[str]) -> tuple[str, list[str]] | None:
+        """The definition a chain through a typed variable names, resolved by call resolution's own resolver
+        (`_resolve_segments`) with the same maps: the longest prefix that is a function, method or class, kept only
+        when the resolution is clean (not tentative, ambiguous, a builtin receiver or an unbound local)."""
+        b = self.b
+        cls, class_map, func_map = self._maps(self.source_of(node))
+        from prism.parser.lang_config import SELF_TOKEN_TEXT
+        self_tokens = SELF_TOKEN_TEXT[self.parsed.language_id]           # as call resolution has them
+        for k in range(len(segments), 1, -1):
+            try:
+                r = b._resolve_segments(segments[:k], self.module, cls, self.import_map, class_map, func_map,
+                                        self_tokens, self.parsed.language_id)
+            except (KeyError, AttributeError, RecursionError, ValueError):
+                return None
+            if r is None or b._last_resolution_was_tentative or b._last_resolution_was_ambiguous \
+                    or b._last_resolution_was_builtin_receiver or b._last_resolution_was_unbound_local:
+                continue
+            r = _follow_aliases(b, r)
+            s = b.symbol_table.get(r)
+            if s is not None and s.kind in DEF_KINDS:
+                return r, segments[k:]
         return None
 
     def add(self, node, tgt: str, kind: str) -> None:
@@ -370,9 +418,12 @@ class _PythonFile:
                         else:
                             self._walk_expr(cc)
             return
-        if self.shadowed(n, segs[0]):
+        local = self.shadowed(n, segs[0])
+        if local and len(segs) < 2:
             return
-        hit = self.target(segs)
+        hit = None if local else self.target(segs)
+        if hit is None and len(segs) >= 2:
+            hit = self.typed_target(n, segs)              # `self.client.send`, `client.send` on a typed variable
         if hit is None:
             return
         tgt, rest = hit
