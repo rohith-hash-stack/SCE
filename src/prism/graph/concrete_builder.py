@@ -5067,7 +5067,7 @@ def _is_interface_shaped_body(body: Node | None, lang: str, source: bytes) -> bo
 def _repo_relative_is_test_file(path: str, repo_root: str) -> bool:
     from prism.scanner.entrypoint_gate import is_test_file
     rel = os.path.relpath(path, repo_root) if os.path.isabs(path) else path
-    return is_test_file(rel.replace(os.sep, "/"))
+    return is_test_file(rel.replace(os.sep, "/"), repo_root)
 
 
 def _classify_symbol_role(

@@ -169,3 +169,21 @@ other test has the same result as in the full run before B10. The 9 B10 tests ar
 
   This is not new, and it hides these files' callers too. A fix changes which code every arm treats as tests, so it
   waits for a decision.
+
+## After the test-file rule fix
+
+`prism.scanner.entrypoint_gate.is_test_file`:
+- **`spec/` directories** count as tests only for JS/TS/Ruby files.
+- **A module named `test.py`/`tests.py`** counts as tests only when its code is test code.
+
+Tests: `tests/test_test_file_rule.py`. Index cache schema 8 → 9.
+
+Shown, the same sample, on the two repositories the rule affected (`after_testrule/shown/`):
+
+| Repository | Before the fix | After |
+|---|---|---|
+| litestar | 72% | 75% |
+| werkzeug | 55% | 59% |
+
+The other 8 repositories have no production file the old rule hid, so their sample is unchanged. **All 10: 63%
+→ 64% (1,792 of 2,817).**

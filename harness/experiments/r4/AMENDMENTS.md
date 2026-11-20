@@ -1288,3 +1288,20 @@ what that run would inherit.
      tools.
 
    Measured (`harness/experiments/graph_coverage/PROGRESS.md`): 27% → 61% of sampled uses shown to the agent.
+4. **Grouped listing** (`58309494`):
+   - when a symbol's dependents exceed their share of the answer, the nearest are listed in full and the rest
+     grouped by file;
+   - an anchor whose code exceeds its share is given as an outline.
+
+   Shown: 61% → 63%. Arms affected: PRISM and INJECTED.
+5. **Bug fix: PRISM's test-file rule** (`prism.scanner.entrypoint_gate.is_test_file`):
+   - **`spec/` directories:** they counted as test code in every language. Now only for JS/TS/Ruby files.
+   - **Modules named `test.py`/`tests.py`:** they counted as test code by name. Now only when their code is test
+     code (a `test*` function, a `TestCase` subclass, a pytest/unittest import).
+   - **What was hidden:** with tests left out (the harness), production code such as litestar's
+     `litestar/openapi/spec` and werkzeug's `werkzeug/test.py` was hidden from the agent's tool answers.
+   - **Arms affected:**
+     - every arm's PRISM tools (PRISM, INJECTED);
+     - wherever PRISM decides what is test code.
+
+     It changes no task, test or metric.
