@@ -18,6 +18,11 @@ repository's definitions PRISM's graph connects, by the kind of use.
   - **form:** `bare` (`foo`) or `qualified` (`mod.foo`, `obj.foo`). A bare name is matched exactly; a qualified one
     by its last part, so it may name a different object with the same attribute name (lower precision; reported
     apart).
+  - **A bare name bound locally is not a use** (since the type-tracking step): a parameter, an assigned name, a loop
+    or comprehension variable in an enclosing function, or a module-level assignment in another file than the
+    definition's. Before, `client` (a parameter) counted as a use of an unrelated `client` fixture. These are
+    counted apart (`local_names_excluded`); reports before this change include them, so compare a stage with the
+    one before it under the same method.
 - **Recorded:** the graph has an edge from the use's source node to the definition, any relation (the main graph,
   or the reference graph Phase B adds). The source node is
   the innermost indexed definition containing the use; for a use outside every definition, the module's own node
@@ -88,6 +93,7 @@ class Index:
         # Phase B: references other than calls and inheritance, in a graph of their own (PHASE2_B_DESIGN.md)
         self.refs = getattr(builder, "reference_graph", None)
         self.defs: dict[str, tuple[str, int, int, str]] = {}
+        self.local_names = 0          # bare names bound locally that share a definition's name: not counted
         names = collections.defaultdict(list)
         for q in builder._def_nodes:
             s = builder.symbol_table.get(q)
@@ -128,6 +134,74 @@ def _parents(tree):
         for c in ast.iter_child_nodes(p):
             out[c] = p
     return out
+
+
+_FUNCS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+_COMPS = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+
+
+def _stores(node, out: set, top: bool = True) -> None:
+    """Names a scope binds other than by import or def/class: assignment, loop, `with`, `except` targets (Store
+    names), not inside nested functions, classes or comprehensions."""
+    for c in ast.iter_child_nodes(node):
+        if isinstance(c, _FUNCS + (ast.ClassDef,) + _COMPS):
+            continue
+        if isinstance(c, ast.Name) and isinstance(c.ctx, ast.Store):
+            out.add(c.id)
+        elif isinstance(c, ast.ExceptHandler) and c.name:
+            out.add(c.name)
+        _stores(c, out, False)
+
+
+def _scope_locals(fn) -> set:
+    """A function's or lambda's own names: parameters and the names it binds (minus `global`/`nonlocal` ones)."""
+    a = fn.args
+    names = {x.arg for x in a.posonlyargs + a.args + a.kwonlyargs}
+    names |= {x.arg for x in (a.vararg, a.kwarg) if x is not None}
+    if not isinstance(fn, ast.Lambda):
+        body = ast.Module(body=list(fn.body), type_ignores=[])
+        _stores(body, names)
+        for g in ast.walk(fn):
+            if isinstance(g, (ast.Global, ast.Nonlocal)):
+                names -= set(g.names)
+    return names
+
+
+class _Shadow:
+    """Whether a bare name at a node is a local binding (a parameter, an assigned name, a loop or comprehension
+    variable), not the indexed definition that shares its name: such a "use" is not one. Module-level assignments
+    count too, unless the definition is in the same file (a conditional definition and its sibling binding)."""
+
+    def __init__(self, tree, parents):
+        self.parents, self._cache = parents, {}
+        self.module_stores: set = set()
+        for stmt in tree.body:
+            if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Import, ast.ImportFrom)):
+                _stores(stmt, self.module_stores)
+
+    def locals_of(self, fn) -> set:
+        if fn not in self._cache:
+            self._cache[fn] = _scope_locals(fn)
+        return self._cache[fn]
+
+    def __call__(self, node, name: str, def_in_this_file: bool) -> bool:
+        c, p = node, self.parents.get(node)
+        while p is not None:
+            if isinstance(p, _FUNCS):
+                in_header = c is getattr(p, "returns", None) or c in getattr(p, "decorator_list", []) \
+                    or c is getattr(p, "args", None)
+                if not in_header and name in self.locals_of(p):
+                    return True
+            elif isinstance(p, _COMPS):
+                bound: set = set()
+                for g in p.generators:
+                    _stores(ast.Module(body=[ast.Expr(g.target)], type_ignores=[]), bound)
+                    if isinstance(g.target, ast.Name):
+                        bound.add(g.target.id)
+                if name in bound:
+                    return True
+            c, p = p, self.parents.get(p)
+        return name in self.module_stores and not def_in_this_file
 
 
 def _location(node, parents, rel) -> str:
@@ -203,11 +277,16 @@ def file_uses(rel: str, source: bytes, idx: Index) -> list[dict]:
     except (SyntaxError, ValueError):
         return []
     parents, out = _parents(tree), []
+    shadow = _Shadow(tree, parents)
+    local_names = [0]
 
     def add(node, name, kind, form):
         tgt = idx.unique[name]
         d = idx.defs[tgt]
         if d[0] == rel and d[1] == getattr(node, "lineno", -1):     # the definition's own line
+            return
+        if form == "bare" and isinstance(node, ast.Name) and shadow(node, name, d[0] == rel):
+            local_names[0] += 1                                        # a local that shares the name: not a use
             return
         src = idx.source(rel, node.lineno)
         rel_ = idx.edge(src, tgt)
@@ -234,6 +313,7 @@ def file_uses(rel: str, source: bytes, idx: Index) -> list[dict]:
             elif isinstance(p, ast.Call) and isinstance(p.func, ast.Name) and p.func.id in GETATTR_FUNCS \
                     and len(p.args) > 1 and p.args[1] is node:
                 add(node, node.value, "getattr-style string", "bare")
+    idx.local_names += local_names[0]
     return out
 
 
@@ -271,6 +351,7 @@ def audit_tree(root: str, builder) -> dict:
         if len(c["examples"]) < 3:
             c["examples"].append(u["where"])
     return {"definitions": len(idx.defs), "unique_names": len(idx.unique), "uses": len(uses),
+            "local_names_excluded": idx.local_names,
             "surfaced_relations": sorted(idx.surfaced), "cells": dict(cells),
             "non_python": non_python_mentions(root, idx)}
 
