@@ -100,7 +100,7 @@ except ImportError:  # pragma: no cover - networkx is a hard dependency elsewher
 #: Bumped 4 -> 5 for `SymbolInfo.nested_in_function`, for the same
 #: hand-listed-fields reason: it decides whether a symbol enters Rule D's
 #: bare-name index, so a cached build must restore it exactly.
-_SCHEMA_VERSION = 6  # 6: SymbolInfo.aliases (JS/TS chained-assignment method aliases)
+_SCHEMA_VERSION = 7  # 7: the reference graph and its aliases (Phase B sub-pass 2d); 6: SymbolInfo.aliases
 
 
 def index_cache_path(repo_root: str) -> Path:
@@ -256,6 +256,15 @@ def save_pipeline_to_cache(
         graph_data["nodes"] = [_jsonable_attrs(n) for n in graph_data["nodes"]]
         edge_key = "edges" if "edges" in graph_data else "links"
         graph_data[edge_key] = [_jsonable_attrs(e) for e in graph_data[edge_key]]
+        # Phase B: the reference graph and the module-level aliases ride in the same JSON (no column change)
+        ref = getattr(builder, "reference_graph", None)
+        if ref is not None:
+            ref_data = _node_link_data_compat(ref)
+            ref_key = "edges" if "edges" in ref_data else "links"
+            graph_data["prism_reference_graph"] = {
+                "nodes": [_jsonable_attrs(n) for n in ref_data["nodes"]],
+                "edges": [_jsonable_attrs(e) for e in ref_data[ref_key]]}
+        graph_data["prism_reference_aliases"] = dict(getattr(builder, "reference_aliases", {}) or {})
 
         symbols = [
             {
@@ -556,6 +565,8 @@ def load_pipeline_from_cache(
             return None
 
         graph_data = json.loads(graph_json)
+        ref_data = graph_data.pop("prism_reference_graph", None)
+        ref_aliases = graph_data.pop("prism_reference_aliases", {})
         graph_data["nodes"] = [_restore_attrs(n) for n in graph_data["nodes"]]
         edge_key = "edges" if "edges" in graph_data else "links"
         graph_data[edge_key] = [_restore_attrs(e) for e in graph_data[edge_key]]
@@ -585,6 +596,17 @@ def load_pipeline_from_cache(
 
         builder = ConcreteGraphBuilder(repo_root, symbol_table)
         builder.graph = graph
+        if ref_data is not None:
+            import networkx as _nx_ref
+            ref = _nx_ref.DiGraph()
+            for n in ref_data["nodes"]:
+                n = _restore_attrs(n)
+                ref.add_node(n.pop("id"), **n)
+            for e in ref_data["edges"]:
+                e = _restore_attrs(e)
+                ref.add_edge(e.pop("source"), e.pop("target"), **e)
+            builder.reference_graph = ref
+        builder.reference_aliases = ref_aliases
         builder.index_errors = json.loads(index_errors_json)
         builder._go_receiver_call_sites_total = go_total
         builder._go_receiver_call_sites_resolved = go_resolved

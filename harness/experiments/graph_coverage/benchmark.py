@@ -16,7 +16,8 @@ repository's definitions PRISM's graph connects, by the kind of use.
   - **form:** `bare` (`foo`) or `qualified` (`mod.foo`, `obj.foo`). A bare name is matched exactly; a qualified one
     by its last part, so it may name a different object with the same attribute name (lower precision; reported
     apart).
-- **Recorded:** the graph has an edge from the use's source node to the definition, any relation. The source node is
+- **Recorded:** the graph has an edge from the use's source node to the definition, any relation (the main graph,
+  or the reference graph Phase B adds). The source node is
   the innermost indexed definition containing the use; for a use outside every definition, the module's own node
   (dotted module name), which PRISM does not build today. PRISM connects definitions, not lines, so a use counts as
   recorded when its definition has any edge to the target (`run` calling `f` also covers `getattr(self, "f")` in
@@ -74,6 +75,8 @@ class Index:
     def __init__(self, builder, root: str):
         from prism.graph.concrete_builder import TRAVERSABLE_RELATIONS
         self.graph, self.root, self.surfaced = builder.graph, root, set(TRAVERSABLE_RELATIONS)
+        # Phase B: references other than calls and inheritance, in a graph of their own (PHASE2_B_DESIGN.md)
+        self.refs = getattr(builder, "reference_graph", None)
         self.defs: dict[str, tuple[str, int, int, str]] = {}
         names = collections.defaultdict(list)
         for q in builder._def_nodes:
@@ -98,8 +101,13 @@ class Index:
         return mod[:-9] if mod.endswith(".__init__") else mod
 
     def edge(self, src: str, dst: str) -> str | None:
-        if src != dst and self.graph.has_edge(src, dst):
+        """The main graph's relation from `src` to `dst`, else 'REFERENCES' if the reference graph connects them."""
+        if src == dst:
+            return None
+        if self.graph.has_edge(src, dst):
             return self.graph.edges[src, dst].get("relation", "CALLS")
+        if self.refs is not None and self.refs.has_edge(src, dst):
+            return "REFERENCES"
         return None
 
 
@@ -258,8 +266,16 @@ def audit(repo: str, rev: str, label: str) -> dict:
     work = os.path.join(scratch, "work")
     _git(repo, "worktree", "add", "-q", "--detach", work, rev)
     try:
+        import time
+        t0 = time.time()
         builder, _tags = build_pipeline(work, LANGUAGE_TIER_PERMISSIVE, use_cache=False)
+        build_seconds = round(time.time() - t0, 1)
         out = audit_tree(work, builder)
+        ref = getattr(builder, "reference_graph", None)
+        out["build"] = {"seconds": build_seconds, "graph_edges": builder.graph.number_of_edges(),
+                        "reference_edges": ref.number_of_edges() if ref is not None else 0,
+                        "module_nodes": sum(1 for _n, d in ref.nodes(data=True) if d.get("kind") == "module")
+                        if ref is not None else 0}
     finally:
         _git(repo, "worktree", "remove", "--force", work, check=False)
         shutil.rmtree(scratch, ignore_errors=True)

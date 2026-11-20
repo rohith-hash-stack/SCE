@@ -68,8 +68,10 @@ def test_prism_edges_are_read(report):
     assert base["recorded"] == 1                                      # ChildThing -> BaseThing: EXTENDS
     # getattr(self, "helper_fn") in `run` is covered by `run`'s CALLS edge: PRISM connects definitions, not lines
     assert _cell(report, "getattr-style string", "function body")["recorded"] == 1
+    # module-level uses: recorded in the reference graph (Phase B), not yet surfaced by the caller views (B10)
     for kind, loc in (("import", "module level"), ("__all__ entry", "module level"), ("call", "module level")):
-        assert _cell(report, kind, loc)["recorded"] == 0, (kind, loc)  # no node outside definitions today
+        c = _cell(report, kind, loc)
+        assert c["recorded"] == 1 and c["surfaced"] == 0, (kind, loc, c)
     assert "CALLS" in report["surfaced_relations"]
     assert report["non_python"]["files_by_type"].get("docs") == 1     # README.md mentions helper_fn
 

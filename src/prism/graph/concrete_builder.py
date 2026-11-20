@@ -200,6 +200,11 @@ class ConcreteGraphBuilder:
         self.index_errors: list[dict[str, str]] = []
         self.symbol_table = symbol_table if symbol_table is not None else GlobalSymbolTable()
         self.graph = nx.DiGraph()
+        #: Phase 2, Phase B (`prism.graph.references`): uses beyond calls and inheritance (imports, `__all__`,
+        #: annotations, decorators, values, attribute reads, module-level code), in a graph of their own so the main
+        #: graph and everything that walks it as a call graph are unchanged.
+        from prism.graph.references import new_reference_graph
+        self.reference_graph = new_reference_graph()
         self._parsed_files: dict[str, ParsedFile] = {}
         self._def_nodes: dict[str, Node] = {}
         #: `(file, start_byte, end_byte)` of a registered definition node ->
@@ -1036,6 +1041,27 @@ class ConcreteGraphBuilder:
         # Sub-pass 2c: virtual dispatch needs the whole repo's OVERRIDES
         # edges and every call site resolved, so it runs last.
         self._expand_virtual_dispatch()
+
+        # Sub-pass 2d (Phase 2, Phase B): references beyond calls and inheritance, into `self.reference_graph`, once
+        # every import map, export and class relation is complete. Python first.
+        from prism.graph.references import collect_python_aliases, link_python_references
+        self.reference_aliases = {}
+        for path in sorted(files):                         # aliases first: a use may sort before its alias's file
+            parsed = self._parsed_files.get(path)
+            if parsed is None or path not in import_maps or parsed.language_id != LanguageID.PYTHON:
+                continue
+            try:
+                collect_python_aliases(self, parsed, self._module_for_file(parsed), import_maps[path])
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass2d")
+        for path in sorted(files):
+            parsed = self._parsed_files.get(path)
+            if parsed is None or path not in import_maps or parsed.language_id != LanguageID.PYTHON:
+                continue
+            try:
+                link_python_references(self, parsed, self._module_for_file(parsed), import_maps[path])
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass2d")
 
     def _expand_virtual_dispatch(self) -> None:
         """Class-hierarchy analysis for dynamically dispatched calls: a

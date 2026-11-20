@@ -22,6 +22,33 @@ graph node to start an edge from.
 into an indexed qualified name through the file's imports, the export registry (re-exports, barrels), same-module
 lookup and wildcard imports. The reference pass reuses it, so a reference resolves exactly as a call does.
 
+## Revision after the edge-consumer audit (2026-11-20, before implementation)
+
+**The reference edges go in a graph of their own,** `builder.reference_graph` (a `networkx.DiGraph`), not in
+`builder.graph`. Two findings:
+1. **The main graph keeps one edge per pair.** A `REFERENCES` edge added where `run` already calls `helper` would
+   overwrite the `CALLS` edge.
+2. **103 places in `src/prism` walk the main graph's edges, and several don't look at the relation:**
+   - the packer's candidate index and knapsack;
+   - `impact/overview` and `impact/context`;
+   - the digest's callee map;
+   - the MCP server's edge views;
+   - `deps/host`.
+
+   They would treat a reference as a call.
+
+**So:**
+- **Each reference-graph edge holds every kind of use between its two nodes** (`ref_kinds`, a set) and a count.
+- **Module nodes exist only in the reference graph.**
+- **The main graph, and everything that reads it, is unchanged** until B10 surfaces the references on purpose.
+- **The index cache (`runtime/index_cache.py`) must save and restore the reference graph,** or a cached build would lose
+  it.
+- **The benchmark counts a use as recorded** if either graph has the connection; "surfaced" still means a main-graph
+  edge the caller views traverse.
+
+**The source of a use in a definition's header** (its decorators, parameter annotations and defaults): the definition
+itself, matching its line range. A base class stays the class's `EXTENDS` edge.
+
 ## The change: sub-pass 2d, `_link_references`
 
 **When it runs:** after 2c, when every import map, export and class relation is complete.
