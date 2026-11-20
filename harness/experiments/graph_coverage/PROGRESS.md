@@ -187,3 +187,68 @@ Shown, the same sample, on the two repositories the rule affected (`after_testru
 
 The other 8 repositories have no production file the old rule hid, so their sample is unchanged. **All 10: 63%
 → 64% (1,792 of 2,817).**
+
+## Variable-type tracking, measured with a corrected benchmark
+
+### The benchmark, corrected first
+
+While sizing this step, the largest "unrecorded" groups turned out to be mostly uses that are not uses: names that
+share a definition's name but are another object. Three corrections (`benchmark.py`; each in both runs below):
+1. **Locals:** a bare name bound locally is not a use of the definition sharing its name. This covers a parameter, an
+   assigned name, a loop or comprehension variable, or a module-level assignment in another file. Example:
+   `client.get("/")` on a parameter `client` was counted as a use of a `client` fixture.
+2. **Outside names:** neither is a bare name imported from outside the repository (`from typing import Callable`,
+   `import json`, `from pprint import pformat`), that import itself, or a builtin the file does not define or import
+   (`type`).
+3. **The repository's own packages** are every module path name, so `pydantic_ai` (under `pydantic_ai_slim/`) is
+   not taken for an outside package.
+
+**About 33,000 of the 171,188 earlier uses were such names.** The figures below are not comparable with the
+sections above, which counted them: each stage is compared with the one before it under the same method.
+
+### The change
+
+`src/prism/graph/references.py`, `_PythonFile.typed_target`; `tests/test_typed_references.py`.
+- **What was missing:** the reference pass skipped every `self.…` chain, because `self` is a parameter.
+- **What it does now:** a chain through a typed variable is resolved with call resolution's own resolver
+  (`_resolve_segments`) and the same instance-type maps (2b), built once per definition:
+  - `self.client.send`;
+  - an annotated parameter's `c.send`;
+  - a module-level instance's `client.close`.
+- **Only clean resolutions are kept:** not tentative, ambiguous, a builtin receiver or an unbound local. An untyped
+  parameter's `c.send` stays unlinked.
+
+### Results (`before_tt/`, `after_tt/`)
+
+"Before" is PRISM at `7103faa2`, after the grouped listing and the test-file fix; "after" adds type tracking. Same
+benchmark, 10 repositories, 137,891 uses (48,067 in production code). `check`: no drops.
+
+| Recorded | Before | After |
+|---|---|---|
+| **All uses** | 76.6% | **77.8%** |
+| **Production code** | 82.0% | **83.1%** |
+| production, bare names | 94.0% | 94.0% |
+| production, `obj.name` | 49.8% | 53.7% |
+| production, decorators | 54.0% | 92.6% |
+| production, passed as an argument | 57.2% | 60.8% |
+| production, assigned as a value | 37.1% | 46.1% |
+| typer (production) | 76.7% | 89.9% |
+
+**The `obj.name` figure understates PRISM.** The benchmark can match such a use only by its attribute's name. A
+sample of scrapy's misses was mostly other objects sharing the name: `logger.info`, `dict.items`, `self.port`. A few
+were real, such as a nested class reached through its class (`MediaPipeline.SpiderInfo`).
+
+**Build time:** +0.2 s to +16 s per repository (instructor +2%, fastmcp +53%). Both audits ran at once, so these are
+rough.
+
+**Shown** (`*/shown/`; 280 production uses per repository, 2,800 in all; the same sampling for both):
+
+| | Before | After |
+|---|---|---|
+| Recorded | 81.0% | 83.2% |
+| Surfaced | 79.1% | 81.3% |
+| **Shown to the agent** | **74.1%** | **77.3%** |
+
+**Of the uses surfaced but not shown after:**
+- 188 are counted in a grouped listing but not named (widely used definitions);
+- 1 is in a file PRISM counts as test code.
