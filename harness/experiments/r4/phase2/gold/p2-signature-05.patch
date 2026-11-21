@@ -1,0 +1,161 @@
+diff --git a/litestar/app.py b/litestar/app.py
+index 646731505..225de9c6c 100644
+--- a/litestar/app.py
++++ b/litestar/app.py
+@@ -859,7 +859,7 @@ class Litestar(Router):
+ 
+         return HandlerIndex(handler=handler, paths=paths, identifier=identifier)
+ 
+-    def route_reverse(self, name: str | BaseRouteHandler, **path_parameters: Any) -> str:
++    def route_reverse(self, *, name: str | BaseRouteHandler, **path_parameters: Any) -> str:
+         """Receives a route handler name and path parameter values and returns the url path to the handler with filled
+         path parameters.
+ 
+diff --git a/litestar/connection/base.py b/litestar/connection/base.py
+index 100fcd460..53f4e9159 100644
+--- a/litestar/connection/base.py
++++ b/litestar/connection/base.py
+@@ -311,6 +311,6 @@ class ASGIConnection(Generic[HandlerT, UserT, AuthT, StateT]):
+             A string representing the absolute url of the route handler.
+         """
+         litestar_instance = self.scope["litestar_app"]
+-        url_path = litestar_instance.route_reverse(name, **path_parameters)
++        url_path = litestar_instance.route_reverse(name=name, **path_parameters)
+ 
+         return make_absolute_url(url_path, self.base_url)
+diff --git a/litestar/openapi/plugins.py b/litestar/openapi/plugins.py
+index 447918457..88cbc0bcc 100644
+--- a/litestar/openapi/plugins.py
++++ b/litestar/openapi/plugins.py
+@@ -97,7 +97,7 @@ class OpenAPIRenderPlugin(ABC):
+         Returns:
+             The route for the OpenAPI JSON schema.
+         """
+-        return request.app.route_reverse(OPENAPI_JSON_HANDLER_NAME)
++        return request.app.route_reverse(name=OPENAPI_JSON_HANDLER_NAME)
+ 
+     def receive_router(self, router: Router) -> None:
+         """Receive the router that serves the OpenAPI UI.
+diff --git a/litestar/template/base.py b/litestar/template/base.py
+index 511f146db..eab8e9fa8 100644
+--- a/litestar/template/base.py
++++ b/litestar/template/base.py
+@@ -51,7 +51,7 @@ def url_for(context: Mapping[str, Any], /, route_name: str | BaseRouteHandler, *
+     Returns:
+         A fully formatted url path.
+     """
+-    return _get_request_from_context(context).app.route_reverse(route_name, **path_parameters)
++    return _get_request_from_context(context).app.route_reverse(name=route_name, **path_parameters)
+ 
+ 
+ def csrf_token(context: Mapping[str, Any], /) -> str:
+diff --git a/tests/e2e/test_routing/test_phase2_signature_route_reverse.py b/tests/e2e/test_routing/test_phase2_signature_route_reverse.py
+new file mode 100644
+index 000000000..3b5982d3a
+--- /dev/null
++++ b/tests/e2e/test_routing/test_phase2_signature_route_reverse.py
+@@ -0,0 +1,9 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_name():
++    owner = importlib.import_module('litestar.app')
++    owner = getattr(owner, 'Litestar')
++    p = inspect.signature(getattr(owner, 'route_reverse')).parameters['name']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY
+diff --git a/tests/e2e/test_routing/test_route_reverse.py b/tests/e2e/test_routing/test_route_reverse.py
+index 583db17bd..229cf952b 100644
+--- a/tests/e2e/test_routing/test_route_reverse.py
++++ b/tests/e2e/test_routing/test_route_reverse.py
+@@ -45,28 +45,28 @@ def test_route_reverse(decorator: HTTPHandlerDecorator) -> None:
+     router_with_param = Router("router-with-param/{router_param:str}", route_handlers=[handler2])
+     app = Litestar(route_handlers=[router, router_with_param])
+ 
+-    reversed_url_path = app.route_reverse("handler-name", param="param-value")
++    reversed_url_path = app.route_reverse(name="handler-name", param="param-value")
+     assert reversed_url_path == "/router-path/path-one/param-value"
+ 
+-    reversed_url_path = app.route_reverse(handler_nameless)
++    reversed_url_path = app.route_reverse(name=handler_nameless)
+     assert reversed_url_path == "/router-path/path-nameless"
+ 
+-    reversed_url_path = app.route_reverse("handler-no-params")
++    reversed_url_path = app.route_reverse(name="handler-no-params")
+     assert reversed_url_path == "/router-path/path-two"
+ 
+     reversed_url_path = app.route_reverse(
+-        "multiple-params-handler-name", router_param="router", str_param="abc", int_param=123
++        name="multiple-params-handler-name", router_param="router", str_param="abc", int_param=123
+     )
+     assert reversed_url_path == "/router-with-param/router/multiple/abc/params/123"
+ 
+-    reversed_url_path = app.route_reverse("handler4", int_param=100)
++    reversed_url_path = app.route_reverse(name="handler4", int_param=100)
+     assert reversed_url_path == "/router-path/handler4/int/100"
+ 
+-    reversed_url_path = app.route_reverse("handler4", str_param="string")
++    reversed_url_path = app.route_reverse(name="handler4", str_param="string")
+     assert reversed_url_path == "/router-path/handler4/str/string"
+ 
+     with pytest.raises(NoRouteMatchFoundException):
+-        reversed_url_path = app.route_reverse("nonexistent-handler")
++        reversed_url_path = app.route_reverse(name="nonexistent-handler")
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -85,12 +85,12 @@ def test_route_reverse_validation_complex_params(complex_path_param) -> None:  #
+     # test that complex types of path params accept either itself
+     # or string but nothing else
+     with pytest.raises(NoRouteMatchFoundException):
+-        app.route_reverse("handler", param=123)
++        app.route_reverse(name="handler", param=123)
+ 
+-    reversed_url_path = app.route_reverse("handler", param=param_manual_str)
++    reversed_url_path = app.route_reverse(name="handler", param=param_manual_str)
+     assert reversed_url_path == f"/abc/{param_manual_str}"
+ 
+-    reversed_url_path = app.route_reverse("handler", param=param_value)
++    reversed_url_path = app.route_reverse(name="handler", param=param_value)
+     assert reversed_url_path == f"/abc/{param_value}"
+ 
+ 
+@@ -106,13 +106,13 @@ def test_route_reverse_validation() -> None:
+     app = Litestar(route_handlers=[handler_one, handler_two])
+ 
+     with pytest.raises(NoRouteMatchFoundException):
+-        app.route_reverse("handler-name")
++        app.route_reverse(name="handler-name")
+ 
+     with pytest.raises(NoRouteMatchFoundException):
+-        app.route_reverse("handler-name", param="str")
++        app.route_reverse(name="handler-name", param="str")
+ 
+     with pytest.raises(NoRouteMatchFoundException):
+-        app.route_reverse("another-handler-name", param=1)
++        app.route_reverse(name="another-handler-name", param=1)
+ 
+ 
+ def test_route_reverse_allow_string_params() -> None:
+@@ -136,7 +136,7 @@ def test_route_reverse_allow_string_params() -> None:
+     app = Litestar(route_handlers=[strings_everywhere_handler])
+ 
+     reversed_url_path = app.route_reverse(
+-        "strings-everywhere-handler",
++        name="strings-everywhere-handler",
+         datetime_param="0001-01-01T01:01:01.000001Z",  # datetime(1, 1, 1, 1, 1, 1, 1, tzinfo=UTC)
+         date_param="0001-01-01",  # date(1,1,1)
+         time_param="01:01:01.000001Z",  # time(1, 1, 1, 1, tzinfo=UTC)
+diff --git a/tests/unit/test_static_files/test_create_static_router.py b/tests/unit/test_static_files/test_create_static_router.py
+index 86102cd8c..833bc2137 100644
+--- a/tests/unit/test_static_files/test_create_static_router.py
++++ b/tests/unit/test_static_files/test_create_static_router.py
+@@ -18,7 +18,7 @@ def test_route_reverse() -> None:
+         route_handlers=[create_static_files_router(path="/static", directories=["something"], name="static")]
+     )
+ 
+-    assert app.route_reverse("static", file_path="foo.py") == "/static/foo.py"
++    assert app.route_reverse(name="static", file_path="foo.py") == "/static/foo.py"
+ 
+ 
+ def test_pass_options() -> None:

@@ -1,0 +1,172 @@
+diff --git a/examples/persistent_state/server.py b/examples/persistent_state/server.py
+index df44cd94..2aa44599 100644
+--- a/examples/persistent_state/server.py
++++ b/examples/persistent_state/server.py
+@@ -23,7 +23,7 @@ async def set_value(key: str, value: str, ctx: Context) -> str:
+ @server.tool
+ async def get_value(key: str, ctx: Context) -> str:
+     """Retrieve a value from session state."""
+-    value = await ctx.get_state(key)
++    value = await ctx.get_state(key=key)
+     if value is None:
+         return f"Key '{key}' not found"
+     return f"'{key}' = '{value}'"
+diff --git a/src/fastmcp/server/context.py b/src/fastmcp/server/context.py
+index 9dbc9376..e637f34b 100644
+--- a/src/fastmcp/server/context.py
++++ b/src/fastmcp/server/context.py
+@@ -968,7 +968,7 @@ class Context:
+             ttl=self._STATE_TTL_SECONDS,
+         )
+ 
+-    async def get_state(self, key: str) -> Any:
++    async def get_state(self, *, key: str) -> Any:
+         """Get a value from the session-scoped state store.
+ 
+         Returns None if the key is not found.
+diff --git a/src/fastmcp/server/transforms/enabled.py b/src/fastmcp/server/transforms/enabled.py
+index faf9aeaa..5263787f 100644
+--- a/src/fastmcp/server/transforms/enabled.py
++++ b/src/fastmcp/server/transforms/enabled.py
+@@ -297,7 +297,7 @@ if TYPE_CHECKING:
+ 
+ async def get_visibility_rules(context: Context) -> list[dict[str, Any]]:
+     """Load visibility rule dicts from session state."""
+-    return await context.get_state("_visibility_rules") or []
++    return await context.get_state(key="_visibility_rules") or []
+ 
+ 
+ async def save_visibility_rules(
+diff --git a/tests/server/middleware/test_initialization_middleware.py b/tests/server/middleware/test_initialization_middleware.py
+index 4716af5f..adbeb173 100644
+--- a/tests/server/middleware/test_initialization_middleware.py
++++ b/tests/server/middleware/test_initialization_middleware.py
+@@ -223,7 +223,7 @@ async def test_session_state_persists_across_tool_calls():
+ 
+             if context.fastmcp_context:
+                 # Read existing state
+-                counter = await context.fastmcp_context.get_state("call_counter")
++                counter = await context.fastmcp_context.get_state(key="call_counter")
+                 self.state_values.append(counter)
+ 
+                 # Increment and save
+@@ -394,7 +394,7 @@ async def test_state_isolation_between_streamable_http_clients():
+     @server.tool
+     async def store_and_read(value: str, ctx: Context) -> dict:
+         """Store a value and return session info."""
+-        existing = await ctx.get_state("client_value")
++        existing = await ctx.get_state(key="client_value")
+         await ctx.set_state("client_value", value)
+         return {
+             "existing": existing,
+diff --git a/tests/server/middleware/test_phase2_signature_get_state.py b/tests/server/middleware/test_phase2_signature_get_state.py
+new file mode 100644
+index 00000000..1325acea
+--- /dev/null
++++ b/tests/server/middleware/test_phase2_signature_get_state.py
+@@ -0,0 +1,9 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_key():
++    owner = importlib.import_module('fastmcp.server.context')
++    owner = getattr(owner, 'Context')
++    p = inspect.signature(getattr(owner, 'get_state')).parameters['key']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY
+diff --git a/tests/server/test_context.py b/tests/server/test_context.py
+index 373286d8..7849c50a 100644
+--- a/tests/server/test_context.py
++++ b/tests/server/test_context.py
+@@ -104,24 +104,24 @@ class TestContextState:
+ 
+         async with Context(fastmcp=server, session=mock_session) as context:
+             # Initially empty
+-            assert await context.get_state("test1") is None
+-            assert await context.get_state("test2") is None
++            assert await context.get_state(key="test1") is None
++            assert await context.get_state(key="test2") is None
+ 
+             # Set values
+             await context.set_state("test1", "value")
+             await context.set_state("test2", 2)
+ 
+             # Retrieve values
+-            assert await context.get_state("test1") == "value"
+-            assert await context.get_state("test2") == 2
++            assert await context.get_state(key="test1") == "value"
++            assert await context.get_state(key="test2") == 2
+ 
+             # Update value
+             await context.set_state("test1", "new_value")
+-            assert await context.get_state("test1") == "new_value"
++            assert await context.get_state(key="test1") == "new_value"
+ 
+             # Delete value
+             await context.delete_state("test1")
+-            assert await context.get_state("test1") is None
++            assert await context.get_state(key="test1") is None
+ 
+     async def test_context_state_session_isolation(self):
+         """Test that different sessions have isolated state."""
+@@ -134,13 +134,13 @@ class TestContextState:
+ 
+         async with Context(fastmcp=server, session=session_b) as context2:
+             # Session B should not see session A's state
+-            assert await context2.get_state("key") is None
++            assert await context2.get_state(key="key") is None
+             await context2.set_state("key", "value-from-B")
+-            assert await context2.get_state("key") == "value-from-B"
++            assert await context2.get_state(key="key") == "value-from-B"
+ 
+         # Verify session A's state is still intact
+         async with Context(fastmcp=server, session=session_a) as context3:
+-            assert await context3.get_state("key") == "value-from-A"
++            assert await context3.get_state(key="key") == "value-from-A"
+ 
+     async def test_context_state_persists_across_requests(self):
+         """Test that state persists across multiple context instances (requests)."""
+@@ -153,13 +153,13 @@ class TestContextState:
+ 
+         # Second request in same session sees the state
+         async with Context(fastmcp=server, session=mock_session) as context2:
+-            counter = await context2.get_state("counter")
++            counter = await context2.get_state(key="counter")
+             assert counter == 1
+             await context2.set_state("counter", counter + 1)
+ 
+         # Third request sees updated state
+         async with Context(fastmcp=server, session=mock_session) as context3:
+-            assert await context3.get_state("counter") == 2
++            assert await context3.get_state(key="counter") == 2
+ 
+     async def test_context_state_nested_contexts_share_state(self):
+         """Test that nested contexts within the same session share state."""
+@@ -171,13 +171,13 @@ class TestContextState:
+ 
+             async with Context(fastmcp=server, session=mock_session) as context2:
+                 # Nested context sees same state (same session)
+-                assert await context2.get_state("key") == "outer-value"
++                assert await context2.get_state(key="key") == "outer-value"
+ 
+                 # Nested context can modify shared state
+                 await context2.set_state("key", "inner-value")
+ 
+             # Outer context sees the modification
+-            assert await context1.get_state("key") == "inner-value"
++            assert await context1.get_state(key="key") == "inner-value"
+ 
+     async def test_two_clients_same_key_isolated_by_session(self):
+         """Test that two different clients can store the same key independently.
+@@ -195,9 +195,9 @@ class TestContextState:
+         async def store_and_read(value: str, ctx: Context) -> dict:
+             """Store a value and return all state info."""
+             stored_session_ids.append(ctx.session_id)
+-            existing = await ctx.get_state("shared_key")
++            existing = await ctx.get_state(key="shared_key")
+             await ctx.set_state("shared_key", value)
+-            new_value = await ctx.get_state("shared_key")
++            new_value = await ctx.get_state(key="shared_key")
+             return {
+                 "session_id": ctx.session_id,
+                 "existing_value": existing,

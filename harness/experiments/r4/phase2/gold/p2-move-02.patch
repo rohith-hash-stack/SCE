@@ -1,0 +1,129 @@
+diff --git a/litestar/cli/commands/core.py b/litestar/cli/commands/core.py
+index 4d46f133b..6d9db9039 100644
+--- a/litestar/cli/commands/core.py
++++ b/litestar/cli/commands/core.py
+@@ -10,7 +10,7 @@ import sys
+ from contextlib import AbstractContextManager, ExitStack, contextmanager
+ from typing import TYPE_CHECKING, Any
+ 
+-from litestar.utils.helpers import envflag
++from litestar.utils.helpers_envflag import envflag
+ 
+ try:
+     import rich_click as click
+diff --git a/litestar/utils/__init__.py b/litestar/utils/__init__.py
+index 3fccb3dd3..13506bb97 100644
+--- a/litestar/utils/__init__.py
++++ b/litestar/utils/__init__.py
+@@ -1,6 +1,7 @@
+ from litestar.utils.deprecation import deprecated, warn_deprecation
+ 
+-from .helpers import envflag, get_enum_string_value, get_name, unique_name_for_scope, url_quote
++from .helpers import get_enum_string_value, get_name, unique_name_for_scope, url_quote
++from .helpers_envflag import envflag
+ from .path import join_paths, normalize_path
+ from .predicates import (
+     is_annotated_type,
+diff --git a/litestar/utils/helpers.py b/litestar/utils/helpers.py
+index 10ff15573..7049fedc5 100644
+--- a/litestar/utils/helpers.py
++++ b/litestar/utils/helpers.py
+@@ -108,32 +108,3 @@ def get_exception_group() -> type[BaseException]:
+         return cast("type[BaseException]", _ExceptionGroup)
+ 
+ 
+-def envflag(varname: str, default: bool = False) -> bool:
+-    """Parse an environment variable as a boolean flag.
+-
+-    Args:
+-        varname: The name of the environment variable to check.
+-        default: Value to return if the environment variable is not set.
+-
+-    Returns:
+-        True for truthy values (1, true, t, yes, y, on),
+-        False for falsy values (0, false, f, no, n, off),
+-        otherwise the provided default if the variable is not set.
+-
+-    Raises:
+-        LitestarException: If the value is not a recognized boolean.
+-    """
+-    if varname not in os.environ:
+-        return default
+-
+-    envvar = os.environ.get(varname)
+-    if not envvar:
+-        return False
+-
+-    norm = envvar.strip().lower()
+-    if norm in {"1", "true", "t", "yes", "y", "on"}:
+-        return True
+-    if norm in {"0", "false", "f", "no", "n", "off"}:
+-        return False
+-
+-    raise LitestarException(f"Invalid value for {varname}: '{norm}' is not a valid boolean.")
+diff --git a/litestar/utils/helpers_envflag.py b/litestar/utils/helpers_envflag.py
+new file mode 100644
+index 000000000..0c7c4e67c
+--- /dev/null
++++ b/litestar/utils/helpers_envflag.py
+@@ -0,0 +1,34 @@
++from __future__ import annotations
++import os
++from litestar.exceptions import LitestarException
++
++
++def envflag(varname: str, default: bool = False) -> bool:
++    """Parse an environment variable as a boolean flag.
++
++    Args:
++        varname: The name of the environment variable to check.
++        default: Value to return if the environment variable is not set.
++
++    Returns:
++        True for truthy values (1, true, t, yes, y, on),
++        False for falsy values (0, false, f, no, n, off),
++        otherwise the provided default if the variable is not set.
++
++    Raises:
++        LitestarException: If the value is not a recognized boolean.
++    """
++    if varname not in os.environ:
++        return default
++
++    envvar = os.environ.get(varname)
++    if not envvar:
++        return False
++
++    norm = envvar.strip().lower()
++    if norm in {"1", "true", "t", "yes", "y", "on"}:
++        return True
++    if norm in {"0", "false", "f", "no", "n", "off"}:
++        return False
++
++    raise LitestarException(f"Invalid value for {varname}: '{norm}' is not a valid boolean.")
+diff --git a/tests/unit/test_utils/test_helpers.py b/tests/unit/test_utils/test_helpers.py
+index cd0b1b2e0..3754c2634 100644
+--- a/tests/unit/test_utils/test_helpers.py
++++ b/tests/unit/test_utils/test_helpers.py
+@@ -4,7 +4,8 @@ from typing import Any, Generic, TypeVar
+ import pytest
+ 
+ from litestar.exceptions import LitestarException
+-from litestar.utils.helpers import envflag, get_name, unique_name_for_scope, unwrap_partial
++from litestar.utils.helpers import get_name, unique_name_for_scope, unwrap_partial
++from litestar.utils.helpers_envflag import envflag
+ 
+ T = TypeVar("T")
+ 
+diff --git a/tests/unit/test_utils/test_phase2_move_envflag.py b/tests/unit/test_utils/test_phase2_move_envflag.py
+new file mode 100644
+index 000000000..72047e8e9
+--- /dev/null
++++ b/tests/unit/test_utils/test_phase2_move_envflag.py
+@@ -0,0 +1,6 @@
++import importlib
++
++
++def test_phase2_moved_envflag():
++    new = importlib.import_module('litestar.utils.helpers_envflag')
++    assert getattr(new, 'envflag').__module__ == 'litestar.utils.helpers_envflag'

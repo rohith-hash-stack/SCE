@@ -1,0 +1,82 @@
+diff --git a/instructor/utils/core.py b/instructor/utils/core.py
+index ed9f413..e61fe1b 100644
+--- a/instructor/utils/core.py
++++ b/instructor/utils/core.py
+@@ -17,11 +17,8 @@ from instructor.v2.core.response_model import (  # noqa: F401
+     prepare_response_model,
+ )
+ from instructor.v2.core.usage import update_total_usage  # noqa: F401
+-from instructor.v2.core.utils import (  # noqa: F401
+-    classproperty,
+-    disable_pydantic_error_url,
+-    is_async,
+-)
++from instructor.v2.core.utils import classproperty, disable_pydantic_error_url
++from instructor.v2.core.utils_is_async import is_async
+ 
+ __all__ = [
+     "classproperty",
+diff --git a/instructor/v2/core/patch.py b/instructor/v2/core/patch.py
+index e0b6911..eeb41f2 100644
+--- a/instructor/v2/core/patch.py
++++ b/instructor/v2/core/patch.py
+@@ -20,7 +20,7 @@ from instructor.v2.core.mode import Mode
+ from instructor.v2.core.providers import Provider
+ from instructor.v2.core.hooks import Hooks
+ from instructor.v2.core.templating import handle_templating
+-from instructor.v2.core.utils import is_async
++from instructor.v2.core.utils_is_async import is_async
+ from instructor.v2.core.exceptions import RegistryValidationMixin
+ from instructor.v2.core.registry import mode_registry
+ from instructor.v2.core.messages import isolate_retry_kwargs
+diff --git a/instructor/v2/core/utils.py b/instructor/v2/core/utils.py
+index 5d8ce28..7dacc14 100644
+--- a/instructor/v2/core/utils.py
++++ b/instructor/v2/core/utils.py
+@@ -12,15 +12,6 @@ R_co = TypeVar("R_co", covariant=True)
+ _validation_error_original_str: Callable[[ValidationError], str] | None = None
+ 
+ 
+-def is_async(func: Callable[..., Any]) -> bool:
+-    """Return whether a callable is async, following wrapped callables."""
+-    is_coroutine = inspect.iscoroutinefunction(func)
+-    while callable(wrapped := getattr(func, "__wrapped__", None)):
+-        func = wrapped
+-        is_coroutine = is_coroutine or inspect.iscoroutinefunction(func)
+-    return is_coroutine
+-
+-
+ class classproperty(Generic[R_co]):
+     """Descriptor for class-level properties."""
+ 
+diff --git a/instructor/v2/core/utils_is_async.py b/instructor/v2/core/utils_is_async.py
+new file mode 100644
+index 0000000..f95fa96
+--- /dev/null
++++ b/instructor/v2/core/utils_is_async.py
+@@ -0,0 +1,13 @@
++from __future__ import annotations
++import inspect
++from collections.abc import Callable
++from typing import Any
++
++
++def is_async(func: Callable[..., Any]) -> bool:
++    """Return whether a callable is async, following wrapped callables."""
++    is_coroutine = inspect.iscoroutinefunction(func)
++    while callable(wrapped := getattr(func, "__wrapped__", None)):
++        func = wrapped
++        is_coroutine = is_coroutine or inspect.iscoroutinefunction(func)
++    return is_coroutine
+diff --git a/tests/core/test_phase2_move_is_async.py b/tests/core/test_phase2_move_is_async.py
+new file mode 100644
+index 0000000..8ef5d81
+--- /dev/null
++++ b/tests/core/test_phase2_move_is_async.py
+@@ -0,0 +1,6 @@
++import importlib
++
++
++def test_phase2_moved_is_async():
++    new = importlib.import_module('instructor.v2.core.utils_is_async')
++    assert getattr(new, 'is_async').__module__ == 'instructor.v2.core.utils_is_async'

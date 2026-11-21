@@ -1,0 +1,185 @@
+diff --git a/instructor/core/__init__.py b/instructor/core/__init__.py
+index d8ba044..cdd5ef3 100644
+--- a/instructor/core/__init__.py
++++ b/instructor/core/__init__.py
+@@ -6,7 +6,7 @@ from .exceptions import (
+     InstructorError,
+     ConfigurationError,
+     IncompleteOutputException,
+-    ValidationError,
++    ValidationErrorImpl,
+     ProviderError,
+     ModeError,
+     ClientError,
+@@ -30,7 +30,7 @@ __all__ = [
+     "InstructorError",
+     "ConfigurationError",
+     "IncompleteOutputException",
+-    "ValidationError",
++    "ValidationErrorImpl",
+     "ProviderError",
+     "ModeError",
+     "ClientError",
+diff --git a/instructor/exceptions.py b/instructor/exceptions.py
+index 10674a8..2439dc1 100644
+--- a/instructor/exceptions.py
++++ b/instructor/exceptions.py
+@@ -32,7 +32,7 @@ from .core.exceptions import (
+     TokenBudgetError,
+     TokenBudgetExceeded,
+     TokenUsageUnavailableError,
+-    ValidationError,
++    ValidationErrorImpl,
+ )
+ 
+ __all__ = [
+@@ -50,5 +50,5 @@ __all__ = [
+     "TokenBudgetError",
+     "TokenBudgetExceeded",
+     "TokenUsageUnavailableError",
+-    "ValidationError",
++    "ValidationErrorImpl",
+ ]
+diff --git a/instructor/v2/core/errors.py b/instructor/v2/core/errors.py
+index 1fe165b..1e9aad9 100644
+--- a/instructor/v2/core/errors.py
++++ b/instructor/v2/core/errors.py
+@@ -291,7 +291,7 @@ class TokenUsageUnavailableError(TokenBudgetError):
+     """Raised when a retry budget cannot be enforced without usage metadata."""
+ 
+ 
+-class ValidationError(InstructorError):
++class ValidationErrorImpl(InstructorError):
+     """Exception raised when LLM response validation fails.
+ 
+     This exception occurs when the LLM's response doesn't meet the
+diff --git a/tests/core/test_exceptions.py b/tests/core/test_exceptions.py
+index b63b493..4f028f0 100644
+--- a/tests/core/test_exceptions.py
++++ b/tests/core/test_exceptions.py
+@@ -6,7 +6,7 @@ from instructor.core.exceptions import (
+     InstructorError,
+     IncompleteOutputException,
+     InstructorRetryException,
+-    ValidationError,
++    ValidationErrorImpl,
+     ProviderError,
+     ConfigurationError,
+     ModeError,
+@@ -19,7 +19,7 @@ def test_exception_hierarchy():
+     """Test that all exceptions inherit from InstructorError."""
+     assert issubclass(IncompleteOutputException, InstructorError)
+     assert issubclass(InstructorRetryException, InstructorError)
+-    assert issubclass(ValidationError, InstructorError)
++    assert issubclass(ValidationErrorImpl, InstructorError)
+     assert issubclass(ProviderError, InstructorError)
+     assert issubclass(ConfigurationError, InstructorError)
+     assert issubclass(ModeError, InstructorError)
+@@ -31,7 +31,7 @@ def test_exception_hierarchy():
+     [
+         lambda: IncompleteOutputException(),
+         lambda: InstructorRetryException(n_attempts=3, total_usage=100),
+-        lambda: ValidationError("Validation failed"),
++        lambda: ValidationErrorImpl("Validation failed"),
+         lambda: ProviderError("openai", "API error"),
+         lambda: ConfigurationError("Invalid config"),
+         lambda: ModeError("tools", "openai", ["json"]),
+@@ -84,8 +84,8 @@ def test_validation_error():
+     """Test ValidationError can be caught."""
+     error_message = "Field validation failed"
+ 
+-    with pytest.raises(ValidationError) as exc_info:
+-        raise ValidationError(error_message)
++    with pytest.raises(ValidationErrorImpl) as exc_info:
++        raise ValidationErrorImpl(error_message)
+ 
+     assert str(exc_info.value) == error_message
+ 
+@@ -149,14 +149,14 @@ def test_multiple_exception_handling():
+         elif exc_type == "retry":
+             raise InstructorRetryException(n_attempts=3, total_usage=100)
+         elif exc_type == "validation":
+-            raise ValidationError("validation failed")
++            raise ValidationErrorImpl("validation failed")
+         else:
+             raise ValueError("unknown exception type")
+ 
+     # Test catching multiple specific exceptions
+     for exc_type in ["incomplete", "retry", "validation"]:
+         with pytest.raises(
+-            (IncompleteOutputException, InstructorRetryException, ValidationError)
++            (IncompleteOutputException, InstructorRetryException, ValidationErrorImpl)
+         ):
+             raise_exception(exc_type)
+ 
+@@ -262,7 +262,7 @@ def test_multiple_exception_types_with_failed_attempts():
+     failed_attempts = [FailedAttempt(1, Exception("Test"), None)]
+ 
+     # Test various exception types can be created with failed attempts
+-    validation_error = ValidationError(
++    validation_error = ValidationErrorImpl(
+         "Validation failed", failed_attempts=failed_attempts
+     )
+     assert validation_error.failed_attempts == failed_attempts
+@@ -279,7 +279,7 @@ def test_multiple_exception_types_with_failed_attempts():
+ def test_failed_attempts_propagation_through_retry_cycles():
+     """Test that failed attempts accumulate and propagate correctly through retry cycles."""
+     # Simulate multiple retry attempts with different exceptions
+-    attempt1 = FailedAttempt(1, ValidationError("Invalid format"), "partial response 1")
++    attempt1 = FailedAttempt(1, ValidationErrorImpl("Invalid format"), "partial response 1")
+     attempt2 = FailedAttempt(2, KeyError("missing_field"), "partial response 2")
+     attempt3 = FailedAttempt(3, ValueError("invalid value"), "partial response 3")
+ 
+@@ -308,7 +308,7 @@ def test_failed_attempts_propagation_through_retry_cycles():
+     exception_types = [
+         type(attempt.exception).__name__ for attempt in final_exception.failed_attempts
+     ]
+-    assert exception_types == ["ValidationError", "KeyError", "ValueError"]
++    assert exception_types == ["ValidationErrorImpl", "KeyError", "ValueError"]
+ 
+     # Verify completions are preserved
+     completions = [attempt.completion for attempt in final_exception.failed_attempts]
+@@ -326,10 +326,10 @@ def test_failed_attempts_propagation_in_exception_hierarchy():
+     base_error = InstructorError("Base error", failed_attempts=base_failed_attempts)
+ 
+     # Convert to more specific exception type using from_exception
+-    specific_error = ValidationError.from_exception(
++    specific_error = ValidationErrorImpl.from_exception(
+         base_error, failed_attempts=base_failed_attempts
+     )
+-    assert isinstance(specific_error, ValidationError)
++    assert isinstance(specific_error, ValidationErrorImpl)
+     assert isinstance(specific_error, InstructorError)  # Should still inherit from base
+     assert specific_error.failed_attempts == base_failed_attempts
+ 
+@@ -360,7 +360,7 @@ def test_failed_attempts_accumulation_simulation():
+     # First attempt fails
+     attempts.append(
+         FailedAttempt(
+-            1, ValidationError("Schema validation failed"), {"invalid": "data"}
++            1, ValidationErrorImpl("Schema validation failed"), {"invalid": "data"}
+         )
+     )
+ 
+@@ -372,7 +372,7 @@ def test_failed_attempts_accumulation_simulation():
+     # Third attempt fails again
+     attempts.append(
+         FailedAttempt(
+-            3, ValidationError("Required field missing"), {"partial": "response"}
++            3, ValidationErrorImpl("Required field missing"), {"partial": "response"}
+         )
+     )
+ 
+diff --git a/tests/core/test_phase2_rename_ValidationError.py b/tests/core/test_phase2_rename_ValidationError.py
+new file mode 100644
+index 0000000..7cc0a39
+--- /dev/null
++++ b/tests/core/test_phase2_rename_ValidationError.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase2_rename_ValidationErrorImpl():
++    owner = importlib.import_module('instructor.v2.core.errors')
++    assert hasattr(owner, 'ValidationErrorImpl')
++    assert not hasattr(owner, 'ValidationError')

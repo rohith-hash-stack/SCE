@@ -1,0 +1,75 @@
+diff --git a/src/werkzeug/datastructures/auth.py b/src/werkzeug/datastructures/auth.py
+index 54f01463..19053492 100644
+--- a/src/werkzeug/datastructures/auth.py
++++ b/src/werkzeug/datastructures/auth.py
+@@ -159,7 +159,7 @@ class Authorization:
+ 
+         if "=" in rest.rstrip("="):
+             # = that is not trailing, this is parameters.
+-            return cls(scheme, parse_dict_header(rest), None)
++            return cls(scheme, parse_dict_header(value=rest), None)
+ 
+         # No = or only trailing =, this is a token.
+         return cls(scheme, None, rest)
+@@ -411,7 +411,7 @@ class WWWAuthenticate:
+ 
+         if "=" in rest.rstrip("="):
+             # = that is not trailing, this is parameters.
+-            return cls(scheme, parse_dict_header(rest))
++            return cls(scheme, parse_dict_header(value=rest))
+ 
+         # No = or only trailing =, this is a token or empty.
+         if rest:
+diff --git a/src/werkzeug/datastructures/cache_control.py b/src/werkzeug/datastructures/cache_control.py
+index 6e77c2f6..b660b40f 100644
+--- a/src/werkzeug/datastructures/cache_control.py
++++ b/src/werkzeug/datastructures/cache_control.py
+@@ -138,7 +138,7 @@ class _CacheControl(cabc.Mapping[str, str | None]):
+         if not value:
+             return cls()
+ 
+-        return cls(parse_dict_header(value))  # type: ignore[call-arg]
++        return cls(parse_dict_header(value=value))  # type: ignore[call-arg]
+ 
+     def to_header(self) -> str:
+         """Convert to a ``Cache-Control`` header value."""
+diff --git a/src/werkzeug/http.py b/src/werkzeug/http.py
+index 02e9f839..1064b407 100644
+--- a/src/werkzeug/http.py
++++ b/src/werkzeug/http.py
+@@ -421,7 +421,7 @@ def parse_list_header(value: str) -> list[str]:
+     ]
+ 
+ 
+-def parse_dict_header(value: str) -> dict[str, str | None]:
++def parse_dict_header(*, value: str) -> dict[str, str | None]:
+     """Parse a list header using :func:`parse_list_header`, then parse each item as a
+     ``key=value`` pair.
+ 
+diff --git a/tests/test_http.py b/tests/test_http.py
+index 08fa4256..5bb29177 100644
+--- a/tests/test_http.py
++++ b/tests/test_http.py
+@@ -114,7 +114,7 @@ class TestHTTPUtility:
+         ],
+     )
+     def test_dict_header(self, value, expect):
+-        assert http.parse_dict_header(value) == expect
++        assert http.parse_dict_header(value=value) == expect
+ 
+     def test_cache_control_header(self):
+         cc = RequestCacheControl.from_header("max-age=0, no-cache")
+diff --git a/tests/test_phase2_signature_parse_dict_header.py b/tests/test_phase2_signature_parse_dict_header.py
+new file mode 100644
+index 00000000..a3302f7e
+--- /dev/null
++++ b/tests/test_phase2_signature_parse_dict_header.py
+@@ -0,0 +1,8 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_value():
++    owner = importlib.import_module('werkzeug.http')
++    p = inspect.signature(getattr(owner, 'parse_dict_header')).parameters['value']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY

@@ -1,0 +1,302 @@
+diff --git a/litestar/concurrency.py b/litestar/concurrency.py
+index 85a3eaf06..514018e8a 100644
+--- a/litestar/concurrency.py
++++ b/litestar/concurrency.py
+@@ -24,7 +24,7 @@ __all__ = (
+     "get_trio_capacity_limiter",
+     "set_asyncio_executor",
+     "set_trio_capacity_limiter",
+-    "sync_to_thread",
++    "sync_to_thread_impl",
+ )
+ 
+ 
+@@ -45,7 +45,7 @@ async def _run_sync_trio(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs)
+     return await trio.to_thread.run_sync(partial(fn, *args, **kwargs), limiter=get_trio_capacity_limiter())
+ 
+ 
+-async def sync_to_thread(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
++async def sync_to_thread_impl(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+     """Run the synchronous callable ``fn`` asynchronously in a worker thread.
+ 
+     When called from asyncio, uses :meth:`asyncio.loop.run_in_executor` to
+diff --git a/litestar/datastructures/upload_file.py b/litestar/datastructures/upload_file.py
+index 5e2e0b0a0..4e49da0a6 100644
+--- a/litestar/datastructures/upload_file.py
++++ b/litestar/datastructures/upload_file.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ 
+ from tempfile import SpooledTemporaryFile
+ 
+-from litestar.concurrency import sync_to_thread
++from litestar.concurrency import sync_to_thread_impl
+ from litestar.constants import ONE_MEGABYTE
+ 
+ __all__ = ("UploadFile",)
+@@ -59,7 +59,7 @@ class UploadFile:
+             Number of bytes written (int).
+         """
+         if self.rolled_to_disk:
+-            return await sync_to_thread(self.file.write, data)
++            return await sync_to_thread_impl(self.file.write, data)
+         return self.file.write(data)
+ 
+     async def read(self, size: int = -1) -> bytes:
+@@ -72,7 +72,7 @@ class UploadFile:
+             Byte string.
+         """
+         if self.rolled_to_disk:
+-            return await sync_to_thread(self.file.read, size)
++            return await sync_to_thread_impl(self.file.read, size)
+         return self.file.read(size)
+ 
+     async def seek(self, offset: int) -> int:
+@@ -85,7 +85,7 @@ class UploadFile:
+             The new absolute file position (in bytes) after seeking.
+         """
+         if self.rolled_to_disk:
+-            return await sync_to_thread(self.file.seek, offset)
++            return await sync_to_thread_impl(self.file.seek, offset)
+         return self.file.seek(offset)
+ 
+     async def close(self) -> None:
+@@ -97,7 +97,7 @@ class UploadFile:
+         if self.file.closed:
+             return None
+         if self.rolled_to_disk:
+-            return await sync_to_thread(self.file.close)
++            return await sync_to_thread_impl(self.file.close)
+         return self.file.close()
+ 
+     def __repr__(self) -> str:
+diff --git a/litestar/file_system.py b/litestar/file_system.py
+index 942971dee..7f3e1a1eb 100644
+--- a/litestar/file_system.py
++++ b/litestar/file_system.py
+@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, NotRequired, TypeAlias,
+ import anyio
+ from typing_extensions import TypedDict
+ 
+-from litestar.concurrency import sync_to_thread
++from litestar.concurrency import sync_to_thread_impl
+ from litestar.plugins import InitPlugin
+ 
+ __all__ = (
+@@ -169,7 +169,7 @@ class BaseLocalFileSystem(LinkableFileSystem):
+ 
+     async def info(self, path: PathType, **kwargs: Any) -> FileInfo:
+         """Return a :class:`~litestar.file_system.FileInfo` for the given ``path``"""
+-        return await sync_to_thread(self._info, path)
++        return await sync_to_thread_impl(self._info, path)
+ 
+     async def read_bytes(
+         self,
+@@ -186,7 +186,7 @@ class BaseLocalFileSystem(LinkableFileSystem):
+         """
+         # simple case; read the whole thing in one go
+         if start == 0 and end == -1:
+-            return await sync_to_thread(pathlib.Path(path).read_bytes)
++            return await sync_to_thread_impl(pathlib.Path(path).read_bytes)
+ 
+         # we have either a start or end set, so open explicitly and then seek / read
+         fh: anyio.AsyncFile
+@@ -253,7 +253,7 @@ class FsspecSyncWrapper(BaseFileSystem):
+         Return info verbatim from :meth:`fsspec.spec.AbstractFileSystem.info`, but try to
+         patch 'mtime' using :func:`litestar.file_system.get_fsspec_mtime_equivalent`.
+         """
+-        result: dict[str, Any] = await sync_to_thread(self.wrapped_fs.info, str(path), **kwargs)
++        result: dict[str, Any] = await sync_to_thread_impl(self.wrapped_fs.info, str(path), **kwargs)
+         result["mtime"] = get_fsspec_mtime_equivalent(result)
+         result.setdefault("is_symlink", result.get("islink"))
+         return cast("FileInfo", result)
+@@ -271,7 +271,7 @@ class FsspecSyncWrapper(BaseFileSystem):
+             start: Offset to start reading from
+             end: Offset to stop reading at (inclusive)
+         """
+-        return await sync_to_thread(  # pyright: ignore[reportReturnType]
++        return await sync_to_thread_impl(  # pyright: ignore[reportReturnType]
+             self.wrapped_fs.cat_file,
+             str(path),
+             start=start or None,
+@@ -294,28 +294,28 @@ class FsspecSyncWrapper(BaseFileSystem):
+             end: Offset to stop reading at (inclusive)
+         """
+ 
+-        fh = cast("io.BytesIO", await sync_to_thread(self.wrapped_fs.open, str(path), mode="rb"))
++        fh = cast("io.BytesIO", await sync_to_thread_impl(self.wrapped_fs.open, str(path), mode="rb"))
+         try:
+             if start != 0:
+-                await sync_to_thread(fh.seek, start)
++                await sync_to_thread_impl(fh.seek, start)
+ 
+             to_read = chunksize
+             while True:
+                 if end != -1:
+-                    current_pos = await sync_to_thread(fh.tell)
++                    current_pos = await sync_to_thread_impl(fh.tell)
+                     if current_pos >= end:
+                         break
+ 
+                     to_read = min(chunksize, end - current_pos)
+ 
+-                chunk = await sync_to_thread(fh.read, to_read)
++                chunk = await sync_to_thread_impl(fh.read, to_read)
+ 
+                 if not chunk:
+                     break
+ 
+                 yield chunk
+         finally:
+-            await sync_to_thread(fh.close)
++            await sync_to_thread_impl(fh.close)
+ 
+ 
+ class FsspecAsyncWrapper(BaseFileSystem):
+diff --git a/litestar/response/sse.py b/litestar/response/sse.py
+index a760dbb55..e06145997 100644
+--- a/litestar/response/sse.py
++++ b/litestar/response/sse.py
+@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
+ 
+ import anyio
+ 
+-from litestar.concurrency import sync_to_thread
++from litestar.concurrency import sync_to_thread_impl
+ from litestar.enums import MediaType
+ from litestar.exceptions import ImproperlyConfiguredException
+ from litestar.response.streaming import ASGIStreamingResponse, Stream
+@@ -95,7 +95,7 @@ class _ServerSentEventIterator(AsyncIteratorWrapper[bytes]):
+     async def _async_generator(self) -> AsyncGenerator[bytes, None]:
+         while True:
+             try:
+-                yield await sync_to_thread(self._call_next)
++                yield await sync_to_thread_impl(self._call_next)
+             except ValueError:
+                 async for value in self.content_async_iterator:
+                     yield self.ensure_bytes(value, DEFAULT_SEPARATOR)
+diff --git a/litestar/stores/file.py b/litestar/stores/file.py
+index 6475322e0..1179e8a6c 100644
+--- a/litestar/stores/file.py
++++ b/litestar/stores/file.py
+@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
+ 
+ from anyio import Path
+ 
+-from litestar.concurrency import sync_to_thread
++from litestar.concurrency import sync_to_thread_impl
+ 
+ from .base import NamespacedStore, StorageObject
+ 
+@@ -92,7 +92,7 @@ class FileStore(NamespacedStore):
+             pass
+ 
+     async def _write(self, target_file: Path, storage_obj: StorageObject) -> None:
+-        await sync_to_thread(self._write_sync, target_file, storage_obj)
++        await sync_to_thread_impl(self._write_sync, target_file, storage_obj)
+ 
+     async def set(self, key: str, value: str | bytes, expires_in: int | timedelta | None = None) -> None:
+         """Set a value.
+@@ -159,7 +159,7 @@ class FileStore(NamespacedStore):
+             This deletes and recreates :attr:`FileStore.path`
+         """
+ 
+-        await sync_to_thread(shutil.rmtree, self.path)
++        await sync_to_thread_impl(shutil.rmtree, self.path)
+         await self.path.mkdir(exist_ok=True)
+ 
+     async def delete_expired(self) -> None:
+diff --git a/litestar/utils/sync.py b/litestar/utils/sync.py
+index a0266193a..d4bc1c043 100644
+--- a/litestar/utils/sync.py
++++ b/litestar/utils/sync.py
+@@ -9,7 +9,7 @@ from typing import (
+ 
+ from typing_extensions import ParamSpec
+ 
+-from litestar.concurrency import sync_to_thread
++from litestar.concurrency import sync_to_thread_impl
+ from litestar.utils.predicates import is_async_callable
+ 
+ __all__ = ("AsyncCallable", "AsyncIteratorWrapper", "ensure_async_callable", "is_async_callable")
+@@ -47,7 +47,7 @@ class AsyncCallable:
+         self.func = fn
+ 
+     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> Awaitable[T]:  # type: ignore[valid-type]
+-        return sync_to_thread(self.func, *args, **kwargs)  # type: ignore[arg-type]
++        return sync_to_thread_impl(self.func, *args, **kwargs)  # type: ignore[arg-type]
+ 
+ 
+ class AsyncIteratorWrapper(Generic[T]):
+@@ -73,7 +73,7 @@ class AsyncIteratorWrapper(Generic[T]):
+     async def _async_generator(self) -> AsyncGenerator[T, None]:
+         while True:
+             try:
+-                yield await sync_to_thread(self._call_next)
++                yield await sync_to_thread_impl(self._call_next)
+             except ValueError:
+                 return
+ 
+diff --git a/tests/unit/test_concurrency.py b/tests/unit/test_concurrency.py
+index 78ae02613..dde9d7823 100644
+--- a/tests/unit/test_concurrency.py
++++ b/tests/unit/test_concurrency.py
+@@ -16,7 +16,7 @@ from litestar.concurrency import (
+     get_trio_capacity_limiter,
+     set_asyncio_executor,
+     set_trio_capacity_limiter,
+-    sync_to_thread,
++    sync_to_thread_impl,
+ )
+ 
+ 
+@@ -43,11 +43,11 @@ def loop() -> Iterator[AbstractEventLoop]:
+ 
+ 
+ def test_sync_to_thread_asyncio(loop: AbstractEventLoop) -> None:
+-    assert loop.run_until_complete(sync_to_thread(func)) == 1
++    assert loop.run_until_complete(sync_to_thread_impl(func)) == 1
+ 
+ 
+ def test_sync_to_thread_trio() -> None:
+-    assert trio.run(sync_to_thread, func) == 1
++    assert trio.run(sync_to_thread_impl, func) == 1
+ 
+ 
+ def test_get_set_asyncio_executor() -> None:
+@@ -71,7 +71,7 @@ def test_asyncio_uses_executor(mocker: MockerFixture, loop: AbstractEventLoop) -
+     mock_run_in_executor = AsyncMock()
+     mocker.patch("litestar.concurrency.asyncio.get_running_loop").return_value.run_in_executor = mock_run_in_executor
+ 
+-    loop.run_until_complete(sync_to_thread(func))
++    loop.run_until_complete(sync_to_thread_impl(func))
+     assert mock_run_in_executor.call_args_list[0].args[0] is executor
+ 
+ 
+@@ -90,7 +90,7 @@ def test_trio_uses_limiter(mocker: MockerFixture) -> None:
+     mocker.patch("litestar.concurrency.get_trio_capacity_limiter", return_value=limiter)
+     mock_run_sync = mocker.patch("trio.to_thread.run_sync", new_callable=AsyncMock)
+ 
+-    trio.run(sync_to_thread, func)
++    trio.run(sync_to_thread_impl, func)
+ 
+     assert mock_run_sync.call_args_list[0].kwargs["limiter"] is limiter
+ 
+@@ -109,4 +109,4 @@ def test_sync_to_thread_unsupported_lib(mocker: MockerFixture, loop: AbstractEve
+     mocker.patch("litestar.concurrency.sniffio.current_async_library", return_value="something")
+ 
+     with pytest.raises(RuntimeError):
+-        loop.run_until_complete(sync_to_thread(func))
++        loop.run_until_complete(sync_to_thread_impl(func))
+diff --git a/tests/unit/test_phase2_rename_sync_to_thread.py b/tests/unit/test_phase2_rename_sync_to_thread.py
+new file mode 100644
+index 000000000..cb8aff3c1
+--- /dev/null
++++ b/tests/unit/test_phase2_rename_sync_to_thread.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase2_rename_sync_to_thread_impl():
++    owner = importlib.import_module('litestar.concurrency')
++    assert hasattr(owner, 'sync_to_thread_impl')
++    assert not hasattr(owner, 'sync_to_thread')

@@ -1,0 +1,152 @@
+diff --git a/src/fastmcp/cli/cli.py b/src/fastmcp/cli/cli.py
+index c8a358ce..19816ad1 100644
+--- a/src/fastmcp/cli/cli.py
++++ b/src/fastmcp/cli/cli.py
+@@ -66,29 +66,6 @@ def _parse_env_var(env_var: str) -> tuple[str, str]:
+     return key.strip(), value.strip()
+ 
+ 
+-@contextmanager
+-def with_argv(args: list[str] | None):
+-    """Temporarily replace sys.argv if args provided.
+-
+-    This context manager is used at the CLI boundary to inject
+-    server arguments when needed, without mutating sys.argv deep
+-    in the source loading logic.
+-
+-    Args are provided without the script name, so we preserve sys.argv[0]
+-    and replace the rest.
+-    """
+-    if args is not None:
+-        original = sys.argv[:]
+-        try:
+-            # Preserve the script name (sys.argv[0]) and replace the rest
+-            sys.argv = [sys.argv[0], *args]
+-            yield
+-        finally:
+-            sys.argv = original
+-    else:
+-        yield
+-
+-
+ @app.command
+ def version(
+     *,
+diff --git a/src/fastmcp/cli/cli_with_argv.py b/src/fastmcp/cli/cli_with_argv.py
+new file mode 100644
+index 00000000..24625dcf
+--- /dev/null
++++ b/src/fastmcp/cli/cli_with_argv.py
+@@ -0,0 +1,25 @@
++import sys
++from contextlib import contextmanager
++
++
++@contextmanager
++def with_argv(args: list[str] | None):
++    """Temporarily replace sys.argv if args provided.
++
++    This context manager is used at the CLI boundary to inject
++    server arguments when needed, without mutating sys.argv deep
++    in the source loading logic.
++
++    Args are provided without the script name, so we preserve sys.argv[0]
++    and replace the rest.
++    """
++    if args is not None:
++        original = sys.argv[:]
++        try:
++            # Preserve the script name (sys.argv[0]) and replace the rest
++            sys.argv = [sys.argv[0], *args]
++            yield
++        finally:
++            sys.argv = original
++    else:
++        yield
+diff --git a/src/fastmcp/cli/run.py b/src/fastmcp/cli/run.py
+index ece664b7..0298f861 100644
+--- a/src/fastmcp/cli/run.py
++++ b/src/fastmcp/cli/run.py
+@@ -142,7 +142,7 @@ async def run_command(
+             # Load the server using the source
+             from contextlib import nullcontext
+ 
+-            from fastmcp.cli.cli import with_argv
++            from fastmcp.cli.cli_with_argv import with_argv
+ 
+             # Use sys.argv context manager if deployment args specified
+             argv_context = with_argv(server_args) if server_args else nullcontext()
+@@ -162,7 +162,7 @@ async def run_command(
+         # Load the server
+         from contextlib import nullcontext
+ 
+-        from fastmcp.cli.cli import with_argv
++        from fastmcp.cli.cli_with_argv import with_argv
+ 
+         # Use sys.argv context manager if server_args specified
+         argv_context = with_argv(server_args) if server_args else nullcontext()
+diff --git a/tests/cli/test_phase2_move_with_argv.py b/tests/cli/test_phase2_move_with_argv.py
+new file mode 100644
+index 00000000..8f2f6814
+--- /dev/null
++++ b/tests/cli/test_phase2_move_with_argv.py
+@@ -0,0 +1,6 @@
++import importlib
++
++
++def test_phase2_moved_with_argv():
++    new = importlib.import_module('fastmcp.cli.cli_with_argv')
++    assert getattr(new, 'with_argv').__module__ == 'fastmcp.cli.cli_with_argv'
+diff --git a/tests/cli/test_server_args.py b/tests/cli/test_server_args.py
+index 32832e70..1a064379 100644
+--- a/tests/cli/test_server_args.py
++++ b/tests/cli/test_server_args.py
+@@ -40,7 +40,7 @@ def get_config() -> dict:
+         source = FileSystemSource(path=str(server_file))
+         config = MCPServerConfig(source=source)
+ 
+-        from fastmcp.cli.cli import with_argv
++        from fastmcp.cli.cli_with_argv import with_argv
+ 
+         # Simulate passing arguments
+         with with_argv(["--name", "TestServer", "--port", "9000", "--debug"]):
+@@ -69,7 +69,7 @@ mcp = FastMCP(args.name)
+         source = FileSystemSource(path=str(server_file))
+         config = MCPServerConfig(source=source)
+ 
+-        from fastmcp.cli.cli import with_argv
++        from fastmcp.cli.cli_with_argv import with_argv
+ 
+         # Test with empty args list (should use defaults)
+         with with_argv([]):
+@@ -95,7 +95,7 @@ mcp = FastMCP(name)
+         source = FileSystemSource(path=str(server_file))
+         config = MCPServerConfig(source=source)
+ 
+-        from fastmcp.cli.cli import with_argv
++        from fastmcp.cli.cli_with_argv import with_argv
+ 
+         # Test with custom argument
+         with with_argv(["--custom"]):
+@@ -121,7 +121,7 @@ mcp = FastMCP(name)
+         source = FileSystemSource(path=str(config_server))
+         config = MCPServerConfig(source=source)
+ 
+-        from fastmcp.cli.cli import with_argv
++        from fastmcp.cli.cli_with_argv import with_argv
+ 
+         # Test with debug flag
+         with with_argv(["--name", "TestExample", "--debug"]):
+diff --git a/tests/cli/test_with_argv.py b/tests/cli/test_with_argv.py
+index ee9d378d..ecd9f686 100644
+--- a/tests/cli/test_with_argv.py
++++ b/tests/cli/test_with_argv.py
+@@ -5,7 +5,7 @@ from unittest.mock import patch
+ 
+ import pytest
+ 
+-from fastmcp.cli.cli import with_argv
++from fastmcp.cli.cli_with_argv import with_argv
+ 
+ 
+ class TestWithArgv:
