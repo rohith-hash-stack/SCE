@@ -1436,3 +1436,18 @@ arm; sharded by seed; a smoke test first.
 - **One observation, recorded before any analysis:** the control `r4s-delete-09` (litestar) reached the turn cap in
   all four arms, where the re-baseline solved it 28 times in 30. The turn logs show steady progress (edits to the
   tests that use the removed function), not a crash. It is examined after the shard, before shards 2–10.
+
+**Shard 1 complete (2026-11-21), the smoke criteria met:**
+- 80 of 80 runs ended and were scored, in 6.9 hours.
+- Health check passed: 0 infrastructure deaths; parse errors 1.07% of turns.
+- The pre-flight passed; INJECTED's retrieval had no error; every derived run records the static check; every
+  derived task's environment set up.
+
+**The `r4s-delete-09` observation was a misreading** (corrected before any analysis):
+- In both the re-baseline and here, every run of it reaches the turn cap without calling done, and its final tree
+  scores resolved (target absent, every scored test passing). The re-baseline's "28 of 30 solved" counts those trees.
+- So nothing changed. The note above compared the run's ending ("stuck") with the re-baseline's solve count, which
+  measures something else.
+
+**Shards 2–10 may start.** Shard 1's own `report.json` is a progress view only; the pre-registered analysis runs on
+all 10 shards merged.
