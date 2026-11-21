@@ -1,0 +1,223 @@
+diff --git a/docs/.hooks/algolia.py b/docs/.hooks/algolia.py
+index 782fc1800..87839a2b8 100644
+--- a/docs/.hooks/algolia.py
++++ b/docs/.hooks/algolia.py
+@@ -48,7 +48,7 @@ def on_page_content(html: str, page: Page, config: Config, files: Files) -> str:
+ 
+     # If the page does not start with a heading, add the h1 with the title
+     # Some examples don't have a heading. or start with h2
+-    first_element = soup.find()
++    first_element = soup.find_impl()
+ 
+     if not first_element or not first_element.name or first_element.name not in ['h1', 'h2', 'h3']:
+         soup.insert(0, BeautifulSoup(f'<h1 id="{title}">{title}</h1>', 'html.parser'))
+diff --git a/pydantic_ai_slim/pydantic_ai/_thinking_part.py b/pydantic_ai_slim/pydantic_ai/_thinking_part.py
+index bca7e368c..791389d07 100644
+--- a/pydantic_ai_slim/pydantic_ai/_thinking_part.py
++++ b/pydantic_ai_slim/pydantic_ai/_thinking_part.py
+@@ -12,12 +12,12 @@ def split_content_into_text_and_thinking(content: str, thinking_tags: tuple[str,
+     start_tag, end_tag = thinking_tags
+     parts: list[ThinkingPart | TextPart] = []
+ 
+-    start_index = content.find(start_tag)
++    start_index = content.find_impl(start_tag)
+     while start_index >= 0:
+         before_think, content = content[:start_index], content[start_index + len(start_tag) :]
+         if before_think:
+             parts.append(TextPart(content=before_think))
+-        end_index = content.find(end_tag)
++        end_index = content.find_impl(end_tag)
+         if end_index >= 0:
+             think_content, content = content[:end_index], content[end_index + len(end_tag) :]
+             parts.append(ThinkingPart(content=think_content))
+@@ -25,7 +25,7 @@ def split_content_into_text_and_thinking(content: str, thinking_tags: tuple[str,
+             # We lose the `<think>` tag, but it shouldn't matter.
+             parts.append(TextPart(content=content))
+             content = ''
+-        start_index = content.find(start_tag)
++        start_index = content.find_impl(start_tag)
+     if content:
+         parts.append(TextPart(content=content))
+     return parts
+diff --git a/pydantic_evals/pydantic_evals/otel/span_tree.py b/pydantic_evals/pydantic_evals/otel/span_tree.py
+index ea0e953a1..425693255 100644
+--- a/pydantic_evals/pydantic_evals/otel/span_tree.py
++++ b/pydantic_evals/pydantic_evals/otel/span_tree.py
+@@ -476,7 +476,7 @@ class SpanTree:
+     # -------------------------------------------------------------------------
+     # Node filtering and iteration
+     # -------------------------------------------------------------------------
+-    def find(self, predicate: SpanQuery | SpanPredicate) -> list[SpanNode]:
++    def find_impl(self, predicate: SpanQuery | SpanPredicate) -> list[SpanNode]:
+         """Find all nodes in the entire tree that match the predicate, scanning from each root in DFS order."""
+         return list(self._filter(predicate))
+ 
+diff --git a/tests/evals/test_otel.py b/tests/evals/test_otel.py
+index 715742735..4cf7d2e20 100644
+--- a/tests/evals/test_otel.py
++++ b/tests/evals/test_otel.py
+@@ -119,13 +119,13 @@ async def test_span_tree_flattened(span_tree: SpanTree):
+ async def test_span_tree_find_all(span_tree: SpanTree):
+     """Test the find_all method of SpanTree."""
+     # Find nodes with important type
+-    important_nodes = list(span_tree.find(lambda node: node.attributes.get('type') == 'important'))
++    important_nodes = list(span_tree.find_impl(lambda node: node.attributes.get('type') == 'important'))
+     assert len(important_nodes) == 2
+     important_names = {node.name for node in important_nodes}
+     assert important_names == {'child1', 'grandchild1'}
+ 
+     # Find nodes with level 2
+-    level2_nodes = list(span_tree.find(lambda node: node.attributes.get('level') == '2'))
++    level2_nodes = list(span_tree.find_impl(lambda node: node.attributes.get('level') == '2'))
+     assert len(level2_nodes) == 3
+     level2_names = {node.name for node in level2_nodes}
+     assert level2_names == {'grandchild1', 'grandchild2', 'grandchild3'}
+@@ -529,13 +529,13 @@ async def test_span_query_basics(span_tree: SpanTree):
+ 
+     # Test name contains condition
+     name_contains_query: SpanQuery = {'name_contains': 'child'}
+-    matched_nodes = list(span_tree.find(name_contains_query))
++    matched_nodes = list(span_tree.find_impl(name_contains_query))
+     assert len(matched_nodes) == 5  # All nodes with "child" in name
+     assert all('child' in node.name for node in matched_nodes)
+ 
+     # Test name regex match condition
+     name_regex_query: SpanQuery = {'name_matches_regex': r'^grand.*\d$'}
+-    matched_nodes = list(span_tree.find(name_regex_query))
++    matched_nodes = list(span_tree.find_impl(name_regex_query))
+     assert len(matched_nodes) == 3  # All grandchild nodes
+     assert all(node.name.startswith('grand') and node.name[-1].isdigit() for node in matched_nodes)
+ 
+@@ -549,7 +549,7 @@ async def test_span_query_basics(span_tree: SpanTree):
+ 
+     # Test has_attribute_keys condition
+     attr_keys_query: SpanQuery = {'has_attribute_keys': ['level', 'type']}
+-    matched_nodes = list(span_tree.find(attr_keys_query))
++    matched_nodes = list(span_tree.find_impl(attr_keys_query))
+     assert len(matched_nodes) == 5  # All nodes except root have both keys
+     assert all('level' in node.attributes and 'type' in node.attributes for node in matched_nodes)
+ 
+@@ -568,13 +568,13 @@ async def test_span_query_negation():
+ 
+     # Test negation of name attribute
+     not_query: SpanQuery = {'not_': {'name_equals': 'child1'}}
+-    matched_nodes = list(tree.find(not_query))
++    matched_nodes = list(tree.find_impl(not_query))
+     assert len(matched_nodes) == 2
+     assert all(node.name != 'child1' for node in matched_nodes)
+ 
+     # Test negation of attribute condition
+     not_attr_query: SpanQuery = {'not_': {'has_attributes': {'category': 'important'}}}
+-    matched_nodes = list(tree.find(not_attr_query))
++    matched_nodes = list(tree.find_impl(not_attr_query))
+     assert len(matched_nodes) == 2
+     assert all(node.attributes.get('category') != 'important' for node in matched_nodes)
+ 
+@@ -601,13 +601,13 @@ async def test_span_query_logical_combinations():
+ 
+     # Test AND logic
+     and_query: SpanQuery = {'and_': [{'name_contains': '1'}, {'has_attributes': {'level': '1'}}]}
+-    matched_nodes = list(tree.find(and_query))
++    matched_nodes = list(tree.find_impl(and_query))
+     assert len(matched_nodes) == 1, matched_nodes
+     assert all(node.name in ['child1'] for node in matched_nodes)
+ 
+     # Test OR logic
+     or_query: SpanQuery = {'or_': [{'name_contains': '2'}, {'has_attributes': {'level': '0'}}]}
+-    matched_nodes = list(tree.find(or_query))
++    matched_nodes = list(tree.find_impl(or_query))
+     assert len(matched_nodes) == 2
+     assert any(node.name == 'child2' for node in matched_nodes)
+     assert any(node.attributes.get('level') == '0' for node in matched_nodes)
+@@ -619,7 +619,7 @@ async def test_span_query_logical_combinations():
+             {'or_': [{'has_attributes': {'category': 'important'}}, {'name_equals': 'child2'}]},
+         ]
+     }
+-    matched_nodes = list(tree.find(complex_query))
++    matched_nodes = list(tree.find_impl(complex_query))
+     assert len(matched_nodes) == 3  # child1, child2, special
+     matched_names = [node.name for node in matched_nodes]
+     assert set(matched_names) == {'child1', 'child2', 'special'}
+@@ -647,7 +647,7 @@ async def test_span_query_timing_conditions():
+ 
+     # Test min_duration
+     min_duration_query: SpanQuery = {'min_duration': fast_threshold}
+-    matched_nodes = list(tree.find(min_duration_query))
++    matched_nodes = list(tree.find_impl(min_duration_query))
+     assert len(matched_nodes) == 2
+     assert 'fast_operation' not in [node.name for node in matched_nodes]
+ 
+@@ -657,7 +657,7 @@ async def test_span_query_timing_conditions():
+         {'min_duration': 0.001, 'max_duration': medium_threshold.seconds},
+     ]
+     for max_duration_query in max_duration_queries:
+-        matched_nodes = list(tree.find(max_duration_query))
++        matched_nodes = list(tree.find_impl(max_duration_query))
+         assert len(matched_nodes) == 2
+         assert 'slow_operation' not in [node.name for node in matched_nodes]
+ 
+@@ -747,7 +747,7 @@ async def test_span_query_complex_hierarchical_conditions():
+         'some_child_has': {'not_': {'name_equals': 'db_query'}},
+     }
+ 
+-    matched_nodes = list(tree.find(request_with_db_and_other))
++    matched_nodes = list(tree.find_impl(request_with_db_and_other))
+     assert len(matched_nodes) == 2  # Both requests have db_query and another operation
+ 
+ 
+@@ -815,28 +815,28 @@ async def test_span_query_child_count():
+ 
+     # Test min_child_count
+     min_2_query: SpanQuery = {'min_child_count': 2}
+-    matched_nodes = list(tree.find(min_2_query))
++    matched_nodes = list(tree.find_impl(min_2_query))
+     assert len(matched_nodes) == 2
+     matched_names = {node.name for node in matched_nodes}
+     assert matched_names == {'parent_two_children', 'parent_three_children'}
+ 
+     # Test max_child_count
+     max_1_query: SpanQuery = {'max_child_count': 1}
+-    matched_nodes = list(tree.find(max_1_query))
++    matched_nodes = list(tree.find_impl(max_1_query))
+     assert len(matched_nodes) == 8  # parent_no_children, parent_one_child, and all the leaf nodes
+     assert 'parent_two_children' not in {node.name for node in matched_nodes}
+     assert 'parent_three_children' not in {node.name for node in matched_nodes}
+ 
+     # Test both min and max together (range)
+     child_range_query: SpanQuery = {'min_child_count': 1, 'max_child_count': 2}
+-    matched_nodes = list(tree.find(child_range_query))
++    matched_nodes = list(tree.find_impl(child_range_query))
+     assert len(matched_nodes) == 2
+     matched_names = {node.name for node in matched_nodes}
+     assert matched_names == {'parent_one_child', 'parent_two_children'}
+ 
+     # Test with other conditions
+     complex_query: SpanQuery = {'name_contains': 'parent', 'min_child_count': 2}
+-    matched_nodes = list(tree.find(complex_query))
++    matched_nodes = list(tree.find_impl(complex_query))
+     assert len(matched_nodes) == 2
+     assert all('parent' in node.name and len(node.children) >= 2 for node in matched_nodes)
+ 
+@@ -853,7 +853,7 @@ async def test_span_query_child_count():
+         'and_': [{'name_contains': 'parent'}, {'min_child_count': 1}],
+         'not_': {'max_child_count': 1},
+     }
+-    matched_nodes = list(tree.find(logical_query))
++    matched_nodes = list(tree.find_impl(logical_query))
+     assert len(matched_nodes) == 2
+     matched_names = {node.name for node in matched_nodes}
+     assert matched_names == {'parent_two_children', 'parent_three_children'}
+diff --git a/tests/evals/test_phase2_rename_find.py b/tests/evals/test_phase2_rename_find.py
+new file mode 100644
+index 000000000..71e5bc0d1
+--- /dev/null
++++ b/tests/evals/test_phase2_rename_find.py
+@@ -0,0 +1,8 @@
++import importlib
++
++
++def test_phase2_rename_find_impl():
++    owner = importlib.import_module('pydantic_evals.otel.span_tree')
++    owner = getattr(owner, 'SpanTree')
++    assert hasattr(owner, 'find_impl')
++    assert not hasattr(owner, 'find')

@@ -273,6 +273,8 @@ class OpenAICompatibleClient:
         task_id: str | None = None,
         engine: str | None = None,
         extra_body: dict | None = None,
+        response_format: dict | None = {"type": "json_object"},  # noqa: B006 - never mutated
+        stop: tuple[str, ...] | None = STOP_SEQUENCES,
     ) -> CallResult:
         """One chat-completions call, retrying on HTTP 429
         (`openai.RateLimitError`) per `RATE_LIMIT_BACKOFF_SECONDS`
@@ -292,13 +294,21 @@ class OpenAICompatibleClient:
         literal string `None`) for a caller - `run_tsr_prompt`'s own
         `FakeClient`-based tests included - that doesn't pass them.
 
-        Always sends `response_format={"type": "json_object"}`: a
+        Sends `response_format={"type": "json_object"}` unless the caller
+        passes `response_format=None` (plain-text protocols such as the
+        Agentless baseline): a
         standard OpenAI-compatible chat-completions parameter, accepted
         by both DeepSeek's endpoint and Ollama's OpenAI-compatible one
         (confirmed for Ollama; DeepSeek's own docs are unreachable from
         this environment - egress to api-docs.deepseek.com is blocked -
         so this relies on it being a standard parameter rather than an
         independently verified DeepSeek doc check).
+
+        `stop` (default `STOP_SEQUENCES`, every existing caller unaffected):
+        the stop sequences sent; `None` sends none. They fit the JSON
+        contracts they were chosen for, not code: `"\n```"` is a fenced
+        block's own closing fence and `"]}\n"` / `"\n\n\n"` occur inside
+        ordinary code (Layer 4's backward answers pass `None`).
 
         `extra_body` (optional, `None` by default - every existing
         caller unaffected): passed straight through to the underlying
@@ -322,8 +332,8 @@ class OpenAICompatibleClient:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    response_format={"type": "json_object"},
-                    stop=list(STOP_SEQUENCES),
+                    **({"response_format": response_format} if response_format is not None else {}),
+                    **({"stop": list(stop)} if stop else {}),
                     **({"seed": seed} if seed is not None else {}),
                     **({"extra_body": extra_body} if extra_body is not None else {}),
                 )
@@ -402,7 +412,16 @@ class OpenAICompatibleClient:
             cost_usd=cost,
             latency_seconds=round(latency, 4),
             seed=seed,
+            system_fingerprint=_str_or_none(getattr(response, "system_fingerprint", None)),
+            response_model=_str_or_none(getattr(response, "model", None)),
         )
+
+
+def _str_or_none(value: object) -> str | None:
+    """A response attribute only if it's a real string - a test double
+    (a `MagicMock` response, say) yields a non-JSON-serializable mock
+    for any attribute it wasn't explicitly given."""
+    return value if isinstance(value, str) else None
 
 
 def _known_model_pricing_override(model: str) -> tuple[float | None, float | None]:

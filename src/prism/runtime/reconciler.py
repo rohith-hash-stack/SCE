@@ -830,7 +830,15 @@ def apply_runtime_state(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set
     so a `discovered_edges` entry whose caller/callee no longer exist (or
     that the static resolver now finds on its own) is skipped rather than
     blindly re-applied.
+
+    Records `builder.runtime_state_digest` (a hash of `state`), so caches
+    derived from the graph (`prism.traversal._cache_keys.snapshot_signature`)
+    tell this builder apart from the same sources without these edges.
     """
+    import hashlib
+    builder.runtime_state_digest = hashlib.sha256(
+        json.dumps(state, sort_keys=True, default=str).encode()
+    ).hexdigest()[:16]
     for caller, callee in state.get("confirmed_edges", []):
         if builder.graph.has_edge(caller, callee):
             builder.graph.edges[caller, callee]["confidence"] = "CONFIRMED_RUNTIME"

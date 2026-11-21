@@ -1,0 +1,857 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "express_t02_012_cookie_signing",
+  "items": [
+   {
+    "source_id": "test/res.cookie.js:9-53",
+    "content": "# test/res.cookie.js:9-53  (test.res.cookie)\ndescribe('res', function(){\n  describe('.cookie(name, object)', function(){\n    it('should generate a JSON cookie', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.cookie('user', { name: 'tobi' }).end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'user=j%3A%7B%22name%22%3A%22tobi%22%7D; Path=/')\n      .expect(200, done)\n    })\n  })\n\n  describe('.cookie(name, string)', function(){\n    it('should set a cookie', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.cookie('name', 'tobi').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'name=tobi; Path=/')\n      .expect(200, done)\n    })\n\n    it('should allow multiple calls', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.cookie('name', 'tobi');\n        res.cookie('age', 1);\n        res.cookie('gender', '?');\n        res.end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Set-Cookie', 'name=tobi; Path=/,age=1; Path=/,gender=%3F; Path=/')\n        .expect(200, done)\n    })\n  })\n})",
+    "token_count": 337,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 3,
+     "rerank_score": 1.4164562225341797,
+     "bm25_rank": 21,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 337
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.cookie.js:101-187#part2of3",
+    "content": "# test/res.cookie.js:101-187#part2of3  (test.res.cookie)\ndescribe('res', function(){\n  describe('.cookie(name, string, options)', function(){\n    describe('maxAge', function(){\n      it('should set relative expires', function(done){\n        var app = express();\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', { maxAge: 1000 });\n          res.end();\n        });\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', /name=tobi; Max-Age=1; Path=\\/; Expires=/)\n          .expect(200, done)\n      })\n\n      it('should set max-age', function(done){\n        var app = express();\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', { maxAge: 1000 });\n          res.end();\n        });\n\n        request(app)\n        .get('/')\n        .expect('Set-Cookie', /Max-Age=1/, done)\n      })\n\n      it('should not mutate the options object', function(done){\n        var app = express();\n\n        var options = { maxAge: 1000 };\n        var optionsCopy = merge({}, options);\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', options)\n          res.json(options)\n        });\n\n        request(app)\n        .get('/')\n        .expect(200, optionsCopy, done)\n      })\n\n      it('should not throw on null', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { maxAge: null })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(200)\n          .expect('Set-Cookie', 'name=tobi; Path=/')\n          .end(done)\n      })\n\n      it('should not throw on undefined', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { maxAge: undefined })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(200)\n          .expect('Set-Cookie', 'name=tobi; Path=/')\n          .end(done)\n      })\n\n      it('should throw an error with invalid maxAge', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { maxAge: 'foobar' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(500, /option maxAge is invalid/, done)\n      })\n    })\n  })\n})",
+    "token_count": 588,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 9,
+     "rerank_score": 1.3369779586791992,
+     "bm25_rank": 26,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 588
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.cookie.js:189-294#part3of3",
+    "content": "# test/res.cookie.js:189-294#part3of3  (test.res.cookie)\ndescribe('res', function(){\n  describe('.cookie(name, string, options)', function(){\n    describe('priority', function () {\n      it('should set low priority', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { priority: 'low' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', /Priority=Low/)\n          .expect(200, done)\n      })\n\n      it('should set medium priority', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { priority: 'medium' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', /Priority=Medium/)\n          .expect(200, done)\n      })\n\n      it('should set high priority', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { priority: 'high' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', /Priority=High/)\n          .expect(200, done)\n      })\n\n      it('should throw with invalid priority', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { priority: 'foobar' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(500, /option priority is invalid/, done)\n      })\n    })\n\n    describe('signed', function(){\n      it('should generate a signed JSON cookie', function(done){\n        var app = express();\n\n        app.use(cookieParser('foo bar baz'));\n\n        app.use(function(req, res){\n          res.cookie('user', { name: 'tobi' }, { signed: true }).end();\n        });\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', 'user=s%3Aj%3A%7B%22name%22%3A%22tobi%22%7D.K20xcwmDS%2BPb1rsD95o5Jm5SqWs1KteqdnynnB7jkTE; Path=/')\n          .expect(200, done)\n      })\n    })\n\n    describe('signed without secret', function(){\n      it('should throw an error', function(done){\n        var app = express();\n\n        app.use(cookieParser());\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', { signed: true }).end();\n        });\n\n        request(app)\n        .get('/')\n        .expect(500, /secret\\S+ required for signed cookies/, done);\n      })\n    })\n\n    describe('.signedCookie(name, string)', function(){\n      it('should set a signed cookie', function(done){\n        var app = express();\n\n        app.use(cookieParser('foo bar baz'));\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', { signed: true }).end();\n        });\n\n        request(app)\n        .get('/')\n        .expect('Set-Cookie', 'name=s%3Atobi.xJjV2iZ6EI7C8E5kzwbfA9PVLl1ZR07UTnuTgQQ4EnQ; Path=/')\n        .expect(200, done)\n      })\n    })\n  })\n})",
+    "token_count": 786,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": 1.1393831968307495,
+     "bm25_rank": 15,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 786
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:862-895",
+    "content": "# lib/response.js:862-895  (lib.response.cookie)\nres.cookie = function (name, value, options) {\n  var opts = merge({}, options);\n  var secret = this.req.secret;\n  var signed = opts.signed;\n\n  if (signed && !secret) {\n    throw new Error('cookieParser(\"secret\") required for signed cookies');\n  }\n\n  var val = typeof value === 'object'\n    ? 'j:' + JSON.stringify(value)\n    : String(value);\n\n  if (signed) {\n    val = 's:' + sign(val, secret);\n  }\n\n  if (opts.maxAge != null) {\n    var maxAge = opts.maxAge - 0\n\n    if (!isNaN(maxAge)) {\n      opts.expires = new Date(Date.now() + maxAge)\n      opts.maxAge = Math.floor(maxAge / 1000)\n    }\n  }\n\n  if (opts.path == null) {\n    opts.path = '/';\n  }\n\n  this.append('Set-Cookie', cookie.serialize(name, String(val), opts));\n\n  return this;\n};",
+    "token_count": 226,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.cookie"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 2,
+     "rerank_score": 1.1031907796859741,
+     "bm25_rank": 17,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 226
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/req.signedCookies.js:1-36",
+    "content": "# test/req.signedCookies.js:1-36  (test.req.signedCookies)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest')\n  , cookieParser = require('cookie-parser')\n\ndescribe('req', function(){\n  describe('.signedCookies', function(){\n    it('should return a signed JSON cookie', function(done){\n      var app = express();\n\n      app.use(cookieParser('secret'));\n\n      app.use(function(req, res){\n        if (req.path === '/set') {\n          res.cookie('obj', { foo: 'bar' }, { signed: true });\n          res.end();\n        } else {\n          res.send(req.signedCookies);\n        }\n      });\n\n      request(app)\n      .get('/set')\n      .end(function(err, res){\n        if (err) return done(err);\n        var cookie = res.header['set-cookie'];\n\n        request(app)\n        .get('/')\n        .set('Cookie', cookie)\n        .expect(200, { obj: { foo: 'bar' } }, done)\n      });\n    })\n  })\n})",
+    "token_count": 227,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": 1.0912035703659058,
+     "bm25_rank": 40,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 227
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.cookie.js:56-99#part1of3",
+    "content": "# test/res.cookie.js:56-99#part1of3  (test.res.cookie)\ndescribe('res', function(){\n  describe('.cookie(name, string, options)', function(){\n    it('should set params', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.cookie('name', 'tobi', { httpOnly: true, secure: true });\n        res.end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'name=tobi; Path=/; HttpOnly; Secure')\n      .expect(200, done)\n    })\n\n    describe('expires', function () {\n      it('should throw on invalid date', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { expires: new Date(NaN) })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(500, /option expires is invalid/, done)\n      })\n    })\n\n    describe('partitioned', function () {\n      it('should set partitioned', function (done) {\n        var app = express();\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { partitioned: true });\n          res.end();\n        });\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', 'name=tobi; Path=/; Partitioned')\n          .expect(200, done)\n      })\n    })\n  })\n})",
+    "token_count": 326,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 8,
+     "rerank_score": 1.0204944610595703,
+     "bm25_rank": 34,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 326
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.clearCookie.js:1-68",
+    "content": "# test/res.clearCookie.js:1-68  (test.res.clearCookie)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('res', function(){\n  describe('.clearCookie(name)', function(){\n    it('should set a cookie passed expiry', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.clearCookie('sid').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'sid=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')\n      .expect(200, done)\n    })\n  })\n\n  describe('.clearCookie(name, options)', function(){\n    it('should set the given params', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.clearCookie('sid', { path: '/admin' }).end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'sid=; Path=/admin; Expires=Thu, 01 Jan 1970 00:00:00 GMT')\n      .expect(200, done)\n    })\n\n    it('should set expires when passed', function(done) {\n      var expiresAt = new Date()\n      var app = express();\n\n      app.use(function(req, res){\n        res.clearCookie('sid', { expires: expiresAt }).end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'sid=; Path=/; Expires=' + expiresAt.toUTCString() )\n      .expect(200, done)\n    })\n\n    it('should set both maxAge and expires when passed', function(done) {\n      var maxAgeInMs = 10000\n      var expiresAt = new Date()\n      var expectedExpires = new Date(expiresAt.getTime() + maxAgeInMs)\n      var app = express();\n\n      app.use(function(req, res){\n        res.clearCookie('sid', { expires: expiresAt, maxAge: maxAgeInMs }).end();\n      });\n\n      request(app)\n      .get('/')\n      // yes, this is the behavior. When we set a max-age, we also set expires to a date 10 sec ahead of expires\n      // even if we set max-age only, we will also set an expires 10 sec in the future\n      .expect('Set-Cookie', 'sid=; Max-Age=10; Path=/; Expires=' + expectedExpires.toUTCString())\n      .expect(200, done)\n    })\n  })\n})",
+    "token_count": 567,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": 0.9678261280059814,
+     "bm25_rank": 1,
+     "dense_rank": 32,
+     "oversized_chunk": false,
+     "engine_token_count": 567
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.set.js:1-124",
+    "content": "# test/res.set.js:1-124  (test.res.set)\n'use strict'\n\nvar express = require('..');\nvar request = require('supertest');\n\ndescribe('res', function(){\n  describe('.set(field, value)', function(){\n    it('should set the response header field', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.set('Content-Type', 'text/x-foo; charset=utf-8').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/x-foo; charset=utf-8')\n      .end(done);\n    })\n\n    it('should coerce to a string', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.set('X-Number', 123);\n        res.end(typeof res.get('X-Number'));\n      });\n\n      request(app)\n      .get('/')\n      .expect('X-Number', '123')\n      .expect(200, 'string', done);\n    })\n  })\n\n  describe('.set(field, values)', function(){\n    it('should set multiple response header fields', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.set('Set-Cookie', [\"type=ninja\", \"language=javascript\"]);\n        res.send(res.get('Set-Cookie'));\n      });\n\n      request(app)\n      .get('/')\n      .expect('[\"type=ninja\",\"language=javascript\"]', done);\n    })\n\n    it('should coerce to an array of strings', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.set('X-Numbers', [123, 456]);\n        res.end(JSON.stringify(res.get('X-Numbers')));\n      });\n\n      request(app)\n      .get('/')\n      .expect('X-Numbers', '123, 456')\n      .expect(200, '[\"123\",\"456\"]', done);\n    })\n\n    it('should not set a charset of one is already set', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.set('Content-Type', 'text/html; charset=lol');\n        res.end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/html; charset=lol')\n      .expect(200, done);\n    })\n\n    it('should throw when Content-Type is an array', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.set('Content-Type', ['text/html'])\n        res.end()\n      });\n\n      request(app)\n      .get('/')\n      .expect(500, /TypeError: Content-Type cannot be set to an Array/, done)\n    })\n  })\n\n  describe('.set(object)', function(){\n    it('should set multiple fields', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.set({\n          'X-Foo': 'bar',\n          'X-Bar': 'baz'\n        }).end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('X-Foo', 'bar')\n      .expect('X-Bar', 'baz')\n      .end(done);\n    })\n\n    it('should coerce to a string', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.set({ 'X-Number': 123 });\n        res.end(typeof res.get('X-Number'));\n      });\n\n      request(app)\n      .get('/')\n      .expect('X-Number', '123')\n      .expect(200, 'string', done);\n    })\n  })\n})",
+    "token_count": 800,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 19,
+     "rerank_score": 0.7361086010932922,
+     "bm25_rank": 35,
+     "dense_rank": 33,
+     "oversized_chunk": false,
+     "engine_token_count": 800
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/cookies/index.js:1-49",
+    "content": "# examples/cookies/index.js:1-49  (examples.cookies)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar cookieParser = require('cookie-parser');\n\n// custom log format\nif (process.env.NODE_ENV !== 'test') app.use(logger(':method :url'))\n\n// parses request cookies, populating\n// req.cookies and req.signedCookies\n// when the secret is passed, used\n// for signing the cookies.\napp.use(cookieParser('my secret here'));\n\n// parses x-www-form-urlencoded\napp.use(express.urlencoded({ extended: false }))\n\napp.get('/', function(req, res){\n  if (req.cookies.remember) {\n    res.send('Remembered :). Click to <a href=\"/forget\">forget</a>!.');\n  } else {\n    res.send('<form method=\"post\"><p>Check to <label>'\n      + '<input type=\"checkbox\" name=\"remember\"/> remember me</label> '\n      + '<input type=\"submit\" value=\"Submit\"/>.</p></form>');\n  }\n});\n\napp.get('/forget', function(req, res){\n  res.clearCookie('remember');\n  res.redirect('back');\n});\n\napp.post('/', function(req, res){\n  var minute = 60000;\n  if (req.body.remember) res.cookie('remember', 1, { maxAge: minute });\n  res.redirect('back');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 341,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 6,
+     "rerank_score": 0.4773058295249939,
+     "bm25_rank": 24,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 341
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:1-65",
+    "content": "# lib/response.js:1-65  (lib.response)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar createError = require('http-errors')\nvar deprecate = require('depd')('express');\nvar encodeUrl = require('encodeurl');\nvar escapeHtml = require('escape-html');\nvar http = require('http');\nvar isAbsolute = require('./utils').isAbsolute;\nvar onFinished = require('on-finished');\nvar path = require('path');\nvar statuses = require('statuses')\nvar merge = require('utils-merge');\nvar sign = require('cookie-signature').sign;\nvar normalizeType = require('./utils').normalizeType;\nvar normalizeTypes = require('./utils').normalizeTypes;\nvar setCharset = require('./utils').setCharset;\nvar cookie = require('cookie');\nvar send = require('send');\nvar extname = path.extname;\nvar mime = send.mime;\nvar resolve = path.resolve;\nvar vary = require('vary');\n\n/**\n * Response prototype.\n * @public\n */\n\nvar res = Object.create(http.ServerResponse.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = res\n\n/**\n * Module variables.\n * @private\n */\n\nvar charsetRegExp = /;\\s*charset\\s*=/;\n\n/**\n * Set status `code`.\n *\n * @param {Number} code\n * @return {ServerResponse}\n * @public\n */",
+    "token_count": 357,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 12,
+     "rerank_score": 0.33728182315826416,
+     "bm25_rank": 45,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 357
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.append.js:1-105",
+    "content": "# test/res.append.js:1-105  (test.res.append)\n'use strict'\n\nvar assert = require('assert')\nvar express = require('..')\nvar request = require('supertest')\n\ndescribe('res', function () {\n  describe('.append(field, val)', function () {\n    it('should append multiple headers', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.append('Set-Cookie', 'foo=bar')\n        next()\n      })\n\n      app.use(function (req, res) {\n        res.append('Set-Cookie', 'fizz=buzz')\n        res.end()\n      })\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['foo=bar', 'fizz=buzz']))\n        .end(done)\n    })\n\n    it('should accept array of values', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.append('Set-Cookie', ['foo=bar', 'fizz=buzz'])\n        res.end()\n      })\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['foo=bar', 'fizz=buzz']))\n        .end(done)\n    })\n\n    it('should get reset by res.set(field, val)', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.append('Set-Cookie', 'foo=bar')\n        res.append('Set-Cookie', 'fizz=buzz')\n        next()\n      })\n\n      app.use(function (req, res) {\n        res.set('Set-Cookie', 'pet=tobi')\n        res.end()\n      });\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['pet=tobi']))\n        .end(done)\n    })\n\n    it('should work with res.set(field, val) first', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.set('Set-Cookie', 'foo=bar')\n        next()\n      })\n\n      app.use(function(req, res){\n        res.append('Set-Cookie', 'fizz=buzz')\n        res.end()\n      })\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['foo=bar', 'fizz=buzz']))\n        .end(done)\n    })\n\n    it('should work together with res.cookie', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.cookie('foo', 'bar')\n        next()\n      })\n\n      app.use(function (req, res) {\n        res.append('Set-Cookie', 'fizz=buzz')\n        res.end()\n      })\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['foo=bar; Path=/', 'fizz=buzz']))\n        .end(done)\n    })\n  })\n})",
+    "token_count": 688,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 13,
+     "rerank_score": 0.14247140288352966,
+     "bm25_rank": 44,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 688
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.cookie.js:1-6",
+    "content": "# test/res.cookie.js:1-6  (test.res.cookie)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest')\n  , cookieParser = require('cookie-parser')\nvar merge = require('utils-merge');",
+    "token_count": 52,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 46,
+     "rerank_score": 0.027937736362218857,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:1-62",
+    "content": "# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */",
+    "token_count": 347,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -0.00404965877532959,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "index.js:1-11",
+    "content": "# index.js:1-11\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\nmodule.exports = require('./lib/express');",
+    "token_count": 84,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 40,
+     "rerank_score": -0.027654726058244705,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/init.js:1-26",
+    "content": "# lib/middleware/init.js:1-26  (lib.middleware.init)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Initialization middleware, exposing the\n * request and response to each other, as well\n * as defaulting the X-Powered-By header field.\n *\n * @param {Function} app\n * @return {Function}\n * @api private\n */",
+    "token_count": 156,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -0.24535414576530457,
+     "bm25_rank": 89,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.jsonp.js:331-386",
+    "content": "# test/res.jsonp.js:331-386  (test.res.jsonp)\ndescribe('res', function(){\n  describe('.jsonp(status, object)', function(){\n    it('should respond with json and set the .statusCode', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp(201, { id: 1 });\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '{\"id\":1}', done)\n    })\n  })\n\n  describe('.jsonp(object, status)', function(){\n    it('should respond with json and set the .statusCode for backwards compat', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp({ id: 1 }, 201);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '{\"id\":1}', done)\n    })\n\n    it('should use status as second number for backwards compat', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp(200, 201);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '200', done)\n    })\n  })\n\n  it('should not override previous Content-Types', function(done){\n    var app = express();\n\n    app.get('/', function(req, res){\n      res.type('application/vnd.example+json');\n      res.jsonp({ hello: 'world' });\n    });\n\n    request(app)\n    .get('/')\n    .expect('content-type', 'application/vnd.example+json; charset=utf-8')\n    .expect(200, '{\"hello\":\"world\"}', done)\n  })\n})",
+    "token_count": 415,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -0.2965143322944641,
+     "bm25_rank": 70,
+     "dense_rank": 92,
+     "oversized_chunk": false,
+     "engine_token_count": 415
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/acceptance/cookie-sessions.js:34-38",
+    "content": "# test/acceptance/cookie-sessions.js:34-38  (test.acceptance.cookie-sessions.getCookies)\nfunction getCookies(res) {\n  return res.headers['set-cookie'].map(function (val) {\n    return val.split(';')[0]\n  }).join('; ');\n}",
+    "token_count": 61,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "test.acceptance.cookie-sessions.getCookies"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 21,
+     "rerank_score": -0.3179784119129181,
+     "bm25_rank": 99,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/cookie-sessions/index.js:1-25",
+    "content": "# examples/cookie-sessions/index.js:1-25  (examples.cookie-sessions)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar cookieSession = require('cookie-session');\nvar express = require('../../');\n\nvar app = module.exports = express();\n\n// add req.session cookie support\napp.use(cookieSession({ secret: 'manny is cool' }));\n\n// do something with the session\napp.get('/', function (req, res) {\n  req.session.count = (req.session.count || 0) + 1\n  res.send('viewed ' + req.session.count + ' times\\n')\n})\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 161,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 14,
+     "rerank_score": -0.45306581258773804,
+     "bm25_rank": 47,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 161
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/acceptance/auth.js:4-6",
+    "content": "# test/acceptance/auth.js:4-6  (test.acceptance.auth.getCookie)\nfunction getCookie(res) {\n  return res.headers['set-cookie'][0].split(';')[0];\n}",
+    "token_count": 42,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "test.acceptance.auth.getCookie"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 24,
+     "rerank_score": -0.4954603612422943,
+     "bm25_rank": 82,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:824-836",
+    "content": "# lib/response.js:824-836  (lib.response.clearCookie)\nres.clearCookie = function clearCookie(name, options) {\n  if (options) {\n    if (options.maxAge) {\n      deprecate('res.clearCookie: Passing \"options.maxAge\" is deprecated. In v5.0.0 of Express, this option will be ignored, as res.clearCookie will automatically set cookies to expire immediately. Please update your code to omit this option.');\n    }\n    if (options.expires) {\n      deprecate('res.clearCookie: Passing \"options.expires\" is deprecated. In v5.0.0 of Express, this option will be ignored, as res.clearCookie will automatically set cookies to expire immediately. Please update your code to omit this option.');\n    }\n  }\n  var opts = merge({ expires: new Date(1), path: '/' }, options);\n\n  return this.cookie(name, '', opts);\n};",
+    "token_count": 196,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.clearCookie"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 7,
+     "rerank_score": -0.5659852027893066,
+     "bm25_rank": 10,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 196
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/query.js:1-23",
+    "content": "# lib/middleware/query.js:1-23  (lib.middleware.query)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n */\n\nvar merge = require('utils-merge')\nvar parseUrl = require('parseurl');\nvar qs = require('qs');\n\n/**\n * @param {Object} options\n * @return {Function}\n * @api public\n */",
+    "token_count": 135,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 44,
+     "rerank_score": -0.6875196099281311,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/acceptance/cookies.js:2-71",
+    "content": "# test/acceptance/cookies.js:2-71  (test.acceptance.cookies)\nvar app = require('../../examples/cookies')\n  , request = require('supertest');\nvar utils = require('../support/utils');\n\ndescribe('cookies', function(){\n  describe('GET /', function(){\n    it('should have a form', function(done){\n      request(app)\n      .get('/')\n      .expect(/<form/, done);\n    })\n\n    it('should respond with no cookies', function(done){\n      request(app)\n      .get('/')\n      .expect(utils.shouldNotHaveHeader('Set-Cookie'))\n      .expect(200, done)\n    })\n\n    it('should respond to cookie', function(done){\n      request(app)\n      .post('/')\n      .type('urlencoded')\n      .send({ remember: 1 })\n      .expect(302, function(err, res){\n        if (err) return done(err)\n        request(app)\n        .get('/')\n        .set('Cookie', res.headers['set-cookie'][0])\n        .expect(200, /Remembered/, done)\n      })\n    })\n  })\n\n  describe('GET /forget', function(){\n    it('should clear cookie', function(done){\n      request(app)\n      .post('/')\n      .type('urlencoded')\n      .send({ remember: 1 })\n      .expect(302, function(err, res){\n        if (err) return done(err)\n        request(app)\n        .get('/forget')\n        .set('Cookie', res.headers['set-cookie'][0])\n        .expect('Set-Cookie', /remember=;/)\n        .expect(302, done)\n      })\n    })\n  })\n\n  describe('POST /', function(){\n    it('should set a cookie', function(done){\n      request(app)\n      .post('/')\n      .type('urlencoded')\n      .send({ remember: 1 })\n      .expect('Set-Cookie', /remember=1/)\n      .expect(302, done)\n    })\n\n    it('should no set cookie w/o reminder', function(done){\n      request(app)\n      .post('/')\n      .send({})\n      .expect(utils.shouldNotHaveHeader('Set-Cookie'))\n      .expect(302, done)\n    })\n  })\n})",
+    "token_count": 474,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 16,
+     "rerank_score": -1.2353980541229248,
+     "bm25_rank": 55,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 474
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/static-files/index.js:1-43",
+    "content": "# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');",
+    "token_count": 348,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 41,
+     "rerank_score": -1.6109733581542969,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 348
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:838-860",
+    "content": "# lib/response.js:838-860  (lib.response)\n/**\n * Set cookie `name` to `value`, with the given `options`.\n *\n * Options:\n *\n *    - `maxAge`   max-age in milliseconds, converted to `expires`\n *    - `signed`   sign the cookie\n *    - `path`     defaults to \"/\"\n *\n * Examples:\n *\n *    // \"Remember Me\" for 15 minutes\n *    res.cookie('rememberme', '1', { expires: new Date(Date.now() + 900000), httpOnly: true });\n *\n *    // same as above\n *    res.cookie('rememberme', '1', { maxAge: 900000, httpOnly: true })\n *\n * @param {String} name\n * @param {String|Object} value\n * @param {Object} [options]\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 208,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 4,
+     "rerank_score": -1.6397550106048584,
+     "bm25_rank": 4,
+     "dense_rank": 25,
+     "oversized_chunk": false,
+     "engine_token_count": 208
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/init.js:28-42",
+    "content": "# lib/middleware/init.js:28-42  (lib.middleware.init.init)\nexports.init = function(app){\n  return function expressInit(req, res, next){\n    if (app.enabled('x-powered-by')) res.setHeader('X-Powered-By', 'Express');\n    req.res = res;\n    res.req = req;\n    req.next = next;\n\n    setPrototypeOf(req, app.request)\n    setPrototypeOf(res, app.response)\n\n    res.locals = res.locals || Object.create(null);\n\n    next();\n  };\n};",
+    "token_count": 109,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.middleware.init.init"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 50,
+     "rerank_score": -1.8090564012527466,
+     "bm25_rank": null,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/web-service/index.js:21-117",
+    "content": "# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 774,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 17,
+     "rerank_score": -1.9087531566619873,
+     "bm25_rank": 9,
+     "dense_rank": 83,
+     "oversized_chunk": false,
+     "engine_token_count": 774
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/content-negotiation/index.js:1-31",
+    "content": "# examples/content-negotiation/index.js:1-31  (examples.content-negotiation)\n'use strict'\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar users = require('./db');\n\n// so either you can deal with different types of formatting\n// for expected response in index.js\napp.get('/', function(req, res){\n  res.format({\n    html: function(){\n      res.send('<ul>' + users.map(function(user){\n        return '<li>' + user.name + '</li>';\n      }).join('') + '</ul>');\n    },\n\n    text: function(){\n      res.send(users.map(function(user){\n        return ' - ' + user.name + '\\n';\n      }).join(''));\n    },\n\n    json: function(){\n      res.json(users);\n    }\n  });\n});\n\n// or you could write a tiny middleware like\n// this to add a layer of abstraction\n// and make things a bit more declarative:",
+    "token_count": 193,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 15,
+     "rerank_score": -1.9864778518676758,
+     "bm25_rank": 18,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 193
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/auth/index.js:1-58",
+    "content": "# examples/auth/index.js:1-58  (examples.auth)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar hash = require('pbkdf2-password')()\nvar path = require('path');\nvar session = require('express-session');\n\nvar app = module.exports = express();\n\n// config\n\napp.set('view engine', 'ejs');\napp.set('views', path.join(__dirname, 'views'));\n\n// middleware\n\napp.use(express.urlencoded({ extended: false }))\napp.use(session({\n  resave: false, // don't save session if unmodified\n  saveUninitialized: false, // don't create session until something stored\n  secret: 'shhhh, very secret'\n}));\n\n// Session-persisted message middleware\n\napp.use(function(req, res, next){\n  var err = req.session.error;\n  var msg = req.session.success;\n  delete req.session.error;\n  delete req.session.success;\n  res.locals.message = '';\n  if (err) res.locals.message = '<p class=\"msg error\">' + err + '</p>';\n  if (msg) res.locals.message = '<p class=\"msg success\">' + msg + '</p>';\n  next();\n});\n\n// dummy database\n\nvar users = {\n  tj: { name: 'tj' }\n};\n\n// when you create a user, generate a salt\n// and hash the password ('foobar' is the pass here)\n\nhash({ password: 'foobar' }, function (err, pass, salt, hash) {\n  if (err) throw err;\n  // store the salt & hash in the \"db\"\n  users.tj.salt = salt;\n  users.tj.hash = hash;\n});\n\n\n// Authenticate using our plain-object database of doom!",
+    "token_count": 359,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 34,
+     "rerank_score": -2.1477489471435547,
+     "bm25_rank": 72,
+     "dense_rank": 71,
+     "oversized_chunk": false,
+     "engine_token_count": 359
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/route-middleware/index.js:60-90",
+    "content": "# examples/route-middleware/index.js:60-90  (examples.route-middleware)\n// Middleware for faux authentication\n// you would of course implement something real,\n// but this illustrates how an authenticated user\n// may interact with middleware\n\napp.use(function(req, res, next){\n  req.authenticatedUser = users[0];\n  next();\n});\n\napp.get('/', function(req, res){\n  res.redirect('/user/0');\n});\n\napp.get('/user/:id', loadUser, function(req, res){\n  res.send('Viewing user ' + req.user.name);\n});\n\napp.get('/user/:id/edit', loadUser, andRestrictToSelf, function(req, res){\n  res.send('Editing user ' + req.user.name);\n});\n\napp.delete('/user/:id', loadUser, andRestrictTo('admin'), function(req, res){\n  res.send('Deleted user ' + req.user.name);\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 227,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -2.4120078086853027,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 227
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/config.js:1-4",
+    "content": "# test/config.js:1-4  (test.config)\n'use strict'\n\nvar assert = require('assert');\nvar express = require('..');",
+    "token_count": 30,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -2.6069791316986084,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-constructor/index.js:1-48",
+    "content": "# examples/view-constructor/index.js:1-48  (examples.view-constructor)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar GithubView = require('./github-view');\nvar md = require('marked').parse;\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\napp.engine('md', function(str, options, fn){\n  try {\n    var html = md(str);\n    html = html.replace(/\\{([^}]+)\\}/g, function(_, name){\n      return options[name] || '';\n    });\n    fn(null, html);\n  } catch(err) {\n    fn(err);\n  }\n});\n\n// pointing to a particular github repo to load files from it\napp.set('views', 'expressjs/express');\n\n// register a new view constructor\napp.set('view', GithubView);\n\napp.get('/', function(req, res){\n  // rendering a view relative to the repo.\n  // app.locals, res.locals, and locals passed\n  // work like they normally would\n  res.render('examples/markdown/views/index.md', { title: 'Example' });\n});\n\napp.get('/Readme.md', function(req, res){\n  // rendering a view from https://github.com/expressjs/express/blob/master/Readme.md\n  res.render('Readme.md');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 316,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": -2.6473302841186523,
+     "bm25_rank": 22,
+     "dense_rank": 87,
+     "oversized_chunk": false,
+     "engine_token_count": 316
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error-pages/index.js:1-103",
+    "content": "# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 721,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 45,
+     "rerank_score": -2.7506840229034424,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 721
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:266-298",
+    "content": "# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 321,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -2.9017772674560547,
+     "bm25_rank": 20,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 321
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:627-682",
+    "content": "# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 384,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -2.926640033721924,
+     "bm25_rank": 2,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 384
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:815-822",
+    "content": "# lib/response.js:815-822  (lib.response)\n/**\n * Clear cookie `name`.\n *\n * @param {String} name\n * @param {Object} [options]\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 57,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": -2.9647812843322754,
+     "bm25_rank": 73,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/acceptance/cookie-sessions.js:2-32",
+    "content": "# test/acceptance/cookie-sessions.js:2-32  (test.acceptance.cookie-sessions)\nvar app = require('../../examples/cookie-sessions')\nvar request = require('supertest')\n\ndescribe('cookie-sessions', function () {\n  describe('GET /', function () {\n    it('should display no views', function (done) {\n      request(app)\n      .get('/')\n      .expect(200, 'viewed 1 times\\n', done)\n    })\n\n    it('should set a session cookie', function (done) {\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', /session=/)\n      .expect(200, done)\n    })\n\n    it('should display 1 view on revisit', function (done) {\n      request(app)\n      .get('/')\n      .expect(200, 'viewed 1 times\\n', function (err, res) {\n        if (err) return done(err)\n        request(app)\n        .get('/')\n        .set('Cookie', getCookies(res))\n        .expect(200, 'viewed 2 times\\n', done)\n      })\n    })\n  })\n})",
+    "token_count": 247,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": -3.00641131401062,
+     "bm25_rank": 49,
+     "dense_rank": 35,
+     "oversized_chunk": false,
+     "engine_token_count": 247
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:1-18",
+    "content": "# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.",
+    "token_count": 114,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -3.0065155029296875,
+     "bm25_rank": 57,
+     "dense_rank": 47,
+     "oversized_chunk": false,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-locals/index.js:102-155",
+    "content": "# examples/view-locals/index.js:102-155  (examples.view-locals)\napp.get('/middleware-locals', count2, users2, function (req, res) {\n  // you can see now how we have much less\n  // to pass to res.render(). If we have\n  // several routes related to users this\n  // can be a great productivity booster\n  res.render('index', { title: 'Users' });\n});\n\n// keep in mind that middleware may be placed anywhere\n// and in various combinations, so if you have locals\n// that you wish to make available to all subsequent\n// middleware/routes you can do something like this:\n\n/*\n\napp.use(function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// or suppose you have some /admin\n// \"global\" local variables:\n\n/*\n\napp.use('/api', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// the following is effectively the same,\n// but uses a route instead:\n\n/*\n\napp.all('/api/*', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 310,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 23,
+     "rerank_score": -3.3433218002319336,
+     "bm25_rank": 19,
+     "dense_rank": 91,
+     "oversized_chunk": false,
+     "engine_token_count": 310
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/express.js:59-116",
+    "content": "# lib/express.js:59-116  (lib.express)\n/**\n * Expose the prototypes.\n */\n\nexports.application = proto;\nexports.request = req;\nexports.response = res;\n\n/**\n * Expose constructors.\n */\n\nexports.Route = Route;\nexports.Router = Router;\n\n/**\n * Expose middleware\n */\n\nexports.json = bodyParser.json\nexports.query = require('./middleware/query');\nexports.raw = bodyParser.raw\nexports.static = require('serve-static');\nexports.text = bodyParser.text\nexports.urlencoded = bodyParser.urlencoded\n\n/**\n * Replace removed middleware with an appropriate error message.\n */\n\nvar removedMiddlewares = [\n  'bodyParser',\n  'compress',\n  'cookieSession',\n  'session',\n  'logger',\n  'cookieParser',\n  'favicon',\n  'responseTime',\n  'errorHandler',\n  'timeout',\n  'methodOverride',\n  'vhost',\n  'csrf',\n  'directory',\n  'limit',\n  'multipart',\n  'staticCache'\n]\n\nremovedMiddlewares.forEach(function (name) {\n  Object.defineProperty(exports, name, {\n    get: function () {\n      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');\n    },\n    configurable: true\n  });\n});",
+    "token_count": 273,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 10,
+     "rerank_score": -3.395508050918579,
+     "bm25_rank": 23,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 273
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/route-middleware/index.js:36-48",
+    "content": "# examples/route-middleware/index.js:36-48  (examples.route-middleware.andRestrictToSelf)\nfunction andRestrictToSelf(req, res, next) {\n  // If our authenticated user is the user we are viewing\n  // then everything is fine :)\n  if (req.authenticatedUser.id === req.user.id) {\n    next();\n  } else {\n    // You may want to implement specific exceptions\n    // such as UnauthorizedError or similar so that you\n    // can handle these can be special-cased in an error handler\n    // (view ./examples/pages for this)\n    next(new Error('Unauthorized'));\n  }\n}",
+    "token_count": 137,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.route-middleware.andRestrictToSelf"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 39,
+     "rerank_score": -5.01470947265625,
+     "bm25_rank": 11,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 137
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/mvc/index.js:22-31",
+    "content": "# examples/mvc/index.js:22-31  (examples.mvc.message)\n// define a custom res.message() method\n// which stores messages in the session\napp.response.message = function(msg){\n  // reference `req.session` via the `this.req` reference\n  var sess = this.req.session;\n  // simply add the msg to an array for later\n  sess.messages = sess.messages || [];\n  sess.messages.push(msg);\n  return this;\n};",
+    "token_count": 96,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.mvc.message"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 26,
+     "rerank_score": -5.0358381271362305,
+     "bm25_rank": 50,
+     "dense_rank": 41,
+     "oversized_chunk": false,
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:776-801",
+    "content": "# lib/response.js:776-801  (lib.response.set)\nres.set =\nres.header = function header(field, val) {\n  if (arguments.length === 2) {\n    var value = Array.isArray(val)\n      ? val.map(String)\n      : String(val);\n\n    // add charset to content-type\n    if (field.toLowerCase() === 'content-type') {\n      if (Array.isArray(value)) {\n        throw new TypeError('Content-Type cannot be set to an Array');\n      }\n      if (!charsetRegExp.test(value)) {\n        var charset = mime.charsets.lookup(value.split(';')[0]);\n        if (charset) value += '; charset=' + charset.toLowerCase();\n      }\n    }\n\n    this.setHeader(field, value);\n  } else {\n    for (var key in field) {\n      this.set(key, field[key]);\n    }\n  }\n  return this;\n};",
+    "token_count": 182,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.set"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 32,
+     "rerank_score": -5.213651180267334,
+     "bm25_rank": 66,
+     "dense_rank": 74,
+     "oversized_chunk": false,
+     "engine_token_count": 182
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:29-53",
+    "content": "# examples/error/index.js:29-53  (examples.error)\napp.get('/', function () {\n  // Caught and passed down to the errorHandler middleware\n  throw new Error('something broke!');\n});\n\napp.get('/next', function(req, res, next){\n  // We can also pass exceptions to next()\n  // The reason for process.nextTick() is to show that\n  // next() can be called inside an async operation,\n  // in real life it can be a DB read or HTTP request.\n  process.nextTick(function(){\n    next(new Error('oh no!'));\n  });\n});\n\n// the error handler is placed after routes\n// if it were above it would not receive errors\n// from app.get() etc\napp.use(error);\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 191,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 36,
+     "rerank_score": -6.233704090118408,
+     "bm25_rank": 7,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 191
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12963,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are investigating how Express serializes an outgoing cookie, starting from `res.cookie` in lib/response.js. Identify the real third-party npm package function it delegates the actual name=value;attributes string construction to, and that function's own real signature and thrown-exception behavior.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.cookie\", \"cookie.index.serialize\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 586,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "lib/router/index.js:63-95",
+    "lib/request.js:292-414#part1of2",
+    "lib/response.js:378-417",
+    "lib/response.js:460-499",
+    "lib/request.js:416-509#part2of2",
+    "lib/request.js:184-210",
+    "lib/response.js:992-999"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "typescript",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     14.521356
+    ],
+    "L_embed_query": [
+     250.44123
+    ],
+    "L_dense": [
+     0.656898
+    ],
+    "L_rrf": [
+     0.104237
+    ],
+    "L_rerank": [
+     27471.266126
+    ],
+    "L_retrieve": [
+     27803.820319
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12963,
+   "prompt_tokens": 13235,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13248,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# test/res.cookie.js:9-53  (test.res.cookie)\ndescribe('res', function(){\n  describe('.cookie(name, object)', function(){\n    it('should generate a JSON cookie', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.cookie('user', { name: 'tobi' }).end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'user=j%3A%7B%22name%22%3A%22tobi%22%7D; Path=/')\n      .expect(200, done)\n    })\n  })\n\n  describe('.cookie(name, string)', function(){\n    it('should set a cookie', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.cookie('name', 'tobi').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'name=tobi; Path=/')\n      .expect(200, done)\n    })\n\n    it('should allow multiple calls', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.cookie('name', 'tobi');\n        res.cookie('age', 1);\n        res.cookie('gender', '?');\n        res.end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Set-Cookie', 'name=tobi; Path=/,age=1; Path=/,gender=%3F; Path=/')\n        .expect(200, done)\n    })\n  })\n})\n\n# test/res.cookie.js:101-187#part2of3  (test.res.cookie)\ndescribe('res', function(){\n  describe('.cookie(name, string, options)', function(){\n    describe('maxAge', function(){\n      it('should set relative expires', function(done){\n        var app = express();\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', { maxAge: 1000 });\n          res.end();\n        });\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', /name=tobi; Max-Age=1; Path=\\/; Expires=/)\n          .expect(200, done)\n      })\n\n      it('should set max-age', function(done){\n        var app = express();\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', { maxAge: 1000 });\n          res.end();\n        });\n\n        request(app)\n        .get('/')\n        .expect('Set-Cookie', /Max-Age=1/, done)\n      })\n\n      it('should not mutate the options object', function(done){\n        var app = express();\n\n        var options = { maxAge: 1000 };\n        var optionsCopy = merge({}, options);\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', options)\n          res.json(options)\n        });\n\n        request(app)\n        .get('/')\n        .expect(200, optionsCopy, done)\n      })\n\n      it('should not throw on null', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { maxAge: null })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(200)\n          .expect('Set-Cookie', 'name=tobi; Path=/')\n          .end(done)\n      })\n\n      it('should not throw on undefined', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { maxAge: undefined })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(200)\n          .expect('Set-Cookie', 'name=tobi; Path=/')\n          .end(done)\n      })\n\n      it('should throw an error with invalid maxAge', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { maxAge: 'foobar' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(500, /option maxAge is invalid/, done)\n      })\n    })\n  })\n})\n\n# test/res.cookie.js:189-294#part3of3  (test.res.cookie)\ndescribe('res', function(){\n  describe('.cookie(name, string, options)', function(){\n    describe('priority', function () {\n      it('should set low priority', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { priority: 'low' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', /Priority=Low/)\n          .expect(200, done)\n      })\n\n      it('should set medium priority', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { priority: 'medium' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', /Priority=Medium/)\n          .expect(200, done)\n      })\n\n      it('should set high priority', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { priority: 'high' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', /Priority=High/)\n          .expect(200, done)\n      })\n\n      it('should throw with invalid priority', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { priority: 'foobar' })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(500, /option priority is invalid/, done)\n      })\n    })\n\n    describe('signed', function(){\n      it('should generate a signed JSON cookie', function(done){\n        var app = express();\n\n        app.use(cookieParser('foo bar baz'));\n\n        app.use(function(req, res){\n          res.cookie('user', { name: 'tobi' }, { signed: true }).end();\n        });\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', 'user=s%3Aj%3A%7B%22name%22%3A%22tobi%22%7D.K20xcwmDS%2BPb1rsD95o5Jm5SqWs1KteqdnynnB7jkTE; Path=/')\n          .expect(200, done)\n      })\n    })\n\n    describe('signed without secret', function(){\n      it('should throw an error', function(done){\n        var app = express();\n\n        app.use(cookieParser());\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', { signed: true }).end();\n        });\n\n        request(app)\n        .get('/')\n        .expect(500, /secret\\S+ required for signed cookies/, done);\n      })\n    })\n\n    describe('.signedCookie(name, string)', function(){\n      it('should set a signed cookie', function(done){\n        var app = express();\n\n        app.use(cookieParser('foo bar baz'));\n\n        app.use(function(req, res){\n          res.cookie('name', 'tobi', { signed: true }).end();\n        });\n\n        request(app)\n        .get('/')\n        .expect('Set-Cookie', 'name=s%3Atobi.xJjV2iZ6EI7C8E5kzwbfA9PVLl1ZR07UTnuTgQQ4EnQ; Path=/')\n        .expect(200, done)\n      })\n    })\n  })\n})\n\n# lib/response.js:862-895  (lib.response.cookie)\nres.cookie = function (name, value, options) {\n  var opts = merge({}, options);\n  var secret = this.req.secret;\n  var signed = opts.signed;\n\n  if (signed && !secret) {\n    throw new Error('cookieParser(\"secret\") required for signed cookies');\n  }\n\n  var val = typeof value === 'object'\n    ? 'j:' + JSON.stringify(value)\n    : String(value);\n\n  if (signed) {\n    val = 's:' + sign(val, secret);\n  }\n\n  if (opts.maxAge != null) {\n    var maxAge = opts.maxAge - 0\n\n    if (!isNaN(maxAge)) {\n      opts.expires = new Date(Date.now() + maxAge)\n      opts.maxAge = Math.floor(maxAge / 1000)\n    }\n  }\n\n  if (opts.path == null) {\n    opts.path = '/';\n  }\n\n  this.append('Set-Cookie', cookie.serialize(name, String(val), opts));\n\n  return this;\n};\n\n# test/req.signedCookies.js:1-36  (test.req.signedCookies)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest')\n  , cookieParser = require('cookie-parser')\n\ndescribe('req', function(){\n  describe('.signedCookies', function(){\n    it('should return a signed JSON cookie', function(done){\n      var app = express();\n\n      app.use(cookieParser('secret'));\n\n      app.use(function(req, res){\n        if (req.path === '/set') {\n          res.cookie('obj', { foo: 'bar' }, { signed: true });\n          res.end();\n        } else {\n          res.send(req.signedCookies);\n        }\n      });\n\n      request(app)\n      .get('/set')\n      .end(function(err, res){\n        if (err) return done(err);\n        var cookie = res.header['set-cookie'];\n\n        request(app)\n        .get('/')\n        .set('Cookie', cookie)\n        .expect(200, { obj: { foo: 'bar' } }, done)\n      });\n    })\n  })\n})\n\n# test/res.cookie.js:56-99#part1of3  (test.res.cookie)\ndescribe('res', function(){\n  describe('.cookie(name, string, options)', function(){\n    it('should set params', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.cookie('name', 'tobi', { httpOnly: true, secure: true });\n        res.end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'name=tobi; Path=/; HttpOnly; Secure')\n      .expect(200, done)\n    })\n\n    describe('expires', function () {\n      it('should throw on invalid date', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { expires: new Date(NaN) })\n          res.end()\n        })\n\n        request(app)\n          .get('/')\n          .expect(500, /option expires is invalid/, done)\n      })\n    })\n\n    describe('partitioned', function () {\n      it('should set partitioned', function (done) {\n        var app = express();\n\n        app.use(function (req, res) {\n          res.cookie('name', 'tobi', { partitioned: true });\n          res.end();\n        });\n\n        request(app)\n          .get('/')\n          .expect('Set-Cookie', 'name=tobi; Path=/; Partitioned')\n          .expect(200, done)\n      })\n    })\n  })\n})\n\n# test/res.clearCookie.js:1-68  (test.res.clearCookie)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('res', function(){\n  describe('.clearCookie(name)', function(){\n    it('should set a cookie passed expiry', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.clearCookie('sid').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'sid=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')\n      .expect(200, done)\n    })\n  })\n\n  describe('.clearCookie(name, options)', function(){\n    it('should set the given params', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.clearCookie('sid', { path: '/admin' }).end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'sid=; Path=/admin; Expires=Thu, 01 Jan 1970 00:00:00 GMT')\n      .expect(200, done)\n    })\n\n    it('should set expires when passed', function(done) {\n      var expiresAt = new Date()\n      var app = express();\n\n      app.use(function(req, res){\n        res.clearCookie('sid', { expires: expiresAt }).end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', 'sid=; Path=/; Expires=' + expiresAt.toUTCString() )\n      .expect(200, done)\n    })\n\n    it('should set both maxAge and expires when passed', function(done) {\n      var maxAgeInMs = 10000\n      var expiresAt = new Date()\n      var expectedExpires = new Date(expiresAt.getTime() + maxAgeInMs)\n      var app = express();\n\n      app.use(function(req, res){\n        res.clearCookie('sid', { expires: expiresAt, maxAge: maxAgeInMs }).end();\n      });\n\n      request(app)\n      .get('/')\n      // yes, this is the behavior. When we set a max-age, we also set expires to a date 10 sec ahead of expires\n      // even if we set max-age only, we will also set an expires 10 sec in the future\n      .expect('Set-Cookie', 'sid=; Max-Age=10; Path=/; Expires=' + expectedExpires.toUTCString())\n      .expect(200, done)\n    })\n  })\n})\n\n# test/res.set.js:1-124  (test.res.set)\n'use strict'\n\nvar express = require('..');\nvar request = require('supertest');\n\ndescribe('res', function(){\n  describe('.set(field, value)', function(){\n    it('should set the response header field', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.set('Content-Type', 'text/x-foo; charset=utf-8').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/x-foo; charset=utf-8')\n      .end(done);\n    })\n\n    it('should coerce to a string', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.set('X-Number', 123);\n        res.end(typeof res.get('X-Number'));\n      });\n\n      request(app)\n      .get('/')\n      .expect('X-Number', '123')\n      .expect(200, 'string', done);\n    })\n  })\n\n  describe('.set(field, values)', function(){\n    it('should set multiple response header fields', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.set('Set-Cookie', [\"type=ninja\", \"language=javascript\"]);\n        res.send(res.get('Set-Cookie'));\n      });\n\n      request(app)\n      .get('/')\n      .expect('[\"type=ninja\",\"language=javascript\"]', done);\n    })\n\n    it('should coerce to an array of strings', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.set('X-Numbers', [123, 456]);\n        res.end(JSON.stringify(res.get('X-Numbers')));\n      });\n\n      request(app)\n      .get('/')\n      .expect('X-Numbers', '123, 456')\n      .expect(200, '[\"123\",\"456\"]', done);\n    })\n\n    it('should not set a charset of one is already set', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.set('Content-Type', 'text/html; charset=lol');\n        res.end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/html; charset=lol')\n      .expect(200, done);\n    })\n\n    it('should throw when Content-Type is an array', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.set('Content-Type', ['text/html'])\n        res.end()\n      });\n\n      request(app)\n      .get('/')\n      .expect(500, /TypeError: Content-Type cannot be set to an Array/, done)\n    })\n  })\n\n  describe('.set(object)', function(){\n    it('should set multiple fields', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.set({\n          'X-Foo': 'bar',\n          'X-Bar': 'baz'\n        }).end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('X-Foo', 'bar')\n      .expect('X-Bar', 'baz')\n      .end(done);\n    })\n\n    it('should coerce to a string', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.set({ 'X-Number': 123 });\n        res.end(typeof res.get('X-Number'));\n      });\n\n      request(app)\n      .get('/')\n      .expect('X-Number', '123')\n      .expect(200, 'string', done);\n    })\n  })\n})\n\n# examples/cookies/index.js:1-49  (examples.cookies)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar cookieParser = require('cookie-parser');\n\n// custom log format\nif (process.env.NODE_ENV !== 'test') app.use(logger(':method :url'))\n\n// parses request cookies, populating\n// req.cookies and req.signedCookies\n// when the secret is passed, used\n// for signing the cookies.\napp.use(cookieParser('my secret here'));\n\n// parses x-www-form-urlencoded\napp.use(express.urlencoded({ extended: false }))\n\napp.get('/', function(req, res){\n  if (req.cookies.remember) {\n    res.send('Remembered :). Click to <a href=\"/forget\">forget</a>!.');\n  } else {\n    res.send('<form method=\"post\"><p>Check to <label>'\n      + '<input type=\"checkbox\" name=\"remember\"/> remember me</label> '\n      + '<input type=\"submit\" value=\"Submit\"/>.</p></form>');\n  }\n});\n\napp.get('/forget', function(req, res){\n  res.clearCookie('remember');\n  res.redirect('back');\n});\n\napp.post('/', function(req, res){\n  var minute = 60000;\n  if (req.body.remember) res.cookie('remember', 1, { maxAge: minute });\n  res.redirect('back');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/response.js:1-65  (lib.response)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar createError = require('http-errors')\nvar deprecate = require('depd')('express');\nvar encodeUrl = require('encodeurl');\nvar escapeHtml = require('escape-html');\nvar http = require('http');\nvar isAbsolute = require('./utils').isAbsolute;\nvar onFinished = require('on-finished');\nvar path = require('path');\nvar statuses = require('statuses')\nvar merge = require('utils-merge');\nvar sign = require('cookie-signature').sign;\nvar normalizeType = require('./utils').normalizeType;\nvar normalizeTypes = require('./utils').normalizeTypes;\nvar setCharset = require('./utils').setCharset;\nvar cookie = require('cookie');\nvar send = require('send');\nvar extname = path.extname;\nvar mime = send.mime;\nvar resolve = path.resolve;\nvar vary = require('vary');\n\n/**\n * Response prototype.\n * @public\n */\n\nvar res = Object.create(http.ServerResponse.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = res\n\n/**\n * Module variables.\n * @private\n */\n\nvar charsetRegExp = /;\\s*charset\\s*=/;\n\n/**\n * Set status `code`.\n *\n * @param {Number} code\n * @return {ServerResponse}\n * @public\n */\n\n# test/res.append.js:1-105  (test.res.append)\n'use strict'\n\nvar assert = require('assert')\nvar express = require('..')\nvar request = require('supertest')\n\ndescribe('res', function () {\n  describe('.append(field, val)', function () {\n    it('should append multiple headers', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.append('Set-Cookie', 'foo=bar')\n        next()\n      })\n\n      app.use(function (req, res) {\n        res.append('Set-Cookie', 'fizz=buzz')\n        res.end()\n      })\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['foo=bar', 'fizz=buzz']))\n        .end(done)\n    })\n\n    it('should accept array of values', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.append('Set-Cookie', ['foo=bar', 'fizz=buzz'])\n        res.end()\n      })\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['foo=bar', 'fizz=buzz']))\n        .end(done)\n    })\n\n    it('should get reset by res.set(field, val)', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.append('Set-Cookie', 'foo=bar')\n        res.append('Set-Cookie', 'fizz=buzz')\n        next()\n      })\n\n      app.use(function (req, res) {\n        res.set('Set-Cookie', 'pet=tobi')\n        res.end()\n      });\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['pet=tobi']))\n        .end(done)\n    })\n\n    it('should work with res.set(field, val) first', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.set('Set-Cookie', 'foo=bar')\n        next()\n      })\n\n      app.use(function(req, res){\n        res.append('Set-Cookie', 'fizz=buzz')\n        res.end()\n      })\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['foo=bar', 'fizz=buzz']))\n        .end(done)\n    })\n\n    it('should work together with res.cookie', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.cookie('foo', 'bar')\n        next()\n      })\n\n      app.use(function (req, res) {\n        res.append('Set-Cookie', 'fizz=buzz')\n        res.end()\n      })\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect(shouldHaveHeaderValues('Set-Cookie', ['foo=bar; Path=/', 'fizz=buzz']))\n        .end(done)\n    })\n  })\n})\n\n# test/res.cookie.js:1-6  (test.res.cookie)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest')\n  , cookieParser = require('cookie-parser')\nvar merge = require('utils-merge');\n\n# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */\n\n# index.js:1-11\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\nmodule.exports = require('./lib/express');\n\n# lib/middleware/init.js:1-26  (lib.middleware.init)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Initialization middleware, exposing the\n * request and response to each other, as well\n * as defaulting the X-Powered-By header field.\n *\n * @param {Function} app\n * @return {Function}\n * @api private\n */\n\n# test/res.jsonp.js:331-386  (test.res.jsonp)\ndescribe('res', function(){\n  describe('.jsonp(status, object)', function(){\n    it('should respond with json and set the .statusCode', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp(201, { id: 1 });\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '{\"id\":1}', done)\n    })\n  })\n\n  describe('.jsonp(object, status)', function(){\n    it('should respond with json and set the .statusCode for backwards compat', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp({ id: 1 }, 201);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '{\"id\":1}', done)\n    })\n\n    it('should use status as second number for backwards compat', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp(200, 201);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '200', done)\n    })\n  })\n\n  it('should not override previous Content-Types', function(done){\n    var app = express();\n\n    app.get('/', function(req, res){\n      res.type('application/vnd.example+json');\n      res.jsonp({ hello: 'world' });\n    });\n\n    request(app)\n    .get('/')\n    .expect('content-type', 'application/vnd.example+json; charset=utf-8')\n    .expect(200, '{\"hello\":\"world\"}', done)\n  })\n})\n\n# test/acceptance/cookie-sessions.js:34-38  (test.acceptance.cookie-sessions.getCookies)\nfunction getCookies(res) {\n  return res.headers['set-cookie'].map(function (val) {\n    return val.split(';')[0]\n  }).join('; ');\n}\n\n# examples/cookie-sessions/index.js:1-25  (examples.cookie-sessions)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar cookieSession = require('cookie-session');\nvar express = require('../../');\n\nvar app = module.exports = express();\n\n// add req.session cookie support\napp.use(cookieSession({ secret: 'manny is cool' }));\n\n// do something with the session\napp.get('/', function (req, res) {\n  req.session.count = (req.session.count || 0) + 1\n  res.send('viewed ' + req.session.count + ' times\\n')\n})\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# test/acceptance/auth.js:4-6  (test.acceptance.auth.getCookie)\nfunction getCookie(res) {\n  return res.headers['set-cookie'][0].split(';')[0];\n}\n\n# lib/response.js:824-836  (lib.response.clearCookie)\nres.clearCookie = function clearCookie(name, options) {\n  if (options) {\n    if (options.maxAge) {\n      deprecate('res.clearCookie: Passing \"options.maxAge\" is deprecated. In v5.0.0 of Express, this option will be ignored, as res.clearCookie will automatically set cookies to expire immediately. Please update your code to omit this option.');\n    }\n    if (options.expires) {\n      deprecate('res.clearCookie: Passing \"options.expires\" is deprecated. In v5.0.0 of Express, this option will be ignored, as res.clearCookie will automatically set cookies to expire immediately. Please update your code to omit this option.');\n    }\n  }\n  var opts = merge({ expires: new Date(1), path: '/' }, options);\n\n  return this.cookie(name, '', opts);\n};\n\n# lib/middleware/query.js:1-23  (lib.middleware.query)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n */\n\nvar merge = require('utils-merge')\nvar parseUrl = require('parseurl');\nvar qs = require('qs');\n\n/**\n * @param {Object} options\n * @return {Function}\n * @api public\n */\n\n# test/acceptance/cookies.js:2-71  (test.acceptance.cookies)\nvar app = require('../../examples/cookies')\n  , request = require('supertest');\nvar utils = require('../support/utils');\n\ndescribe('cookies', function(){\n  describe('GET /', function(){\n    it('should have a form', function(done){\n      request(app)\n      .get('/')\n      .expect(/<form/, done);\n    })\n\n    it('should respond with no cookies', function(done){\n      request(app)\n      .get('/')\n      .expect(utils.shouldNotHaveHeader('Set-Cookie'))\n      .expect(200, done)\n    })\n\n    it('should respond to cookie', function(done){\n      request(app)\n      .post('/')\n      .type('urlencoded')\n      .send({ remember: 1 })\n      .expect(302, function(err, res){\n        if (err) return done(err)\n        request(app)\n        .get('/')\n        .set('Cookie', res.headers['set-cookie'][0])\n        .expect(200, /Remembered/, done)\n      })\n    })\n  })\n\n  describe('GET /forget', function(){\n    it('should clear cookie', function(done){\n      request(app)\n      .post('/')\n      .type('urlencoded')\n      .send({ remember: 1 })\n      .expect(302, function(err, res){\n        if (err) return done(err)\n        request(app)\n        .get('/forget')\n        .set('Cookie', res.headers['set-cookie'][0])\n        .expect('Set-Cookie', /remember=;/)\n        .expect(302, done)\n      })\n    })\n  })\n\n  describe('POST /', function(){\n    it('should set a cookie', function(done){\n      request(app)\n      .post('/')\n      .type('urlencoded')\n      .send({ remember: 1 })\n      .expect('Set-Cookie', /remember=1/)\n      .expect(302, done)\n    })\n\n    it('should no set cookie w/o reminder', function(done){\n      request(app)\n      .post('/')\n      .send({})\n      .expect(utils.shouldNotHaveHeader('Set-Cookie'))\n      .expect(302, done)\n    })\n  })\n})\n\n# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');\n\n# lib/response.js:838-860  (lib.response)\n/**\n * Set cookie `name` to `value`, with the given `options`.\n *\n * Options:\n *\n *    - `maxAge`   max-age in milliseconds, converted to `expires`\n *    - `signed`   sign the cookie\n *    - `path`     defaults to \"/\"\n *\n * Examples:\n *\n *    // \"Remember Me\" for 15 minutes\n *    res.cookie('rememberme', '1', { expires: new Date(Date.now() + 900000), httpOnly: true });\n *\n *    // same as above\n *    res.cookie('rememberme', '1', { maxAge: 900000, httpOnly: true })\n *\n * @param {String} name\n * @param {String|Object} value\n * @param {Object} [options]\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# lib/middleware/init.js:28-42  (lib.middleware.init.init)\nexports.init = function(app){\n  return function expressInit(req, res, next){\n    if (app.enabled('x-powered-by')) res.setHeader('X-Powered-By', 'Express');\n    req.res = res;\n    res.req = req;\n    req.next = next;\n\n    setPrototypeOf(req, app.request)\n    setPrototypeOf(res, app.response)\n\n    res.locals = res.locals || Object.create(null);\n\n    next();\n  };\n};\n\n# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/content-negotiation/index.js:1-31  (examples.content-negotiation)\n'use strict'\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar users = require('./db');\n\n// so either you can deal with different types of formatting\n// for expected response in index.js\napp.get('/', function(req, res){\n  res.format({\n    html: function(){\n      res.send('<ul>' + users.map(function(user){\n        return '<li>' + user.name + '</li>';\n      }).join('') + '</ul>');\n    },\n\n    text: function(){\n      res.send(users.map(function(user){\n        return ' - ' + user.name + '\\n';\n      }).join(''));\n    },\n\n    json: function(){\n      res.json(users);\n    }\n  });\n});\n\n// or you could write a tiny middleware like\n// this to add a layer of abstraction\n// and make things a bit more declarative:\n\n# examples/auth/index.js:1-58  (examples.auth)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar hash = require('pbkdf2-password')()\nvar path = require('path');\nvar session = require('express-session');\n\nvar app = module.exports = express();\n\n// config\n\napp.set('view engine', 'ejs');\napp.set('views', path.join(__dirname, 'views'));\n\n// middleware\n\napp.use(express.urlencoded({ extended: false }))\napp.use(session({\n  resave: false, // don't save session if unmodified\n  saveUninitialized: false, // don't create session until something stored\n  secret: 'shhhh, very secret'\n}));\n\n// Session-persisted message middleware\n\napp.use(function(req, res, next){\n  var err = req.session.error;\n  var msg = req.session.success;\n  delete req.session.error;\n  delete req.session.success;\n  res.locals.message = '';\n  if (err) res.locals.message = '<p class=\"msg error\">' + err + '</p>';\n  if (msg) res.locals.message = '<p class=\"msg success\">' + msg + '</p>';\n  next();\n});\n\n// dummy database\n\nvar users = {\n  tj: { name: 'tj' }\n};\n\n// when you create a user, generate a salt\n// and hash the password ('foobar' is the pass here)\n\nhash({ password: 'foobar' }, function (err, pass, salt, hash) {\n  if (err) throw err;\n  // store the salt & hash in the \"db\"\n  users.tj.salt = salt;\n  users.tj.hash = hash;\n});\n\n\n// Authenticate using our plain-object database of doom!\n\n# examples/route-middleware/index.js:60-90  (examples.route-middleware)\n// Middleware for faux authentication\n// you would of course implement something real,\n// but this illustrates how an authenticated user\n// may interact with middleware\n\napp.use(function(req, res, next){\n  req.authenticatedUser = users[0];\n  next();\n});\n\napp.get('/', function(req, res){\n  res.redirect('/user/0');\n});\n\napp.get('/user/:id', loadUser, function(req, res){\n  res.send('Viewing user ' + req.user.name);\n});\n\napp.get('/user/:id/edit', loadUser, andRestrictToSelf, function(req, res){\n  res.send('Editing user ' + req.user.name);\n});\n\napp.delete('/user/:id', loadUser, andRestrictTo('admin'), function(req, res){\n  res.send('Deleted user ' + req.user.name);\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# test/config.js:1-4  (test.config)\n'use strict'\n\nvar assert = require('assert');\nvar express = require('..');\n\n# examples/view-constructor/index.js:1-48  (examples.view-constructor)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar GithubView = require('./github-view');\nvar md = require('marked').parse;\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\napp.engine('md', function(str, options, fn){\n  try {\n    var html = md(str);\n    html = html.replace(/\\{([^}]+)\\}/g, function(_, name){\n      return options[name] || '';\n    });\n    fn(null, html);\n  } catch(err) {\n    fn(err);\n  }\n});\n\n// pointing to a particular github repo to load files from it\napp.set('views', 'expressjs/express');\n\n// register a new view constructor\napp.set('view', GithubView);\n\napp.get('/', function(req, res){\n  // rendering a view relative to the repo.\n  // app.locals, res.locals, and locals passed\n  // work like they normally would\n  res.render('examples/markdown/views/index.md', { title: 'Example' });\n});\n\napp.get('/Readme.md', function(req, res){\n  // rendering a view from https://github.com/expressjs/express/blob/master/Readme.md\n  res.render('Readme.md');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# lib/response.js:815-822  (lib.response)\n/**\n * Clear cookie `name`.\n *\n * @param {String} name\n * @param {Object} [options]\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# test/acceptance/cookie-sessions.js:2-32  (test.acceptance.cookie-sessions)\nvar app = require('../../examples/cookie-sessions')\nvar request = require('supertest')\n\ndescribe('cookie-sessions', function () {\n  describe('GET /', function () {\n    it('should display no views', function (done) {\n      request(app)\n      .get('/')\n      .expect(200, 'viewed 1 times\\n', done)\n    })\n\n    it('should set a session cookie', function (done) {\n      request(app)\n      .get('/')\n      .expect('Set-Cookie', /session=/)\n      .expect(200, done)\n    })\n\n    it('should display 1 view on revisit', function (done) {\n      request(app)\n      .get('/')\n      .expect(200, 'viewed 1 times\\n', function (err, res) {\n        if (err) return done(err)\n        request(app)\n        .get('/')\n        .set('Cookie', getCookies(res))\n        .expect(200, 'viewed 2 times\\n', done)\n      })\n    })\n  })\n})\n\n# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.\n\n# examples/view-locals/index.js:102-155  (examples.view-locals)\napp.get('/middleware-locals', count2, users2, function (req, res) {\n  // you can see now how we have much less\n  // to pass to res.render(). If we have\n  // several routes related to users this\n  // can be a great productivity booster\n  res.render('index', { title: 'Users' });\n});\n\n// keep in mind that middleware may be placed anywhere\n// and in various combinations, so if you have locals\n// that you wish to make available to all subsequent\n// middleware/routes you can do something like this:\n\n/*\n\napp.use(function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// or suppose you have some /admin\n// \"global\" local variables:\n\n/*\n\napp.use('/api', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// the following is effectively the same,\n// but uses a route instead:\n\n/*\n\napp.all('/api/*', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/express.js:59-116  (lib.express)\n/**\n * Expose the prototypes.\n */\n\nexports.application = proto;\nexports.request = req;\nexports.response = res;\n\n/**\n * Expose constructors.\n */\n\nexports.Route = Route;\nexports.Router = Router;\n\n/**\n * Expose middleware\n */\n\nexports.json = bodyParser.json\nexports.query = require('./middleware/query');\nexports.raw = bodyParser.raw\nexports.static = require('serve-static');\nexports.text = bodyParser.text\nexports.urlencoded = bodyParser.urlencoded\n\n/**\n * Replace removed middleware with an appropriate error message.\n */\n\nvar removedMiddlewares = [\n  'bodyParser',\n  'compress',\n  'cookieSession',\n  'session',\n  'logger',\n  'cookieParser',\n  'favicon',\n  'responseTime',\n  'errorHandler',\n  'timeout',\n  'methodOverride',\n  'vhost',\n  'csrf',\n  'directory',\n  'limit',\n  'multipart',\n  'staticCache'\n]\n\nremovedMiddlewares.forEach(function (name) {\n  Object.defineProperty(exports, name, {\n    get: function () {\n      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');\n    },\n    configurable: true\n  });\n});\n\n# examples/route-middleware/index.js:36-48  (examples.route-middleware.andRestrictToSelf)\nfunction andRestrictToSelf(req, res, next) {\n  // If our authenticated user is the user we are viewing\n  // then everything is fine :)\n  if (req.authenticatedUser.id === req.user.id) {\n    next();\n  } else {\n    // You may want to implement specific exceptions\n    // such as UnauthorizedError or similar so that you\n    // can handle these can be special-cased in an error handler\n    // (view ./examples/pages for this)\n    next(new Error('Unauthorized'));\n  }\n}\n\n# examples/mvc/index.js:22-31  (examples.mvc.message)\n// define a custom res.message() method\n// which stores messages in the session\napp.response.message = function(msg){\n  // reference `req.session` via the `this.req` reference\n  var sess = this.req.session;\n  // simply add the msg to an array for later\n  sess.messages = sess.messages || [];\n  sess.messages.push(msg);\n  return this;\n};\n\n# lib/response.js:776-801  (lib.response.set)\nres.set =\nres.header = function header(field, val) {\n  if (arguments.length === 2) {\n    var value = Array.isArray(val)\n      ? val.map(String)\n      : String(val);\n\n    // add charset to content-type\n    if (field.toLowerCase() === 'content-type') {\n      if (Array.isArray(value)) {\n        throw new TypeError('Content-Type cannot be set to an Array');\n      }\n      if (!charsetRegExp.test(value)) {\n        var charset = mime.charsets.lookup(value.split(';')[0]);\n        if (charset) value += '; charset=' + charset.toLowerCase();\n      }\n    }\n\n    this.setHeader(field, value);\n  } else {\n    for (var key in field) {\n      this.set(key, field[key]);\n    }\n  }\n  return this;\n};\n\n# examples/error/index.js:29-53  (examples.error)\napp.get('/', function () {\n  // Caught and passed down to the errorHandler middleware\n  throw new Error('something broke!');\n});\n\napp.get('/next', function(req, res, next){\n  // We can also pass exceptions to next()\n  // The reason for process.nextTick() is to show that\n  // next() can be called inside an async operation,\n  // in real life it can be a DB read or HTTP request.\n  process.nextTick(function(){\n    next(new Error('oh no!'));\n  });\n});\n\n// the error handler is placed after routes\n// if it were above it would not receive errors\n// from app.get() etc\napp.use(error);\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n## Task\n\nYou are investigating how Express serializes an outgoing cookie, starting from `res.cookie` in lib/response.js. Identify the real third-party npm package function it delegates the actual name=value;attributes string construction to, and that function's own real signature and thrown-exception behavior.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.cookie\", \"cookie.index.serialize\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -1,0 +1,101 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "fastapi_t02_018_application_setup_docs_registration",
+  "items": [
+   {
+    "source_id": "fastapi/applications.py:48-4588",
+    "content": "# fastapi/applications.py:48-4588  (fastapi.applications.FastAPI)\nclass FastAPI(Starlette):\n    ...",
+    "token_count": 33,
+    "rank": 1,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.applications.FastAPI"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 9,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/applications.py:998-1049",
+    "content": "# fastapi/applications.py:998-1049  (fastapi.applications.FastAPI.setup)\n    def setup(self) -> None:\n        if self.openapi_url:\n            urls = (server_data.get(\"url\") for server_data in self.servers)\n            server_urls = {url for url in urls if url}\n\n            async def openapi(req: Request) -> JSONResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                if root_path not in server_urls:\n                    if root_path and self.root_path_in_servers:\n                        self.servers.insert(0, {\"url\": root_path})\n                        server_urls.add(root_path)\n                return JSONResponse(self.openapi())\n\n            self.add_route(self.openapi_url, openapi, include_in_schema=False)\n        if self.openapi_url and self.docs_url:\n\n            async def swagger_ui_html(req: Request) -> HTMLResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                openapi_url = root_path + self.openapi_url\n                oauth2_redirect_url = self.swagger_ui_oauth2_redirect_url\n                if oauth2_redirect_url:\n                    oauth2_redirect_url = root_path + oauth2_redirect_url\n                return get_swagger_ui_html(\n                    openapi_url=openapi_url,\n                    title=f\"{self.title} - Swagger UI\",\n                    oauth2_redirect_url=oauth2_redirect_url,\n                    init_oauth=self.swagger_ui_init_oauth,\n                    swagger_ui_parameters=self.swagger_ui_parameters,\n                )\n\n            self.add_route(self.docs_url, swagger_ui_html, include_in_schema=False)\n\n            if self.swagger_ui_oauth2_redirect_url:\n\n                async def swagger_ui_redirect(req: Request) -> HTMLResponse:\n                    return get_swagger_ui_oauth2_redirect_html()\n\n                self.add_route(\n                    self.swagger_ui_oauth2_redirect_url,\n                    swagger_ui_redirect,\n                    include_in_schema=False,\n                )\n        if self.openapi_url and self.redoc_url:\n\n            async def redoc_html(req: Request) -> HTMLResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                openapi_url = root_path + self.openapi_url\n                return get_redoc_html(\n                    openapi_url=openapi_url, title=f\"{self.title} - ReDoc\"\n                )\n\n            self.add_route(self.redoc_url, redoc_html, include_in_schema=False)",
+    "token_count": 478,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.applications.FastAPI.setup"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 452,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 511,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how FastAPI wires up its own documentation routes (/openapi.json, /docs, /redoc) in fastapi/applications.py. Starting from `FastAPI.setup`, identify what it does at the top level: it conditionally registers each documentation route by delegating to a single routing method it inherits from its base class rather than defining itself.\n\nFirst give a short (2-4 sentence) explanation of what it does, in prose.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in the real causal order. Include in that array only symbols whose full definition lives within this repository's own source. A call that resolves to a method defined on a base class outside this repository must be described in your prose explanation only - do not add it to the JSON array, e.g.:\n\n```json\n[\"fastapi.applications.FastAPI.setup\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "fastapi.applications.FastAPI.setup",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 2,
+   "manifest_candidates_unfiltered": 2,
+   "requested_symbols": [
+    "fastapi.applications.FastAPI.setup"
+   ],
+   "turn1_requested_count": 1,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `FastAPI.setup` method is responsible for setting up the FastAPI application by conditionally registering documentation routes such as /openapi.json, /docs, and /redoc. It delegates this task to a single routing method inherited from its base class rather than defining the routes itself.\",\n  \"requested_symbols\": [\"fastapi.applications.FastAPI.setup\"]\n}\n```",
+     "prompt_tokens": 551,
+     "completion_tokens": 86,
+     "latency_seconds": 6.335668421000264,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     97.040111
+    ],
+    "L_turn2_hydrate": [
+     287.679603
+    ],
+    "L_retrieve": [
+     6722.940169
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 511,
+   "prompt_tokens": 836,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 849,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/applications.py:48-4588  (fastapi.applications.FastAPI)\nclass FastAPI(Starlette):\n    ...\n\n# fastapi/applications.py:998-1049  (fastapi.applications.FastAPI.setup)\n    def setup(self) -> None:\n        if self.openapi_url:\n            urls = (server_data.get(\"url\") for server_data in self.servers)\n            server_urls = {url for url in urls if url}\n\n            async def openapi(req: Request) -> JSONResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                if root_path not in server_urls:\n                    if root_path and self.root_path_in_servers:\n                        self.servers.insert(0, {\"url\": root_path})\n                        server_urls.add(root_path)\n                return JSONResponse(self.openapi())\n\n            self.add_route(self.openapi_url, openapi, include_in_schema=False)\n        if self.openapi_url and self.docs_url:\n\n            async def swagger_ui_html(req: Request) -> HTMLResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                openapi_url = root_path + self.openapi_url\n                oauth2_redirect_url = self.swagger_ui_oauth2_redirect_url\n                if oauth2_redirect_url:\n                    oauth2_redirect_url = root_path + oauth2_redirect_url\n                return get_swagger_ui_html(\n                    openapi_url=openapi_url,\n                    title=f\"{self.title} - Swagger UI\",\n                    oauth2_redirect_url=oauth2_redirect_url,\n                    init_oauth=self.swagger_ui_init_oauth,\n                    swagger_ui_parameters=self.swagger_ui_parameters,\n                )\n\n            self.add_route(self.docs_url, swagger_ui_html, include_in_schema=False)\n\n            if self.swagger_ui_oauth2_redirect_url:\n\n                async def swagger_ui_redirect(req: Request) -> HTMLResponse:\n                    return get_swagger_ui_oauth2_redirect_html()\n\n                self.add_route(\n                    self.swagger_ui_oauth2_redirect_url,\n                    swagger_ui_redirect,\n                    include_in_schema=False,\n                )\n        if self.openapi_url and self.redoc_url:\n\n            async def redoc_html(req: Request) -> HTMLResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                openapi_url = root_path + self.openapi_url\n                return get_redoc_html(\n                    openapi_url=openapi_url, title=f\"{self.title} - ReDoc\"\n                )\n\n            self.add_route(self.redoc_url, redoc_html, include_in_schema=False)\n\n## Task\n\nYou are investigating how FastAPI wires up its own documentation routes (/openapi.json, /docs, /redoc) in fastapi/applications.py. Starting from `FastAPI.setup`, identify what it does at the top level: it conditionally registers each documentation route by delegating to a single routing method it inherits from its base class rather than defining itself.\n\nFirst give a short (2-4 sentence) explanation of what it does, in prose.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in the real causal order. Include in that array only symbols whose full definition lives within this repository's own source. A call that resolves to a method defined on a base class outside this repository must be described in your prose explanation only - do not add it to the JSON array, e.g.:\n\n```json\n[\"fastapi.applications.FastAPI.setup\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

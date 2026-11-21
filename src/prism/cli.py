@@ -3,13 +3,16 @@ from __future__ import annotations
 
 import json
 import os
+from typing import TYPE_CHECKING
 
 import click
 
 from prism.analysis.hybrid_engine import DEFAULT_RUNTIME_BIAS, HybridFlowEngine
+from prism.git_files import keep_git_visible
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.hierarchy import compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
+from prism.graph.robot_framework import ROBOT_EXTENSIONS, link_robot_framework
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.language_tiers import TIER_1_ONLY_LANGUAGES
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
@@ -39,6 +42,9 @@ from prism.slicer.distance import DistanceConfig, DistanceEngine
 from prism.slicer.blueprint import mine_sibling_blueprint
 from prism.slicer.knapsack import QUERY_TYPE_BUG_LOCALIZATION, QUERY_TYPE_GENERAL, ContextKnapsackPacker
 from prism.tagger.engine import TaggingEngine
+
+if TYPE_CHECKING:
+    from prism.deps.index import DependencyIndex
 
 IGNORED_DIRS = {
     ".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build",
@@ -118,11 +124,26 @@ def discover_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE
         for filename in filenames:
             if any(filename.endswith(ext) for ext in allowed_extensions):
                 files.append(os.path.join(dirpath, filename))
-    return sorted(files)
+    return sorted(keep_git_visible(repo_root, files))
+
+
+def discover_robot_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE) -> list[str]:
+    """`.robot`/`.resource` files (`prism.graph.robot_framework`); none
+    under `tier1-only`, which indexes Python alone."""
+    if language_tier == LANGUAGE_TIER_TIER1_ONLY:
+        return []
+    files: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(repo_root):
+        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")]
+        for filename in filenames:
+            if filename.endswith(ROBOT_EXTENSIONS):
+                files.append(os.path.join(dirpath, filename))
+    return sorted(keep_git_visible(repo_root, files))
 
 
 def build_pipeline(
-    repo_path: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE, use_cache: bool = True
+    repo_path: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE, use_cache: bool = True,
+    dependencies: "DependencyIndex | None" = None,
 ) -> tuple[ConcreteGraphBuilder, dict[str, set[str]]]:
     """Run Stages 1-3 (parse, link, tag) end to end for one repository.
 
@@ -135,23 +156,50 @@ def build_pipeline(
     incremental linking. Any cache miss, corruption, or `use_cache=False`
     falls straight through to the full Stage 1-3 run below, and a fresh
     result is always cached afterward for next time.
+
+    `dependencies` (opt-in): resolve calls into installed third-party
+    packages against their offline summaries (`prism.deps`). Each called
+    dependency entry point becomes one external boundary node carrying its
+    capability summary; no dependency internals enter the index. The
+    whole-repo index cache is bypassed in this mode - its fingerprint does
+    not cover dependency state.
     """
     repo_root = os.path.abspath(repo_path)
     files = discover_files(repo_root, language_tier)
+    # Robot Framework suites/resources have no grammar: they are read by
+    # `prism.graph.robot_framework` after Pass 2, but still belong in the
+    # cache fingerprint so editing one invalidates the cache.
+    robot_files = discover_robot_files(repo_root, language_tier)
+    fingerprint_files = sorted(files + robot_files)
 
+    if dependencies is not None:
+        use_cache = False
     if use_cache:
-        cached = load_pipeline_from_cache(repo_root, files, language_tier)
+        cached = load_pipeline_from_cache(repo_root, fingerprint_files, language_tier)
         if cached is not None:
             return cached
 
     symbol_table = GlobalSymbolTable()
     builder = ConcreteGraphBuilder(repo_root, symbol_table)
-    builder.pass1_collect_definitions(files)
-    builder.pass2_resolve_calls(files)
+    if dependencies is None:
+        builder.pass1_collect_definitions(files)
+        builder.pass2_resolve_calls(files)
+    else:
+        from prism.deps.host import attach_dependency_headers, cleanup_header_root, detach_dependency_headers
+
+        header_files, summaries, header_root = attach_dependency_headers(builder, files, dependencies)
+        try:
+            builder.pass1_collect_definitions(files + header_files)
+            builder.pass2_resolve_calls(files + header_files)
+            detach_dependency_headers(builder, summaries, header_root)
+        finally:
+            cleanup_header_root(header_root)
+    if robot_files:
+        link_robot_framework(builder, robot_files)
     tag_matrix = TaggingEngine().tag_graph(builder)
 
     if use_cache:
-        save_pipeline_to_cache(repo_root, files, language_tier, builder, tag_matrix)
+        save_pipeline_to_cache(repo_root, fingerprint_files, language_tier, builder, tag_matrix)
 
     return builder, tag_matrix
 
@@ -593,6 +641,125 @@ def status(repo_path: str) -> None:
         click.echo("No runtime trace has been recorded yet - run `prism trace --repo . -- pytest ...` first.")
 
 
+@main.command()
+@click.argument("question")
+@click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
+@click.option("-k", "--top-k", "top_k", default=10, show_default=True, type=click.IntRange(1, 50), help="Hits to return.")
+@click.option("--json", "as_json", is_flag=True, help="Print the result payload as JSON.")
+@click.option(
+    "--deps", is_flag=True,
+    help="Summarize installed third-party packages (depth-1 offline summaries) so their I/O counts as capability.",
+)
+def ask(question: str, repo_path: str, top_k: int, as_json: bool, deps: bool) -> None:
+    """Answer a natural-language QUESTION about the code with ranked symbols
+    and their upstream entry points (see prism.query.nlq). An exact name in
+    the query is pinned first; offline summaries (`prism summarize`) are
+    used automatically when they cover >= 95% of the functions."""
+    from prism.query.nlq import NLQIndex
+    repo_root = os.path.abspath(repo_path)
+    dependencies = None
+    if deps:
+        from prism.deps.index import DependencyIndex
+        dependencies = DependencyIndex()
+    builder, _tags = build_pipeline(repo_root, dependencies=dependencies)
+    result = NLQIndex(builder, repo_root, summaries="auto").search(question, top_k=top_k)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+    routing = ("route", "summary_weight")
+    intent = {k: v for k, v in result["intent"].items() if k not in ("source",) + routing}
+    described = ", ".join(f"{k}={v}" for k, v in intent.items()) or "none (stems only)"
+    click.echo(f"Intent: {described}")
+    click.echo(f"Route: {result['intent']['route']}, summary weight {result['intent']['summary_weight']}")
+    if not result["hits"]:
+        click.echo("No matching symbols.")
+    for hit in result["hits"]:
+        pin = "  [exact name]" if hit["pinned"] else ""
+        click.echo(f"{hit['rank']:>3}. {hit['qname']}  ({hit['location']})  score {hit['score']:.2f}{pin}")
+        for line in hit["entry_context"]:
+            click.echo(f"       {line}")
+
+
+@main.command()
+@click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
+@click.option("--model", default=None, help="Ollama model (default: the locked summarizer). Another model's index is used at weight 0.")
+@click.option("--base-urls", default="http://127.0.0.1:11434", show_default=True, help="Comma-separated Ollama servers, used round-robin.")
+@click.option("--threads", default=4, show_default=True, type=click.IntRange(1, 64), help="Concurrent requests.")
+@click.option("--from-cache", "from_cache", type=click.Path(exists=True, dir_okay=False),
+              help="Install summaries from a purpose-search harness cache (summary_cache_<repo>.json); each entry is checked against its card key.")
+@click.option("--dry-run", is_flag=True, help="Count what would be summarized; call no model, write nothing.")
+@click.option("--checkpoint-every", "checkpoint_every", default=25, show_default=True, type=click.IntRange(1),
+              help="Write the index every N batches; an interrupted run resumes from the last checkpoint.")
+@click.option("--candidate", default="v2", show_default=True, type=click.Choice(["v2", "v3", "v3-name", "v4", "v5"]),
+              help="v2: the locked summarizer. Unvalidated (the index is used at weight 0 until validated; v2 summaries "
+                   "are reused): v3 / v3-name - a stricter lint sends name-restating (and, for v3, short) summaries to "
+                   "repair; v4 - name-restating summaries are rewritten from the function's source; v5 - v4, also for "
+                   "long functions with short summaries, and the rewrite's effects are indexed too.")
+@click.option("--only", "only", type=click.Path(exists=True, dir_okay=False),
+              help="Summarize only the functions listed in this file (one qualified name per line) - for experiments.")
+def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, from_cache: str | None, dry_run: bool,
+              checkpoint_every: int, candidate: str, only: str | None) -> None:
+    """Build or refresh the offline summary index (.prism/summaries.json)
+    that `prism ask` / `prism.ask` use as a second search field.
+
+    The locked pipeline (prism.summaries.pipeline): a context card per
+    function, one plain-English sentence from a local Ollama model, a lint
+    + repair pass. Incremental and resumable: unchanged functions keep their
+    summary, and the index is checkpointed every --checkpoint-every batches,
+    so rerunning after a crash or timeout continues where it stopped.
+    Serving never calls a model; with >= 95% coverage search applies the
+    summaries at weight 0.5, otherwise not at all."""
+    from prism.summaries.index import MIN_COVERAGE, SUMMARY_WEIGHT
+    from prism.summaries.pipeline import LOCKED_MODEL, build_index
+    repo_root = os.path.abspath(repo_path)
+    builder, _tags = build_pipeline(repo_root)
+    cache = json.loads(open(from_cache, encoding="utf-8").read()) if from_cache else None
+    counts = build_index(builder, repo_root, model=model or LOCKED_MODEL,
+                         base_urls=[u for u in base_urls.split(",") if u], threads=threads, from_cache=cache,
+                         dry_run=dry_run, checkpoint_every=checkpoint_every, candidate=candidate,
+                         log=lambda m: click.echo(m, err=True),
+                         only={ln.strip() for ln in open(only, encoding="utf-8") if ln.strip()} if only else None)
+    if dry_run:
+        click.echo(json.dumps(counts, indent=2))
+        return
+    weight = SUMMARY_WEIGHT if counts["locked_pipeline"] and counts["coverage"] >= MIN_COVERAGE else 0.0
+    click.echo(f"Wrote {counts['path']}: coverage {counts['coverage']:.1%} of {counts['functions']} functions "
+               f"(summarized {counts['summarized']}, repaired {counts['repaired']}, failed {counts['failed']}, "
+               f"kept {counts['kept']}, imported {counts['imported']}, checkpoints {counts['checkpoints']}).")
+    click.echo(f"Search summary weight: {weight}" + ("" if counts["locked_pipeline"] else " (not the locked pipeline)"))
+
+
+@main.command()
+@click.argument("symbol")
+@click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
+@click.option("--budget", "budget_tokens", default=12000, show_default=True, type=click.IntRange(1000, 200000),
+              help="Token budget for the whole package; callers' code fills what is left.")
+@click.option("--no-tests", is_flag=True, help="Leave test callers out.")
+@click.option("--visible", "visible", multiple=True, metavar="FILE[:FIRST-LAST]",
+              help="Code the AI already has open (repeatable): code entirely inside it is sent as a pointer, not again.")
+@click.option("--new-code", "new_code_path", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="A file with SYMBOL's proposed new code: adds the calls that change breaks, call site by call site.")
+@click.option("--json", "as_json", is_flag=True, help="Print the package as JSON.")
+def impact(symbol: str, repo_path: str, budget_tokens: int, no_tests: bool, visible: tuple[str, ...],
+           new_code_path: str | None, as_json: bool) -> None:
+    """Everything to read before changing SYMBOL: the codebase and its group, the full code and digest of
+    SYMBOL, how each caller depends on it (result, errors, arguments, await), what it relies on in its
+    callees, the conventions and closest sibling code to follow, its callers' code, and its wider impact
+    (see prism.impact.context)."""
+    from prism.impact.context import ChangeContextBuilder, parse_visible, render
+    repo_root = os.path.abspath(repo_path)
+    builder, _tags = build_pipeline(repo_root)
+    if builder.symbol_table.get(symbol) is None:
+        leaf = symbol.rsplit(".", 1)[-1]
+        matches = sorted(q for q in builder._def_nodes if q.rsplit(".", 1)[-1] == leaf)[:10]
+        raise click.ClickException(f"unknown symbol {symbol!r}" + (f"; did you mean: {', '.join(matches)}" if matches else ""))
+    ctx = ChangeContextBuilder(builder, repo_root).build(symbol, budget_tokens=budget_tokens, include_tests=not no_tests,
+                                                         visible=parse_visible(visible),
+                                                         new_code=open(new_code_path, encoding="utf8").read()
+                                                         if new_code_path else None)
+    click.echo(json.dumps(ctx.to_dict(), indent=2, default=str) if as_json else render(ctx), nl=False)
+
+
 @main.command(name="mcp")
 @click.option(
     "--transport", type=click.Choice(["stdio", "sse", "streamable-http"]), default="stdio", show_default=True,
@@ -602,7 +769,12 @@ def status(repo_path: str) -> None:
     "--repo", "repo_path", type=click.Path(exists=True, file_okay=False), default=None,
     help="Default repository root for a tool call that omits its own repo_path (defaults to this process's cwd).",
 )
-def mcp_command(transport: str, repo_path: str | None) -> None:
+@click.option(
+    "--debug-log", "debug_log", envvar="PRISM_DEBUG_LOG", type=click.Path(file_okay=False), default=None,
+    help="Record every tool call (arguments, stage timings, what was retrieved and delivered, tokens, errors) "
+    "under this directory, for debugging. Off unless given. See docs/debug_logger.md.",
+)
+def mcp_command(transport: str, repo_path: str | None, debug_log: str | None) -> None:
     """Run Prism as a Model Context Protocol server (see docs/mcp_setup.md)."""
     try:
         from prism.mcp.server import run_server
@@ -618,7 +790,69 @@ def mcp_command(transport: str, repo_path: str | None) -> None:
             err=True,
         )
         raise SystemExit(1) from exc
+    if debug_log:
+        from prism.debug.recorder import install
+
+        recorder = install(debug_log, repo=repo_path)
+        click.echo(f"prism debug log: {recorder.dir}", err=True)     # stdout is the MCP channel
     run_server(transport=transport, repo_path=repo_path)
+
+
+@main.group(name="debug")
+def debug_group() -> None:
+    """Tools for investigating Prism by hand (see docs/debug_logger.md)."""
+
+
+@debug_group.command(name="find")
+@click.option("--repo", "repo_path", required=True, type=click.Path(exists=True, file_okay=False))
+@click.argument("words", nargs=-1, required=True)
+@click.option("--limit", type=int, default=40, show_default=True)
+def debug_find(repo_path: str, words: tuple[str, ...], limit: int) -> None:
+    """Exact symbol names containing every one of WORDS (case-insensitive)."""
+    builder, _ = build_pipeline(repo_path)
+    wanted = [w.lower() for w in words]
+    rows = []
+    for symbol in builder.symbol_table:
+        if symbol.kind not in ("function", "method", "class"):
+            continue
+        if all(w in symbol.qualified_name.lower() for w in wanted):
+            callers = builder.graph.in_degree(symbol.qualified_name) if symbol.qualified_name in builder.graph else 0
+            where = f"{os.path.relpath(symbol.file, repo_path)}:{symbol.line_range[0]}"
+            rows.append((symbol.qualified_name, symbol.kind, symbol.role.value, where, callers))
+    rows.sort()
+    for qname, kind, role, where, callers in rows[:limit]:
+        click.echo(f"{qname}\n    {kind}, {role}, {where}, {callers} direct caller(s)")
+    click.echo(f"{len(rows)} match(es)" + (f", first {limit} shown" if len(rows) > limit else ""))
+
+
+@debug_group.command(name="timeline")
+@click.option("--log-dir", required=True, type=click.Path(exists=True, file_okay=False),
+              help="The directory given to `prism mcp --debug-log`.")
+@click.option("--copilot", "copilot_path", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="A VS Code Copilot chat export (Chat: Export Chat...).")
+@click.option("--session", default=None, help="Only this session directory name.")
+@click.option("--out", "out_path", type=click.Path(dir_okay=False), default=None, help="Write here instead of stdout.")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
+def debug_timeline(log_dir: str, copilot_path: str | None, session: str | None, out_path: str | None, as_json: bool) -> None:
+    """One timeline: each chat question joined with the Prism calls it caused."""
+    from prism.debug.copilot import load_copilot_session
+    from prism.debug.timeline import join, load_calls, render_markdown
+
+    calls = load_calls(log_dir)
+    if session:
+        calls = [c for c in calls if c["session"] == session]
+    turns = load_copilot_session(copilot_path) if copilot_path else []
+    turns, unmatched = join(turns, calls)
+    if as_json:
+        text = json.dumps({"turns": turns, "unmatched_calls": unmatched}, indent=2, default=str)
+    else:
+        text = render_markdown(turns, unmatched, log_dir)
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        click.echo(f"wrote {out_path} ({len(turns)} turns, {len(calls)} Prism calls)")
+    else:
+        click.echo(text)
 
 
 if __name__ == "__main__":

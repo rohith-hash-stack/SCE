@@ -1,0 +1,1303 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_008_db_session_load_decode",
+  "items": [
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:41-43",
+    "content": "# django/contrib/sessions/backends/db.py:41-43  (django.contrib.sessions.backends.db.SessionStore.load)\nclass SessionStore(SessionBase):\n    def load(self):\n        s = self._get_session_from_db()\n        return self.decode(s.session_data) if s else {}",
+    "token_count": 60,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.load"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:30-39",
+    "content": "# django/contrib/sessions/backends/db.py:30-39  (django.contrib.sessions.backends.db.SessionStore._get_session_from_db)\nclass SessionStore(SessionBase):\n    def _get_session_from_db(self):\n        try:\n            return self.model.objects.get(\n                session_key=self.session_key, expire_date__gt=timezone.now()\n            )\n        except (self.model.DoesNotExist, SuspiciousOperation) as e:\n            if isinstance(e, SuspiciousOperation):\n                logger = logging.getLogger(\"django.security.%s\" % e.__class__.__name__)\n                logger.warning(str(e))\n            self._session_key = None",
+    "token_count": 127,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore._get_session_from_db"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 127
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:45-46",
+    "content": "# django/contrib/sessions/backends/db.py:45-46  (django.contrib.sessions.backends.db.SessionStore.exists)\nclass SessionStore(SessionBase):\n    def exists(self, session_key):\n        return self.model.objects.filter(session_key=session_key).exists()",
+    "token_count": 54,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.exists"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:26-28",
+    "content": "# django/contrib/sessions/backends/db.py:26-28  (django.contrib.sessions.backends.db.SessionStore.model)\nclass SessionStore(SessionBase):\n    @cached_property\n    def model(self):\n        return self.get_model_class()",
+    "token_count": 50,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.model"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:48-59",
+    "content": "# django/contrib/sessions/backends/db.py:48-59  (django.contrib.sessions.backends.db.SessionStore.create)\nclass SessionStore(SessionBase):\n    def create(self):\n        while True:\n            self._session_key = self._get_new_session_key()\n            try:\n                # Save immediately to ensure we have a unique entry in the\n                # database.\n                self.save(must_create=True)\n            except CreateError:\n                # Key wasn't unique. Try again.\n                continue\n            self.modified = True\n            return",
+    "token_count": 110,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.create"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 110
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:18-24",
+    "content": "# django/contrib/sessions/backends/db.py:18-24  (django.contrib.sessions.backends.db.SessionStore.get_model_class)\nclass SessionStore(SessionBase):\n    @classmethod\n    def get_model_class(cls):\n        # Avoids a circular import and allows importing SessionStore when\n        # django.contrib.sessions is not in INSTALLED_APPS.\n        from django.contrib.sessions.models import Session\n\n        return Session",
+    "token_count": 84,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.get_model_class"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:61-71",
+    "content": "# django/contrib/sessions/backends/db.py:61-71  (django.contrib.sessions.backends.db.SessionStore.create_model_instance)\nclass SessionStore(SessionBase):\n    def create_model_instance(self, data):\n        \"\"\"\n        Return a new instance of the session model object, which represents the\n        current session state. Intended to be used for saving the session data\n        to the database.\n        \"\"\"\n        return self.model(\n            session_key=self._get_or_create_session_key(),\n            session_data=self.encode(data),\n            expire_date=self.get_expiry_date(),\n        )",
+    "token_count": 117,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.create_model_instance"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 117
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:15-16",
+    "content": "# django/contrib/sessions/backends/db.py:15-16  (django.contrib.sessions.backends.db.SessionStore.__init__)\nclass SessionStore(SessionBase):\n    def __init__(self, session_key=None):\n        super().__init__(session_key)",
+    "token_count": 53,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.__init__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:73-96",
+    "content": "# django/contrib/sessions/backends/db.py:73-96  (django.contrib.sessions.backends.db.SessionStore.save)\nclass SessionStore(SessionBase):\n    def save(self, must_create=False):\n        \"\"\"\n        Save the current session data to the database. If 'must_create' is\n        True, raise a database error if the saving operation doesn't create a\n        new entry (as opposed to possibly updating an existing entry).\n        \"\"\"\n        if self.session_key is None:\n            return self.create()\n        data = self._get_session(no_load=must_create)\n        obj = self.create_model_instance(data)\n        using = router.db_for_write(self.model, instance=obj)\n        try:\n            with transaction.atomic(using=using):\n                obj.save(\n                    force_insert=must_create, force_update=not must_create, using=using\n                )\n        except IntegrityError:\n            if must_create:\n                raise CreateError\n            raise\n        except DatabaseError:\n            if not must_create:\n                raise UpdateError\n            raise",
+    "token_count": 211,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.save"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 211
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:11-13",
+    "content": "# django/contrib/sessions/backends/db.py:11-13  (django.contrib.sessions.backends.db.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"\n    Implement database session store.\n    \"\"\"",
+    "token_count": 42,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:98-106",
+    "content": "# django/contrib/sessions/backends/db.py:98-106  (django.contrib.sessions.backends.db.SessionStore.delete)\nclass SessionStore(SessionBase):\n    def delete(self, session_key=None):\n        if session_key is None:\n            if self.session_key is None:\n                return\n            session_key = self.session_key\n        try:\n            self.model.objects.get(session_key=session_key).delete()\n        except self.model.DoesNotExist:\n            pass",
+    "token_count": 92,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.delete"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 92
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:1-7",
+    "content": "# django/contrib/sessions/backends/db.py:1-7  (django.contrib.sessions.backends.db)\nimport logging\n\nfrom django.contrib.sessions.backends.base import CreateError, SessionBase, UpdateError\nfrom django.core.exceptions import SuspiciousOperation\nfrom django.db import DatabaseError, IntegrityError, router, transaction\nfrom django.utils import timezone\nfrom django.utils.functional import cached_property",
+    "token_count": 77,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 77
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/db.py:108-110",
+    "content": "# django/contrib/sessions/backends/db.py:108-110  (django.contrib.sessions.backends.db.SessionStore.clear_expired)\nclass SessionStore(SessionBase):\n    @classmethod\n    def clear_expired(cls):\n        cls.get_model_class().objects.filter(expire_date__lt=timezone.now()).delete()",
+    "token_count": 65,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.db.SessionStore.clear_expired"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sessions_tests/models.py:1-8",
+    "content": "# tests/sessions_tests/models.py:1-8  (tests.sessions_tests.models)\n\"\"\"\nThis custom Session model adds an extra column to store an account ID. In\nreal-world applications, it gives you the option of querying the database for\nall active sessions for a particular account.\n\"\"\"\nfrom django.contrib.sessions.backends.db import SessionStore as DBStore\nfrom django.contrib.sessions.base_session import AbstractBaseSession\nfrom django.db import models",
+    "token_count": 88,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "module_block",
+     "engine_token_count": 88
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:27-44",
+    "content": "# django/contrib/sessions/backends/cached_db.py:27-44  (django.contrib.sessions.backends.cached_db.SessionStore.load)\nclass SessionStore(DBStore):\n    def load(self):\n        try:\n            data = self._cache.get(self.cache_key)\n        except Exception:\n            # Some backends (e.g. memcache) raise an exception on invalid\n            # cache keys. If this happens, reset the session. See #17810.\n            data = None\n\n        if data is None:\n            s = self._get_session_from_db()\n            if s:\n                data = self.decode(s.session_data)\n                self._cache.set(\n                    self.cache_key, data, self.get_expiry_age(expiry=s.expire_date)\n                )\n            else:\n                data = {}\n        return data",
+    "token_count": 169,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cached_db.SessionStore.load"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 169
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:23-33",
+    "content": "# django/contrib/sessions/backends/cache.py:23-33  (django.contrib.sessions.backends.cache.SessionStore.load)\nclass SessionStore(SessionBase):\n    def load(self):\n        try:\n            session_data = self._cache.get(self.cache_key)\n        except Exception:\n            # Some backends (e.g. memcache) raise an exception on invalid\n            # cache keys. If this happens, reset the session. See #17810.\n            session_data = None\n        if session_data is not None:\n            return session_data\n        self._session_key = None\n        return {}",
+    "token_count": 126,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore.load"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "method",
+     "engine_token_count": 126
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:65-72",
+    "content": "# django/contrib/sessions/backends/cached_db.py:65-72  (django.contrib.sessions.backends.cached_db.SessionStore.flush)\nclass SessionStore(DBStore):\n    def flush(self):\n        \"\"\"\n        Remove the current session data from the database and regenerate the\n        key.\n        \"\"\"\n        self.clear()\n        self.delete(self.session_key)\n        self._session_key = None",
+    "token_count": 80,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cached_db.SessionStore.flush"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "method",
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/signed_cookies.py:6-24",
+    "content": "# django/contrib/sessions/backends/signed_cookies.py:6-24  (django.contrib.sessions.backends.signed_cookies.SessionStore.load)\nclass SessionStore(SessionBase):\n    def load(self):\n        \"\"\"\n        Load the data from the key itself instead of fetching from some\n        external data store. Opposite of _get_session_key(), raise BadSignature\n        if signature fails.\n        \"\"\"\n        try:\n            return signing.loads(\n                self.session_key,\n                serializer=self.serializer,\n                # This doesn't handle non-default expiry dates, see #19201\n                max_age=self.get_session_cookie_age(),\n                salt=\"django.contrib.sessions.backends.signed_cookies\",\n            )\n        except Exception:\n            # BadSignature, ValueError, or unpickling exceptions. If any of\n            # these happen, reset the session.\n            self.create()\n        return {}",
+    "token_count": 177,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.signed_cookies.SessionStore.load"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "method",
+     "engine_token_count": 177
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/signed_cookies.py:33-40",
+    "content": "# django/contrib/sessions/backends/signed_cookies.py:33-40  (django.contrib.sessions.backends.signed_cookies.SessionStore.save)\nclass SessionStore(SessionBase):\n    def save(self, must_create=False):\n        \"\"\"\n        To save, get the session key as a securely signed string and then set\n        the modified flag so that the cookie is set on the client for the\n        current request.\n        \"\"\"\n        self._session_key = self._get_session_key()\n        self.modified = True",
+    "token_count": 104,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.signed_cookies.SessionStore.save"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "method",
+     "engine_token_count": 104
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:13-17",
+    "content": "# django/contrib/sessions/backends/cached_db.py:13-17  (django.contrib.sessions.backends.cached_db.SessionStore)\nclass SessionStore(DBStore):\n    \"\"\"\n    Implement cached, database backed sessions.\n    \"\"\"\n\n    cache_key_prefix = KEY_PREFIX",
+    "token_count": 55,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cached_db.SessionStore"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sessions_tests/models.py:24-27",
+    "content": "# tests/sessions_tests/models.py:24-27  (tests.sessions_tests.models.SessionStore)\nclass SessionStore(DBStore):\n    \"\"\"\n    A database session store, that handles updating the account ID column\n    inside the custom session model.\n    \"\"\"",
+    "token_count": 53,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.sessions_tests.models.SessionStore"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/signed_cookies.py:60-65",
+    "content": "# django/contrib/sessions/backends/signed_cookies.py:60-65  (django.contrib.sessions.backends.signed_cookies.SessionStore.cycle_key)\nclass SessionStore(SessionBase):\n    def cycle_key(self):\n        \"\"\"\n        Keep the same data but with a new key. Call save() and it will\n        automatically save a cookie with a new key at the end of the request.\n        \"\"\"\n        self.save()",
+    "token_count": 86,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.signed_cookies.SessionStore.cycle_key"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sessions_tests/tests.py:1-40",
+    "content": "# tests/sessions_tests/tests.py:1-40  (tests.sessions_tests.tests)\nimport base64\nimport os\nimport shutil\nimport string\nimport tempfile\nimport unittest\nfrom datetime import timedelta\nfrom http import cookies\nfrom pathlib import Path\nfrom unittest import mock\n\nfrom django.conf import settings\nfrom django.contrib.sessions.backends.base import UpdateError\nfrom django.contrib.sessions.backends.cache import SessionStore as CacheSession\nfrom django.contrib.sessions.backends.cached_db import SessionStore as CacheDBSession\nfrom django.contrib.sessions.backends.db import SessionStore as DatabaseSession\nfrom django.contrib.sessions.backends.file import SessionStore as FileSession\nfrom django.contrib.sessions.backends.signed_cookies import (\n    SessionStore as CookieSession,\n)\nfrom django.contrib.sessions.exceptions import InvalidSessionKey, SessionInterrupted\nfrom django.contrib.sessions.middleware import SessionMiddleware\nfrom django.contrib.sessions.models import Session\nfrom django.contrib.sessions.serializers import JSONSerializer\nfrom django.core import management\nfrom django.core.cache import caches\nfrom django.core.cache.backends.base import InvalidCacheBackendError\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.core.signing import TimestampSigner\nfrom django.http import HttpResponse\nfrom django.test import (\n    RequestFactory,\n    SimpleTestCase,\n    TestCase,\n    ignore_warnings,\n    override_settings,\n)\nfrom django.utils import timezone\n\nfrom .models import SessionStore as CustomDatabaseSession",
+    "token_count": 282,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "module_block",
+     "engine_token_count": 282
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/signed_cookies.py:26-31",
+    "content": "# django/contrib/sessions/backends/signed_cookies.py:26-31  (django.contrib.sessions.backends.signed_cookies.SessionStore.create)\nclass SessionStore(SessionBase):\n    def create(self):\n        \"\"\"\n        To create a new key, set the modified flag so that the cookie is set\n        on the client for the current request.\n        \"\"\"\n        self.modified = True",
+    "token_count": 78,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.signed_cookies.SessionStore.create"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "method",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/models.py:28-32",
+    "content": "# django/contrib/sessions/models.py:28-32  (django.contrib.sessions.models.Session.get_session_store_class)\nclass Session(AbstractBaseSession):\n    @classmethod\n    def get_session_store_class(cls):\n        from django.contrib.sessions.backends.db import SessionStore\n\n        return SessionStore",
+    "token_count": 59,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.models.Session.get_session_store_class"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "method",
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/signed_cookies.py:42-48",
+    "content": "# django/contrib/sessions/backends/signed_cookies.py:42-48  (django.contrib.sessions.backends.signed_cookies.SessionStore.exists)\nclass SessionStore(SessionBase):\n    def exists(self, session_key=None):\n        \"\"\"\n        This method makes sense when you're talking to a shared resource, but\n        it doesn't matter when you're storing the information in the client's\n        cookie.\n        \"\"\"\n        return False",
+    "token_count": 88,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.signed_cookies.SessionStore.exists"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 88
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:35-52",
+    "content": "# django/contrib/sessions/backends/cache.py:35-52  (django.contrib.sessions.backends.cache.SessionStore.create)\nclass SessionStore(SessionBase):\n    def create(self):\n        # Because a cache can fail silently (e.g. memcache), we don't know if\n        # we are failing to create a new session because of a key collision or\n        # because the cache is missing. So we try for a (large) number of times\n        # and then raise an exception. That's the risk you shoulder if using\n        # cache backing.\n        for i in range(10000):\n            self._session_key = self._get_new_session_key()\n            try:\n                self.save(must_create=True)\n            except CreateError:\n                continue\n            self.modified = True\n            return\n        raise RuntimeError(\n            \"Unable to create a new session key. \"\n            \"It is likely that the cache is unavailable.\"\n        )",
+    "token_count": 199,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore.create"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "method",
+     "engine_token_count": 199
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/signed_cookies.py:50-58",
+    "content": "# django/contrib/sessions/backends/signed_cookies.py:50-58  (django.contrib.sessions.backends.signed_cookies.SessionStore.delete)\nclass SessionStore(SessionBase):\n    def delete(self, session_key=None):\n        \"\"\"\n        To delete, clear the session key and the underlying data structure\n        and set the modified flag so that the cookie is set on the client for\n        the current request.\n        \"\"\"\n        self._session_key = \"\"\n        self._session_cache = {}\n        self.modified = True",
+    "token_count": 105,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.signed_cookies.SessionStore.delete"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "method",
+     "engine_token_count": 105
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:46-51",
+    "content": "# django/contrib/sessions/backends/cached_db.py:46-51  (django.contrib.sessions.backends.cached_db.SessionStore.exists)\nclass SessionStore(DBStore):\n    def exists(self, session_key):\n        return (\n            session_key\n            and (self.cache_key_prefix + session_key) in self._cache\n            or super().exists(session_key)\n        )",
+    "token_count": 78,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cached_db.SessionStore.exists"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "method",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:196-210",
+    "content": "# django/contrib/sessions/backends/file.py:196-210  (django.contrib.sessions.backends.file.SessionStore.clear_expired)\nclass SessionStore(SessionBase):\n    @classmethod\n    def clear_expired(cls):\n        storage_path = cls._get_storage_path()\n        file_prefix = settings.SESSION_COOKIE_NAME\n\n        for session_file in os.listdir(storage_path):\n            if not session_file.startswith(file_prefix):\n                continue\n            session_key = session_file[len(file_prefix) :]\n            session = cls(session_key)\n            # When an expired session is loaded, its file is removed, and a\n            # new file is immediately created. Prevent this by disabling\n            # the create() method.\n            session.create = lambda: None\n            session.load()",
+    "token_count": 155,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore.clear_expired"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "method",
+     "engine_token_count": 155
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:19-21",
+    "content": "# django/contrib/sessions/backends/file.py:19-21  (django.contrib.sessions.backends.file.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"\n    Implement a file based session store.\n    \"\"\"",
+    "token_count": 44,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 44
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:70-77",
+    "content": "# django/contrib/sessions/backends/file.py:70-77  (django.contrib.sessions.backends.file.SessionStore._expiry_date)\nclass SessionStore(SessionBase):\n    def _expiry_date(self, session_data):\n        \"\"\"\n        Return the expiry time of the file storing the session's content.\n        \"\"\"\n        return session_data.get(\"_session_expiry\") or (\n            self._last_modification()\n            + datetime.timedelta(seconds=self.get_session_cookie_age())\n        )",
+    "token_count": 94,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore._expiry_date"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "method",
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/base.py:180-193",
+    "content": "# django/contrib/sessions/backends/base.py:180-193  (django.contrib.sessions.backends.base.SessionBase._get_session)\nclass SessionBase:\n    def _get_session(self, no_load=False):\n        \"\"\"\n        Lazily load session from storage (unless \"no_load\" is True, when only\n        an empty dict is stored) and store it in the current instance.\n        \"\"\"\n        self.accessed = True\n        try:\n            return self._session_cache\n        except AttributeError:\n            if self.session_key is None or no_load:\n                self._session_cache = {}\n            else:\n                self._session_cache = self.load()\n        return self._session_cache",
+    "token_count": 141,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.base.SessionBase._get_session"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 141
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/signed_cookies.py:67-77",
+    "content": "# django/contrib/sessions/backends/signed_cookies.py:67-77  (django.contrib.sessions.backends.signed_cookies.SessionStore._get_session_key)\nclass SessionStore(SessionBase):\n    def _get_session_key(self):\n        \"\"\"\n        Instead of generating a random string, generate a secure url-safe\n        base64-encoded string of data as our session key.\n        \"\"\"\n        return signing.dumps(\n            self._session,\n            compress=True,\n            salt=\"django.contrib.sessions.backends.signed_cookies\",\n            serializer=self.serializer,\n        )",
+    "token_count": 111,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.signed_cookies.SessionStore._get_session_key"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "method",
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:9-13",
+    "content": "# django/contrib/sessions/backends/cache.py:9-13  (django.contrib.sessions.backends.cache.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"\n    A cache-based session store.\n    \"\"\"\n\n    cache_key_prefix = KEY_PREFIX",
+    "token_count": 49,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client_regress/session.py:5-10",
+    "content": "# tests/test_client_regress/session.py:5-10  (tests.test_client_regress.session.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"\n    A simple cookie-based session storage implementation.\n\n    The session key is actually the session data, pickled and encoded.\n    This means that saving the session will change the session key.\n    \"\"\"",
+    "token_count": 71,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client_regress.session.SessionStore"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:71-74",
+    "content": "# django/contrib/sessions/backends/cache.py:71-74  (django.contrib.sessions.backends.cache.SessionStore.exists)\nclass SessionStore(SessionBase):\n    def exists(self, session_key):\n        return (\n            bool(session_key) and (self.cache_key_prefix + session_key) in self._cache\n        )",
+    "token_count": 66,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore.exists"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "full",
+     "bm25_rank": 24,
+     "chunk_kind": "method",
+     "engine_token_count": 66
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:79-105",
+    "content": "# django/contrib/sessions/backends/file.py:79-105  (django.contrib.sessions.backends.file.SessionStore.load)\nclass SessionStore(SessionBase):\n    def load(self):\n        session_data = {}\n        try:\n            with open(self._key_to_file(), encoding=\"ascii\") as session_file:\n                file_data = session_file.read()\n            # Don't fail if there is no data in the session file.\n            # We may have opened the empty placeholder file.\n            if file_data:\n                try:\n                    session_data = self.decode(file_data)\n                except (EOFError, SuspiciousOperation) as e:\n                    if isinstance(e, SuspiciousOperation):\n                        logger = logging.getLogger(\n                            \"django.security.%s\" % e.__class__.__name__\n                        )\n                        logger.warning(str(e))\n                    self.create()\n\n                # Remove expired sessions.\n                expiry_age = self.get_expiry_age(expiry=self._expiry_date(session_data))\n                if expiry_age <= 0:\n                    session_data = {}\n                    self.delete()\n                    self.create()\n        except (OSError, SuspiciousOperation):\n            self._session_key = None\n        return session_data",
+    "token_count": 235,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore.load"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "full",
+     "bm25_rank": 25,
+     "chunk_kind": "method",
+     "engine_token_count": 235
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:1-9",
+    "content": "# django/contrib/sessions/backends/cached_db.py:1-9  (django.contrib.sessions.backends.cached_db)\n\"\"\"\nCached, database-backed sessions.\n\"\"\"\n\nfrom django.conf import settings\nfrom django.contrib.sessions.backends.db import SessionStore as DBStore\nfrom django.core.cache import caches\n\nKEY_PREFIX = \"django.contrib.sessions.cached_db\"",
+    "token_count": 71,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "full",
+     "bm25_rank": 26,
+     "chunk_kind": "module_block",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:19-21",
+    "content": "# django/contrib/sessions/backends/cached_db.py:19-21  (django.contrib.sessions.backends.cached_db.SessionStore.__init__)\nclass SessionStore(DBStore):\n    def __init__(self, session_key=None):\n        self._cache = caches[settings.SESSION_CACHE_ALIAS]\n        super().__init__(session_key)",
+    "token_count": 70,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cached_db.SessionStore.__init__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "full",
+     "bm25_rank": 27,
+     "chunk_kind": "method",
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/models.py:9-26",
+    "content": "# django/contrib/sessions/models.py:9-26  (django.contrib.sessions.models.Session)\nclass Session(AbstractBaseSession):\n    \"\"\"\n    Django provides full support for anonymous sessions. The session\n    framework lets you store and retrieve arbitrary data on a\n    per-site-visitor basis. It stores data on the server side and\n    abstracts the sending and receiving of cookies. Cookies contain a\n    session ID -- not the data itself.\n\n    The Django sessions framework is entirely cookie-based. It does\n    not fall back to putting session IDs in URLs. This is an intentional\n    design decision. Not only does that behavior make URLs ugly, it makes\n    your site vulnerable to session-ID theft via the \"Referer\" header.\n\n    For complete documentation on using Sessions in your code, consult\n    the sessions documentation that is shipped with Django (also available\n    on the Django web site).\n    \"\"\"\n\n    objects = SessionManager()",
+    "token_count": 194,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.models.Session"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "full",
+     "bm25_rank": 28,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 194
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:180-181",
+    "content": "# django/contrib/sessions/backends/file.py:180-181  (django.contrib.sessions.backends.file.SessionStore.exists)\nclass SessionStore(SessionBase):\n    def exists(self, session_key):\n        return os.path.exists(self._key_to_file(session_key))",
+    "token_count": 56,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore.exists"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "full",
+     "bm25_rank": 29,
+     "chunk_kind": "method",
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/base.py:348-354",
+    "content": "# django/contrib/sessions/backends/base.py:348-354  (django.contrib.sessions.backends.base.SessionBase.load)\nclass SessionBase:\n    def load(self):\n        \"\"\"\n        Load the session data and return a dictionary.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of SessionBase must provide a load() method\"\n        )",
+    "token_count": 72,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.base.SessionBase.load"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "full",
+     "bm25_rank": 30,
+     "chunk_kind": "method",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:193-194",
+    "content": "# django/contrib/sessions/backends/file.py:193-194  (django.contrib.sessions.backends.file.SessionStore.clean)\nclass SessionStore(SessionBase):\n    def clean(self):\n        pass",
+    "token_count": 42,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore.clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "full",
+     "bm25_rank": 31,
+     "chunk_kind": "method",
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:23-25",
+    "content": "# django/contrib/sessions/backends/cached_db.py:23-25  (django.contrib.sessions.backends.cached_db.SessionStore.cache_key)\nclass SessionStore(DBStore):\n    @property\n    def cache_key(self):\n        return self.cache_key_prefix + self._get_or_create_session_key()",
+    "token_count": 63,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cached_db.SessionStore.cache_key"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "full",
+     "bm25_rank": 32,
+     "chunk_kind": "method",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:62-68",
+    "content": "# django/contrib/sessions/backends/file.py:62-68  (django.contrib.sessions.backends.file.SessionStore._last_modification)\nclass SessionStore(SessionBase):\n    def _last_modification(self):\n        \"\"\"\n        Return the modification time of the file storing the session's content.\n        \"\"\"\n        modification = os.stat(self._key_to_file()).st_mtime\n        tz = datetime.timezone.utc if settings.USE_TZ else None\n        return datetime.datetime.fromtimestamp(modification, tz=tz)",
+    "token_count": 104,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore._last_modification"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "full",
+     "bm25_rank": 33,
+     "chunk_kind": "method",
+     "engine_token_count": 104
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/csrf_tests/tests.py:185-188",
+    "content": "# tests/csrf_tests/tests.py:185-188  (tests.csrf_tests.tests.TestingSessionStore)\nclass TestingSessionStore(SessionStore):\n    \"\"\"\n    A version of SessionStore that stores what cookie values are passed to\n    set_cookie() when CSRF_USE_SESSIONS=True.\n    \"\"\"",
+    "token_count": 63,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.csrf_tests.tests.TestingSessionStore"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "full",
+     "bm25_rank": 34,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:57-63",
+    "content": "# django/contrib/sessions/backends/cached_db.py:57-63  (django.contrib.sessions.backends.cached_db.SessionStore.delete)\nclass SessionStore(DBStore):\n    def delete(self, session_key=None):\n        super().delete(session_key)\n        if session_key is None:\n            if self.session_key is None:\n                return\n            session_key = self.session_key\n        self._cache.delete(self.cache_key_prefix + session_key)",
+    "token_count": 92,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cached_db.SessionStore.delete"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "full",
+     "bm25_rank": 35,
+     "chunk_kind": "method",
+     "engine_token_count": 92
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:83-85",
+    "content": "# django/contrib/sessions/backends/cache.py:83-85  (django.contrib.sessions.backends.cache.SessionStore.clear_expired)\nclass SessionStore(SessionBase):\n    @classmethod\n    def clear_expired(cls):\n        pass",
+    "token_count": 46,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore.clear_expired"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "full",
+     "bm25_rank": 36,
+     "chunk_kind": "method",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:15-17",
+    "content": "# django/contrib/sessions/backends/cache.py:15-17  (django.contrib.sessions.backends.cache.SessionStore.__init__)\nclass SessionStore(SessionBase):\n    def __init__(self, session_key=None):\n        self._cache = caches[settings.SESSION_CACHE_ALIAS]\n        super().__init__(session_key)",
+    "token_count": 66,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore.__init__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "full",
+     "bm25_rank": 37,
+     "chunk_kind": "method",
+     "engine_token_count": 66
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/signed_cookies.py:79-81",
+    "content": "# django/contrib/sessions/backends/signed_cookies.py:79-81  (django.contrib.sessions.backends.signed_cookies.SessionStore.clear_expired)\nclass SessionStore(SessionBase):\n    @classmethod\n    def clear_expired(cls):\n        pass",
+    "token_count": 50,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.signed_cookies.SessionStore.clear_expired"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "full",
+     "bm25_rank": 38,
+     "chunk_kind": "method",
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:19-21",
+    "content": "# django/contrib/sessions/backends/cache.py:19-21  (django.contrib.sessions.backends.cache.SessionStore.cache_key)\nclass SessionStore(SessionBase):\n    @property\n    def cache_key(self):\n        return self.cache_key_prefix + self._get_or_create_session_key()",
+    "token_count": 59,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore.cache_key"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "full",
+     "bm25_rank": 39,
+     "chunk_kind": "method",
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:23-26",
+    "content": "# django/contrib/sessions/backends/file.py:23-26  (django.contrib.sessions.backends.file.SessionStore.__init__)\nclass SessionStore(SessionBase):\n    def __init__(self, session_key=None):\n        self.storage_path = self._get_storage_path()\n        self.file_prefix = settings.SESSION_COOKIE_NAME\n        super().__init__(session_key)",
+    "token_count": 75,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore.__init__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "full",
+     "bm25_rank": 40,
+     "chunk_kind": "method",
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:28-45",
+    "content": "# django/contrib/sessions/backends/file.py:28-45  (django.contrib.sessions.backends.file.SessionStore._get_storage_path)\nclass SessionStore(SessionBase):\n    @classmethod\n    def _get_storage_path(cls):\n        try:\n            return cls._storage_path\n        except AttributeError:\n            storage_path = (\n                getattr(settings, \"SESSION_FILE_PATH\", None) or tempfile.gettempdir()\n            )\n            # Make sure the storage path is valid.\n            if not os.path.isdir(storage_path):\n                raise ImproperlyConfigured(\n                    \"The session storage path %r doesn't exist. Please set your\"\n                    \" SESSION_FILE_PATH setting to an existing directory in which\"\n                    \" Django can store session data.\" % storage_path\n                )\n\n            cls._storage_path = storage_path\n            return storage_path",
+    "token_count": 169,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore._get_storage_path"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "full",
+     "bm25_rank": 41,
+     "chunk_kind": "method",
+     "engine_token_count": 169
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:76-81",
+    "content": "# django/contrib/sessions/backends/cache.py:76-81  (django.contrib.sessions.backends.cache.SessionStore.delete)\nclass SessionStore(SessionBase):\n    def delete(self, session_key=None):\n        if session_key is None:\n            if self.session_key is None:\n                return\n            session_key = self.session_key\n        self._cache.delete(self.cache_key_prefix + session_key)",
+    "token_count": 81,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore.delete"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "full",
+     "bm25_rank": 42,
+     "chunk_kind": "method",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:183-191",
+    "content": "# django/contrib/sessions/backends/file.py:183-191  (django.contrib.sessions.backends.file.SessionStore.delete)\nclass SessionStore(SessionBase):\n    def delete(self, session_key=None):\n        if session_key is None:\n            if self.session_key is None:\n                return\n            session_key = self.session_key\n        try:\n            os.unlink(self._key_to_file(session_key))\n        except OSError:\n            pass",
+    "token_count": 90,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore.delete"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "full",
+     "bm25_rank": 43,
+     "chunk_kind": "method",
+     "engine_token_count": 90
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:117-178",
+    "content": "# django/contrib/sessions/backends/file.py:117-178  (django.contrib.sessions.backends.file.SessionStore.save)\nclass SessionStore(SessionBase):\n    def save(self, must_create=False):\n        if self.session_key is None:\n            return self.create()\n        # Get the session data now, before we start messing\n        # with the file it is stored within.\n        session_data = self._get_session(no_load=must_create)\n\n        session_file_name = self._key_to_file()\n\n        try:\n            # Make sure the file exists.  If it does not already exist, an\n            # empty placeholder file is created.\n            flags = os.O_WRONLY | getattr(os, \"O_BINARY\", 0)\n            if must_create:\n                flags |= os.O_EXCL | os.O_CREAT\n            fd = os.open(session_file_name, flags)\n            os.close(fd)\n        except FileNotFoundError:\n            if not must_create:\n                raise UpdateError\n        except FileExistsError:\n            if must_create:\n                raise CreateError\n\n        # Write the session file without interfering with other threads\n        # or processes.  By writing to an atomically generated temporary\n        # file and then using the atomic os.rename() to make the complete\n        # file visible, we avoid having to lock the session file, while\n        # still maintaining its integrity.\n        #\n        # Note: Locking the session file was explored, but rejected in part\n        # because in order to be atomic and cross-platform, it required a\n        # long-lived lock file for each session, doubling the number of\n        # files in the session storage directory at any given time.  This\n        # rename solution is cleaner and avoids any additional overhead\n        # when reading the session data, which is the more common case\n        # unless SESSION_SAVE_EVERY_REQUEST = True.\n        #\n        # See ticket #8616.\n        dir, prefix = os.path.split(session_file_name)\n\n        try:\n            output_file_fd, output_file_name = tempfile.mkstemp(\n                dir=dir, prefix=prefix + \"_out_\"\n            )\n            renamed = False\n            try:\n                try:\n                    os.write(output_file_fd, self.encode(session_data).encode())\n                finally:\n                    os.close(output_file_fd)\n\n                # This will atomically rename the file (os.rename) if the OS\n                # supports it. Otherwise this will result in a shutil.copy2\n                # and os.unlink (for example on Windows). See #9084.\n                shutil.move(output_file_name, session_file_name)\n                renamed = True\n            finally:\n                if not renamed:\n                    os.unlink(output_file_name)\n        except (EOFError, OSError):\n            pass",
+    "token_count": 567,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore.save"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "full",
+     "bm25_rank": 44,
+     "chunk_kind": "method",
+     "engine_token_count": 567
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cached_db.py:53-55",
+    "content": "# django/contrib/sessions/backends/cached_db.py:53-55  (django.contrib.sessions.backends.cached_db.SessionStore.save)\nclass SessionStore(DBStore):\n    def save(self, must_create=False):\n        super().save(must_create)\n        self._cache.set(self.cache_key, self._session, self.get_expiry_age())",
+    "token_count": 72,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cached_db.SessionStore.save"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "full",
+     "bm25_rank": 45,
+     "chunk_kind": "method",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:107-115",
+    "content": "# django/contrib/sessions/backends/file.py:107-115  (django.contrib.sessions.backends.file.SessionStore.create)\nclass SessionStore(SessionBase):\n    def create(self):\n        while True:\n            self._session_key = self._get_new_session_key()\n            try:\n                self.save(must_create=True)\n            except CreateError:\n                continue\n            self.modified = True\n            return",
+    "token_count": 84,
+    "rank": 59,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore.create"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "full",
+     "bm25_rank": 46,
+     "chunk_kind": "method",
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sessions_tests/models.py:44-45",
+    "content": "# tests/sessions_tests/models.py:44-45  (tests.sessions_tests.models.SessionStore.get_session_cookie_age)\nclass SessionStore(DBStore):\n    def get_session_cookie_age(self):\n        return 60 * 60 * 24  # One day.",
+    "token_count": 58,
+    "rank": 60,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.sessions_tests.models.SessionStore.get_session_cookie_age"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "full",
+     "bm25_rank": 47,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/cache.py:54-69",
+    "content": "# django/contrib/sessions/backends/cache.py:54-69  (django.contrib.sessions.backends.cache.SessionStore.save)\nclass SessionStore(SessionBase):\n    def save(self, must_create=False):\n        if self.session_key is None:\n            return self.create()\n        if must_create:\n            func = self._cache.add\n        elif self._cache.get(self.cache_key) is not None:\n            func = self._cache.set\n        else:\n            raise UpdateError\n        result = func(\n            self.cache_key,\n            self._get_session(no_load=must_create),\n            self.get_expiry_age(),\n        )\n        if must_create and not result:\n            raise CreateError",
+    "token_count": 139,
+    "rank": 61,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.cache.SessionStore.save"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "full",
+     "bm25_rank": 48,
+     "chunk_kind": "method",
+     "engine_token_count": 139
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/backends/file.py:47-60",
+    "content": "# django/contrib/sessions/backends/file.py:47-60  (django.contrib.sessions.backends.file.SessionStore._key_to_file)\nclass SessionStore(SessionBase):\n    def _key_to_file(self, session_key=None):\n        \"\"\"\n        Get the file associated with this session key.\n        \"\"\"\n        if session_key is None:\n            session_key = self._get_or_create_session_key()\n\n        # Make sure we're not vulnerable to directory traversal. Session keys\n        # should always be md5s, so they should never contain directory\n        # components.\n        if not set(session_key).issubset(VALID_KEY_CHARS):\n            raise InvalidSessionKey(\"Invalid characters in session key\")\n\n        return os.path.join(self.storage_path, self.file_prefix + session_key)",
+    "token_count": 159,
+    "rank": 62,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.backends.file.SessionStore._key_to_file"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "full",
+     "bm25_rank": 49,
+     "chunk_kind": "method",
+     "engine_token_count": 159
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sessions_tests/no_clear_expired.py:5-7",
+    "content": "# tests/sessions_tests/no_clear_expired.py:5-7  (tests.sessions_tests.no_clear_expired.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"Session store without support for clearing expired sessions.\"\"\"\n\n    pass",
+    "token_count": 43,
+    "rank": 63,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.sessions_tests.no_clear_expired.SessionStore"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "full",
+     "bm25_rank": 50,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 43
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 6520,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging a Django database-backed session load in\ndjango/contrib/sessions/backends/db.py. Starting from\n`SessionStore.load`, trace the real causal pipeline a session load\ntravels through, in the order each stage is actually reached at\nrequest time, up to and including the call that decodes the stored\nsession data back into a Python dict. Assume a matching, unexpired\nsession row exists in the database.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.sessions.backends.db.SessionStore.load\", \"django.contrib.sessions.backends.db.SessionStore._get_session_from_db\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/contrib/sessions/backends/db.py",
+   "cutoff": 0,
+   "n_components": 63,
+   "n_full": 63,
+   "n_stub": 0,
+   "n_dropped": 0,
+   "packed_tokens": 6520,
+   "latency_ms": {
+    "L_priority_sort": [
+     1305.366273
+    ],
+    "L_binary_search_tokenize": [
+     35.563211
+    ],
+    "L_retrieve": [
+     1341.224873
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 6520,
+   "prompt_tokens": 6864,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 6877,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/sessions/backends/db.py:41-43  (django.contrib.sessions.backends.db.SessionStore.load)\nclass SessionStore(SessionBase):\n    def load(self):\n        s = self._get_session_from_db()\n        return self.decode(s.session_data) if s else {}\n\n# django/contrib/sessions/backends/db.py:30-39  (django.contrib.sessions.backends.db.SessionStore._get_session_from_db)\nclass SessionStore(SessionBase):\n    def _get_session_from_db(self):\n        try:\n            return self.model.objects.get(\n                session_key=self.session_key, expire_date__gt=timezone.now()\n            )\n        except (self.model.DoesNotExist, SuspiciousOperation) as e:\n            if isinstance(e, SuspiciousOperation):\n                logger = logging.getLogger(\"django.security.%s\" % e.__class__.__name__)\n                logger.warning(str(e))\n            self._session_key = None\n\n# django/contrib/sessions/backends/db.py:45-46  (django.contrib.sessions.backends.db.SessionStore.exists)\nclass SessionStore(SessionBase):\n    def exists(self, session_key):\n        return self.model.objects.filter(session_key=session_key).exists()\n\n# django/contrib/sessions/backends/db.py:26-28  (django.contrib.sessions.backends.db.SessionStore.model)\nclass SessionStore(SessionBase):\n    @cached_property\n    def model(self):\n        return self.get_model_class()\n\n# django/contrib/sessions/backends/db.py:48-59  (django.contrib.sessions.backends.db.SessionStore.create)\nclass SessionStore(SessionBase):\n    def create(self):\n        while True:\n            self._session_key = self._get_new_session_key()\n            try:\n                # Save immediately to ensure we have a unique entry in the\n                # database.\n                self.save(must_create=True)\n            except CreateError:\n                # Key wasn't unique. Try again.\n                continue\n            self.modified = True\n            return\n\n# django/contrib/sessions/backends/db.py:18-24  (django.contrib.sessions.backends.db.SessionStore.get_model_class)\nclass SessionStore(SessionBase):\n    @classmethod\n    def get_model_class(cls):\n        # Avoids a circular import and allows importing SessionStore when\n        # django.contrib.sessions is not in INSTALLED_APPS.\n        from django.contrib.sessions.models import Session\n\n        return Session\n\n# django/contrib/sessions/backends/db.py:61-71  (django.contrib.sessions.backends.db.SessionStore.create_model_instance)\nclass SessionStore(SessionBase):\n    def create_model_instance(self, data):\n        \"\"\"\n        Return a new instance of the session model object, which represents the\n        current session state. Intended to be used for saving the session data\n        to the database.\n        \"\"\"\n        return self.model(\n            session_key=self._get_or_create_session_key(),\n            session_data=self.encode(data),\n            expire_date=self.get_expiry_date(),\n        )\n\n# django/contrib/sessions/backends/db.py:15-16  (django.contrib.sessions.backends.db.SessionStore.__init__)\nclass SessionStore(SessionBase):\n    def __init__(self, session_key=None):\n        super().__init__(session_key)\n\n# django/contrib/sessions/backends/db.py:73-96  (django.contrib.sessions.backends.db.SessionStore.save)\nclass SessionStore(SessionBase):\n    def save(self, must_create=False):\n        \"\"\"\n        Save the current session data to the database. If 'must_create' is\n        True, raise a database error if the saving operation doesn't create a\n        new entry (as opposed to possibly updating an existing entry).\n        \"\"\"\n        if self.session_key is None:\n            return self.create()\n        data = self._get_session(no_load=must_create)\n        obj = self.create_model_instance(data)\n        using = router.db_for_write(self.model, instance=obj)\n        try:\n            with transaction.atomic(using=using):\n                obj.save(\n                    force_insert=must_create, force_update=not must_create, using=using\n                )\n        except IntegrityError:\n            if must_create:\n                raise CreateError\n            raise\n        except DatabaseError:\n            if not must_create:\n                raise UpdateError\n            raise\n\n# django/contrib/sessions/backends/db.py:11-13  (django.contrib.sessions.backends.db.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"\n    Implement database session store.\n    \"\"\"\n\n# django/contrib/sessions/backends/db.py:98-106  (django.contrib.sessions.backends.db.SessionStore.delete)\nclass SessionStore(SessionBase):\n    def delete(self, session_key=None):\n        if session_key is None:\n            if self.session_key is None:\n                return\n            session_key = self.session_key\n        try:\n            self.model.objects.get(session_key=session_key).delete()\n        except self.model.DoesNotExist:\n            pass\n\n# django/contrib/sessions/backends/db.py:1-7  (django.contrib.sessions.backends.db)\nimport logging\n\nfrom django.contrib.sessions.backends.base import CreateError, SessionBase, UpdateError\nfrom django.core.exceptions import SuspiciousOperation\nfrom django.db import DatabaseError, IntegrityError, router, transaction\nfrom django.utils import timezone\nfrom django.utils.functional import cached_property\n\n# django/contrib/sessions/backends/db.py:108-110  (django.contrib.sessions.backends.db.SessionStore.clear_expired)\nclass SessionStore(SessionBase):\n    @classmethod\n    def clear_expired(cls):\n        cls.get_model_class().objects.filter(expire_date__lt=timezone.now()).delete()\n\n# tests/sessions_tests/models.py:1-8  (tests.sessions_tests.models)\n\"\"\"\nThis custom Session model adds an extra column to store an account ID. In\nreal-world applications, it gives you the option of querying the database for\nall active sessions for a particular account.\n\"\"\"\nfrom django.contrib.sessions.backends.db import SessionStore as DBStore\nfrom django.contrib.sessions.base_session import AbstractBaseSession\nfrom django.db import models\n\n# django/contrib/sessions/backends/cached_db.py:27-44  (django.contrib.sessions.backends.cached_db.SessionStore.load)\nclass SessionStore(DBStore):\n    def load(self):\n        try:\n            data = self._cache.get(self.cache_key)\n        except Exception:\n            # Some backends (e.g. memcache) raise an exception on invalid\n            # cache keys. If this happens, reset the session. See #17810.\n            data = None\n\n        if data is None:\n            s = self._get_session_from_db()\n            if s:\n                data = self.decode(s.session_data)\n                self._cache.set(\n                    self.cache_key, data, self.get_expiry_age(expiry=s.expire_date)\n                )\n            else:\n                data = {}\n        return data\n\n# django/contrib/sessions/backends/cache.py:23-33  (django.contrib.sessions.backends.cache.SessionStore.load)\nclass SessionStore(SessionBase):\n    def load(self):\n        try:\n            session_data = self._cache.get(self.cache_key)\n        except Exception:\n            # Some backends (e.g. memcache) raise an exception on invalid\n            # cache keys. If this happens, reset the session. See #17810.\n            session_data = None\n        if session_data is not None:\n            return session_data\n        self._session_key = None\n        return {}\n\n# django/contrib/sessions/backends/cached_db.py:65-72  (django.contrib.sessions.backends.cached_db.SessionStore.flush)\nclass SessionStore(DBStore):\n    def flush(self):\n        \"\"\"\n        Remove the current session data from the database and regenerate the\n        key.\n        \"\"\"\n        self.clear()\n        self.delete(self.session_key)\n        self._session_key = None\n\n# django/contrib/sessions/backends/signed_cookies.py:6-24  (django.contrib.sessions.backends.signed_cookies.SessionStore.load)\nclass SessionStore(SessionBase):\n    def load(self):\n        \"\"\"\n        Load the data from the key itself instead of fetching from some\n        external data store. Opposite of _get_session_key(), raise BadSignature\n        if signature fails.\n        \"\"\"\n        try:\n            return signing.loads(\n                self.session_key,\n                serializer=self.serializer,\n                # This doesn't handle non-default expiry dates, see #19201\n                max_age=self.get_session_cookie_age(),\n                salt=\"django.contrib.sessions.backends.signed_cookies\",\n            )\n        except Exception:\n            # BadSignature, ValueError, or unpickling exceptions. If any of\n            # these happen, reset the session.\n            self.create()\n        return {}\n\n# django/contrib/sessions/backends/signed_cookies.py:33-40  (django.contrib.sessions.backends.signed_cookies.SessionStore.save)\nclass SessionStore(SessionBase):\n    def save(self, must_create=False):\n        \"\"\"\n        To save, get the session key as a securely signed string and then set\n        the modified flag so that the cookie is set on the client for the\n        current request.\n        \"\"\"\n        self._session_key = self._get_session_key()\n        self.modified = True\n\n# django/contrib/sessions/backends/cached_db.py:13-17  (django.contrib.sessions.backends.cached_db.SessionStore)\nclass SessionStore(DBStore):\n    \"\"\"\n    Implement cached, database backed sessions.\n    \"\"\"\n\n    cache_key_prefix = KEY_PREFIX\n\n# tests/sessions_tests/models.py:24-27  (tests.sessions_tests.models.SessionStore)\nclass SessionStore(DBStore):\n    \"\"\"\n    A database session store, that handles updating the account ID column\n    inside the custom session model.\n    \"\"\"\n\n# django/contrib/sessions/backends/signed_cookies.py:60-65  (django.contrib.sessions.backends.signed_cookies.SessionStore.cycle_key)\nclass SessionStore(SessionBase):\n    def cycle_key(self):\n        \"\"\"\n        Keep the same data but with a new key. Call save() and it will\n        automatically save a cookie with a new key at the end of the request.\n        \"\"\"\n        self.save()\n\n# tests/sessions_tests/tests.py:1-40  (tests.sessions_tests.tests)\nimport base64\nimport os\nimport shutil\nimport string\nimport tempfile\nimport unittest\nfrom datetime import timedelta\nfrom http import cookies\nfrom pathlib import Path\nfrom unittest import mock\n\nfrom django.conf import settings\nfrom django.contrib.sessions.backends.base import UpdateError\nfrom django.contrib.sessions.backends.cache import SessionStore as CacheSession\nfrom django.contrib.sessions.backends.cached_db import SessionStore as CacheDBSession\nfrom django.contrib.sessions.backends.db import SessionStore as DatabaseSession\nfrom django.contrib.sessions.backends.file import SessionStore as FileSession\nfrom django.contrib.sessions.backends.signed_cookies import (\n    SessionStore as CookieSession,\n)\nfrom django.contrib.sessions.exceptions import InvalidSessionKey, SessionInterrupted\nfrom django.contrib.sessions.middleware import SessionMiddleware\nfrom django.contrib.sessions.models import Session\nfrom django.contrib.sessions.serializers import JSONSerializer\nfrom django.core import management\nfrom django.core.cache import caches\nfrom django.core.cache.backends.base import InvalidCacheBackendError\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.core.signing import TimestampSigner\nfrom django.http import HttpResponse\nfrom django.test import (\n    RequestFactory,\n    SimpleTestCase,\n    TestCase,\n    ignore_warnings,\n    override_settings,\n)\nfrom django.utils import timezone\n\nfrom .models import SessionStore as CustomDatabaseSession\n\n# django/contrib/sessions/backends/signed_cookies.py:26-31  (django.contrib.sessions.backends.signed_cookies.SessionStore.create)\nclass SessionStore(SessionBase):\n    def create(self):\n        \"\"\"\n        To create a new key, set the modified flag so that the cookie is set\n        on the client for the current request.\n        \"\"\"\n        self.modified = True\n\n# django/contrib/sessions/models.py:28-32  (django.contrib.sessions.models.Session.get_session_store_class)\nclass Session(AbstractBaseSession):\n    @classmethod\n    def get_session_store_class(cls):\n        from django.contrib.sessions.backends.db import SessionStore\n\n        return SessionStore\n\n# django/contrib/sessions/backends/signed_cookies.py:42-48  (django.contrib.sessions.backends.signed_cookies.SessionStore.exists)\nclass SessionStore(SessionBase):\n    def exists(self, session_key=None):\n        \"\"\"\n        This method makes sense when you're talking to a shared resource, but\n        it doesn't matter when you're storing the information in the client's\n        cookie.\n        \"\"\"\n        return False\n\n# django/contrib/sessions/backends/cache.py:35-52  (django.contrib.sessions.backends.cache.SessionStore.create)\nclass SessionStore(SessionBase):\n    def create(self):\n        # Because a cache can fail silently (e.g. memcache), we don't know if\n        # we are failing to create a new session because of a key collision or\n        # because the cache is missing. So we try for a (large) number of times\n        # and then raise an exception. That's the risk you shoulder if using\n        # cache backing.\n        for i in range(10000):\n            self._session_key = self._get_new_session_key()\n            try:\n                self.save(must_create=True)\n            except CreateError:\n                continue\n            self.modified = True\n            return\n        raise RuntimeError(\n            \"Unable to create a new session key. \"\n            \"It is likely that the cache is unavailable.\"\n        )\n\n# django/contrib/sessions/backends/signed_cookies.py:50-58  (django.contrib.sessions.backends.signed_cookies.SessionStore.delete)\nclass SessionStore(SessionBase):\n    def delete(self, session_key=None):\n        \"\"\"\n        To delete, clear the session key and the underlying data structure\n        and set the modified flag so that the cookie is set on the client for\n        the current request.\n        \"\"\"\n        self._session_key = \"\"\n        self._session_cache = {}\n        self.modified = True\n\n# django/contrib/sessions/backends/cached_db.py:46-51  (django.contrib.sessions.backends.cached_db.SessionStore.exists)\nclass SessionStore(DBStore):\n    def exists(self, session_key):\n        return (\n            session_key\n            and (self.cache_key_prefix + session_key) in self._cache\n            or super().exists(session_key)\n        )\n\n# django/contrib/sessions/backends/file.py:196-210  (django.contrib.sessions.backends.file.SessionStore.clear_expired)\nclass SessionStore(SessionBase):\n    @classmethod\n    def clear_expired(cls):\n        storage_path = cls._get_storage_path()\n        file_prefix = settings.SESSION_COOKIE_NAME\n\n        for session_file in os.listdir(storage_path):\n            if not session_file.startswith(file_prefix):\n                continue\n            session_key = session_file[len(file_prefix) :]\n            session = cls(session_key)\n            # When an expired session is loaded, its file is removed, and a\n            # new file is immediately created. Prevent this by disabling\n            # the create() method.\n            session.create = lambda: None\n            session.load()\n\n# django/contrib/sessions/backends/file.py:19-21  (django.contrib.sessions.backends.file.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"\n    Implement a file based session store.\n    \"\"\"\n\n# django/contrib/sessions/backends/file.py:70-77  (django.contrib.sessions.backends.file.SessionStore._expiry_date)\nclass SessionStore(SessionBase):\n    def _expiry_date(self, session_data):\n        \"\"\"\n        Return the expiry time of the file storing the session's content.\n        \"\"\"\n        return session_data.get(\"_session_expiry\") or (\n            self._last_modification()\n            + datetime.timedelta(seconds=self.get_session_cookie_age())\n        )\n\n# django/contrib/sessions/backends/base.py:180-193  (django.contrib.sessions.backends.base.SessionBase._get_session)\nclass SessionBase:\n    def _get_session(self, no_load=False):\n        \"\"\"\n        Lazily load session from storage (unless \"no_load\" is True, when only\n        an empty dict is stored) and store it in the current instance.\n        \"\"\"\n        self.accessed = True\n        try:\n            return self._session_cache\n        except AttributeError:\n            if self.session_key is None or no_load:\n                self._session_cache = {}\n            else:\n                self._session_cache = self.load()\n        return self._session_cache\n\n# django/contrib/sessions/backends/signed_cookies.py:67-77  (django.contrib.sessions.backends.signed_cookies.SessionStore._get_session_key)\nclass SessionStore(SessionBase):\n    def _get_session_key(self):\n        \"\"\"\n        Instead of generating a random string, generate a secure url-safe\n        base64-encoded string of data as our session key.\n        \"\"\"\n        return signing.dumps(\n            self._session,\n            compress=True,\n            salt=\"django.contrib.sessions.backends.signed_cookies\",\n            serializer=self.serializer,\n        )\n\n# django/contrib/sessions/backends/cache.py:9-13  (django.contrib.sessions.backends.cache.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"\n    A cache-based session store.\n    \"\"\"\n\n    cache_key_prefix = KEY_PREFIX\n\n# tests/test_client_regress/session.py:5-10  (tests.test_client_regress.session.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"\n    A simple cookie-based session storage implementation.\n\n    The session key is actually the session data, pickled and encoded.\n    This means that saving the session will change the session key.\n    \"\"\"\n\n# django/contrib/sessions/backends/cache.py:71-74  (django.contrib.sessions.backends.cache.SessionStore.exists)\nclass SessionStore(SessionBase):\n    def exists(self, session_key):\n        return (\n            bool(session_key) and (self.cache_key_prefix + session_key) in self._cache\n        )\n\n# django/contrib/sessions/backends/file.py:79-105  (django.contrib.sessions.backends.file.SessionStore.load)\nclass SessionStore(SessionBase):\n    def load(self):\n        session_data = {}\n        try:\n            with open(self._key_to_file(), encoding=\"ascii\") as session_file:\n                file_data = session_file.read()\n            # Don't fail if there is no data in the session file.\n            # We may have opened the empty placeholder file.\n            if file_data:\n                try:\n                    session_data = self.decode(file_data)\n                except (EOFError, SuspiciousOperation) as e:\n                    if isinstance(e, SuspiciousOperation):\n                        logger = logging.getLogger(\n                            \"django.security.%s\" % e.__class__.__name__\n                        )\n                        logger.warning(str(e))\n                    self.create()\n\n                # Remove expired sessions.\n                expiry_age = self.get_expiry_age(expiry=self._expiry_date(session_data))\n                if expiry_age <= 0:\n                    session_data = {}\n                    self.delete()\n                    self.create()\n        except (OSError, SuspiciousOperation):\n            self._session_key = None\n        return session_data\n\n# django/contrib/sessions/backends/cached_db.py:1-9  (django.contrib.sessions.backends.cached_db)\n\"\"\"\nCached, database-backed sessions.\n\"\"\"\n\nfrom django.conf import settings\nfrom django.contrib.sessions.backends.db import SessionStore as DBStore\nfrom django.core.cache import caches\n\nKEY_PREFIX = \"django.contrib.sessions.cached_db\"\n\n# django/contrib/sessions/backends/cached_db.py:19-21  (django.contrib.sessions.backends.cached_db.SessionStore.__init__)\nclass SessionStore(DBStore):\n    def __init__(self, session_key=None):\n        self._cache = caches[settings.SESSION_CACHE_ALIAS]\n        super().__init__(session_key)\n\n# django/contrib/sessions/models.py:9-26  (django.contrib.sessions.models.Session)\nclass Session(AbstractBaseSession):\n    \"\"\"\n    Django provides full support for anonymous sessions. The session\n    framework lets you store and retrieve arbitrary data on a\n    per-site-visitor basis. It stores data on the server side and\n    abstracts the sending and receiving of cookies. Cookies contain a\n    session ID -- not the data itself.\n\n    The Django sessions framework is entirely cookie-based. It does\n    not fall back to putting session IDs in URLs. This is an intentional\n    design decision. Not only does that behavior make URLs ugly, it makes\n    your site vulnerable to session-ID theft via the \"Referer\" header.\n\n    For complete documentation on using Sessions in your code, consult\n    the sessions documentation that is shipped with Django (also available\n    on the Django web site).\n    \"\"\"\n\n    objects = SessionManager()\n\n# django/contrib/sessions/backends/file.py:180-181  (django.contrib.sessions.backends.file.SessionStore.exists)\nclass SessionStore(SessionBase):\n    def exists(self, session_key):\n        return os.path.exists(self._key_to_file(session_key))\n\n# django/contrib/sessions/backends/base.py:348-354  (django.contrib.sessions.backends.base.SessionBase.load)\nclass SessionBase:\n    def load(self):\n        \"\"\"\n        Load the session data and return a dictionary.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of SessionBase must provide a load() method\"\n        )\n\n# django/contrib/sessions/backends/file.py:193-194  (django.contrib.sessions.backends.file.SessionStore.clean)\nclass SessionStore(SessionBase):\n    def clean(self):\n        pass\n\n# django/contrib/sessions/backends/cached_db.py:23-25  (django.contrib.sessions.backends.cached_db.SessionStore.cache_key)\nclass SessionStore(DBStore):\n    @property\n    def cache_key(self):\n        return self.cache_key_prefix + self._get_or_create_session_key()\n\n# django/contrib/sessions/backends/file.py:62-68  (django.contrib.sessions.backends.file.SessionStore._last_modification)\nclass SessionStore(SessionBase):\n    def _last_modification(self):\n        \"\"\"\n        Return the modification time of the file storing the session's content.\n        \"\"\"\n        modification = os.stat(self._key_to_file()).st_mtime\n        tz = datetime.timezone.utc if settings.USE_TZ else None\n        return datetime.datetime.fromtimestamp(modification, tz=tz)\n\n# tests/csrf_tests/tests.py:185-188  (tests.csrf_tests.tests.TestingSessionStore)\nclass TestingSessionStore(SessionStore):\n    \"\"\"\n    A version of SessionStore that stores what cookie values are passed to\n    set_cookie() when CSRF_USE_SESSIONS=True.\n    \"\"\"\n\n# django/contrib/sessions/backends/cached_db.py:57-63  (django.contrib.sessions.backends.cached_db.SessionStore.delete)\nclass SessionStore(DBStore):\n    def delete(self, session_key=None):\n        super().delete(session_key)\n        if session_key is None:\n            if self.session_key is None:\n                return\n            session_key = self.session_key\n        self._cache.delete(self.cache_key_prefix + session_key)\n\n# django/contrib/sessions/backends/cache.py:83-85  (django.contrib.sessions.backends.cache.SessionStore.clear_expired)\nclass SessionStore(SessionBase):\n    @classmethod\n    def clear_expired(cls):\n        pass\n\n# django/contrib/sessions/backends/cache.py:15-17  (django.contrib.sessions.backends.cache.SessionStore.__init__)\nclass SessionStore(SessionBase):\n    def __init__(self, session_key=None):\n        self._cache = caches[settings.SESSION_CACHE_ALIAS]\n        super().__init__(session_key)\n\n# django/contrib/sessions/backends/signed_cookies.py:79-81  (django.contrib.sessions.backends.signed_cookies.SessionStore.clear_expired)\nclass SessionStore(SessionBase):\n    @classmethod\n    def clear_expired(cls):\n        pass\n\n# django/contrib/sessions/backends/cache.py:19-21  (django.contrib.sessions.backends.cache.SessionStore.cache_key)\nclass SessionStore(SessionBase):\n    @property\n    def cache_key(self):\n        return self.cache_key_prefix + self._get_or_create_session_key()\n\n# django/contrib/sessions/backends/file.py:23-26  (django.contrib.sessions.backends.file.SessionStore.__init__)\nclass SessionStore(SessionBase):\n    def __init__(self, session_key=None):\n        self.storage_path = self._get_storage_path()\n        self.file_prefix = settings.SESSION_COOKIE_NAME\n        super().__init__(session_key)\n\n# django/contrib/sessions/backends/file.py:28-45  (django.contrib.sessions.backends.file.SessionStore._get_storage_path)\nclass SessionStore(SessionBase):\n    @classmethod\n    def _get_storage_path(cls):\n        try:\n            return cls._storage_path\n        except AttributeError:\n            storage_path = (\n                getattr(settings, \"SESSION_FILE_PATH\", None) or tempfile.gettempdir()\n            )\n            # Make sure the storage path is valid.\n            if not os.path.isdir(storage_path):\n                raise ImproperlyConfigured(\n                    \"The session storage path %r doesn't exist. Please set your\"\n                    \" SESSION_FILE_PATH setting to an existing directory in which\"\n                    \" Django can store session data.\" % storage_path\n                )\n\n            cls._storage_path = storage_path\n            return storage_path\n\n# django/contrib/sessions/backends/cache.py:76-81  (django.contrib.sessions.backends.cache.SessionStore.delete)\nclass SessionStore(SessionBase):\n    def delete(self, session_key=None):\n        if session_key is None:\n            if self.session_key is None:\n                return\n            session_key = self.session_key\n        self._cache.delete(self.cache_key_prefix + session_key)\n\n# django/contrib/sessions/backends/file.py:183-191  (django.contrib.sessions.backends.file.SessionStore.delete)\nclass SessionStore(SessionBase):\n    def delete(self, session_key=None):\n        if session_key is None:\n            if self.session_key is None:\n                return\n            session_key = self.session_key\n        try:\n            os.unlink(self._key_to_file(session_key))\n        except OSError:\n            pass\n\n# django/contrib/sessions/backends/file.py:117-178  (django.contrib.sessions.backends.file.SessionStore.save)\nclass SessionStore(SessionBase):\n    def save(self, must_create=False):\n        if self.session_key is None:\n            return self.create()\n        # Get the session data now, before we start messing\n        # with the file it is stored within.\n        session_data = self._get_session(no_load=must_create)\n\n        session_file_name = self._key_to_file()\n\n        try:\n            # Make sure the file exists.  If it does not already exist, an\n            # empty placeholder file is created.\n            flags = os.O_WRONLY | getattr(os, \"O_BINARY\", 0)\n            if must_create:\n                flags |= os.O_EXCL | os.O_CREAT\n            fd = os.open(session_file_name, flags)\n            os.close(fd)\n        except FileNotFoundError:\n            if not must_create:\n                raise UpdateError\n        except FileExistsError:\n            if must_create:\n                raise CreateError\n\n        # Write the session file without interfering with other threads\n        # or processes.  By writing to an atomically generated temporary\n        # file and then using the atomic os.rename() to make the complete\n        # file visible, we avoid having to lock the session file, while\n        # still maintaining its integrity.\n        #\n        # Note: Locking the session file was explored, but rejected in part\n        # because in order to be atomic and cross-platform, it required a\n        # long-lived lock file for each session, doubling the number of\n        # files in the session storage directory at any given time.  This\n        # rename solution is cleaner and avoids any additional overhead\n        # when reading the session data, which is the more common case\n        # unless SESSION_SAVE_EVERY_REQUEST = True.\n        #\n        # See ticket #8616.\n        dir, prefix = os.path.split(session_file_name)\n\n        try:\n            output_file_fd, output_file_name = tempfile.mkstemp(\n                dir=dir, prefix=prefix + \"_out_\"\n            )\n            renamed = False\n            try:\n                try:\n                    os.write(output_file_fd, self.encode(session_data).encode())\n                finally:\n                    os.close(output_file_fd)\n\n                # This will atomically rename the file (os.rename) if the OS\n                # supports it. Otherwise this will result in a shutil.copy2\n                # and os.unlink (for example on Windows). See #9084.\n                shutil.move(output_file_name, session_file_name)\n                renamed = True\n            finally:\n                if not renamed:\n                    os.unlink(output_file_name)\n        except (EOFError, OSError):\n            pass\n\n# django/contrib/sessions/backends/cached_db.py:53-55  (django.contrib.sessions.backends.cached_db.SessionStore.save)\nclass SessionStore(DBStore):\n    def save(self, must_create=False):\n        super().save(must_create)\n        self._cache.set(self.cache_key, self._session, self.get_expiry_age())\n\n# django/contrib/sessions/backends/file.py:107-115  (django.contrib.sessions.backends.file.SessionStore.create)\nclass SessionStore(SessionBase):\n    def create(self):\n        while True:\n            self._session_key = self._get_new_session_key()\n            try:\n                self.save(must_create=True)\n            except CreateError:\n                continue\n            self.modified = True\n            return\n\n# tests/sessions_tests/models.py:44-45  (tests.sessions_tests.models.SessionStore.get_session_cookie_age)\nclass SessionStore(DBStore):\n    def get_session_cookie_age(self):\n        return 60 * 60 * 24  # One day.\n\n# django/contrib/sessions/backends/cache.py:54-69  (django.contrib.sessions.backends.cache.SessionStore.save)\nclass SessionStore(SessionBase):\n    def save(self, must_create=False):\n        if self.session_key is None:\n            return self.create()\n        if must_create:\n            func = self._cache.add\n        elif self._cache.get(self.cache_key) is not None:\n            func = self._cache.set\n        else:\n            raise UpdateError\n        result = func(\n            self.cache_key,\n            self._get_session(no_load=must_create),\n            self.get_expiry_age(),\n        )\n        if must_create and not result:\n            raise CreateError\n\n# django/contrib/sessions/backends/file.py:47-60  (django.contrib.sessions.backends.file.SessionStore._key_to_file)\nclass SessionStore(SessionBase):\n    def _key_to_file(self, session_key=None):\n        \"\"\"\n        Get the file associated with this session key.\n        \"\"\"\n        if session_key is None:\n            session_key = self._get_or_create_session_key()\n\n        # Make sure we're not vulnerable to directory traversal. Session keys\n        # should always be md5s, so they should never contain directory\n        # components.\n        if not set(session_key).issubset(VALID_KEY_CHARS):\n            raise InvalidSessionKey(\"Invalid characters in session key\")\n\n        return os.path.join(self.storage_path, self.file_prefix + session_key)\n\n# tests/sessions_tests/no_clear_expired.py:5-7  (tests.sessions_tests.no_clear_expired.SessionStore)\nclass SessionStore(SessionBase):\n    \"\"\"Session store without support for clearing expired sessions.\"\"\"\n\n    pass\n\n## Task\n\nYou are debugging a Django database-backed session load in\ndjango/contrib/sessions/backends/db.py. Starting from\n`SessionStore.load`, trace the real causal pipeline a session load\ntravels through, in the order each stage is actually reached at\nrequest time, up to and including the call that decodes the stored\nsession data back into a Python dict. Assume a matching, unexpired\nsession row exists in the database.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.sessions.backends.db.SessionStore.load\", \"django.contrib.sessions.backends.db.SessionStore._get_session_from_db\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

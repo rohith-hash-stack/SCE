@@ -1,0 +1,707 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "fastapi_t02_004_route_registration_pipeline",
+  "items": [
+   {
+    "source_id": "fastapi/routing.py:429-593",
+    "content": "# fastapi/routing.py:429-593  (fastapi.routing.APIRoute)\nclass APIRoute(routing.Route):\n    ...",
+    "token_count": 31,
+    "rank": 1,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.routing.APIRoute"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 9,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/routing.py:430-570",
+    "content": "# fastapi/routing.py:430-570  (fastapi.routing.APIRoute.__init__)\n    def __init__(\n        self,\n        path: str,\n        endpoint: Callable[..., Any],\n        *,\n        response_model: Any = Default(None),\n        status_code: Optional[int] = None,\n        tags: Optional[List[Union[str, Enum]]] = None,\n        dependencies: Optional[Sequence[params.Depends]] = None,\n        summary: Optional[str] = None,\n        description: Optional[str] = None,\n        response_description: str = \"Successful Response\",\n        responses: Optional[Dict[Union[int, str], Dict[str, Any]]] = None,\n        deprecated: Optional[bool] = None,\n        name: Optional[str] = None,\n        methods: Optional[Union[Set[str], List[str]]] = None,\n        operation_id: Optional[str] = None,\n        response_model_include: Optional[IncEx] = None,\n        response_model_exclude: Optional[IncEx] = None,\n        response_model_by_alias: bool = True,\n        response_model_exclude_unset: bool = False,\n        response_model_exclude_defaults: bool = False,\n        response_model_exclude_none: bool = False,\n        include_in_schema: bool = True,\n        response_class: Union[Type[Response], DefaultPlaceholder] = Default(\n            JSONResponse\n        ),\n        dependency_overrides_provider: Optional[Any] = None,\n        callbacks: Optional[List[BaseRoute]] = None,\n        openapi_extra: Optional[Dict[str, Any]] = None,\n        generate_unique_id_function: Union[\n            Callable[[\"APIRoute\"], str], DefaultPlaceholder\n        ] = Default(generate_unique_id),\n    ) -> None:\n        self.path = path\n        self.endpoint = endpoint\n        if isinstance(response_model, DefaultPlaceholder):\n            return_annotation = get_typed_return_annotation(endpoint)\n            if lenient_issubclass(return_annotation, Response):\n                response_model = None\n            else:\n                response_model = return_annotation\n        self.response_model = response_model\n        self.summary = summary\n        self.response_description = response_description\n        self.deprecated = deprecated\n        self.operation_id = operation_id\n        self.response_model_include = response_model_include\n        self.response_model_exclude = response_model_exclude\n        self.response_model_by_alias = response_model_by_alias\n        self.response_model_exclude_unset = response_model_exclude_unset\n        self.response_model_exclude_defaults = response_model_exclude_defaults\n        self.response_model_exclude_none = response_model_exclude_none\n        self.include_in_schema = include_in_schema\n        self.response_class = response_class\n        self.dependency_overrides_provider = dependency_overrides_provider\n        self.callbacks = callbacks\n        self.openapi_extra = openapi_extra\n        self.generate_unique_id_function = generate_unique_id_function\n        self.tags = tags or []\n        self.responses = responses or {}\n        self.name = get_name(endpoint) if name is None else name\n        self.path_regex, self.path_format, self.param_convertors = compile_path(path)\n        if methods is None:\n            methods = [\"GET\"]\n        self.methods: Set[str] = {method.upper() for method in methods}\n        if isinstance(generate_unique_id_function, DefaultPlaceholder):\n            current_generate_unique_id: Callable[[APIRoute], str] = (\n                generate_unique_id_function.value\n            )\n        else:\n            current_generate_unique_id = generate_unique_id_function\n        self.unique_id = self.operation_id or current_generate_unique_id(self)\n        # normalize enums e.g. http.HTTPStatus\n        if isinstance(status_code, IntEnum):\n            status_code = int(status_code)\n        self.status_code = status_code\n        if self.response_model:\n            assert is_body_allowed_for_status_code(status_code), (\n                f\"Status code {status_code} must not have a response body\"\n            )\n            response_name = \"Response_\" + self.unique_id\n            self.response_field = create_model_field(\n                name=response_name,\n                type_=self.response_model,\n                mode=\"serialization\",\n            )\n            # Create a clone of the field, so that a Pydantic submodel is not returned\n            # as is just because it's an instance of a subclass of a more limited class\n            # e.g. UserInDB (containing hashed_password) could be a subclass of User\n            # that doesn't have the hashed_password. But because it's a subclass, it\n            # would pass the validation and be returned as is.\n            # By being a new field, no inheritance will be passed as is. A new model\n            # will always be created.\n            # TODO: remove when deprecating Pydantic v1\n            self.secure_cloned_response_field: Optional[ModelField] = (\n                create_cloned_field(self.response_field)\n            )\n        else:\n            self.response_field = None  # type: ignore\n            self.secure_cloned_response_field = None\n        self.dependencies = list(dependencies or [])\n        self.description = description or inspect.cleandoc(self.endpoint.__doc__ or \"\")\n        # if a \"form feed\" character (page break) is found in the description text,\n        # truncate description text to the content preceding the first \"form feed\"\n        self.description = self.description.split(\"\\f\")[0].strip()\n        response_fields = {}\n        for additional_status_code, response in self.responses.items():\n            assert isinstance(response, dict), \"An additional response must be a dict\"\n            model = response.get(\"model\")\n            if model:\n                assert is_body_allowed_for_status_code(additional_status_code), (\n                    f\"Status code {additional_status_code} must not have a response body\"\n                )\n                response_name = f\"Response_{additional_status_code}_{self.unique_id}\"\n                response_field = create_model_field(\n                    name=response_name, type_=model, mode=\"serialization\"\n                )\n                response_fields[additional_status_code] = response_field\n        if response_fields:\n            self.response_fields: Dict[Union[int, str], ModelField] = response_fields\n        else:\n            self.response_fields = {}\n\n        assert callable(endpoint), \"An endpoint must be a callable\"\n        self.dependant = get_dependant(path=self.path_format, call=self.endpoint)\n        for depends in self.dependencies[::-1]:\n            self.dependant.dependencies.insert(\n                0,\n                get_parameterless_sub_dependant(depends=depends, path=self.path_format),\n            )\n        self._flat_dependant = get_flat_dependant(self.dependant)\n        self._embed_body_fields = _should_embed_body_fields(\n            self._flat_dependant.body_params\n        )\n        self.body_field = get_body_field(\n            flat_dependant=self._flat_dependant,\n            name=self.unique_id,\n            embed_body_fields=self._embed_body_fields,\n        )\n        self.app = request_response(self.get_route_handler())",
+    "token_count": 1417,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.routing.APIRoute.__init__"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 1393,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/datastructures.py:197-204",
+    "content": "# fastapi/datastructures.py:197-204  (fastapi.datastructures.Default)\ndef Default(value: DefaultType) -> DefaultType:\n    \"\"\"\n    You shouldn't use this function directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n    return DefaultPlaceholder(value)  # type: ignore\n\n# Referenced module constants:\nDefaultType = TypeVar(\"DefaultType\")",
+    "token_count": 100,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.datastructures.Default"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 71,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:838-859",
+    "content": "# fastapi/dependencies/utils.py:838-859  (fastapi.dependencies.utils._should_embed_body_fields)\ndef _should_embed_body_fields(fields: List[ModelField]) -> bool:\n    if not fields:\n        return False\n    # More than one dependency could have the same field, it would show up as multiple\n    # fields but it's the same one, so count them by name\n    body_param_names_set = {field.name for field in fields}\n    # A top level field has to be a single field, not multiple\n    if len(body_param_names_set) > 1:\n        return True\n    first_field = fields[0]\n    # If it explicitly specifies it is embedded, it has to be embedded\n    if getattr(first_field.field_info, \"embed\", None):\n        return True\n    # If it's a Form (or File) field, it has to be a BaseModel (or a union of BaseModels) to be top level\n    # otherwise it has to be embedded, so that the key value pair can be extracted\n    if (\n        isinstance(first_field.field_info, params.Form)\n        and not lenient_issubclass(first_field.type_, BaseModel)\n        and not is_union_of_base_models(first_field.type_)\n    ):\n        return True\n    return False",
+    "token_count": 274,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils._should_embed_body_fields"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 247,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:951-1001",
+    "content": "# fastapi/dependencies/utils.py:951-1001  (fastapi.dependencies.utils.get_body_field)\ndef get_body_field(\n    *, flat_dependant: Dependant, name: str, embed_body_fields: bool\n) -> Optional[ModelField]:\n    \"\"\"\n    Get a ModelField representing the request body for a path operation, combining\n    all body parameters into a single field if necessary.\n\n    Used to check if it's form data (with `isinstance(body_field, params.Form)`)\n    or JSON and to generate the JSON Schema for a request body.\n\n    This is **not** used to validate/parse the request body, that's done with each\n    individual body parameter.\n    \"\"\"\n    if not flat_dependant.body_params:\n        return None\n    first_param = flat_dependant.body_params[0]\n    if not embed_body_fields:\n        return first_param\n    model_name = \"Body_\" + name\n    BodyModel = create_body_model(\n        fields=flat_dependant.body_params, model_name=model_name\n    )\n    required = any(True for f in flat_dependant.body_params if f.required)\n    BodyFieldInfo_kwargs: Dict[str, Any] = {\n        \"annotation\": BodyModel,\n        \"alias\": \"body\",\n    }\n    if not required:\n        BodyFieldInfo_kwargs[\"default\"] = None\n    if any(isinstance(f.field_info, params.File) for f in flat_dependant.body_params):\n        BodyFieldInfo: Type[params.Body] = params.File\n    elif any(isinstance(f.field_info, params.Form) for f in flat_dependant.body_params):\n        BodyFieldInfo = params.Form\n    else:\n        BodyFieldInfo = params.Body\n\n        body_param_media_types = [\n            f.field_info.media_type\n            for f in flat_dependant.body_params\n            if isinstance(f.field_info, params.Body)\n        ]\n        if len(set(body_param_media_types)) == 1:\n            BodyFieldInfo_kwargs[\"media_type\"] = body_param_media_types[0]\n    final_field = create_model_field(\n        name=\"body\",\n        type_=BodyModel,\n        required=required,\n        alias=\"body\",\n        field_info=BodyFieldInfo(**BodyFieldInfo_kwargs),\n    )\n    return final_field",
+    "token_count": 469,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_body_field"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 443,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:282-287",
+    "content": "# fastapi/_compat.py:282-287  (fastapi._compat.create_body_model)\n    def create_body_model(\n        *, fields: Sequence[ModelField], model_name: str\n    ) -> Type[BaseModel]:\n        ...",
+    "token_count": 54,
+    "rank": 6,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi._compat.create_body_model"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 30,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:63-106",
+    "content": "# fastapi/utils.py:63-106  (fastapi.utils.create_model_field)\ndef create_model_field(\n    name: str,\n    type_: Any,\n    class_validators: Optional[Dict[str, Validator]] = None,\n    default: Optional[Any] = Undefined,\n    required: Union[bool, UndefinedType] = Undefined,\n    model_config: Type[BaseConfig] = BaseConfig,\n    field_info: Optional[FieldInfo] = None,\n    alias: Optional[str] = None,\n    mode: Literal[\"validation\", \"serialization\"] = \"validation\",\n) -> ModelField:\n    class_validators = class_validators or {}\n    if PYDANTIC_V2:\n        field_info = field_info or FieldInfo(\n            annotation=type_, default=default, alias=alias\n        )\n    else:\n        field_info = field_info or FieldInfo()\n    kwargs = {\"name\": name, \"field_info\": field_info}\n    if PYDANTIC_V2:\n        kwargs.update({\"mode\": mode})\n    else:\n        kwargs.update(\n            {\n                \"type_\": type_,\n                \"class_validators\": class_validators,\n                \"default\": default,\n                \"required\": required,\n                \"model_config\": model_config,\n                \"alias\": alias,\n            }\n        )\n    try:\n        return ModelField(**kwargs)  # type: ignore[arg-type]\n    except (RuntimeError, PydanticSchemaGenerationError):\n        raise fastapi.exceptions.FastAPIError(\n            \"Invalid args for response field! Hint: \"\n            f\"check that {type_} is a valid Pydantic field type. \"\n            \"If you are using a return type annotation that is not a valid Pydantic \"\n            \"field (e.g. Union[Response, dict, None]) you can disable generating the \"\n            \"response model from the type annotation with the path operation decorator \"\n            \"parameter response_model=None. Read more: \"\n            \"https://fastapi.tiangolo.com/tutorial/response-model/\"\n        ) from None",
+    "token_count": 424,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.utils.create_model_field"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 403,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:265-314",
+    "content": "# fastapi/dependencies/utils.py:265-314  (fastapi.dependencies.utils.get_dependant)\ndef get_dependant(\n    *,\n    path: str,\n    call: Callable[..., Any],\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n    use_cache: bool = True,\n) -> Dependant:\n    path_param_names = get_path_param_names(path)\n    endpoint_signature = get_typed_signature(call)\n    signature_params = endpoint_signature.parameters\n    dependant = Dependant(\n        call=call,\n        name=name,\n        path=path,\n        security_scopes=security_scopes,\n        use_cache=use_cache,\n    )\n    for param_name, param in signature_params.items():\n        is_path_param = param_name in path_param_names\n        param_details = analyze_param(\n            param_name=param_name,\n            annotation=param.annotation,\n            value=param.default,\n            is_path_param=is_path_param,\n        )\n        if param_details.depends is not None:\n            sub_dependant = get_param_sub_dependant(\n                param_name=param_name,\n                depends=param_details.depends,\n                path=path,\n                security_scopes=security_scopes,\n            )\n            dependant.dependencies.append(sub_dependant)\n            continue\n        if add_non_field_param_to_dependency(\n            param_name=param_name,\n            type_annotation=param_details.type_annotation,\n            dependant=dependant,\n        ):\n            assert param_details.field is None, (\n                f\"Cannot specify multiple FastAPI annotations for {param_name!r}\"\n            )\n            continue\n        assert param_details.field is not None\n        if isinstance(param_details.field.field_info, params.Body):\n            dependant.body_params.append(param_details.field)\n        else:\n            add_param_to_fields(field=param_details.field, dependant=dependant)\n    return dependant",
+    "token_count": 386,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_dependant"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 361,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/models.py:14-37",
+    "content": "# fastapi/dependencies/models.py:14-37  (fastapi.dependencies.models.Dependant)\n@dataclass\nclass Dependant:\n    ...",
+    "token_count": 33,
+    "rank": 9,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.models.Dependant"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 10,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:317-338",
+    "content": "# fastapi/dependencies/utils.py:317-338  (fastapi.dependencies.utils.add_non_field_param_to_dependency)\ndef add_non_field_param_to_dependency(\n    *, param_name: str, type_annotation: Any, dependant: Dependant\n) -> Optional[bool]:\n    ...",
+    "token_count": 62,
+    "rank": 10,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.add_non_field_param_to_dependency"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 34,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:514-527",
+    "content": "# fastapi/dependencies/utils.py:514-527  (fastapi.dependencies.utils.add_param_to_fields)\ndef add_param_to_fields(*, field: ModelField, dependant: Dependant) -> None:\n    ...",
+    "token_count": 49,
+    "rank": 11,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.add_param_to_fields"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 23,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:348-511",
+    "content": "# fastapi/dependencies/utils.py:348-511  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    ...",
+    "token_count": 61,
+    "rank": 12,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.analyze_param"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 36,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:260-266",
+    "content": "# fastapi/_compat.py:260-266  (fastapi._compat.copy_field_info)\n    def copy_field_info(*, field_info: FieldInfo, annotation: Any) -> FieldInfo:\n        ...",
+    "token_count": 47,
+    "rank": 13,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi._compat.copy_field_info"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 23,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:588-590",
+    "content": "# fastapi/_compat.py:588-590  (fastapi._compat.field_annotation_is_scalar)\ndef field_annotation_is_scalar(annotation: Any) -> bool:\n    ...",
+    "token_count": 39,
+    "rank": 14,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi._compat.field_annotation_is_scalar"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 14,
+     "distance": 2.816326530612245
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:168-171",
+    "content": "# fastapi/_compat.py:168-171  (fastapi._compat.get_annotation_from_field_info)\n    def get_annotation_from_field_info(\n        annotation: Any, field_info: FieldInfo, field_name: str\n    ) -> Any:\n        ...",
+    "token_count": 57,
+    "rank": 15,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi._compat.get_annotation_from_field_info"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 31,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:241-246",
+    "content": "# fastapi/_compat.py:241-246  (fastapi._compat.is_scalar_field)\n    def is_scalar_field(field: ModelField) -> bool:\n        ...",
+    "token_count": 39,
+    "rank": 16,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi._compat.is_scalar_field"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 15,
+     "distance": 1.816326530612245
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:251-252",
+    "content": "# fastapi/_compat.py:251-252  (fastapi._compat.is_scalar_sequence_field)\n    def is_scalar_sequence_field(field: ModelField) -> bool:\n        ...",
+    "token_count": 41,
+    "rank": 17,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi._compat.is_scalar_sequence_field"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 16,
+     "distance": 1.816326530612245
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:621-629",
+    "content": "# fastapi/_compat.py:621-629  (fastapi._compat.is_uploadfile_or_nonable_uploadfile_annotation)\ndef is_uploadfile_or_nonable_uploadfile_annotation(annotation: Any) -> bool:\n    ...",
+    "token_count": 49,
+    "rank": 18,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi._compat.is_uploadfile_or_nonable_uploadfile_annotation"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 19,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:647-659",
+    "content": "# fastapi/_compat.py:647-659  (fastapi._compat.is_uploadfile_sequence_annotation)\ndef is_uploadfile_sequence_annotation(annotation: Any) -> bool:\n    ...",
+    "token_count": 41,
+    "rank": 19,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi._compat.is_uploadfile_sequence_annotation"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 15,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:341-345",
+    "content": "# fastapi/dependencies/utils.py:341-345  (fastapi.dependencies.utils.ParamDetails)\n@dataclass\nclass ParamDetails:\n    ...",
+    "token_count": 34,
+    "rank": 20,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.ParamDetails"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 10,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:91-115",
+    "content": "# fastapi/dependencies/utils.py:91-115  (fastapi.dependencies.utils.ensure_multipart_is_installed)\ndef ensure_multipart_is_installed() -> None:\n    ...",
+    "token_count": 38,
+    "rank": 21,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.ensure_multipart_is_installed"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 12,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/params.py:479-593",
+    "content": "# fastapi/params.py:479-593  (fastapi.params.Body)\nclass Body(FieldInfo):\n    ...",
+    "token_count": 28,
+    "rank": 22,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.params.Body"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 7,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:177-209",
+    "content": "# fastapi/dependencies/utils.py:177-209  (fastapi.dependencies.utils.get_flat_dependant)\ndef get_flat_dependant(\n    dependant: Dependant,\n    *,\n    skip_repeats: bool = False,\n    visited: Optional[List[CacheKey]] = None,\n) -> Dependant:\n    if visited is None:\n        visited = []\n    visited.append(dependant.cache_key)\n\n    flat_dependant = Dependant(\n        path_params=dependant.path_params.copy(),\n        query_params=dependant.query_params.copy(),\n        header_params=dependant.header_params.copy(),\n        cookie_params=dependant.cookie_params.copy(),\n        body_params=dependant.body_params.copy(),\n        security_requirements=dependant.security_requirements.copy(),\n        use_cache=dependant.use_cache,\n        path=dependant.path,\n    )\n    for sub_dependant in dependant.dependencies:\n        if skip_repeats and sub_dependant.cache_key in visited:\n            continue\n        flat_sub = get_flat_dependant(\n            sub_dependant, skip_repeats=skip_repeats, visited=visited\n        )\n        flat_dependant.path_params.extend(flat_sub.path_params)\n        flat_dependant.query_params.extend(flat_sub.query_params)\n        flat_dependant.header_params.extend(flat_sub.header_params)\n        flat_dependant.cookie_params.extend(flat_sub.cookie_params)\n        flat_dependant.body_params.extend(flat_sub.body_params)\n        flat_dependant.security_requirements.extend(flat_sub.security_requirements)\n    return flat_dependant\n\n# Referenced module constants:\nCacheKey = Tuple[Optional[Callable[..., Any]], Tuple[str, ...]]",
+    "token_count": 332,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_flat_dependant"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 299,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:135-139",
+    "content": "# fastapi/dependencies/utils.py:135-139  (fastapi.dependencies.utils.get_parameterless_sub_dependant)\ndef get_parameterless_sub_dependant(*, depends: params.Depends, path: str) -> Dependant:\n    assert callable(depends.dependency), (\n        \"A parameter-less dependency must have a callable dependency\"\n    )\n    return get_sub_dependant(depends=depends, dependency=depends.dependency, path=path)",
+    "token_count": 94,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_parameterless_sub_dependant"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 66,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:142-171",
+    "content": "# fastapi/dependencies/utils.py:142-171  (fastapi.dependencies.utils.get_sub_dependant)\ndef get_sub_dependant(\n    *,\n    depends: params.Depends,\n    dependency: Callable[..., Any],\n    path: str,\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n) -> Dependant:\n    ...",
+    "token_count": 81,
+    "rank": 25,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.get_sub_dependant"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 55,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/models.py:8-11",
+    "content": "# fastapi/dependencies/models.py:8-11  (fastapi.dependencies.models.SecurityRequirement)\n@dataclass\nclass SecurityRequirement:\n    ...",
+    "token_count": 31,
+    "rank": 26,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.models.SecurityRequirement"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 10,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:254-262",
+    "content": "# fastapi/dependencies/utils.py:254-262  (fastapi.dependencies.utils.get_typed_return_annotation)\ndef get_typed_return_annotation(call: Callable[..., Any]) -> Any:\n    signature = inspect.signature(call)\n    annotation = signature.return_annotation\n\n    if annotation is inspect.Signature.empty:\n        return None\n\n    globalns = getattr(call, \"__globals__\", {})\n    return get_typed_annotation(annotation, globalns)",
+    "token_count": 92,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_typed_return_annotation"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 65,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:247-251",
+    "content": "# fastapi/dependencies/utils.py:247-251  (fastapi.dependencies.utils.get_typed_annotation)\ndef get_typed_annotation(annotation: Any, globalns: Dict[str, Any]) -> Any:\n    ...",
+    "token_count": 48,
+    "rank": 28,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.get_typed_annotation"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 22,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:231-244",
+    "content": "# fastapi/dependencies/utils.py:231-244  (fastapi.dependencies.utils.get_typed_signature)\ndef get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:\n    ...",
+    "token_count": 44,
+    "rank": 29,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.get_typed_signature"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 18,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/routing.py:572-587",
+    "content": "# fastapi/routing.py:572-587  (fastapi.routing.APIRoute.get_route_handler)\n    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:\n        return get_request_handler(\n            dependant=self.dependant,\n            body_field=self.body_field,\n            status_code=self.status_code,\n            response_class=self.response_class,\n            response_field=self.secure_cloned_response_field,\n            response_model_include=self.response_model_include,\n            response_model_exclude=self.response_model_exclude,\n            response_model_by_alias=self.response_model_by_alias,\n            response_model_exclude_unset=self.response_model_exclude_unset,\n            response_model_exclude_defaults=self.response_model_exclude_defaults,\n            response_model_exclude_none=self.response_model_exclude_none,\n            dependency_overrides_provider=self.dependency_overrides_provider,\n            embed_body_fields=self._embed_body_fields,\n        )",
+    "token_count": 175,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.routing.APIRoute.get_route_handler"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 150,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/routing.py:218-358",
+    "content": "# fastapi/routing.py:218-358  (fastapi.routing.get_request_handler)\ndef get_request_handler(\n    ...",
+    "token_count": 30,
+    "rank": 31,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.routing.get_request_handler"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 7,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:109-161",
+    "content": "# fastapi/utils.py:109-161  (fastapi.utils.create_cloned_field)\ndef create_cloned_field(\n    field: ModelField,\n    *,\n    cloned_types: Optional[MutableMapping[Type[BaseModel], Type[BaseModel]]] = None,\n) -> ModelField:\n    if PYDANTIC_V2:\n        return field\n    # cloned_types caches already cloned types to support recursive models and improve\n    # performance by avoiding unnecessary cloning\n    if cloned_types is None:\n        cloned_types = _CLONED_TYPES_CACHE\n\n    original_type = field.type_\n    if is_dataclass(original_type) and hasattr(original_type, \"__pydantic_model__\"):\n        original_type = original_type.__pydantic_model__\n    use_type = original_type\n    if lenient_issubclass(original_type, BaseModel):\n        original_type = cast(Type[BaseModel], original_type)\n        use_type = cloned_types.get(original_type)\n        if use_type is None:\n            use_type = create_model(original_type.__name__, __base__=original_type)\n            cloned_types[original_type] = use_type\n            for f in original_type.__fields__.values():\n                use_type.__fields__[f.name] = create_cloned_field(\n                    f, cloned_types=cloned_types\n                )\n    new_field = create_model_field(name=field.name, type_=use_type)\n    new_field.has_alias = field.has_alias  # type: ignore[attr-defined]\n    new_field.alias = field.alias  # type: ignore[misc]\n    new_field.class_validators = field.class_validators  # type: ignore[attr-defined]\n    new_field.default = field.default  # type: ignore[misc]\n    new_field.required = field.required  # type: ignore[misc]\n    new_field.model_config = field.model_config  # type: ignore[attr-defined]\n    new_field.field_info = field.field_info\n    new_field.allow_none = field.allow_none  # type: ignore[attr-defined]\n    new_field.validate_always = field.validate_always  # type: ignore[attr-defined]\n    if field.sub_fields:  # type: ignore[attr-defined]\n        new_field.sub_fields = [  # type: ignore[attr-defined]\n            create_cloned_field(sub_field, cloned_types=cloned_types)\n            for sub_field in field.sub_fields  # type: ignore[attr-defined]\n        ]\n    if field.key_field:  # type: ignore[attr-defined]\n        new_field.key_field = create_cloned_field(  # type: ignore[attr-defined]\n            field.key_field,  # type: ignore[attr-defined]\n            cloned_types=cloned_types,\n        )\n    new_field.validators = field.validators  # type: ignore[attr-defined]\n    new_field.pre_validators = field.pre_validators  # type: ignore[attr-defined]\n    new_field.post_validators = field.post_validators  # type: ignore[attr-defined]\n    new_field.parse_json = field.parse_json  # type: ignore[attr-defined]\n    new_field.shape = field.shape  # type: ignore[attr-defined]\n    new_field.populate_validators()  # type: ignore[attr-defined]\n    return new_field\n\n# Referenced module constants:\n_CLONED_TYPES_CACHE: MutableMapping[Type[BaseModel], Type[BaseModel]] = (\n    WeakKeyDictionary()\n)",
+    "token_count": 692,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.utils.create_cloned_field"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 662,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/exceptions.py:143-146",
+    "content": "# fastapi/exceptions.py:143-146  (fastapi.exceptions.FastAPIError)\nclass FastAPIError(RuntimeError):\n    ...",
+    "token_count": 33,
+    "rank": 33,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.exceptions.FastAPIError"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 9,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:42-56",
+    "content": "# fastapi/utils.py:42-56  (fastapi.utils.is_body_allowed_for_status_code)\ndef is_body_allowed_for_status_code(status_code: Union[int, str, None]) -> bool:\n    if status_code is None:\n        return True\n    # Ref: https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#patterned-fields-1\n    if status_code in {\n        \"default\",\n        \"1XX\",\n        \"2XX\",\n        \"3XX\",\n        \"4XX\",\n        \"5XX\",\n    }:\n        return True\n    current_status_code = int(status_code)\n    return not (current_status_code < 200 or current_status_code in {204, 205, 304})",
+    "token_count": 170,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.utils.is_body_allowed_for_status_code"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 139,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 5595,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating what happens when FastAPI registers a route in fastapi/routing.py. Starting from `APIRoute.__init__`, trace the causal pipeline that turns a decorated endpoint function into a fully-configured route: how its response type is introspected, how its full dependency tree is built and flattened, and how its request-body field is constructed.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear.\n",
+   "task_type": "T2_localization",
+   "anchor": "fastapi.routing.APIRoute.__init__",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 41,
+   "manifest_candidates_unfiltered": 41,
+   "requested_symbols": [
+    "fastapi.routing.APIRoute.__init__",
+    "fastapi._compat.lenient_issubclass",
+    "fastapi.datastructures.Default",
+    "fastapi.dependencies.utils._should_embed_body_fields",
+    "fastapi.dependencies.utils.get_body_field",
+    "fastapi._compat.create_body_model",
+    "fastapi.utils.create_model_field",
+    "fastapi.dependencies.utils.get_dependant",
+    "fastapi.dependencies.models.Dependant",
+    "fastapi.dependencies.utils.add_non_field_param_to_dependency",
+    "fastapi._compat.lenient_issubclass",
+    "fastapi.dependencies.utils.add_param_to_fields",
+    "fastapi.dependencies.utils.analyze_param",
+    "copy.copy",
+    "fastapi._compat.copy_field_info",
+    "fastapi._compat.field_annotation_is_scalar",
+    "fastapi._compat.get_annotation_from_field_info",
+    "fastapi._compat.is_scalar_field",
+    "fastapi._compat.is_scalar_sequence_field",
+    "fastapi._compat.is_uploadfile_or_nonable_uploadfile_annotation",
+    "fastapi._compat.is_uploadfile_sequence_annotation",
+    "fastapi._compat.lenient_issubclass",
+    "fastapi.dependencies.utils.ParamDetails",
+    "fastapi.dependencies.utils.ensure_multipart_is_installed",
+    "fastapi.logger.logger.error",
+    "fastapi.params.Body",
+    "fastapi.dependencies.utils.get_flat_dependant",
+    "fastapi.dependencies.utils.get_flat_dependant",
+    "fastapi.dependencies.utils.get_parameterless_sub_dependant",
+    "fastapi.dependencies.utils.get_sub_dependant",
+    "fastapi.dependencies.models.SecurityRequirement",
+    "fastapi.dependencies.utils.get_dependant",
+    "fastapi.dependencies.utils.get_typed_return_annotation",
+    "fastapi.dependencies.utils.get_typed_annotation",
+    "fastapi.dependencies.utils.get_typed_signature",
+    "inspect.signature",
+    "fastapi.routing.APIRoute.get_route_handler",
+    "fastapi.routing.get_request_handler",
+    "asyncio.iscoroutinefunction",
+    "fastapi.datastructures.Default",
+    "fastapi.utils.create_cloned_field",
+    "dataclasses.is_dataclass",
+    "fastapi._compat.lenient_issubclass",
+    "fastapi.utils.create_cloned_field",
+    "fastapi.utils.create_model_field",
+    "fastapi.exceptions.FastAPIError",
+    "pydantic.fields.FieldInfo",
+    "pydantic.create_model",
+    "typing.cast",
+    "fastapi.utils.is_body_allowed_for_status_code"
+   ],
+   "turn1_requested_count": 50,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "fastapi._compat.lenient_issubclass",
+    "fastapi._compat.lenient_issubclass",
+    "copy.copy",
+    "fastapi._compat.lenient_issubclass",
+    "fastapi.logger.logger.error",
+    "inspect.signature",
+    "asyncio.iscoroutinefunction",
+    "dataclasses.is_dataclass",
+    "fastapi._compat.lenient_issubclass",
+    "pydantic.fields.FieldInfo",
+    "pydantic.create_model",
+    "typing.cast"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The FastAPI route registration process starts with `APIRoute.__init__`, which introspects the endpoint function's response type and builds its dependency tree. It then flattens the dependency tree and constructs the request-body field if necessary.\",\n  \"requested_symbols\": [\n    \"fastapi.routing.APIRoute.__init__\",\n    \"fastapi._compat.lenient_issubclass\",\n    \"fastapi.datastructures.Default\",\n    \"fastapi.dependencies.utils._should_embed_body_fields\",\n    \"fastapi.dependencies.utils.get_body_field\",\n    \"fastapi._compat.create_body_model\",\n    \"fastapi.utils.create_model_field\",\n    \"fastapi.dependencies.utils.get_dependant\",\n    \"fastapi.dependencies.models.Dependant\",\n    \"fastapi.dependencies.utils.add_non_field_param_to_dependency\",\n    \"fastapi._compat.lenient_issubclass\",\n    \"fastapi.dependencies.utils.add_param_to_fields\",\n    \"fastapi.dependencies.utils.analyze_param\",\n    \"copy.copy\",\n    \"fastapi._compat.copy_field_info\",\n    \"fastapi._compat.field_annotation_is_scalar\",\n    \"fastapi._compat.get_annotation_from_field_info\",\n    \"fastapi._compat.is_scalar_field\",\n    \"fastapi._compat.is_scalar_sequence_field\",\n    \"fastapi._compat.is_uploadfile_or_nonable_uploadfile_annotation\",\n    \"fastapi._compat.is_uploadfile_sequence_annotation\",\n    \"fastapi._compat.lenient_issubclass\",\n    \"fastapi.dependencies.utils.ParamDetails\",\n    \"fastapi.dependencies.utils.ensure_multipart_is_installed\",\n    \"fastapi.logger.logger.error\",\n    \"fastapi.params.Body\",\n    \"fastapi.dependencies.utils.get_flat_dependant\",\n    \"fastapi.dependencies.utils.get_flat_dependant\",\n    \"fastapi.dependencies.utils.get_parameterless_sub_dependant\",\n    \"fastapi.dependencies.utils.get_sub_dependant\",\n    \"fastapi.dependencies.models.SecurityRequirement\",\n    \"fastapi.dependencies.utils.get_dependant\",\n    \"fastapi.dependencies.utils.get_typed_return_annotation\",\n    \"fastapi.dependencies.utils.get_typed_annotation\",\n    \"fastapi.dependencies.utils.get_typed_signature\",\n    \"inspect.signature\",\n    \"fastapi.routing.APIRoute.get_route_handler\",\n    \"fastapi.routing.get_request_handler\",\n    \"asyncio.iscoroutinefunction\",\n    \"fastapi.datastructures.Default\",\n    \"fastapi.utils.create_cloned_field\",\n    \"dataclasses.is_dataclass\",\n    \"fastapi._compat.lenient_issubclass\",\n    \"fastapi.utils.create_cloned_field\",\n    \"fastapi.utils.create_model_field\",\n    \"fastapi.exceptions.FastAPIError\",\n    \"pydantic.fields.FieldInfo\",\n    \"pydantic.create_model\",\n    \"typing.cast\",\n    \"fastapi.utils.is_body_allowed_for_status_code\"\n  ]\n}\n```",
+     "prompt_tokens": 2377,
+     "completion_tokens": 578,
+     "latency_seconds": 40.838736239000355,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     73.266723
+    ],
+    "L_turn2_hydrate": [
+     957.915632
+    ],
+    "L_retrieve": [
+     41896.041819
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 5595,
+   "prompt_tokens": 5860,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 5873,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/routing.py:429-593  (fastapi.routing.APIRoute)\nclass APIRoute(routing.Route):\n    ...\n\n# fastapi/routing.py:430-570  (fastapi.routing.APIRoute.__init__)\n    def __init__(\n        self,\n        path: str,\n        endpoint: Callable[..., Any],\n        *,\n        response_model: Any = Default(None),\n        status_code: Optional[int] = None,\n        tags: Optional[List[Union[str, Enum]]] = None,\n        dependencies: Optional[Sequence[params.Depends]] = None,\n        summary: Optional[str] = None,\n        description: Optional[str] = None,\n        response_description: str = \"Successful Response\",\n        responses: Optional[Dict[Union[int, str], Dict[str, Any]]] = None,\n        deprecated: Optional[bool] = None,\n        name: Optional[str] = None,\n        methods: Optional[Union[Set[str], List[str]]] = None,\n        operation_id: Optional[str] = None,\n        response_model_include: Optional[IncEx] = None,\n        response_model_exclude: Optional[IncEx] = None,\n        response_model_by_alias: bool = True,\n        response_model_exclude_unset: bool = False,\n        response_model_exclude_defaults: bool = False,\n        response_model_exclude_none: bool = False,\n        include_in_schema: bool = True,\n        response_class: Union[Type[Response], DefaultPlaceholder] = Default(\n            JSONResponse\n        ),\n        dependency_overrides_provider: Optional[Any] = None,\n        callbacks: Optional[List[BaseRoute]] = None,\n        openapi_extra: Optional[Dict[str, Any]] = None,\n        generate_unique_id_function: Union[\n            Callable[[\"APIRoute\"], str], DefaultPlaceholder\n        ] = Default(generate_unique_id),\n    ) -> None:\n        self.path = path\n        self.endpoint = endpoint\n        if isinstance(response_model, DefaultPlaceholder):\n            return_annotation = get_typed_return_annotation(endpoint)\n            if lenient_issubclass(return_annotation, Response):\n                response_model = None\n            else:\n                response_model = return_annotation\n        self.response_model = response_model\n        self.summary = summary\n        self.response_description = response_description\n        self.deprecated = deprecated\n        self.operation_id = operation_id\n        self.response_model_include = response_model_include\n        self.response_model_exclude = response_model_exclude\n        self.response_model_by_alias = response_model_by_alias\n        self.response_model_exclude_unset = response_model_exclude_unset\n        self.response_model_exclude_defaults = response_model_exclude_defaults\n        self.response_model_exclude_none = response_model_exclude_none\n        self.include_in_schema = include_in_schema\n        self.response_class = response_class\n        self.dependency_overrides_provider = dependency_overrides_provider\n        self.callbacks = callbacks\n        self.openapi_extra = openapi_extra\n        self.generate_unique_id_function = generate_unique_id_function\n        self.tags = tags or []\n        self.responses = responses or {}\n        self.name = get_name(endpoint) if name is None else name\n        self.path_regex, self.path_format, self.param_convertors = compile_path(path)\n        if methods is None:\n            methods = [\"GET\"]\n        self.methods: Set[str] = {method.upper() for method in methods}\n        if isinstance(generate_unique_id_function, DefaultPlaceholder):\n            current_generate_unique_id: Callable[[APIRoute], str] = (\n                generate_unique_id_function.value\n            )\n        else:\n            current_generate_unique_id = generate_unique_id_function\n        self.unique_id = self.operation_id or current_generate_unique_id(self)\n        # normalize enums e.g. http.HTTPStatus\n        if isinstance(status_code, IntEnum):\n            status_code = int(status_code)\n        self.status_code = status_code\n        if self.response_model:\n            assert is_body_allowed_for_status_code(status_code), (\n                f\"Status code {status_code} must not have a response body\"\n            )\n            response_name = \"Response_\" + self.unique_id\n            self.response_field = create_model_field(\n                name=response_name,\n                type_=self.response_model,\n                mode=\"serialization\",\n            )\n            # Create a clone of the field, so that a Pydantic submodel is not returned\n            # as is just because it's an instance of a subclass of a more limited class\n            # e.g. UserInDB (containing hashed_password) could be a subclass of User\n            # that doesn't have the hashed_password. But because it's a subclass, it\n            # would pass the validation and be returned as is.\n            # By being a new field, no inheritance will be passed as is. A new model\n            # will always be created.\n            # TODO: remove when deprecating Pydantic v1\n            self.secure_cloned_response_field: Optional[ModelField] = (\n                create_cloned_field(self.response_field)\n            )\n        else:\n            self.response_field = None  # type: ignore\n            self.secure_cloned_response_field = None\n        self.dependencies = list(dependencies or [])\n        self.description = description or inspect.cleandoc(self.endpoint.__doc__ or \"\")\n        # if a \"form feed\" character (page break) is found in the description text,\n        # truncate description text to the content preceding the first \"form feed\"\n        self.description = self.description.split(\"\\f\")[0].strip()\n        response_fields = {}\n        for additional_status_code, response in self.responses.items():\n            assert isinstance(response, dict), \"An additional response must be a dict\"\n            model = response.get(\"model\")\n            if model:\n                assert is_body_allowed_for_status_code(additional_status_code), (\n                    f\"Status code {additional_status_code} must not have a response body\"\n                )\n                response_name = f\"Response_{additional_status_code}_{self.unique_id}\"\n                response_field = create_model_field(\n                    name=response_name, type_=model, mode=\"serialization\"\n                )\n                response_fields[additional_status_code] = response_field\n        if response_fields:\n            self.response_fields: Dict[Union[int, str], ModelField] = response_fields\n        else:\n            self.response_fields = {}\n\n        assert callable(endpoint), \"An endpoint must be a callable\"\n        self.dependant = get_dependant(path=self.path_format, call=self.endpoint)\n        for depends in self.dependencies[::-1]:\n            self.dependant.dependencies.insert(\n                0,\n                get_parameterless_sub_dependant(depends=depends, path=self.path_format),\n            )\n        self._flat_dependant = get_flat_dependant(self.dependant)\n        self._embed_body_fields = _should_embed_body_fields(\n            self._flat_dependant.body_params\n        )\n        self.body_field = get_body_field(\n            flat_dependant=self._flat_dependant,\n            name=self.unique_id,\n            embed_body_fields=self._embed_body_fields,\n        )\n        self.app = request_response(self.get_route_handler())\n\n# fastapi/datastructures.py:197-204  (fastapi.datastructures.Default)\ndef Default(value: DefaultType) -> DefaultType:\n    \"\"\"\n    You shouldn't use this function directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n    return DefaultPlaceholder(value)  # type: ignore\n\n# Referenced module constants:\nDefaultType = TypeVar(\"DefaultType\")\n\n# fastapi/dependencies/utils.py:838-859  (fastapi.dependencies.utils._should_embed_body_fields)\ndef _should_embed_body_fields(fields: List[ModelField]) -> bool:\n    if not fields:\n        return False\n    # More than one dependency could have the same field, it would show up as multiple\n    # fields but it's the same one, so count them by name\n    body_param_names_set = {field.name for field in fields}\n    # A top level field has to be a single field, not multiple\n    if len(body_param_names_set) > 1:\n        return True\n    first_field = fields[0]\n    # If it explicitly specifies it is embedded, it has to be embedded\n    if getattr(first_field.field_info, \"embed\", None):\n        return True\n    # If it's a Form (or File) field, it has to be a BaseModel (or a union of BaseModels) to be top level\n    # otherwise it has to be embedded, so that the key value pair can be extracted\n    if (\n        isinstance(first_field.field_info, params.Form)\n        and not lenient_issubclass(first_field.type_, BaseModel)\n        and not is_union_of_base_models(first_field.type_)\n    ):\n        return True\n    return False\n\n# fastapi/dependencies/utils.py:951-1001  (fastapi.dependencies.utils.get_body_field)\ndef get_body_field(\n    *, flat_dependant: Dependant, name: str, embed_body_fields: bool\n) -> Optional[ModelField]:\n    \"\"\"\n    Get a ModelField representing the request body for a path operation, combining\n    all body parameters into a single field if necessary.\n\n    Used to check if it's form data (with `isinstance(body_field, params.Form)`)\n    or JSON and to generate the JSON Schema for a request body.\n\n    This is **not** used to validate/parse the request body, that's done with each\n    individual body parameter.\n    \"\"\"\n    if not flat_dependant.body_params:\n        return None\n    first_param = flat_dependant.body_params[0]\n    if not embed_body_fields:\n        return first_param\n    model_name = \"Body_\" + name\n    BodyModel = create_body_model(\n        fields=flat_dependant.body_params, model_name=model_name\n    )\n    required = any(True for f in flat_dependant.body_params if f.required)\n    BodyFieldInfo_kwargs: Dict[str, Any] = {\n        \"annotation\": BodyModel,\n        \"alias\": \"body\",\n    }\n    if not required:\n        BodyFieldInfo_kwargs[\"default\"] = None\n    if any(isinstance(f.field_info, params.File) for f in flat_dependant.body_params):\n        BodyFieldInfo: Type[params.Body] = params.File\n    elif any(isinstance(f.field_info, params.Form) for f in flat_dependant.body_params):\n        BodyFieldInfo = params.Form\n    else:\n        BodyFieldInfo = params.Body\n\n        body_param_media_types = [\n            f.field_info.media_type\n            for f in flat_dependant.body_params\n            if isinstance(f.field_info, params.Body)\n        ]\n        if len(set(body_param_media_types)) == 1:\n            BodyFieldInfo_kwargs[\"media_type\"] = body_param_media_types[0]\n    final_field = create_model_field(\n        name=\"body\",\n        type_=BodyModel,\n        required=required,\n        alias=\"body\",\n        field_info=BodyFieldInfo(**BodyFieldInfo_kwargs),\n    )\n    return final_field\n\n# fastapi/_compat.py:282-287  (fastapi._compat.create_body_model)\n    def create_body_model(\n        *, fields: Sequence[ModelField], model_name: str\n    ) -> Type[BaseModel]:\n        ...\n\n# fastapi/utils.py:63-106  (fastapi.utils.create_model_field)\ndef create_model_field(\n    name: str,\n    type_: Any,\n    class_validators: Optional[Dict[str, Validator]] = None,\n    default: Optional[Any] = Undefined,\n    required: Union[bool, UndefinedType] = Undefined,\n    model_config: Type[BaseConfig] = BaseConfig,\n    field_info: Optional[FieldInfo] = None,\n    alias: Optional[str] = None,\n    mode: Literal[\"validation\", \"serialization\"] = \"validation\",\n) -> ModelField:\n    class_validators = class_validators or {}\n    if PYDANTIC_V2:\n        field_info = field_info or FieldInfo(\n            annotation=type_, default=default, alias=alias\n        )\n    else:\n        field_info = field_info or FieldInfo()\n    kwargs = {\"name\": name, \"field_info\": field_info}\n    if PYDANTIC_V2:\n        kwargs.update({\"mode\": mode})\n    else:\n        kwargs.update(\n            {\n                \"type_\": type_,\n                \"class_validators\": class_validators,\n                \"default\": default,\n                \"required\": required,\n                \"model_config\": model_config,\n                \"alias\": alias,\n            }\n        )\n    try:\n        return ModelField(**kwargs)  # type: ignore[arg-type]\n    except (RuntimeError, PydanticSchemaGenerationError):\n        raise fastapi.exceptions.FastAPIError(\n            \"Invalid args for response field! Hint: \"\n            f\"check that {type_} is a valid Pydantic field type. \"\n            \"If you are using a return type annotation that is not a valid Pydantic \"\n            \"field (e.g. Union[Response, dict, None]) you can disable generating the \"\n            \"response model from the type annotation with the path operation decorator \"\n            \"parameter response_model=None. Read more: \"\n            \"https://fastapi.tiangolo.com/tutorial/response-model/\"\n        ) from None\n\n# fastapi/dependencies/utils.py:265-314  (fastapi.dependencies.utils.get_dependant)\ndef get_dependant(\n    *,\n    path: str,\n    call: Callable[..., Any],\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n    use_cache: bool = True,\n) -> Dependant:\n    path_param_names = get_path_param_names(path)\n    endpoint_signature = get_typed_signature(call)\n    signature_params = endpoint_signature.parameters\n    dependant = Dependant(\n        call=call,\n        name=name,\n        path=path,\n        security_scopes=security_scopes,\n        use_cache=use_cache,\n    )\n    for param_name, param in signature_params.items():\n        is_path_param = param_name in path_param_names\n        param_details = analyze_param(\n            param_name=param_name,\n            annotation=param.annotation,\n            value=param.default,\n            is_path_param=is_path_param,\n        )\n        if param_details.depends is not None:\n            sub_dependant = get_param_sub_dependant(\n                param_name=param_name,\n                depends=param_details.depends,\n                path=path,\n                security_scopes=security_scopes,\n            )\n            dependant.dependencies.append(sub_dependant)\n            continue\n        if add_non_field_param_to_dependency(\n            param_name=param_name,\n            type_annotation=param_details.type_annotation,\n            dependant=dependant,\n        ):\n            assert param_details.field is None, (\n                f\"Cannot specify multiple FastAPI annotations for {param_name!r}\"\n            )\n            continue\n        assert param_details.field is not None\n        if isinstance(param_details.field.field_info, params.Body):\n            dependant.body_params.append(param_details.field)\n        else:\n            add_param_to_fields(field=param_details.field, dependant=dependant)\n    return dependant\n\n# fastapi/dependencies/models.py:14-37  (fastapi.dependencies.models.Dependant)\n@dataclass\nclass Dependant:\n    ...\n\n# fastapi/dependencies/utils.py:317-338  (fastapi.dependencies.utils.add_non_field_param_to_dependency)\ndef add_non_field_param_to_dependency(\n    *, param_name: str, type_annotation: Any, dependant: Dependant\n) -> Optional[bool]:\n    ...\n\n# fastapi/dependencies/utils.py:514-527  (fastapi.dependencies.utils.add_param_to_fields)\ndef add_param_to_fields(*, field: ModelField, dependant: Dependant) -> None:\n    ...\n\n# fastapi/dependencies/utils.py:348-511  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    ...\n\n# fastapi/_compat.py:260-266  (fastapi._compat.copy_field_info)\n    def copy_field_info(*, field_info: FieldInfo, annotation: Any) -> FieldInfo:\n        ...\n\n# fastapi/_compat.py:588-590  (fastapi._compat.field_annotation_is_scalar)\ndef field_annotation_is_scalar(annotation: Any) -> bool:\n    ...\n\n# fastapi/_compat.py:168-171  (fastapi._compat.get_annotation_from_field_info)\n    def get_annotation_from_field_info(\n        annotation: Any, field_info: FieldInfo, field_name: str\n    ) -> Any:\n        ...\n\n# fastapi/_compat.py:241-246  (fastapi._compat.is_scalar_field)\n    def is_scalar_field(field: ModelField) -> bool:\n        ...\n\n# fastapi/_compat.py:251-252  (fastapi._compat.is_scalar_sequence_field)\n    def is_scalar_sequence_field(field: ModelField) -> bool:\n        ...\n\n# fastapi/_compat.py:621-629  (fastapi._compat.is_uploadfile_or_nonable_uploadfile_annotation)\ndef is_uploadfile_or_nonable_uploadfile_annotation(annotation: Any) -> bool:\n    ...\n\n# fastapi/_compat.py:647-659  (fastapi._compat.is_uploadfile_sequence_annotation)\ndef is_uploadfile_sequence_annotation(annotation: Any) -> bool:\n    ...\n\n# fastapi/dependencies/utils.py:341-345  (fastapi.dependencies.utils.ParamDetails)\n@dataclass\nclass ParamDetails:\n    ...\n\n# fastapi/dependencies/utils.py:91-115  (fastapi.dependencies.utils.ensure_multipart_is_installed)\ndef ensure_multipart_is_installed() -> None:\n    ...\n\n# fastapi/params.py:479-593  (fastapi.params.Body)\nclass Body(FieldInfo):\n    ...\n\n# fastapi/dependencies/utils.py:177-209  (fastapi.dependencies.utils.get_flat_dependant)\ndef get_flat_dependant(\n    dependant: Dependant,\n    *,\n    skip_repeats: bool = False,\n    visited: Optional[List[CacheKey]] = None,\n) -> Dependant:\n    if visited is None:\n        visited = []\n    visited.append(dependant.cache_key)\n\n    flat_dependant = Dependant(\n        path_params=dependant.path_params.copy(),\n        query_params=dependant.query_params.copy(),\n        header_params=dependant.header_params.copy(),\n        cookie_params=dependant.cookie_params.copy(),\n        body_params=dependant.body_params.copy(),\n        security_requirements=dependant.security_requirements.copy(),\n        use_cache=dependant.use_cache,\n        path=dependant.path,\n    )\n    for sub_dependant in dependant.dependencies:\n        if skip_repeats and sub_dependant.cache_key in visited:\n            continue\n        flat_sub = get_flat_dependant(\n            sub_dependant, skip_repeats=skip_repeats, visited=visited\n        )\n        flat_dependant.path_params.extend(flat_sub.path_params)\n        flat_dependant.query_params.extend(flat_sub.query_params)\n        flat_dependant.header_params.extend(flat_sub.header_params)\n        flat_dependant.cookie_params.extend(flat_sub.cookie_params)\n        flat_dependant.body_params.extend(flat_sub.body_params)\n        flat_dependant.security_requirements.extend(flat_sub.security_requirements)\n    return flat_dependant\n\n# Referenced module constants:\nCacheKey = Tuple[Optional[Callable[..., Any]], Tuple[str, ...]]\n\n# fastapi/dependencies/utils.py:135-139  (fastapi.dependencies.utils.get_parameterless_sub_dependant)\ndef get_parameterless_sub_dependant(*, depends: params.Depends, path: str) -> Dependant:\n    assert callable(depends.dependency), (\n        \"A parameter-less dependency must have a callable dependency\"\n    )\n    return get_sub_dependant(depends=depends, dependency=depends.dependency, path=path)\n\n# fastapi/dependencies/utils.py:142-171  (fastapi.dependencies.utils.get_sub_dependant)\ndef get_sub_dependant(\n    *,\n    depends: params.Depends,\n    dependency: Callable[..., Any],\n    path: str,\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n) -> Dependant:\n    ...\n\n# fastapi/dependencies/models.py:8-11  (fastapi.dependencies.models.SecurityRequirement)\n@dataclass\nclass SecurityRequirement:\n    ...\n\n# fastapi/dependencies/utils.py:254-262  (fastapi.dependencies.utils.get_typed_return_annotation)\ndef get_typed_return_annotation(call: Callable[..., Any]) -> Any:\n    signature = inspect.signature(call)\n    annotation = signature.return_annotation\n\n    if annotation is inspect.Signature.empty:\n        return None\n\n    globalns = getattr(call, \"__globals__\", {})\n    return get_typed_annotation(annotation, globalns)\n\n# fastapi/dependencies/utils.py:247-251  (fastapi.dependencies.utils.get_typed_annotation)\ndef get_typed_annotation(annotation: Any, globalns: Dict[str, Any]) -> Any:\n    ...\n\n# fastapi/dependencies/utils.py:231-244  (fastapi.dependencies.utils.get_typed_signature)\ndef get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:\n    ...\n\n# fastapi/routing.py:572-587  (fastapi.routing.APIRoute.get_route_handler)\n    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:\n        return get_request_handler(\n            dependant=self.dependant,\n            body_field=self.body_field,\n            status_code=self.status_code,\n            response_class=self.response_class,\n            response_field=self.secure_cloned_response_field,\n            response_model_include=self.response_model_include,\n            response_model_exclude=self.response_model_exclude,\n            response_model_by_alias=self.response_model_by_alias,\n            response_model_exclude_unset=self.response_model_exclude_unset,\n            response_model_exclude_defaults=self.response_model_exclude_defaults,\n            response_model_exclude_none=self.response_model_exclude_none,\n            dependency_overrides_provider=self.dependency_overrides_provider,\n            embed_body_fields=self._embed_body_fields,\n        )\n\n# fastapi/routing.py:218-358  (fastapi.routing.get_request_handler)\ndef get_request_handler(\n    ...\n\n# fastapi/utils.py:109-161  (fastapi.utils.create_cloned_field)\ndef create_cloned_field(\n    field: ModelField,\n    *,\n    cloned_types: Optional[MutableMapping[Type[BaseModel], Type[BaseModel]]] = None,\n) -> ModelField:\n    if PYDANTIC_V2:\n        return field\n    # cloned_types caches already cloned types to support recursive models and improve\n    # performance by avoiding unnecessary cloning\n    if cloned_types is None:\n        cloned_types = _CLONED_TYPES_CACHE\n\n    original_type = field.type_\n    if is_dataclass(original_type) and hasattr(original_type, \"__pydantic_model__\"):\n        original_type = original_type.__pydantic_model__\n    use_type = original_type\n    if lenient_issubclass(original_type, BaseModel):\n        original_type = cast(Type[BaseModel], original_type)\n        use_type = cloned_types.get(original_type)\n        if use_type is None:\n            use_type = create_model(original_type.__name__, __base__=original_type)\n            cloned_types[original_type] = use_type\n            for f in original_type.__fields__.values():\n                use_type.__fields__[f.name] = create_cloned_field(\n                    f, cloned_types=cloned_types\n                )\n    new_field = create_model_field(name=field.name, type_=use_type)\n    new_field.has_alias = field.has_alias  # type: ignore[attr-defined]\n    new_field.alias = field.alias  # type: ignore[misc]\n    new_field.class_validators = field.class_validators  # type: ignore[attr-defined]\n    new_field.default = field.default  # type: ignore[misc]\n    new_field.required = field.required  # type: ignore[misc]\n    new_field.model_config = field.model_config  # type: ignore[attr-defined]\n    new_field.field_info = field.field_info\n    new_field.allow_none = field.allow_none  # type: ignore[attr-defined]\n    new_field.validate_always = field.validate_always  # type: ignore[attr-defined]\n    if field.sub_fields:  # type: ignore[attr-defined]\n        new_field.sub_fields = [  # type: ignore[attr-defined]\n            create_cloned_field(sub_field, cloned_types=cloned_types)\n            for sub_field in field.sub_fields  # type: ignore[attr-defined]\n        ]\n    if field.key_field:  # type: ignore[attr-defined]\n        new_field.key_field = create_cloned_field(  # type: ignore[attr-defined]\n            field.key_field,  # type: ignore[attr-defined]\n            cloned_types=cloned_types,\n        )\n    new_field.validators = field.validators  # type: ignore[attr-defined]\n    new_field.pre_validators = field.pre_validators  # type: ignore[attr-defined]\n    new_field.post_validators = field.post_validators  # type: ignore[attr-defined]\n    new_field.parse_json = field.parse_json  # type: ignore[attr-defined]\n    new_field.shape = field.shape  # type: ignore[attr-defined]\n    new_field.populate_validators()  # type: ignore[attr-defined]\n    return new_field\n\n# Referenced module constants:\n_CLONED_TYPES_CACHE: MutableMapping[Type[BaseModel], Type[BaseModel]] = (\n    WeakKeyDictionary()\n)\n\n# fastapi/exceptions.py:143-146  (fastapi.exceptions.FastAPIError)\nclass FastAPIError(RuntimeError):\n    ...\n\n# fastapi/utils.py:42-56  (fastapi.utils.is_body_allowed_for_status_code)\ndef is_body_allowed_for_status_code(status_code: Union[int, str, None]) -> bool:\n    if status_code is None:\n        return True\n    # Ref: https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#patterned-fields-1\n    if status_code in {\n        \"default\",\n        \"1XX\",\n        \"2XX\",\n        \"3XX\",\n        \"4XX\",\n        \"5XX\",\n    }:\n        return True\n    current_status_code = int(status_code)\n    return not (current_status_code < 200 or current_status_code in {204, 205, 304})\n\n## Task\n\nYou are investigating what happens when FastAPI registers a route in fastapi/routing.py. Starting from `APIRoute.__init__`, trace the causal pipeline that turns a decorated endpoint function into a fully-configured route: how its response type is introspected, how its full dependency tree is built and flattened, and how its request-body field is constructed.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

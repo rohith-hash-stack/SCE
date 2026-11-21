@@ -1,0 +1,291 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t13_001_blast_reverse",
+  "items": [
+   {
+    "source_id": "django/urls/base.py:27-88",
+    "content": "# django/urls/base.py:27-88  (django.urls.base.reverse)\ndef reverse(viewname, urlconf=None, args=None, kwargs=None, current_app=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    resolver = get_resolver(urlconf)\n    args = args or []\n    kwargs = kwargs or {}\n\n    prefix = get_script_prefix()\n\n    if not isinstance(viewname, str):\n        view = viewname\n    else:\n        *path, view = viewname.split(\":\")\n\n        if current_app:\n            current_path = current_app.split(\":\")\n            current_path.reverse()\n        else:\n            current_path = None\n\n        resolved_path = []\n        ns_pattern = \"\"\n        ns_converters = {}\n        for ns in path:\n            current_ns = current_path.pop() if current_path else None\n            # Lookup the name to see if it could be an app identifier.\n            try:\n                app_list = resolver.app_dict[ns]\n                # Yes! Path part matches an app in the current Resolver.\n                if current_ns and current_ns in app_list:\n                    # If we are reversing for a particular app, use that\n                    # namespace.\n                    ns = current_ns\n                elif ns not in app_list:\n                    # The name isn't shared by one of the instances (i.e.,\n                    # the default) so pick the first instance as the default.\n                    ns = app_list[0]\n            except KeyError:\n                pass\n\n            if ns != current_ns:\n                current_path = None\n\n            try:\n                extra, resolver = resolver.namespace_dict[ns]\n                resolved_path.append(ns)\n                ns_pattern += extra\n                ns_converters.update(resolver.pattern.converters)\n            except KeyError as key:\n                if resolved_path:\n                    raise NoReverseMatch(\n                        \"%s is not a registered namespace inside '%s'\"\n                        % (key, \":\".join(resolved_path))\n                    )\n                else:\n                    raise NoReverseMatch(\"%s is not a registered namespace\" % key)\n        if ns_pattern:\n            resolver = get_ns_resolver(\n                ns_pattern, resolver, tuple(ns_converters.items())\n            )\n\n    return resolver._reverse_with_prefix(view, prefix, *args, **kwargs)",
+    "token_count": 459,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.reverse"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 440,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/helpers.py:198-302",
+    "content": "# django/contrib/admin/helpers.py:198-302  (django.contrib.admin.helpers.AdminReadonlyField)\nclass AdminReadonlyField:\n    ...",
+    "token_count": 34,
+    "rank": 2,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.helpers.AdminReadonlyField"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 8,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/helpers.py:249-262",
+    "content": "# django/contrib/admin/helpers.py:249-262  (django.contrib.admin.helpers.AdminReadonlyField.get_admin_url)\n    def get_admin_url(self, remote_field, remote_obj):\n        url_name = \"admin:%s_%s_change\" % (\n            remote_field.model._meta.app_label,\n            remote_field.model._meta.model_name,\n        )\n        try:\n            url = reverse(\n                url_name,\n                args=[quote(remote_obj.pk)],\n                current_app=self.model_admin.admin_site.name,\n            )\n            return format_html('<a href=\"{}\">{}</a>', url, remote_obj)\n        except NoReverseMatch:\n            return str(remote_obj)",
+    "token_count": 138,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.helpers.AdminReadonlyField.get_admin_url"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 109,
+     "distance": 0.6666666666666666
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:615-2285",
+    "content": "# django/contrib/admin/options.py:615-2285  (django.contrib.admin.options.ModelAdmin)\nclass ModelAdmin(BaseModelAdmin):\n    ...",
+    "token_count": 33,
+    "rank": 4,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 9,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1322-1410",
+    "content": "# django/contrib/admin/options.py:1322-1410  (django.contrib.admin.options.ModelAdmin.response_add)\n    def response_add(self, request, obj, post_url_continue=None):\n        \"\"\"\n        Determine the HttpResponse for the add_view stage.\n        \"\"\"\n        opts = obj._meta\n        preserved_filters = self.get_preserved_filters(request)\n        obj_url = reverse(\n            \"admin:%s_%s_change\" % (opts.app_label, opts.model_name),\n            args=(quote(obj.pk),),\n            current_app=self.admin_site.name,\n        )\n        # Add a link to the object's change form if the user can edit the obj.\n        if self.has_change_permission(request, obj):\n            obj_repr = format_html('<a href=\"{}\">{}</a>', urlquote(obj_url), obj)\n        else:\n            obj_repr = str(obj)\n        msg_dict = {\n            \"name\": opts.verbose_name,\n            \"obj\": obj_repr,\n        }\n        # Here, we distinguish between different save types by checking for\n        # the presence of keys in request.POST.\n\n        if IS_POPUP_VAR in request.POST:\n            to_field = request.POST.get(TO_FIELD_VAR)\n            if to_field:\n                attr = str(to_field)\n            else:\n                attr = obj._meta.pk.attname\n            value = obj.serializable_value(attr)\n            popup_response_data = json.dumps(\n                {\n                    \"value\": str(value),\n                    \"obj\": str(obj),\n                }\n            )\n            return TemplateResponse(\n                request,\n                self.popup_response_template\n                or [\n                    \"admin/%s/%s/popup_response.html\"\n                    % (opts.app_label, opts.model_name),\n                    \"admin/%s/popup_response.html\" % opts.app_label,\n                    \"admin/popup_response.html\",\n                ],\n                {\n                    \"popup_response_data\": popup_response_data,\n                },\n            )\n\n        elif \"_continue\" in request.POST or (\n            # Redirecting after \"Save as new\".\n            \"_saveasnew\" in request.POST\n            and self.save_as_continue\n            and self.has_change_permission(request, obj)\n        ):\n            msg = _(\"The {name} \u201c{obj}\u201d was added successfully.\")\n            if self.has_change_permission(request, obj):\n                msg += \" \" + _(\"You may edit it again below.\")\n            self.message_user(request, format_html(msg, **msg_dict), messages.SUCCESS)\n            if post_url_continue is None:\n                post_url_continue = obj_url\n            post_url_continue = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts},\n                post_url_continue,\n            )\n            return HttpResponseRedirect(post_url_continue)\n\n        elif \"_addanother\" in request.POST:\n            msg = format_html(\n                _(\n                    \"The {name} \u201c{obj}\u201d was added successfully. You may add another \"\n                    \"{name} below.\"\n                ),\n                **msg_dict,\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            redirect_url = request.path\n            redirect_url = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts}, redirect_url\n            )\n            return HttpResponseRedirect(redirect_url)\n\n        else:\n            msg = format_html(\n                _(\"The {name} \u201c{obj}\u201d was added successfully.\"), **msg_dict\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            return self.response_post_save_add(request, obj)\n\n# Referenced module constants:\nIS_POPUP_VAR = \"_popup\"\nTO_FIELD_VAR = \"_to_field\"",
+    "token_count": 731,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.response_add"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 698,
+     "distance": 3.6163265306122447
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1412-1509",
+    "content": "# django/contrib/admin/options.py:1412-1509  (django.contrib.admin.options.ModelAdmin.response_change)\n    def response_change(self, request, obj):\n        \"\"\"\n        Determine the HttpResponse for the change_view stage.\n        \"\"\"\n\n        if IS_POPUP_VAR in request.POST:\n            opts = obj._meta\n            to_field = request.POST.get(TO_FIELD_VAR)\n            attr = str(to_field) if to_field else opts.pk.attname\n            value = request.resolver_match.kwargs[\"object_id\"]\n            new_value = obj.serializable_value(attr)\n            popup_response_data = json.dumps(\n                {\n                    \"action\": \"change\",\n                    \"value\": str(value),\n                    \"obj\": str(obj),\n                    \"new_value\": str(new_value),\n                }\n            )\n            return TemplateResponse(\n                request,\n                self.popup_response_template\n                or [\n                    \"admin/%s/%s/popup_response.html\"\n                    % (opts.app_label, opts.model_name),\n                    \"admin/%s/popup_response.html\" % opts.app_label,\n                    \"admin/popup_response.html\",\n                ],\n                {\n                    \"popup_response_data\": popup_response_data,\n                },\n            )\n\n        opts = self.opts\n        preserved_filters = self.get_preserved_filters(request)\n\n        msg_dict = {\n            \"name\": opts.verbose_name,\n            \"obj\": format_html('<a href=\"{}\">{}</a>', urlquote(request.path), obj),\n        }\n        if \"_continue\" in request.POST:\n            msg = format_html(\n                _(\n                    \"The {name} \u201c{obj}\u201d was changed successfully. You may edit it \"\n                    \"again below.\"\n                ),\n                **msg_dict,\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            redirect_url = request.path\n            redirect_url = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts}, redirect_url\n            )\n            return HttpResponseRedirect(redirect_url)\n\n        elif \"_saveasnew\" in request.POST:\n            msg = format_html(\n                _(\n                    \"The {name} \u201c{obj}\u201d was added successfully. You may edit it again \"\n                    \"below.\"\n                ),\n                **msg_dict,\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            redirect_url = reverse(\n                \"admin:%s_%s_change\" % (opts.app_label, opts.model_name),\n                args=(obj.pk,),\n                current_app=self.admin_site.name,\n            )\n            redirect_url = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts}, redirect_url\n            )\n            return HttpResponseRedirect(redirect_url)\n\n        elif \"_addanother\" in request.POST:\n            msg = format_html(\n                _(\n                    \"The {name} \u201c{obj}\u201d was changed successfully. You may add another \"\n                    \"{name} below.\"\n                ),\n                **msg_dict,\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            redirect_url = reverse(\n                \"admin:%s_%s_add\" % (opts.app_label, opts.model_name),\n                current_app=self.admin_site.name,\n            )\n            redirect_url = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts}, redirect_url\n            )\n            return HttpResponseRedirect(redirect_url)\n\n        else:\n            msg = format_html(\n                _(\"The {name} \u201c{obj}\u201d was changed successfully.\"), **msg_dict\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            return self.response_post_save_change(request, obj)",
+    "token_count": 730,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.response_change"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 703,
+     "distance": 3.6163265306122447
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:109-115",
+    "content": "# django/urls/base.py:109-115  (django.urls.base.get_script_prefix)\ndef get_script_prefix():\n    \"\"\"\n    Return the currently active script prefix. Useful for client code that\n    wishes to construct their own URLs manually (although accessing the request\n    instance is normally going to be a lot cleaner).\n    \"\"\"\n    return getattr(_prefixes, \"value\", \"/\")\n\n# Referenced module constants:\n_prefixes = Local()",
+    "token_count": 94,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.get_script_prefix"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 65,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:140-145",
+    "content": "# django/urls/base.py:140-145  (django.urls.base.get_urlconf)\ndef get_urlconf(default=None):\n    \"\"\"\n    Return the root URLconf to use for the current thread if it has been\n    changed from the default one.\n    \"\"\"\n    return getattr(_urlconfs, \"value\", default)\n\n# Referenced module constants:\n_urlconfs = Local()",
+    "token_count": 83,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.get_urlconf"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 54,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/exceptions.py:8-9",
+    "content": "# django/urls/exceptions.py:8-9  (django.urls.exceptions.NoReverseMatch)\nclass NoReverseMatch(Exception):\n    pass",
+    "token_count": 28,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.exceptions.NoReverseMatch"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 8,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:456-828",
+    "content": "# django/urls/resolvers.py:456-828  (django.urls.resolvers.URLResolver)\nclass URLResolver:\n    ...",
+    "token_count": 30,
+    "rank": 10,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.urls.resolvers.URLResolver"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 6,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:741-828",
+    "content": "# django/urls/resolvers.py:741-828  (django.urls.resolvers.URLResolver._reverse_with_prefix)\n    def _reverse_with_prefix(self, lookup_view, _prefix, *args, **kwargs):\n        if args and kwargs:\n            raise ValueError(\"Don't mix *args and **kwargs in call to reverse()!\")\n\n        if not self._populated:\n            self._populate()\n\n        possibilities = self.reverse_dict.getlist(lookup_view)\n\n        for possibility, pattern, defaults, converters in possibilities:\n            for result, params in possibility:\n                if args:\n                    if len(args) != len(params):\n                        continue\n                    candidate_subs = dict(zip(params, args))\n                else:\n                    if set(kwargs).symmetric_difference(params).difference(defaults):\n                        continue\n                    matches = True\n                    for k, v in defaults.items():\n                        if k in params:\n                            continue\n                        if kwargs.get(k, v) != v:\n                            matches = False\n                            break\n                    if not matches:\n                        continue\n                    candidate_subs = kwargs\n                # Convert the candidate subs to text using Converter.to_url().\n                text_candidate_subs = {}\n                match = True\n                for k, v in candidate_subs.items():\n                    if k in converters:\n                        try:\n                            text_candidate_subs[k] = converters[k].to_url(v)\n                        except ValueError:\n                            match = False\n                            break\n                    else:\n                        text_candidate_subs[k] = str(v)\n                if not match:\n                    continue\n                # WSGI provides decoded URLs, without %xx escapes, and the URL\n                # resolver operates on such URLs. First substitute arguments\n                # without quoting to build a decoded URL and look for a match.\n                # Then, if we have a match, redo the substitution with quoted\n                # arguments in order to return a properly encoded URL.\n                candidate_pat = _prefix.replace(\"%\", \"%%\") + result\n                if re.search(\n                    \"^%s%s\" % (re.escape(_prefix), pattern),\n                    candidate_pat % text_candidate_subs,\n                ):\n                    # safe characters from `pchar` definition of RFC 3986\n                    url = quote(\n                        candidate_pat % text_candidate_subs,\n                        safe=RFC3986_SUBDELIMS + \"/~:@\",\n                    )\n                    # Don't allow construction of scheme relative urls.\n                    return escape_leading_slashes(url)\n        # lookup_view can be URL name or callable, but callables are not\n        # friendly in error messages.\n        m = getattr(lookup_view, \"__module__\", None)\n        n = getattr(lookup_view, \"__name__\", None)\n        if m is not None and n is not None:\n            lookup_view_s = \"%s.%s\" % (m, n)\n        else:\n            lookup_view_s = lookup_view\n\n        patterns = [pattern for (_, pattern, _, _) in possibilities]\n        if patterns:\n            if args:\n                arg_msg = \"arguments '%s'\" % (args,)\n            elif kwargs:\n                arg_msg = \"keyword arguments '%s'\" % kwargs\n            else:\n                arg_msg = \"no arguments\"\n            msg = \"Reverse for '%s' with %s not found. %d pattern(s) tried: %s\" % (\n                lookup_view_s,\n                arg_msg,\n                len(patterns),\n                patterns,\n            )\n        else:\n            msg = (\n                \"Reverse for '%(view)s' not found. '%(view)s' is not \"\n                \"a valid view function or pattern name.\" % {\"view\": lookup_view_s}\n            )\n        raise NoReverseMatch(msg)",
+    "token_count": 750,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLResolver._reverse_with_prefix"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 718,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:116-124",
+    "content": "# django/urls/resolvers.py:116-124  (django.urls.resolvers.get_ns_resolver)\n@functools.lru_cache(maxsize=None)\ndef get_ns_resolver(ns_pattern, resolver, converters):\n    # Build a namespaced resolver for the given parent URLconf pattern.\n    # This makes it possible to have captured parameters in the parent\n    # URLconf pattern.\n    pattern = RegexPattern(ns_pattern)\n    pattern.converters = dict(converters)\n    ns_resolver = URLResolver(pattern, resolver.url_patterns)\n    return URLResolver(RegexPattern(r\"^/\"), [ns_resolver])",
+    "token_count": 126,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.get_ns_resolver"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 101,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:105-108",
+    "content": "# django/urls/resolvers.py:105-108  (django.urls.resolvers.get_resolver)\ndef get_resolver(urlconf=None):\n    if urlconf is None:\n        urlconf = settings.ROOT_URLCONF\n    return _get_cached_resolver(urlconf)",
+    "token_count": 57,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.get_resolver"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 33,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 3293,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are assessing the blast radius of changing the return value shape\nof `django.urls.base.reverse` (e.g. changing it from a plain URL\nstring to a wrapper object) in django/urls/base.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `reverse`'s return value (a plain `x = reverse(...)`\nassignment, or a caller of such a caller two hops out) - callers that\nmerely pass `reverse(...)` straight through to another function\nwithout binding it locally do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "anchor": "django.urls.base.reverse",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 22,
+   "manifest_candidates_unfiltered": 22,
+   "requested_symbols": [
+    "django.urls.base.reverse",
+    "django.contrib.admin.helpers.AdminReadonlyField.get_admin_url",
+    "django.contrib.admin.options.ModelAdmin.response_add",
+    "django.contrib.admin.options.ModelAdmin.response_change"
+   ],
+   "turn1_requested_count": 4,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The task requires identifying symbols that bind or unpack the return value of `django.urls.base.reverse`. We need to trace the execution path from the seed `reverse` function to identify symbols that directly use its return value in their own body.\",\n  \"requested_symbols\": [\n    \"django.urls.base.reverse\",\n    \"django.contrib.admin.helpers.AdminReadonlyField.get_admin_url\",\n    \"django.contrib.admin.options.ModelAdmin.response_add\",\n    \"django.contrib.admin.options.ModelAdmin.response_change\"\n  ]\n}\n```",
+     "prompt_tokens": 1465,
+     "completion_tokens": 109,
+     "latency_seconds": 9.931153871999413,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     611.766515
+    ],
+    "L_turn2_hydrate": [
+     1203.079687
+    ],
+    "L_retrieve": [
+     11757.193088
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 3293,
+   "prompt_tokens": 3554,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3567,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/urls/base.py:27-88  (django.urls.base.reverse)\ndef reverse(viewname, urlconf=None, args=None, kwargs=None, current_app=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    resolver = get_resolver(urlconf)\n    args = args or []\n    kwargs = kwargs or {}\n\n    prefix = get_script_prefix()\n\n    if not isinstance(viewname, str):\n        view = viewname\n    else:\n        *path, view = viewname.split(\":\")\n\n        if current_app:\n            current_path = current_app.split(\":\")\n            current_path.reverse()\n        else:\n            current_path = None\n\n        resolved_path = []\n        ns_pattern = \"\"\n        ns_converters = {}\n        for ns in path:\n            current_ns = current_path.pop() if current_path else None\n            # Lookup the name to see if it could be an app identifier.\n            try:\n                app_list = resolver.app_dict[ns]\n                # Yes! Path part matches an app in the current Resolver.\n                if current_ns and current_ns in app_list:\n                    # If we are reversing for a particular app, use that\n                    # namespace.\n                    ns = current_ns\n                elif ns not in app_list:\n                    # The name isn't shared by one of the instances (i.e.,\n                    # the default) so pick the first instance as the default.\n                    ns = app_list[0]\n            except KeyError:\n                pass\n\n            if ns != current_ns:\n                current_path = None\n\n            try:\n                extra, resolver = resolver.namespace_dict[ns]\n                resolved_path.append(ns)\n                ns_pattern += extra\n                ns_converters.update(resolver.pattern.converters)\n            except KeyError as key:\n                if resolved_path:\n                    raise NoReverseMatch(\n                        \"%s is not a registered namespace inside '%s'\"\n                        % (key, \":\".join(resolved_path))\n                    )\n                else:\n                    raise NoReverseMatch(\"%s is not a registered namespace\" % key)\n        if ns_pattern:\n            resolver = get_ns_resolver(\n                ns_pattern, resolver, tuple(ns_converters.items())\n            )\n\n    return resolver._reverse_with_prefix(view, prefix, *args, **kwargs)\n\n# django/contrib/admin/helpers.py:198-302  (django.contrib.admin.helpers.AdminReadonlyField)\nclass AdminReadonlyField:\n    ...\n\n# django/contrib/admin/helpers.py:249-262  (django.contrib.admin.helpers.AdminReadonlyField.get_admin_url)\n    def get_admin_url(self, remote_field, remote_obj):\n        url_name = \"admin:%s_%s_change\" % (\n            remote_field.model._meta.app_label,\n            remote_field.model._meta.model_name,\n        )\n        try:\n            url = reverse(\n                url_name,\n                args=[quote(remote_obj.pk)],\n                current_app=self.model_admin.admin_site.name,\n            )\n            return format_html('<a href=\"{}\">{}</a>', url, remote_obj)\n        except NoReverseMatch:\n            return str(remote_obj)\n\n# django/contrib/admin/options.py:615-2285  (django.contrib.admin.options.ModelAdmin)\nclass ModelAdmin(BaseModelAdmin):\n    ...\n\n# django/contrib/admin/options.py:1322-1410  (django.contrib.admin.options.ModelAdmin.response_add)\n    def response_add(self, request, obj, post_url_continue=None):\n        \"\"\"\n        Determine the HttpResponse for the add_view stage.\n        \"\"\"\n        opts = obj._meta\n        preserved_filters = self.get_preserved_filters(request)\n        obj_url = reverse(\n            \"admin:%s_%s_change\" % (opts.app_label, opts.model_name),\n            args=(quote(obj.pk),),\n            current_app=self.admin_site.name,\n        )\n        # Add a link to the object's change form if the user can edit the obj.\n        if self.has_change_permission(request, obj):\n            obj_repr = format_html('<a href=\"{}\">{}</a>', urlquote(obj_url), obj)\n        else:\n            obj_repr = str(obj)\n        msg_dict = {\n            \"name\": opts.verbose_name,\n            \"obj\": obj_repr,\n        }\n        # Here, we distinguish between different save types by checking for\n        # the presence of keys in request.POST.\n\n        if IS_POPUP_VAR in request.POST:\n            to_field = request.POST.get(TO_FIELD_VAR)\n            if to_field:\n                attr = str(to_field)\n            else:\n                attr = obj._meta.pk.attname\n            value = obj.serializable_value(attr)\n            popup_response_data = json.dumps(\n                {\n                    \"value\": str(value),\n                    \"obj\": str(obj),\n                }\n            )\n            return TemplateResponse(\n                request,\n                self.popup_response_template\n                or [\n                    \"admin/%s/%s/popup_response.html\"\n                    % (opts.app_label, opts.model_name),\n                    \"admin/%s/popup_response.html\" % opts.app_label,\n                    \"admin/popup_response.html\",\n                ],\n                {\n                    \"popup_response_data\": popup_response_data,\n                },\n            )\n\n        elif \"_continue\" in request.POST or (\n            # Redirecting after \"Save as new\".\n            \"_saveasnew\" in request.POST\n            and self.save_as_continue\n            and self.has_change_permission(request, obj)\n        ):\n            msg = _(\"The {name} \u201c{obj}\u201d was added successfully.\")\n            if self.has_change_permission(request, obj):\n                msg += \" \" + _(\"You may edit it again below.\")\n            self.message_user(request, format_html(msg, **msg_dict), messages.SUCCESS)\n            if post_url_continue is None:\n                post_url_continue = obj_url\n            post_url_continue = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts},\n                post_url_continue,\n            )\n            return HttpResponseRedirect(post_url_continue)\n\n        elif \"_addanother\" in request.POST:\n            msg = format_html(\n                _(\n                    \"The {name} \u201c{obj}\u201d was added successfully. You may add another \"\n                    \"{name} below.\"\n                ),\n                **msg_dict,\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            redirect_url = request.path\n            redirect_url = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts}, redirect_url\n            )\n            return HttpResponseRedirect(redirect_url)\n\n        else:\n            msg = format_html(\n                _(\"The {name} \u201c{obj}\u201d was added successfully.\"), **msg_dict\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            return self.response_post_save_add(request, obj)\n\n# Referenced module constants:\nIS_POPUP_VAR = \"_popup\"\nTO_FIELD_VAR = \"_to_field\"\n\n# django/contrib/admin/options.py:1412-1509  (django.contrib.admin.options.ModelAdmin.response_change)\n    def response_change(self, request, obj):\n        \"\"\"\n        Determine the HttpResponse for the change_view stage.\n        \"\"\"\n\n        if IS_POPUP_VAR in request.POST:\n            opts = obj._meta\n            to_field = request.POST.get(TO_FIELD_VAR)\n            attr = str(to_field) if to_field else opts.pk.attname\n            value = request.resolver_match.kwargs[\"object_id\"]\n            new_value = obj.serializable_value(attr)\n            popup_response_data = json.dumps(\n                {\n                    \"action\": \"change\",\n                    \"value\": str(value),\n                    \"obj\": str(obj),\n                    \"new_value\": str(new_value),\n                }\n            )\n            return TemplateResponse(\n                request,\n                self.popup_response_template\n                or [\n                    \"admin/%s/%s/popup_response.html\"\n                    % (opts.app_label, opts.model_name),\n                    \"admin/%s/popup_response.html\" % opts.app_label,\n                    \"admin/popup_response.html\",\n                ],\n                {\n                    \"popup_response_data\": popup_response_data,\n                },\n            )\n\n        opts = self.opts\n        preserved_filters = self.get_preserved_filters(request)\n\n        msg_dict = {\n            \"name\": opts.verbose_name,\n            \"obj\": format_html('<a href=\"{}\">{}</a>', urlquote(request.path), obj),\n        }\n        if \"_continue\" in request.POST:\n            msg = format_html(\n                _(\n                    \"The {name} \u201c{obj}\u201d was changed successfully. You may edit it \"\n                    \"again below.\"\n                ),\n                **msg_dict,\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            redirect_url = request.path\n            redirect_url = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts}, redirect_url\n            )\n            return HttpResponseRedirect(redirect_url)\n\n        elif \"_saveasnew\" in request.POST:\n            msg = format_html(\n                _(\n                    \"The {name} \u201c{obj}\u201d was added successfully. You may edit it again \"\n                    \"below.\"\n                ),\n                **msg_dict,\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            redirect_url = reverse(\n                \"admin:%s_%s_change\" % (opts.app_label, opts.model_name),\n                args=(obj.pk,),\n                current_app=self.admin_site.name,\n            )\n            redirect_url = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts}, redirect_url\n            )\n            return HttpResponseRedirect(redirect_url)\n\n        elif \"_addanother\" in request.POST:\n            msg = format_html(\n                _(\n                    \"The {name} \u201c{obj}\u201d was changed successfully. You may add another \"\n                    \"{name} below.\"\n                ),\n                **msg_dict,\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            redirect_url = reverse(\n                \"admin:%s_%s_add\" % (opts.app_label, opts.model_name),\n                current_app=self.admin_site.name,\n            )\n            redirect_url = add_preserved_filters(\n                {\"preserved_filters\": preserved_filters, \"opts\": opts}, redirect_url\n            )\n            return HttpResponseRedirect(redirect_url)\n\n        else:\n            msg = format_html(\n                _(\"The {name} \u201c{obj}\u201d was changed successfully.\"), **msg_dict\n            )\n            self.message_user(request, msg, messages.SUCCESS)\n            return self.response_post_save_change(request, obj)\n\n# django/urls/base.py:109-115  (django.urls.base.get_script_prefix)\ndef get_script_prefix():\n    \"\"\"\n    Return the currently active script prefix. Useful for client code that\n    wishes to construct their own URLs manually (although accessing the request\n    instance is normally going to be a lot cleaner).\n    \"\"\"\n    return getattr(_prefixes, \"value\", \"/\")\n\n# Referenced module constants:\n_prefixes = Local()\n\n# django/urls/base.py:140-145  (django.urls.base.get_urlconf)\ndef get_urlconf(default=None):\n    \"\"\"\n    Return the root URLconf to use for the current thread if it has been\n    changed from the default one.\n    \"\"\"\n    return getattr(_urlconfs, \"value\", default)\n\n# Referenced module constants:\n_urlconfs = Local()\n\n# django/urls/exceptions.py:8-9  (django.urls.exceptions.NoReverseMatch)\nclass NoReverseMatch(Exception):\n    pass\n\n# django/urls/resolvers.py:456-828  (django.urls.resolvers.URLResolver)\nclass URLResolver:\n    ...\n\n# django/urls/resolvers.py:741-828  (django.urls.resolvers.URLResolver._reverse_with_prefix)\n    def _reverse_with_prefix(self, lookup_view, _prefix, *args, **kwargs):\n        if args and kwargs:\n            raise ValueError(\"Don't mix *args and **kwargs in call to reverse()!\")\n\n        if not self._populated:\n            self._populate()\n\n        possibilities = self.reverse_dict.getlist(lookup_view)\n\n        for possibility, pattern, defaults, converters in possibilities:\n            for result, params in possibility:\n                if args:\n                    if len(args) != len(params):\n                        continue\n                    candidate_subs = dict(zip(params, args))\n                else:\n                    if set(kwargs).symmetric_difference(params).difference(defaults):\n                        continue\n                    matches = True\n                    for k, v in defaults.items():\n                        if k in params:\n                            continue\n                        if kwargs.get(k, v) != v:\n                            matches = False\n                            break\n                    if not matches:\n                        continue\n                    candidate_subs = kwargs\n                # Convert the candidate subs to text using Converter.to_url().\n                text_candidate_subs = {}\n                match = True\n                for k, v in candidate_subs.items():\n                    if k in converters:\n                        try:\n                            text_candidate_subs[k] = converters[k].to_url(v)\n                        except ValueError:\n                            match = False\n                            break\n                    else:\n                        text_candidate_subs[k] = str(v)\n                if not match:\n                    continue\n                # WSGI provides decoded URLs, without %xx escapes, and the URL\n                # resolver operates on such URLs. First substitute arguments\n                # without quoting to build a decoded URL and look for a match.\n                # Then, if we have a match, redo the substitution with quoted\n                # arguments in order to return a properly encoded URL.\n                candidate_pat = _prefix.replace(\"%\", \"%%\") + result\n                if re.search(\n                    \"^%s%s\" % (re.escape(_prefix), pattern),\n                    candidate_pat % text_candidate_subs,\n                ):\n                    # safe characters from `pchar` definition of RFC 3986\n                    url = quote(\n                        candidate_pat % text_candidate_subs,\n                        safe=RFC3986_SUBDELIMS + \"/~:@\",\n                    )\n                    # Don't allow construction of scheme relative urls.\n                    return escape_leading_slashes(url)\n        # lookup_view can be URL name or callable, but callables are not\n        # friendly in error messages.\n        m = getattr(lookup_view, \"__module__\", None)\n        n = getattr(lookup_view, \"__name__\", None)\n        if m is not None and n is not None:\n            lookup_view_s = \"%s.%s\" % (m, n)\n        else:\n            lookup_view_s = lookup_view\n\n        patterns = [pattern for (_, pattern, _, _) in possibilities]\n        if patterns:\n            if args:\n                arg_msg = \"arguments '%s'\" % (args,)\n            elif kwargs:\n                arg_msg = \"keyword arguments '%s'\" % kwargs\n            else:\n                arg_msg = \"no arguments\"\n            msg = \"Reverse for '%s' with %s not found. %d pattern(s) tried: %s\" % (\n                lookup_view_s,\n                arg_msg,\n                len(patterns),\n                patterns,\n            )\n        else:\n            msg = (\n                \"Reverse for '%(view)s' not found. '%(view)s' is not \"\n                \"a valid view function or pattern name.\" % {\"view\": lookup_view_s}\n            )\n        raise NoReverseMatch(msg)\n\n# django/urls/resolvers.py:116-124  (django.urls.resolvers.get_ns_resolver)\n@functools.lru_cache(maxsize=None)\ndef get_ns_resolver(ns_pattern, resolver, converters):\n    # Build a namespaced resolver for the given parent URLconf pattern.\n    # This makes it possible to have captured parameters in the parent\n    # URLconf pattern.\n    pattern = RegexPattern(ns_pattern)\n    pattern.converters = dict(converters)\n    ns_resolver = URLResolver(pattern, resolver.url_patterns)\n    return URLResolver(RegexPattern(r\"^/\"), [ns_resolver])\n\n# django/urls/resolvers.py:105-108  (django.urls.resolvers.get_resolver)\ndef get_resolver(urlconf=None):\n    if urlconf is None:\n        urlconf = settings.ROOT_URLCONF\n    return _get_cached_resolver(urlconf)\n\n## Task\n\nYou are assessing the blast radius of changing the return value shape\nof `django.urls.base.reverse` (e.g. changing it from a plain URL\nstring to a wrapper object) in django/urls/base.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `reverse`'s return value (a plain `x = reverse(...)`\nassignment, or a caller of such a caller two hops out) - callers that\nmerely pass `reverse(...)` straight through to another function\nwithout binding it locally do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

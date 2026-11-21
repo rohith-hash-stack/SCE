@@ -1,0 +1,213 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t5_008_input_to_procedure_call",
+  "items": [
+   {
+    "source_id": "http/resolveHTTPResponse.ts:132-175",
+    "content": "# http/resolveHTTPResponse.ts:132-175  (http.resolveHTTPResponse.inputToProcedureCall)\nasync function inputToProcedureCall<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(procedureOpts: {\n  opts: Pick<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'onError' | 'req' | 'router'\n  >;\n  ctx: inferRouterContext<TRouter> | undefined;\n  type: 'mutation' | 'query';\n  input: unknown;\n  path: string;\n}): Promise<TRPCResponse<unknown, inferRouterError<TRouter>>> {\n  const { opts, ctx, type, input, path } = procedureOpts;\n  try {\n    const data = await callProcedure({\n      procedures: opts.router._def.procedures,\n      path,\n      rawInput: input,\n      ctx,\n      type,\n    });\n    return {\n      result: {\n        data,\n      },\n    };\n  } catch (cause) {\n    const error = getTRPCErrorFromUnknown(cause);\n\n    opts.onError?.({ error, path, input, ctx, type: type, req: opts.req });\n\n    return {\n      error: getErrorShape({\n        config: opts.router._def._config,\n        error,\n        type,\n        path,\n        input,\n        ctx,\n      }),\n    };\n  }\n}",
+    "token_count": 287,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.inputToProcedureCall"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 261,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:282-297",
+    "content": "# core/router.ts:282-297  (core.router.callProcedure)\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}",
+    "token_count": 124,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.callProcedure"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 105,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:4-24",
+    "content": "# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}",
+    "token_count": 162,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "error.TRPCError.getTRPCErrorFromUnknown"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 136,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/getErrorShape.ts:10-35",
+    "content": "# shared/getErrorShape.ts:10-35  (shared.getErrorShape.getErrorShape)\nexport function getErrorShape<TConfig extends AnyRootConfig>(opts: {\n  config: TConfig;\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TConfig['$types']['ctx'] | undefined;\n}): TConfig['$types']['errorShape'] {\n  const { path, error, config } = opts;\n  const { code } = opts.error;\n  const shape: DefaultErrorShape = {\n    message: error.message,\n    code: TRPC_ERROR_CODES_BY_KEY[code],\n    data: {\n      code,\n      httpStatus: getHTTPStatusCodeFromError(error),\n    },\n  };\n  if (config.isDev && typeof opts.error.stack === 'string') {\n    shape.data.stack = opts.error.stack;\n  }\n  if (typeof path === 'string') {\n    shape.data.path = path;\n  }\n  return config.errorFormatter({ ...opts, shape });\n}",
+    "token_count": 221,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.getErrorShape.getErrorShape"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 201,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:177-223",
+    "content": "# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData)\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  const { router, req, onError } = errorOpts.opts;\n  const error = getTRPCErrorFromUnknown(cause);\n  onError?.({\n    error,\n    path: errorOpts.path,\n    input: errorOpts.input,\n    ctx: errorOpts.ctx,\n    type: errorOpts.type,\n    req,\n  });\n  const untransformedJSON = {\n    error: getErrorShape({\n      config: router._def._config,\n      error,\n      type: errorOpts.type,\n      path: errorOpts.path,\n      input: errorOpts.input,\n      ctx: errorOpts.ctx,\n    }),\n  };\n  const transformedJSON = transformTRPCResponse(\n    router._def._config,\n    untransformedJSON,\n  );\n  const body = JSON.stringify(transformedJSON);\n  return {\n    error,\n    untransformedJSON,\n    body,\n  };\n}",
+    "token_count": 305,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.caughtErrorToData"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 278,
+     "distance": 2.643171806167401
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:74-130",
+    "content": "# http/resolveHTTPResponse.ts:74-130  (http.resolveHTTPResponse.initResponse)\nfunction initResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(initOpts: {\n  ctx: inferRouterContext<TRouter> | undefined;\n  paths: string[] | undefined;\n  type: ProcedureType | 'unknown';\n  responseMeta?: HTTPBaseHandlerOptions<TRouter, TRequest>['responseMeta'];\n  untransformedJSON?:\n    | TRPCResponse<unknown, inferRouterError<TRouter>>\n    | TRPCResponse<unknown, inferRouterError<TRouter>>[]\n    | undefined;\n  errors?: TRPCError[];\n}): HTTPResponse {\n  const {\n    ctx,\n    paths,\n    type,\n    responseMeta,\n    untransformedJSON,\n    errors = [],\n  } = initOpts;\n\n  let status = untransformedJSON ? getHTTPStatusCode(untransformedJSON) : 200;\n  const headers: HTTPHeaders = {\n    'Content-Type': 'application/json',\n  };\n\n  const eagerGeneration = !untransformedJSON;\n  const data = eagerGeneration\n    ? []\n    : Array.isArray(untransformedJSON)\n    ? untransformedJSON\n    : [untransformedJSON];\n\n  const meta =\n    responseMeta?.({\n      ctx,\n      paths,\n      type,\n      data,\n      errors,\n      eagerGeneration,\n    }) ?? {};\n\n  for (const [key, value] of Object.entries(meta.headers ?? {})) {\n    headers[key] = value;\n  }\n  if (meta.status) {\n    status = meta.status;\n  }\n\n  return {\n    status,\n    headers,\n  };\n}",
+    "token_count": 353,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.initResponse"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 328,
+     "distance": 0.8810572687224669
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:31-33",
+    "content": "# http/getHTTPStatusCode.ts:31-33  (http.getHTTPStatusCode.getStatusCodeFromKey)\nfunction getStatusCodeFromKey(code: keyof typeof TRPC_ERROR_CODES_BY_KEY) {\n  return JSONRPC2_TO_HTTP_CODE[code] ?? 500;\n}\n\n# Referenced module constants:\nJSONRPC2_TO_HTTP_CODE = {...}  # 15 entries",
+    "token_count": 77,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.getHTTPStatusCode.getStatusCodeFromKey"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 46,
+     "distance": 2.8810572687224667
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:26-52",
+    "content": "# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}",
+    "token_count": 244,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "error.TRPCError.TRPCError"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 218,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1773,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `http.resolveHTTPResponse.inputToProcedureCall` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "http.resolveHTTPResponse.inputToProcedureCall",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 10,
+   "manifest_candidates_unfiltered": 10,
+   "requested_symbols": [
+    "http.resolveHTTPResponse.inputToProcedureCall",
+    "core.router.callProcedure",
+    "error.TRPCError.getTRPCErrorFromUnknown",
+    "shared.getErrorShape.getErrorShape",
+    "http.resolveHTTPResponse.caughtErrorToData",
+    "http.resolveHTTPResponse.initResponse",
+    "http.getHTTPStatusCode.getHTTPStatusCode",
+    "http.getHTTPStatusCode.getStatusCodeFromKey",
+    "error.TRPCError.TRPCError"
+   ],
+   "turn1_requested_count": 9,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "http.getHTTPStatusCode.getHTTPStatusCode"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"If `http.resolveHTTPResponse.inputToProcedureCall` changes, it could break the execution flow of the HTTP response resolution process, as it is directly called by `http.resolveHTTPResponse.resolveHTTPResponse` and is responsible for handling the input to procedure calls. Any changes to its implementation might affect how errors are caught, transformed, or how the response is initialized.\",\n  \"requested_symbols\": [\n    \"http.resolveHTTPResponse.inputToProcedureCall\",\n    \"core.router.callProcedure\",\n    \"error.TRPCError.getTRPCErrorFromUnknown\",\n    \"shared.getErrorShape.getErrorShape\",\n    \"http.resolveHTTPResponse.caughtErrorToData\",\n    \"http.resolveHTTPResponse.initResponse\",\n    \"http.getHTTPStatusCode.getHTTPStatusCode\",\n    \"http.getHTTPStatusCode.getStatusCodeFromKey\",\n    \"error.TRPCError.TRPCError\"\n  ]\n}\n```",
+     "prompt_tokens": 729,
+     "completion_tokens": 184,
+     "latency_seconds": 12.814971710000464,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     9.639481
+    ],
+    "L_turn2_hydrate": [
+     32.63387
+    ],
+    "L_retrieve": [
+     12863.011998
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1773,
+   "prompt_tokens": 1913,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1926,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# http/resolveHTTPResponse.ts:132-175  (http.resolveHTTPResponse.inputToProcedureCall)\nasync function inputToProcedureCall<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(procedureOpts: {\n  opts: Pick<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'onError' | 'req' | 'router'\n  >;\n  ctx: inferRouterContext<TRouter> | undefined;\n  type: 'mutation' | 'query';\n  input: unknown;\n  path: string;\n}): Promise<TRPCResponse<unknown, inferRouterError<TRouter>>> {\n  const { opts, ctx, type, input, path } = procedureOpts;\n  try {\n    const data = await callProcedure({\n      procedures: opts.router._def.procedures,\n      path,\n      rawInput: input,\n      ctx,\n      type,\n    });\n    return {\n      result: {\n        data,\n      },\n    };\n  } catch (cause) {\n    const error = getTRPCErrorFromUnknown(cause);\n\n    opts.onError?.({ error, path, input, ctx, type: type, req: opts.req });\n\n    return {\n      error: getErrorShape({\n        config: opts.router._def._config,\n        error,\n        type,\n        path,\n        input,\n        ctx,\n      }),\n    };\n  }\n}\n\n# core/router.ts:282-297  (core.router.callProcedure)\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}\n\n# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}\n\n# shared/getErrorShape.ts:10-35  (shared.getErrorShape.getErrorShape)\nexport function getErrorShape<TConfig extends AnyRootConfig>(opts: {\n  config: TConfig;\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TConfig['$types']['ctx'] | undefined;\n}): TConfig['$types']['errorShape'] {\n  const { path, error, config } = opts;\n  const { code } = opts.error;\n  const shape: DefaultErrorShape = {\n    message: error.message,\n    code: TRPC_ERROR_CODES_BY_KEY[code],\n    data: {\n      code,\n      httpStatus: getHTTPStatusCodeFromError(error),\n    },\n  };\n  if (config.isDev && typeof opts.error.stack === 'string') {\n    shape.data.stack = opts.error.stack;\n  }\n  if (typeof path === 'string') {\n    shape.data.path = path;\n  }\n  return config.errorFormatter({ ...opts, shape });\n}\n\n# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData)\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  const { router, req, onError } = errorOpts.opts;\n  const error = getTRPCErrorFromUnknown(cause);\n  onError?.({\n    error,\n    path: errorOpts.path,\n    input: errorOpts.input,\n    ctx: errorOpts.ctx,\n    type: errorOpts.type,\n    req,\n  });\n  const untransformedJSON = {\n    error: getErrorShape({\n      config: router._def._config,\n      error,\n      type: errorOpts.type,\n      path: errorOpts.path,\n      input: errorOpts.input,\n      ctx: errorOpts.ctx,\n    }),\n  };\n  const transformedJSON = transformTRPCResponse(\n    router._def._config,\n    untransformedJSON,\n  );\n  const body = JSON.stringify(transformedJSON);\n  return {\n    error,\n    untransformedJSON,\n    body,\n  };\n}\n\n# http/resolveHTTPResponse.ts:74-130  (http.resolveHTTPResponse.initResponse)\nfunction initResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(initOpts: {\n  ctx: inferRouterContext<TRouter> | undefined;\n  paths: string[] | undefined;\n  type: ProcedureType | 'unknown';\n  responseMeta?: HTTPBaseHandlerOptions<TRouter, TRequest>['responseMeta'];\n  untransformedJSON?:\n    | TRPCResponse<unknown, inferRouterError<TRouter>>\n    | TRPCResponse<unknown, inferRouterError<TRouter>>[]\n    | undefined;\n  errors?: TRPCError[];\n}): HTTPResponse {\n  const {\n    ctx,\n    paths,\n    type,\n    responseMeta,\n    untransformedJSON,\n    errors = [],\n  } = initOpts;\n\n  let status = untransformedJSON ? getHTTPStatusCode(untransformedJSON) : 200;\n  const headers: HTTPHeaders = {\n    'Content-Type': 'application/json',\n  };\n\n  const eagerGeneration = !untransformedJSON;\n  const data = eagerGeneration\n    ? []\n    : Array.isArray(untransformedJSON)\n    ? untransformedJSON\n    : [untransformedJSON];\n\n  const meta =\n    responseMeta?.({\n      ctx,\n      paths,\n      type,\n      data,\n      errors,\n      eagerGeneration,\n    }) ?? {};\n\n  for (const [key, value] of Object.entries(meta.headers ?? {})) {\n    headers[key] = value;\n  }\n  if (meta.status) {\n    status = meta.status;\n  }\n\n  return {\n    status,\n    headers,\n  };\n}\n\n# http/getHTTPStatusCode.ts:31-33  (http.getHTTPStatusCode.getStatusCodeFromKey)\nfunction getStatusCodeFromKey(code: keyof typeof TRPC_ERROR_CODES_BY_KEY) {\n  return JSONRPC2_TO_HTTP_CODE[code] ?? 500;\n}\n\n# Referenced module constants:\nJSONRPC2_TO_HTTP_CODE = {...}  # 15 entries\n\n# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}\n\n## Task\n\nWhat breaks if `http.resolveHTTPResponse.inputToProcedureCall` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

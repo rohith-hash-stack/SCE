@@ -1,0 +1,217 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "syn_t4_edit",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"glob\": \"*.py\", \"pattern\": \"def f\\\\(\\\\): return 1\"})\nno matches",
+    "token_count": 30,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def f\\(\\): return 1",
+      "glob": "*.py"
+     },
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (grep {\"glob\": \"*.py\", \"pattern\": \"def f\\\\(\\\\):\"})\ntests/test_duplicate_models_openapi.py:22:def f():",
+    "token_count": 38,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [
+     "tests.test_duplicate_models_openapi.f"
+    ],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def f\\(\\):",
+      "glob": "*.py"
+     },
+     "engine_token_count": 38
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r4.1",
+    "content": "# r4.1  (read {\"end_line\": 24, \"path\": \"tests/test_duplicate_models_openapi.py\", \"start_line\": 20})\n20: \n21: @app.get(\"/\", response_model=Model3)\n22: def f():\n23:     return {\"c\": {}, \"d\": {\"a\": {}}}\n24: \n[lines 20-24 of 80]",
+    "token_count": 94,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "tests.test_duplicate_models_openapi.f"
+    ],
+    "provenance": {
+     "msg_id": "r4.1",
+     "tool": "read",
+     "args": {
+      "path": "tests/test_duplicate_models_openapi.py",
+      "start_line": 20,
+      "end_line": 24
+     },
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 162,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "Change f to return 2:\n\ndef f(): return 1",
+   "task_type": "T4_edit",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 5,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 1,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 1,
+   "executed_after_answer": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def f\\(\\): return 1",
+        "glob": "*.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "grep_empty"
+      }
+     ],
+     "completion_tokens": 35,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 28,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def f\\(\\):",
+        "glob": "*.py"
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 59,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "tests/test_duplicate_models_openapi.py",
+        "start_line": 20,
+        "end_line": 24
+       },
+       "msg_id": "r4.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 64,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 5,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 80,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     2968.726839,
+     1885.542896,
+     3860.195012,
+     4219.109431,
+     5330.887022
+    ],
+    "L_tool_exec": [
+     17.003383,
+     18.774391,
+     0.253997
+    ],
+    "L_retrieve": [
+     18340.338861
+    ]
+   },
+   "agent_prompt_tokens": 954,
+   "agent_answer": {
+    "text": "```python\n@app.get('/', response_model=Model3)\ndef f():\n    return 2\n```",
+    "generation_tokens": 80,
+    "latency_seconds": 5.33074395299991,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1007,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 162,
+   "prompt_tokens": 954,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1007,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

@@ -1,0 +1,247 @@
+diff --git a/src/fastmcp/client/__init__.py b/src/fastmcp/client/__init__.py
+index e7e63817..2cd08c54 100644
+--- a/src/fastmcp/client/__init__.py
++++ b/src/fastmcp/client/__init__.py
+@@ -1,4 +1,4 @@
+-from .auth import OAuth, BearerAuth
++from .auth import OAuthImpl, BearerAuth
+ from .client import Client
+ from .transports import (
+     ClientTransport,
+@@ -20,7 +20,7 @@ __all__ = [
+     "FastMCPTransport",
+     "NodeStdioTransport",
+     "NpxStdioTransport",
+-    "OAuth",
++    "OAuthImpl",
+     "PythonStdioTransport",
+     "SSETransport",
+     "StdioTransport",
+diff --git a/src/fastmcp/client/auth/__init__.py b/src/fastmcp/client/auth/__init__.py
+index 6ec3ecf4..328eeeec 100644
+--- a/src/fastmcp/client/auth/__init__.py
++++ b/src/fastmcp/client/auth/__init__.py
+@@ -1,4 +1,4 @@
+ from .bearer import BearerAuth
+-from .oauth import OAuth
++from .oauth import OAuthImpl
+ 
+-__all__ = ["BearerAuth", "OAuth"]
++__all__ = ["BearerAuth", "OAuthImpl"]
+diff --git a/src/fastmcp/client/auth/oauth.py b/src/fastmcp/client/auth/oauth.py
+index 393844d0..d3e19558 100644
+--- a/src/fastmcp/client/auth/oauth.py
++++ b/src/fastmcp/client/auth/oauth.py
+@@ -29,7 +29,7 @@ from fastmcp.client.oauth_callback import (
+ from fastmcp.utilities.http import find_available_port
+ from fastmcp.utilities.logging import get_logger
+ 
+-__all__ = ["OAuth"]
++__all__ = ["OAuthImpl"]
+ 
+ logger = get_logger(__name__)
+ 
+@@ -135,7 +135,7 @@ class TokenStorageAdapter(TokenStorage):
+         )
+ 
+ 
+-class OAuth(OAuthClientProvider):
++class OAuthImpl(OAuthClientProvider):
+     """
+     OAuth client provider for MCP servers with browser-based authentication.
+ 
+diff --git a/src/fastmcp/client/transports/http.py b/src/fastmcp/client/transports/http.py
+index 89ad8fc6..f7853e2a 100644
+--- a/src/fastmcp/client/transports/http.py
++++ b/src/fastmcp/client/transports/http.py
+@@ -16,7 +16,7 @@ from typing_extensions import Unpack
+ 
+ import fastmcp
+ from fastmcp.client.auth.bearer import BearerAuth
+-from fastmcp.client.auth.oauth import OAuth
++from fastmcp.client.auth.oauth import OAuthImpl
+ from fastmcp.client.transports.base import ClientTransport, SessionKwargs
+ from fastmcp.server.dependencies import get_http_headers
+ from fastmcp.utilities.timeout import normalize_timeout_to_timedelta
+@@ -77,7 +77,7 @@ class StreamableHttpTransport(ClientTransport):
+ 
+     def _set_auth(self, auth: httpx.Auth | Literal["oauth"] | str | None):
+         if auth == "oauth":
+-            auth = OAuth(self.url, httpx_client_factory=self.httpx_client_factory)
++            auth = OAuthImpl(self.url, httpx_client_factory=self.httpx_client_factory)
+         elif isinstance(auth, str):
+             auth = BearerAuth(auth)
+         self.auth = auth
+diff --git a/src/fastmcp/client/transports/sse.py b/src/fastmcp/client/transports/sse.py
+index ec932e6d..100b8e11 100644
+--- a/src/fastmcp/client/transports/sse.py
++++ b/src/fastmcp/client/transports/sse.py
+@@ -15,7 +15,7 @@ from pydantic import AnyUrl
+ from typing_extensions import Unpack
+ 
+ from fastmcp.client.auth.bearer import BearerAuth
+-from fastmcp.client.auth.oauth import OAuth
++from fastmcp.client.auth.oauth import OAuthImpl
+ from fastmcp.client.transports.base import ClientTransport, SessionKwargs
+ from fastmcp.server.dependencies import get_http_headers
+ from fastmcp.utilities.timeout import normalize_timeout_to_timedelta
+@@ -49,7 +49,7 @@ class SSETransport(ClientTransport):
+ 
+     def _set_auth(self, auth: httpx.Auth | Literal["oauth"] | str | None):
+         if auth == "oauth":
+-            auth = OAuth(self.url, httpx_client_factory=self.httpx_client_factory)
++            auth = OAuthImpl(self.url, httpx_client_factory=self.httpx_client_factory)
+         elif isinstance(auth, str):
+             auth = BearerAuth(auth)
+         self.auth = auth
+diff --git a/src/fastmcp/utilities/tests.py b/src/fastmcp/utilities/tests.py
+index e25bb38b..acf4f5dc 100644
+--- a/src/fastmcp/utilities/tests.py
++++ b/src/fastmcp/utilities/tests.py
+@@ -13,7 +13,7 @@ import httpx
+ import uvicorn
+ 
+ from fastmcp import settings
+-from fastmcp.client.auth.oauth import OAuth
++from fastmcp.client.auth.oauth import OAuthImpl
+ from fastmcp.utilities.http import find_available_port
+ 
+ if TYPE_CHECKING:
+@@ -222,7 +222,7 @@ async def run_server_async(
+             await asyncio.wait_for(server_task, timeout=2.0)
+ 
+ 
+-class HeadlessOAuth(OAuth):
++class HeadlessOAuth(OAuthImpl):
+     """
+     OAuth provider that bypasses browser interaction for testing.
+ 
+diff --git a/tests/client/auth/test_oauth_client.py b/tests/client/auth/test_oauth_client.py
+index 20a335e8..94b2b593 100644
+--- a/tests/client/auth/test_oauth_client.py
++++ b/tests/client/auth/test_oauth_client.py
+@@ -6,7 +6,7 @@ import pytest
+ from mcp.types import TextResourceContents
+ 
+ from fastmcp.client import Client
+-from fastmcp.client.auth import OAuth
++from fastmcp.client.auth import OAuthImpl
+ from fastmcp.client.transports import StreamableHttpTransport
+ from fastmcp.server.auth.auth import ClientRegistrationOptions
+ from fastmcp.server.auth.providers.in_memory import InMemoryOAuthProvider
+@@ -141,7 +141,7 @@ class TestOAuthClientUrlHandling:
+         the full path to find the correct .well-known endpoints.
+         """
+         mcp_url = "https://mcp.example.com/server1/v1.0/mcp"
+-        oauth = OAuth(mcp_url=mcp_url)
++        oauth = OAuthImpl(mcp_url=mcp_url)
+ 
+         # The full URL should be preserved for OAuth discovery
+         assert oauth.context.server_url == mcp_url
+@@ -152,7 +152,7 @@ class TestOAuthClientUrlHandling:
+     def test_oauth_preserves_root_url(self):
+         """OAuth client should work correctly with root-level URLs."""
+         mcp_url = "https://mcp.example.com"
+-        oauth = OAuth(mcp_url=mcp_url)
++        oauth = OAuthImpl(mcp_url=mcp_url)
+ 
+         assert oauth.context.server_url == mcp_url
+         assert oauth.mcp_url == mcp_url
+@@ -160,7 +160,7 @@ class TestOAuthClientUrlHandling:
+     def test_oauth_normalizes_trailing_slash(self):
+         """OAuth client should normalize trailing slashes for consistency."""
+         mcp_url_with_slash = "https://mcp.example.com/api/mcp/"
+-        oauth = OAuth(mcp_url=mcp_url_with_slash)
++        oauth = OAuthImpl(mcp_url=mcp_url_with_slash)
+ 
+         # Trailing slash should be stripped
+         expected = "https://mcp.example.com/api/mcp"
+@@ -170,7 +170,7 @@ class TestOAuthClientUrlHandling:
+     def test_oauth_token_storage_uses_full_url(self):
+         """Token storage should use the full URL to separate tokens per endpoint."""
+         mcp_url = "https://mcp.example.com/server1/v1.0/mcp"
+-        oauth = OAuth(mcp_url=mcp_url)
++        oauth = OAuthImpl(mcp_url=mcp_url)
+ 
+         # Token storage should key by the full URL, not just the host
+         assert oauth.token_storage_adapter._server_url == mcp_url
+@@ -187,7 +187,7 @@ class TestOAuthGeneratorCleanup:
+ 
+     async def test_generator_closed_on_successful_flow(self):
+         """Verify aclose() is called on the parent generator after successful flow."""
+-        oauth = OAuth(mcp_url="https://example.com")
++        oauth = OAuthImpl(mcp_url="https://example.com")
+ 
+         # Track generator lifecycle using a wrapper class
+         class TrackedGenerator:
+@@ -220,7 +220,7 @@ class TestOAuthGeneratorCleanup:
+ 
+         # Patch the parent class to return our tracked generator
+         with patch.object(
+-            OAuth.__bases__[0], "async_auth_flow", return_value=tracked_gen
++            OAuthImpl.__bases__[0], "async_auth_flow", return_value=tracked_gen
+         ):
+             # Drive the OAuth flow
+             flow = oauth.async_auth_flow(httpx.Request("GET", "https://example.com"))
+@@ -240,7 +240,7 @@ class TestOAuthGeneratorCleanup:
+ 
+     async def test_generator_closed_on_exception(self):
+         """Verify aclose() is called even when an exception occurs mid-flow."""
+-        oauth = OAuth(mcp_url="https://example.com")
++        oauth = OAuthImpl(mcp_url="https://example.com")
+ 
+         class FailingGenerator:
+             def __init__(self):
+@@ -268,7 +268,7 @@ class TestOAuthGeneratorCleanup:
+         tracked_gen = FailingGenerator()
+ 
+         with patch.object(
+-            OAuth.__bases__[0], "async_auth_flow", return_value=tracked_gen
++            OAuthImpl.__bases__[0], "async_auth_flow", return_value=tracked_gen
+         ):
+             flow = oauth.async_auth_flow(httpx.Request("GET", "https://example.com"))
+             with pytest.raises(ValueError, match="Simulated failure"):
+diff --git a/tests/client/auth/test_phase2_rename_OAuth.py b/tests/client/auth/test_phase2_rename_OAuth.py
+new file mode 100644
+index 00000000..be3b0daa
+--- /dev/null
++++ b/tests/client/auth/test_phase2_rename_OAuth.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase2_rename_OAuthImpl():
++    owner = importlib.import_module('fastmcp.client.auth.oauth')
++    assert hasattr(owner, 'OAuthImpl')
++    assert not hasattr(owner, 'OAuth')
+diff --git a/tests/client/transports/test_transports.py b/tests/client/transports/test_transports.py
+index acf6001c..4d4fd835 100644
+--- a/tests/client/transports/test_transports.py
++++ b/tests/client/transports/test_transports.py
+@@ -2,7 +2,7 @@ from ssl import VerifyMode
+ 
+ import httpx
+ 
+-from fastmcp.client.auth.oauth import OAuth
++from fastmcp.client.auth.oauth import OAuthImpl
+ from fastmcp.client.transports import SSETransport, StreamableHttpTransport
+ 
+ 
+@@ -15,7 +15,7 @@ async def test_oauth_uses_same_client_as_transport_streamable_http():
+         auth="oauth",
+     )
+ 
+-    assert isinstance(transport.auth, OAuth)
++    assert isinstance(transport.auth, OAuthImpl)
+     async with transport.auth.httpx_client_factory() as httpx_client:
+         assert httpx_client._transport is not None
+         assert (
+@@ -33,7 +33,7 @@ async def test_oauth_uses_same_client_as_transport_sse():
+         auth="oauth",
+     )
+ 
+-    assert isinstance(transport.auth, OAuth)
++    assert isinstance(transport.auth, OAuthImpl)
+     async with transport.auth.httpx_client_factory() as httpx_client:
+         assert httpx_client._transport is not None
+         assert (

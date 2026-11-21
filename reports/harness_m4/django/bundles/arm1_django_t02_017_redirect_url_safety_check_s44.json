@@ -1,0 +1,1006 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t02_017_redirect_url_safety_check",
+  "items": [
+   {
+    "source_id": "django/utils/http.py:259-286",
+    "content": "# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme)\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    \"\"\"\n    Return ``True`` if the url uses an allowed host and a safe scheme.\n\n    Always return ``False`` on an empty url.\n\n    If ``require_https`` is ``True``, only 'https' will be considered a valid\n    scheme, as opposed to 'http' and 'https' with the default, ``False``.\n\n    Note: \"True\" doesn't entail that a URL is \"safe\". It may still be e.g.\n    quoted incorrectly. Ensure to also use django.utils.encoding.iri_to_uri()\n    on the path component of untrusted URLs.\n    \"\"\"\n    if url is not None:\n        url = url.strip()\n    if not url:\n        return False\n    if allowed_hosts is None:\n        allowed_hosts = set()\n    elif isinstance(allowed_hosts, str):\n        allowed_hosts = {allowed_hosts}\n    # Chrome treats \\ completely as / in paths but it could be part of some\n    # basic auth credentials so we need to check both URLs.\n    return _url_has_allowed_host_and_scheme(\n        url, allowed_hosts, require_https=require_https\n    ) and _url_has_allowed_host_and_scheme(\n        url.replace(\"\\\\\", \"/\"), allowed_hosts, require_https=require_https\n    )",
+    "token_count": 295,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.http.url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 12,
+     "rerank_score": 1.6837142705917358,
+     "bm25_rank": 1,
+     "dense_rank": 73,
+     "oversized_chunk": false,
+     "engine_token_count": 295
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/logging_tests/urls.py:1-15",
+    "content": "# tests/logging_tests/urls.py:1-15  (tests.logging_tests.urls)\nfrom django.urls import path\n\nfrom . import views\n\nurlpatterns = [\n    path(\"innocent/\", views.innocent),\n    path(\"redirect/\", views.redirect),\n    path(\"suspicious/\", views.suspicious),\n    path(\"suspicious_spec/\", views.suspicious_spec),\n    path(\"internal_server_error/\", views.internal_server_error),\n    path(\"uncaught_exception/\", views.uncaught_exception),\n    path(\"permission_denied/\", views.permission_denied),\n    path(\"multi_part_parser_error/\", views.multi_part_parser_error),\n    path(\"does_not_exist_raised/\", views.does_not_exist_raised),\n]",
+    "token_count": 147,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 31,
+     "rerank_score": 1.0496882200241089,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 147
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:368-395",
+    "content": "# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme)\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    if url.startswith(\"///\"):\n        return False\n    try:\n        url_info = _urlparse(url)\n    except ValueError:  # e.g. invalid IPv6 addresses\n        return False\n    # Forbid URLs like http:///example.com - with a scheme, but without a hostname.\n    # In that URL, example.com is not the hostname but, a path component. However,\n    # Chrome will still consider example.com to be the hostname, so we must not\n    # allow this syntax.\n    if not url_info.netloc and url_info.scheme:\n        return False\n    # Forbid URLs that start with control characters. Some browsers (like\n    # Chrome) ignore quite a few control characters at the start of a\n    # URL and might consider the URL as scheme relative.\n    if unicodedata.category(url[0])[0] == \"C\":\n        return False\n    scheme = url_info.scheme\n    # Consider URLs without a scheme (e.g. //example.com/p) to be http.\n    if not url_info.scheme and url_info.netloc:\n        scheme = \"http\"\n    valid_schemes = [\"https\"] if require_https else [\"http\", \"https\"]\n    return (not url_info.netloc or url_info.netloc in allowed_hosts) and (\n        not scheme or scheme in valid_schemes\n    )",
+    "token_count": 356,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.http._url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 6,
+     "rerank_score": 0.9135704040527344,
+     "bm25_rank": 2,
+     "dense_rank": 27,
+     "oversized_chunk": false,
+     "engine_token_count": 356
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/csrf_tests/tests.py:694-745",
+    "content": "# tests/csrf_tests/tests.py:694-745  (tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_https_malformed_referer)\nclass CsrfViewMiddlewareTestMixin(CsrfFunctionTestMixin):\n    @override_settings(DEBUG=True)\n    def test_https_malformed_referer(self):\n        \"\"\"\n        A POST HTTPS request with a bad referer is rejected.\n        \"\"\"\n        malformed_referer_msg = \"Referer checking failed - Referer is malformed.\"\n        req = self._get_POST_request_with_token()\n        req._is_secure_override = True\n        req.META[\"HTTP_REFERER\"] = \"http://http://www.example.com/\"\n        mw = CsrfViewMiddleware(post_form_view)\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(\n            response,\n            \"Referer checking failed - Referer is insecure while host is secure.\",\n            status_code=403,\n        )\n        # Empty\n        req.META[\"HTTP_REFERER\"] = \"\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n        # Non-ASCII\n        req.META[\"HTTP_REFERER\"] = \"\u00d8B\u00f6I\u00df\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n        # missing scheme\n        # >>> urlparse('//example.com/')\n        # ParseResult(\n        #   scheme='', netloc='example.com', path='/', params='', query='', fragment='',\n        # )\n        req.META[\"HTTP_REFERER\"] = \"//example.com/\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n        # missing netloc\n        # >>> urlparse('https://')\n        # ParseResult(\n        #   scheme='https', netloc='', path='', params='', query='', fragment='',\n        # )\n        req.META[\"HTTP_REFERER\"] = \"https://\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n        # Invalid URL\n        # >>> urlparse('https://[')\n        # ValueError: Invalid IPv6 URL\n        req.META[\"HTTP_REFERER\"] = \"https://[\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)",
+    "token_count": 622,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_https_malformed_referer"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": 0.6328799724578857,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 622
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:45-55",
+    "content": "# django/contrib/auth/views.py:45-55  (django.contrib.auth.views.RedirectURLMixin.get_redirect_url)\nclass RedirectURLMixin:\n    def get_redirect_url(self):\n        \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n        redirect_to = self.request.POST.get(\n            self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n        )\n        url_is_safe = url_has_allowed_host_and_scheme(\n            url=redirect_to,\n            allowed_hosts=self.get_success_url_allowed_hosts(),\n            require_https=self.request.is_secure(),\n        )\n        return redirect_to if url_is_safe else \"\"",
+    "token_count": 126,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin.get_redirect_url"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": 0.4301493763923645,
+     "bm25_rank": 15,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 126
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:161-202",
+    "content": "# tests/utils_tests/test_http.py:161-202  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_bad_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_bad_urls(self):\n        bad_urls = (\n            \"http://example.com\",\n            \"http:///example.com\",\n            \"https://example.com\",\n            \"ftp://example.com\",\n            r\"\\\\example.com\",\n            r\"\\\\\\example.com\",\n            r\"/\\\\/example.com\",\n            r\"\\\\\\example.com\",\n            r\"\\\\example.com\",\n            r\"\\\\//example.com\",\n            r\"/\\/example.com\",\n            r\"\\/example.com\",\n            r\"/\\example.com\",\n            \"http:///example.com\",\n            r\"http:/\\//example.com\",\n            r\"http:\\/example.com\",\n            r\"http:/\\example.com\",\n            'javascript:alert(\"XSS\")',\n            \"\\njavascript:alert(x)\",\n            \"java\\nscript:alert(x)\",\n            \"\\x08//example.com\",\n            r\"http://otherserver\\@example.com\",\n            r\"http:\\\\testserver\\@example.com\",\n            r\"http://testserver\\me:pass@example.com\",\n            r\"http://testserver\\@example.com\",\n            r\"http:\\\\testserver\\confirm\\me@example.com\",\n            \"http:999999999\",\n            \"ftp:9999999999\",\n            \"\\n\",\n            \"http://[2001:cdba:0000:0000:0000:0000:3257:9652/\",\n            \"http://2001:cdba:0000:0000:0000:0000:3257:9652]/\",\n        )\n        for bad_url in bad_urls:\n            with self.subTest(url=bad_url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        bad_url, allowed_hosts={\"testserver\", \"testserver2\"}\n                    ),\n                    False,\n                )",
+    "token_count": 446,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_bad_urls"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 1,
+     "rerank_score": 0.10801806300878525,
+     "bm25_rank": 13,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 446
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:251-263",
+    "content": "# tests/utils_tests/test_http.py:251-263  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_allowed_hosts_str(self):\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"http://good.com/good\", allowed_hosts=\"good.com\"\n            ),\n            True,\n        )\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"http://good.co/evil\", allowed_hosts=\"good.com\"\n            ),\n            False,\n        )",
+    "token_count": 121,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": -0.24080032110214233,
+     "bm25_rank": 4,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 121
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:332-365",
+    "content": "# django/utils/http.py:332-365  (django.utils.http._urlsplit)\ndef _urlsplit(url, scheme=\"\", allow_fragments=True):\n    \"\"\"Parse a URL into 5 components:\n    <scheme>://<netloc>/<path>?<query>#<fragment>\n    Return a 5-tuple: (scheme, netloc, path, query, fragment).\n    Note that we don't break the components up in smaller bits\n    (e.g. netloc is a single string) and we don't expand % escapes.\"\"\"\n    url, scheme, _coerce_result = _coerce_args(url, scheme)\n    url = _remove_unsafe_bytes_from_url(url)\n    scheme = _remove_unsafe_bytes_from_url(scheme)\n\n    netloc = query = fragment = \"\"\n    i = url.find(\":\")\n    if i > 0:\n        for c in url[:i]:\n            if c not in scheme_chars:\n                break\n        else:\n            scheme, url = url[:i].lower(), url[i + 1 :]\n\n    if url[:2] == \"//\":\n        netloc, url = _splitnetloc(url, 2)\n        if (\"[\" in netloc and \"]\" not in netloc) or (\n            \"]\" in netloc and \"[\" not in netloc\n        ):\n            raise ValueError(\"Invalid IPv6 URL\")\n        if \"[\" in netloc and \"]\" in netloc:\n            bracketed_host = netloc.partition(\"[\")[2].partition(\"]\")[0]\n            _check_bracketed_host(bracketed_host)\n    if allow_fragments and \"#\" in url:\n        url, fragment = url.split(\"#\", 1)\n    if \"?\" in url:\n        url, query = url.split(\"?\", 1)\n    v = SplitResult(scheme, netloc, url, query, fragment)\n    return _coerce_result(v)",
+    "token_count": 392,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.http._urlsplit"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 32,
+     "rerank_score": -0.34196174144744873,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 392
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:226-233",
+    "content": "# tests/utils_tests/test_http.py:226-233  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_basic_auth(self):\n        # Valid basic auth credentials are allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                r\"http://user:pass@testserver/\", allowed_hosts={\"user:pass@testserver\"}\n            ),\n            True,\n        )",
+    "token_count": 98,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 16,
+     "rerank_score": -0.3801509141921997,
+     "bm25_rank": 5,
+     "dense_rank": 96,
+     "oversized_chunk": false,
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:160-182",
+    "content": "# django/urls/resolvers.py:160-182  (django.urls.resolvers.CheckURLMixin._check_pattern_startswith_slash)\nclass CheckURLMixin:\n    def _check_pattern_startswith_slash(self):\n        \"\"\"\n        Check that the pattern does not begin with a forward slash.\n        \"\"\"\n        regex_pattern = self.regex.pattern\n        if not settings.APPEND_SLASH:\n            # Skip check as it can be useful to start a URL pattern with a slash\n            # when APPEND_SLASH=False.\n            return []\n        if regex_pattern.startswith((\"/\", \"^/\", \"^\\\\/\")) and not regex_pattern.endswith(\n            \"/\"\n        ):\n            warning = Warning(\n                \"Your URL pattern {} has a route beginning with a '/'. Remove this \"\n                \"slash as it is unnecessary. If this pattern is targeted in an \"\n                \"include(), ensure the include() pattern has a trailing '/'.\".format(\n                    self.describe()\n                ),\n                id=\"urls.W002\",\n            )\n            return [warning]\n        else:\n            return []",
+    "token_count": 216,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.CheckURLMixin._check_pattern_startswith_slash"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 14,
+     "rerank_score": -0.39698806405067444,
+     "bm25_rank": 50,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 216
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/validators.py:114-160",
+    "content": "# django/core/validators.py:114-160  (django.core.validators.URLValidator.__call__)\nclass URLValidator(RegexValidator):\n    def __call__(self, value):\n        if not isinstance(value, str) or len(value) > self.max_length:\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n        if self.unsafe_chars.intersection(value):\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n        # Check if the scheme is valid.\n        scheme = value.split(\"://\")[0].lower()\n        if scheme not in self.schemes:\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n\n        # Then check full URL\n        try:\n            splitted_url = urlsplit(value)\n        except ValueError:\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n        try:\n            super().__call__(value)\n        except ValidationError as e:\n            # Trivial case failed. Try for possible IDN domain\n            if value:\n                scheme, netloc, path, query, fragment = splitted_url\n                try:\n                    netloc = punycode(netloc)  # IDN -> ACE\n                except UnicodeError:  # invalid domain part\n                    raise e\n                url = urlunsplit((scheme, netloc, path, query, fragment))\n                super().__call__(url)\n            else:\n                raise\n        else:\n            # Now verify IPv6 in the netloc part\n            host_match = re.search(r\"^\\[(.+)\\](?::[0-9]{1,5})?$\", splitted_url.netloc)\n            if host_match:\n                potential_ip = host_match[1]\n                try:\n                    validate_ipv6_address(potential_ip)\n                except ValidationError:\n                    raise ValidationError(\n                        self.message, code=self.code, params={\"value\": value}\n                    )\n\n        # The maximum length of a full host name is 253 characters per RFC 1034\n        # section 3.1. It's defined to be 255 bytes or less, but this includes\n        # one byte for the length of the name and one byte for the trailing dot\n        # that's used to indicate absolute names in DNS.\n        if splitted_url.hostname is None or len(splitted_url.hostname) > 253:\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})",
+    "token_count": 510,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.validators.URLValidator.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -0.7873784899711609,
+     "bm25_rank": 19,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 510
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:291-305",
+    "content": "# django/utils/http.py:291-305  (django.utils.http._urlparse)\ndef _urlparse(url, scheme=\"\", allow_fragments=True):\n    \"\"\"Parse a URL into 6 components:\n    <scheme>://<netloc>/<path>;<params>?<query>#<fragment>\n    Return a 6-tuple: (scheme, netloc, path, params, query, fragment).\n    Note that we don't break the components up in smaller bits\n    (e.g. netloc is a single string) and we don't expand % escapes.\"\"\"\n    url, scheme, _coerce_result = _coerce_args(url, scheme)\n    splitresult = _urlsplit(url, scheme, allow_fragments)\n    scheme, netloc, url, query, fragment = splitresult\n    if scheme in uses_params and \";\" in url:\n        url, params = _splitparams(url)\n    else:\n        params = \"\"\n    result = ParseResult(scheme, netloc, url, params, query, fragment)\n    return _coerce_result(result)",
+    "token_count": 224,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.http._urlparse"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 34,
+     "rerank_score": -1.0451068878173828,
+     "bm25_rank": 11,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 224
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:265-278",
+    "content": "# tests/utils_tests/test_http.py:265-278  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_secure_param_https_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_secure_param_https_urls(self):\n        secure_urls = (\n            \"https://example.com/p\",\n            \"HTTPS://example.com/p\",\n            \"/view/?param=http://example.com\",\n        )\n        for url in secure_urls:\n            with self.subTest(url=url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        url, allowed_hosts={\"example.com\"}, require_https=True\n                    ),\n                    True,\n                )",
+    "token_count": 135,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_secure_param_https_urls"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 11,
+     "rerank_score": -1.1434484720230103,
+     "bm25_rank": 6,
+     "dense_rank": 47,
+     "oversized_chunk": false,
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:398-406",
+    "content": "# django/utils/http.py:398-406  (django.utils.http.escape_leading_slashes)\ndef escape_leading_slashes(url):\n    \"\"\"\n    If redirecting to an absolute path (two leading slashes), a slash must be\n    escaped to prevent browsers from handling the path as schemaless and\n    redirecting to another host.\n    \"\"\"\n    if url.startswith(\"//\"):\n        url = \"/%2F{}\".format(url[2:])\n    return url",
+    "token_count": 97,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.http.escape_leading_slashes"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 18,
+     "rerank_score": -1.1480623483657837,
+     "bm25_rank": 20,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:280-293",
+    "content": "# tests/utils_tests/test_http.py:280-293  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_secure_param_non_https_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_secure_param_non_https_urls(self):\n        insecure_urls = (\n            \"http://example.com/p\",\n            \"ftp://example.com/p\",\n            \"//example.com/p\",\n        )\n        for url in insecure_urls:\n            with self.subTest(url=url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        url, allowed_hosts={\"example.com\"}, require_https=True\n                    ),\n                    False,\n                )",
+    "token_count": 133,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_secure_param_non_https_urls"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 10,
+     "rerank_score": -1.186187505722046,
+     "bm25_rank": 7,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 133
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/decorators.py:10-40",
+    "content": "# django/contrib/auth/decorators.py:10-40  (django.contrib.auth.decorators.user_passes_test)\ndef user_passes_test(\n    test_func, login_url=None, redirect_field_name=REDIRECT_FIELD_NAME\n):\n    \"\"\"\n    Decorator for views that checks that the user passes the given test,\n    redirecting to the log-in page if necessary. The test should be a callable\n    that takes the user object and returns True if the user passes.\n    \"\"\"\n\n    def decorator(view_func):\n        @wraps(view_func)\n        def _wrapper_view(request, *args, **kwargs):\n            if test_func(request.user):\n                return view_func(request, *args, **kwargs)\n            path = request.build_absolute_uri()\n            resolved_login_url = resolve_url(login_url or settings.LOGIN_URL)\n            # If the login url is the same scheme and net location then just\n            # use the path as the \"next\" url.\n            login_scheme, login_netloc = urlparse(resolved_login_url)[:2]\n            current_scheme, current_netloc = urlparse(path)[:2]\n            if (not login_scheme or login_scheme == current_scheme) and (\n                not login_netloc or login_netloc == current_netloc\n            ):\n                path = request.get_full_path()\n            from django.contrib.auth.views import redirect_to_login\n\n            return redirect_to_login(path, resolved_login_url, redirect_field_name)\n\n        return _wrapper_view\n\n    return decorator",
+    "token_count": 299,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.decorators.user_passes_test"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 46,
+     "rerank_score": -1.285259485244751,
+     "bm25_rank": 21,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 299
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_views.py:1158-1170",
+    "content": "# tests/auth_tests/test_views.py:1158-1170  (tests.auth_tests.test_views.LoginSuccessURLAllowedHostsTest.test_success_url_allowed_hosts_unsafe_host)\nclass LoginSuccessURLAllowedHostsTest(AuthViewsTestCase):\n    def test_success_url_allowed_hosts_unsafe_host(self):\n        response = self.client.post(\n            \"/login/allowed_hosts/\",\n            {\n                \"username\": \"testclient\",\n                \"password\": \"password\",\n                \"next\": \"https://evil/home\",\n            },\n        )\n        self.assertIn(SESSION_KEY, self.client.session)\n        self.assertRedirects(\n            response, \"/accounts/profile/\", fetch_redirect_response=False\n        )",
+    "token_count": 140,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_views.LoginSuccessURLAllowedHostsTest.test_success_url_allowed_hosts_unsafe_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 20,
+     "rerank_score": -1.331784725189209,
+     "bm25_rank": 58,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:204-224",
+    "content": "# tests/utils_tests/test_http.py:204-224  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_good_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_good_urls(self):\n        good_urls = (\n            \"/view/?param=http://example.com\",\n            \"/view/?param=https://example.com\",\n            \"/view?param=ftp://example.com\",\n            \"view/?param=//example.com\",\n            \"https://testserver/\",\n            \"HTTPS://testserver/\",\n            \"//testserver/\",\n            \"http://testserver/confirm?email=me@example.com\",\n            \"/url%20with%20spaces/\",\n            \"path/http:2222222222\",\n        )\n        for good_url in good_urls:\n            with self.subTest(url=good_url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        good_url, allowed_hosts={\"otherserver\", \"testserver\"}\n                    ),\n                    True,\n                )",
+    "token_count": 212,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_good_urls"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": -1.3697253465652466,
+     "bm25_rank": 8,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 212
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/check_framework/test_4_0_compatibility.py:8-21",
+    "content": "# tests/check_framework/test_4_0_compatibility.py:8-21  (tests.check_framework.test_4_0_compatibility.CheckCSRFTrustedOrigins.test_invalid_url)\nclass CheckCSRFTrustedOrigins(SimpleTestCase):\n    @override_settings(CSRF_TRUSTED_ORIGINS=[\"example.com\"])\n    def test_invalid_url(self):\n        self.assertEqual(\n            check_csrf_trusted_origins(None),\n            [\n                Error(\n                    \"As of Django 4.0, the values in the CSRF_TRUSTED_ORIGINS \"\n                    \"setting must start with a scheme (usually http:// or \"\n                    \"https://) but found example.com. See the release notes for \"\n                    \"details.\",\n                    id=\"4_0.E001\",\n                )\n            ],\n        )",
+    "token_count": 168,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.check_framework.test_4_0_compatibility.CheckCSRFTrustedOrigins.test_invalid_url"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 28,
+     "rerank_score": -1.4683772325515747,
+     "bm25_rank": 95,
+     "dense_rank": 52,
+     "oversized_chunk": false,
+     "engine_token_count": 168
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/field_tests/test_urlfield.py:30-86#part1of2",
+    "content": "# tests/forms_tests/field_tests/test_urlfield.py:30-86#part1of2  (tests.forms_tests.field_tests.test_urlfield.URLFieldTest.test_urlfield_clean)\nclass URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):\n    def test_urlfield_clean(self):\n        f = URLField(required=False)\n        tests = [\n            (\"http://localhost\", \"http://localhost\"),\n            (\"http://example.com\", \"http://example.com\"),\n            (\"http://example.com/test\", \"http://example.com/test\"),\n            (\"http://example.com.\", \"http://example.com.\"),\n            (\"http://www.example.com\", \"http://www.example.com\"),\n            (\"http://www.example.com:8000/test\", \"http://www.example.com:8000/test\"),\n            (\n                \"http://example.com?some_param=some_value\",\n                \"http://example.com?some_param=some_value\",\n            ),\n            (\"valid-with-hyphens.com\", \"http://valid-with-hyphens.com\"),\n            (\"subdomain.domain.com\", \"http://subdomain.domain.com\"),\n            (\"http://200.8.9.10\", \"http://200.8.9.10\"),\n            (\"http://200.8.9.10:8000/test\", \"http://200.8.9.10:8000/test\"),\n            (\"http://valid-----hyphens.com\", \"http://valid-----hyphens.com\"),\n            (\n                \"http://some.idn.xyz\u00e4\u00f6\u00fc\u00dfabc.domain.com:123/blah\",\n                \"http://some.idn.xyz\\xe4\\xf6\\xfc\\xdfabc.domain.com:123/blah\",\n            ),\n            (\n                \"www.example.com/s/http://code.djangoproject.com/ticket/13804\",\n                \"http://www.example.com/s/http://code.djangoproject.com/ticket/13804\",\n            ),\n            # Normalization.\n            (\"http://example.com/     \", \"http://example.com/\"),\n            # Valid IDN.\n            (\"http://\u05e2\u05d1\u05e8\u05d9\u05ea.idn.icann.org/\", \"http://\u05e2\u05d1\u05e8\u05d9\u05ea.idn.icann.org/\"),\n            (\"http://s\u00e3opaulo.com/\", \"http://s\u00e3opaulo.com/\"),\n            (\"http://s\u00e3opaulo.com.br/\", \"http://s\u00e3opaulo.com.br/\"),\n            (\"http://\u043f\u0440\u0438\u043c\u0435\u0440.\u0438\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u0435/\", \"http://\u043f\u0440\u0438\u043c\u0435\u0440.\u0438\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u0435/\"),\n            (\"http://\u0645\u062b\u0627\u0644.\u0625\u062e\u062a\u0628\u0627\u0631/\", \"http://\u0645\u062b\u0627\u0644.\u0625\u062e\u062a\u0628\u0627\u0631/\"),\n            (\"http://\u4f8b\u5b50.\u6d4b\u8bd5/\", \"http://\u4f8b\u5b50.\u6d4b\u8bd5/\"),\n            (\"http://\u4f8b\u5b50.\u6e2c\u8a66/\", \"http://\u4f8b\u5b50.\u6e2c\u8a66/\"),\n            (\n                \"http://\u0909\u0926\u093e\u0939\u0930\u0923.\u092a\u0930\u0940\u0915\u094d\u0937\u093e/\",\n                \"http://\u0909\u0926\u093e\u0939\u0930\u0923.\u092a\u0930\u0940\u0915\u094d\u0937\u093e/\",\n            ),\n            (\"http://\u4f8b\u3048.\u30c6\u30b9\u30c8/\", \"http://\u4f8b\u3048.\u30c6\u30b9\u30c8/\"),\n            (\"http://\u0645\u062b\u0627\u0644.\u0622\u0632\u0645\u0627\u06cc\u0634\u06cc/\", \"http://\u0645\u062b\u0627\u0644.\u0622\u0632\u0645\u0627\u06cc\u0634\u06cc/\"),\n            (\"http://\uc2e4\ub840.\ud14c\uc2a4\ud2b8/\", \"http://\uc2e4\ub840.\ud14c\uc2a4\ud2b8/\"),\n            (\"http://\u0627\u0644\u0639\u0631\u0628\u064a\u0629.idn.icann.org/\", \"http://\u0627\u0644\u0639\u0631\u0628\u064a\u0629.idn.icann.org/\"),\n            # IPv6.\n            (\"http://[12:34::3a53]/\", \"http://[12:34::3a53]/\"),\n            (\"http://[a34:9238::]:8080/\", \"http://[a34:9238::]:8080/\"),\n            # IPv6 without scheme.\n            (\"[12:34::3a53]/\", \"http://[12:34::3a53]/\"),\n            # IDN domain without scheme but with port.\n            (\"\u00f1and\u00fa.es:8080/\", \"http://\u00f1and\u00fa.es:8080/\"),\n            # Scheme-relative.\n            (\"//example.com\", \"http://example.com\"),\n            (\"//example.com/path\", \"http://example.com/path\"),\n            # Whitespace stripped.\n            (\"\\t\\n//example.com  \\n\\t\\n\", \"http://example.com\"),\n            (\"\\t\\nhttp://example.com  \\n\\t\\n\", \"http://example.com\"),\n        ]",
+    "token_count": 954,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.field_tests.test_urlfield.URLFieldTest.test_urlfield_clean"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 45,
+     "rerank_score": -1.6477582454681396,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": true,
+     "engine_token_count": 954
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/httpwrappers/tests.py:502-513",
+    "content": "# tests/httpwrappers/tests.py:502-513  (tests.httpwrappers.tests.HttpResponseTests.test_unsafe_redirect)\nclass HttpResponseTests(SimpleTestCase):\n    def test_unsafe_redirect(self):\n        bad_urls = [\n            'data:text/html,<script>window.alert(\"xss\")</script>',\n            \"mailto:test@example.com\",\n            \"file:///etc/passwd\",\n            \"\u00e9\" * (MAX_URL_REDIRECT_LENGTH + 1),\n        ]\n        for url in bad_urls:\n            with self.assertRaises(DisallowedRedirect):\n                HttpResponseRedirect(url)\n            with self.assertRaises(DisallowedRedirect):\n                HttpResponsePermanentRedirect(url)",
+    "token_count": 132,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.httpwrappers.tests.HttpResponseTests.test_unsafe_redirect"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 35,
+     "rerank_score": -1.7348614931106567,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 132
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:57-58",
+    "content": "# django/contrib/auth/views.py:57-58  (django.contrib.auth.views.RedirectURLMixin.get_success_url_allowed_hosts)\nclass RedirectURLMixin:\n    def get_success_url_allowed_hosts(self):\n        return {self.request.get_host(), *self.success_url_allowed_hosts}",
+    "token_count": 57,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin.get_success_url_allowed_hosts"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": -1.8913822174072266,
+     "bm25_rank": 89,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:316-333",
+    "content": "# tests/utils_tests/test_http.py:316-333  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_splitting_bracketed_hosts)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_splitting_bracketed_hosts(self):\n        # Port of urllib.parse.urlsplit() tests from Python.\n        p1 = _urlsplit(\"scheme://user@[v6a.ip]/path?query\")\n        self.assertEqual(p1.hostname, \"v6a.ip\")\n        self.assertEqual(p1.username, \"user\")\n        self.assertEqual(p1.path, \"/path\")\n        # Removed the '%test' suffix from ported tests as %scope_id suffixes were\n        # added in Python 3.9: https://docs.python.org/3/whatsnew/3.9.html#ipaddress\n        p2 = _urlsplit(\"scheme://user@[0439:23af:2309::fae7]/path?query\")\n        self.assertEqual(p2.hostname, \"0439:23af:2309::fae7\")\n        self.assertEqual(p2.username, \"user\")\n        self.assertEqual(p2.path, \"/path\")\n        p3 = _urlsplit(\n            \"scheme://user@[0439:23af:2309::fae7:1234:192.0.2.146]/path?query\"\n        )\n        self.assertEqual(p3.hostname, \"0439:23af:2309::fae7:1234:192.0.2.146\")\n        self.assertEqual(p3.username, \"user\")\n        self.assertEqual(p3.path, \"/path\")",
+    "token_count": 374,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_splitting_bracketed_hosts"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 15,
+     "rerank_score": -1.9865734577178955,
+     "bm25_rank": 32,
+     "dense_rank": 28,
+     "oversized_chunk": false,
+     "engine_token_count": 374
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:296-313",
+    "content": "# tests/utils_tests/test_http.py:296-313  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_invalid_bracketed_hosts)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_invalid_bracketed_hosts(self):\n        # Port of urllib.parse.urlsplit() tests from Python.\n        tests = [\n            \"Scheme://user@[192.0.2.146]/Path?Query\",\n            \"Scheme://user@[important.com:8000]/Path?Query\",\n            \"Scheme://user@[v123r.IP]/Path?Query\",\n            \"Scheme://user@[v12ae]/Path?Query\",\n            \"Scheme://user@[v.IP]/Path?Query\",\n            \"Scheme://user@[v123.]/Path?Query\",\n            \"Scheme://user@[v]/Path?Query\",\n            \"Scheme://user@[0439:23af::2309::fae7:1234]/Path?Query\",\n            \"Scheme://user@[0439:23af:2309::fae7:1234:2342:438e:192.0.2.146]/\"\n            \"Path?Query\",\n            \"Scheme://user@]v6a.ip[/Path\",\n        ]\n        for invalid_url in tests:\n            with self.subTest(invalid_url=invalid_url):\n                self.assertRaises(ValueError, _urlsplit, invalid_url)",
+    "token_count": 325,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_invalid_bracketed_hosts"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 8,
+     "rerank_score": -2.0575883388519287,
+     "bm25_rank": 16,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 325
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:235-249",
+    "content": "# tests/utils_tests/test_http.py:235-249  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_no_allowed_hosts(self):\n        # A path without host is allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"/confirm/me@example.com\", allowed_hosts=None\n            ),\n            True,\n        )\n        # Basic auth without host is not allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                r\"http://testserver\\@example.com\", allowed_hosts=None\n            ),\n            False,\n        )",
+    "token_count": 136,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 5,
+     "rerank_score": -2.2225303649902344,
+     "bm25_rank": 3,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/exceptions.py:56-58",
+    "content": "# django/core/exceptions.py:56-58  (django.core.exceptions.DisallowedRedirect)\nclass DisallowedRedirect(SuspiciousOperation):\n    \"\"\"Redirect to scheme not in allowed list\"\"\"\n\n    pass",
+    "token_count": 42,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.exceptions.DisallowedRedirect"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 26,
+     "rerank_score": -2.2382404804229736,
+     "bm25_rank": null,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:1-30",
+    "content": "# django/urls/resolvers.py:1-30  (django.urls.resolvers)\n\"\"\"\nThis module converts requested URLs to callback view functions.\n\nURLResolver is the main class here. Its resolve() method takes a URL (as\na string) and returns a ResolverMatch object which provides access to all\nattributes of the resolved URL match.\n\"\"\"\nimport functools\nimport inspect\nimport re\nimport string\nfrom importlib import import_module\nfrom pickle import PicklingError\nfrom urllib.parse import quote\n\nfrom asgiref.local import Local\n\nfrom django.conf import settings\nfrom django.core.checks import Error, Warning\nfrom django.core.checks.urls import check_resolver\nfrom django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.functional import cached_property\nfrom django.utils.http import RFC3986_SUBDELIMS, escape_leading_slashes\nfrom django.utils.regex_helper import _lazy_re_compile, normalize\nfrom django.utils.translation import get_language\n\nfrom .converters import get_converter\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .utils import get_callable",
+    "token_count": 239,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -2.2415244579315186,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 239
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:34-60",
+    "content": "# django/middleware/common.py:34-60  (django.middleware.common.CommonMiddleware.process_request)\nclass CommonMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        \"\"\"\n        Check for denied User-Agents and rewrite the URL based on\n        settings.APPEND_SLASH and settings.PREPEND_WWW\n        \"\"\"\n\n        # Check for denied User-Agents\n        user_agent = request.META.get(\"HTTP_USER_AGENT\")\n        if user_agent is not None:\n            for user_agent_regex in settings.DISALLOWED_USER_AGENTS:\n                if user_agent_regex.search(user_agent):\n                    raise PermissionDenied(\"Forbidden user agent\")\n\n        # Check for a redirect based on settings.PREPEND_WWW\n        host = request.get_host()\n\n        if settings.PREPEND_WWW and host and not host.startswith(\"www.\"):\n            # Check if we also need to append a slash so we can do it all\n            # with a single redirect. (This check may be somewhat expensive,\n            # so we only do it if we already know we're sending a redirect,\n            # or in process_response if we get a 404.)\n            if self.should_redirect_with_slash(request):\n                path = self.get_full_path_with_slash(request)\n            else:\n                path = request.get_full_path()\n\n            return self.response_redirect_class(f\"{request.scheme}://www.{host}{path}\")",
+    "token_count": 289,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.process_request"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 22,
+     "rerank_score": -2.37418532371521,
+     "bm25_rank": 65,
+     "dense_rank": 31,
+     "oversized_chunk": false,
+     "engine_token_count": 289
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:618-630",
+    "content": "# django/http/response.py:618-630  (django.http.response.HttpResponseRedirectBase.__init__)\nclass HttpResponseRedirectBase(HttpResponse):\n    def __init__(self, redirect_to, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Location\"] = iri_to_uri(redirect_to)\n        redirect_to_str = str(redirect_to)\n        if len(redirect_to_str) > MAX_URL_REDIRECT_LENGTH:\n            raise DisallowedRedirect(\n                f\"Unsafe redirect exceeding {MAX_URL_REDIRECT_LENGTH} characters\"\n            )\n        parsed = urlparse(redirect_to_str)\n        if parsed.scheme and parsed.scheme not in self.allowed_schemes:\n            raise DisallowedRedirect(\n                \"Unsafe redirect to URL with protocol '%s'\" % parsed.scheme\n            )",
+    "token_count": 163,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseRedirectBase.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 13,
+     "rerank_score": -2.613765001296997,
+     "bm25_rank": 28,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 163
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:616-632",
+    "content": "# django/http/response.py:616-632  (django.http.response.HttpResponseRedirectBase)\nclass HttpResponseRedirectBase(HttpResponse):\n    allowed_schemes = [\"http\", \"https\", \"ftp\"]\n\n    def __init__(self, redirect_to, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Location\"] = iri_to_uri(redirect_to)\n        redirect_to_str = str(redirect_to)\n        if len(redirect_to_str) > MAX_URL_REDIRECT_LENGTH:\n            raise DisallowedRedirect(\n                f\"Unsafe redirect exceeding {MAX_URL_REDIRECT_LENGTH} characters\"\n            )\n        parsed = urlparse(redirect_to_str)\n        if parsed.scheme and parsed.scheme not in self.allowed_schemes:\n            raise DisallowedRedirect(\n                \"Unsafe redirect to URL with protocol '%s'\" % parsed.scheme\n            )\n\n    url = property(lambda self: self[\"Location\"])",
+    "token_count": 186,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseRedirectBase"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 7,
+     "rerank_score": -2.6674609184265137,
+     "bm25_rank": 22,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 186
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:743-760",
+    "content": "# django/http/request.py:743-760  (django.http.request.validate_host)\ndef validate_host(host, allowed_hosts):\n    \"\"\"\n    Validate the given host for this site.\n\n    Check that the host looks valid and matches a host or host pattern in the\n    given list of ``allowed_hosts``. Any pattern beginning with a period\n    matches a domain and all its subdomains (e.g. ``.example.com`` matches\n    ``example.com`` and any subdomain), ``*`` matches anything, and anything\n    else must match exactly.\n\n    Note: This function assumes that the given host is lowercased and has\n    already had the port, if any, stripped off.\n\n    Return ``True`` for a valid host, ``False`` otherwise.\n    \"\"\"\n    return any(\n        pattern == \"*\" or is_same_domain(host, pattern) for pattern in allowed_hosts\n    )",
+    "token_count": 187,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.validate_host"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 41,
+     "rerank_score": -2.814892053604126,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 187
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:1-24",
+    "content": "# tests/utils_tests/test_http.py:1-24  (tests.utils_tests.test_http)\nimport platform\nimport unittest\nfrom datetime import datetime, timezone\nfrom unittest import mock\n\nfrom django.test import SimpleTestCase\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.http import (\n    _urlsplit,\n    base36_to_int,\n    content_disposition_header,\n    escape_leading_slashes,\n    http_date,\n    int_to_base36,\n    is_same_domain,\n    parse_etags,\n    parse_header_parameters,\n    parse_http_date,\n    quote_etag,\n    url_has_allowed_host_and_scheme,\n    urlencode,\n    urlsafe_base64_decode,\n    urlsafe_base64_encode,\n)",
+    "token_count": 150,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 44,
+     "rerank_score": -2.834393262863159,
+     "bm25_rank": 18,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 150
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:19-63",
+    "content": "# django/views/i18n.py:19-63  (django.views.i18n.set_language)\ndef set_language(request):\n    \"\"\"\n    Redirect to a given URL while setting the chosen language in the session\n    (if enabled) and in a cookie. The URL and the language code need to be\n    specified in the request parameters.\n\n    Since this view changes how the user will see the rest of the site, it must\n    only be accessed as a POST request. If called as a GET request, it will\n    redirect to the page in the request (the 'next' parameter) without changing\n    any state.\n    \"\"\"\n    next_url = request.POST.get(\"next\", request.GET.get(\"next\"))\n    if (\n        next_url or request.accepts(\"text/html\")\n    ) and not url_has_allowed_host_and_scheme(\n        url=next_url,\n        allowed_hosts={request.get_host()},\n        require_https=request.is_secure(),\n    ):\n        next_url = request.META.get(\"HTTP_REFERER\")\n        if not url_has_allowed_host_and_scheme(\n            url=next_url,\n            allowed_hosts={request.get_host()},\n            require_https=request.is_secure(),\n        ):\n            next_url = \"/\"\n    response = HttpResponseRedirect(next_url) if next_url else HttpResponse(status=204)\n    if request.method == \"POST\":\n        lang_code = request.POST.get(LANGUAGE_QUERY_PARAMETER)\n        if lang_code and check_for_language(lang_code):\n            if next_url:\n                next_trans = translate_url(next_url, lang_code)\n                if next_trans != next_url:\n                    response = HttpResponseRedirect(next_trans)\n            response.set_cookie(\n                settings.LANGUAGE_COOKIE_NAME,\n                lang_code,\n                max_age=settings.LANGUAGE_COOKIE_AGE,\n                path=settings.LANGUAGE_COOKIE_PATH,\n                domain=settings.LANGUAGE_COOKIE_DOMAIN,\n                secure=settings.LANGUAGE_COOKIE_SECURE,\n                httponly=settings.LANGUAGE_COOKIE_HTTPONLY,\n                samesite=settings.LANGUAGE_COOKIE_SAMESITE,\n            )\n    return response",
+    "token_count": 409,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.i18n.set_language"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 30,
+     "rerank_score": -2.9224493503570557,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 409
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:391-403",
+    "content": "# django/urls/resolvers.py:391-403  (django.urls.resolvers.URLPattern._check_pattern_name)\nclass URLPattern:\n    def _check_pattern_name(self):\n        \"\"\"\n        Check that the pattern name does not contain a colon.\n        \"\"\"\n        if self.pattern.name is not None and \":\" in self.pattern.name:\n            warning = Warning(\n                \"Your URL pattern {} has a name including a ':'. Remove the colon, to \"\n                \"avoid ambiguous namespace references.\".format(self.pattern.describe()),\n                id=\"urls.W003\",\n            )\n            return [warning]\n        else:\n            return []",
+    "token_count": 129,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLPattern._check_pattern_name"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 21,
+     "rerank_score": -3.022825241088867,
+     "bm25_rank": 42,
+     "dense_rank": 38,
+     "oversized_chunk": false,
+     "engine_token_count": 129
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/mixins.py:1-7",
+    "content": "# django/contrib/auth/mixins.py:1-7  (django.contrib.auth.mixins)\nfrom urllib.parse import urlparse\n\nfrom django.conf import settings\nfrom django.contrib.auth import REDIRECT_FIELD_NAME\nfrom django.contrib.auth.views import redirect_to_login\nfrom django.core.exceptions import ImproperlyConfigured, PermissionDenied\nfrom django.shortcuts import resolve_url",
+    "token_count": 73,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -3.252488136291504,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaulttags.py:1325-1391",
+    "content": "# django/template/defaulttags.py:1325-1391  (django.template.defaulttags.url)\n@register.tag\ndef url(parser, token):\n    r\"\"\"\n    Return an absolute URL matching the given view with its parameters.\n\n    This is a way to define links that aren't tied to a particular URL\n    configuration::\n\n        {% url \"url_name\" arg1 arg2 %}\n\n        or\n\n        {% url \"url_name\" name1=value1 name2=value2 %}\n\n    The first argument is a URL pattern name. Other arguments are\n    space-separated values that will be filled in place of positional and\n    keyword arguments in the URL. Don't mix positional and keyword arguments.\n    All arguments for the URL must be present.\n\n    For example, if you have a view ``app_name.views.client_details`` taking\n    the client's id and the corresponding line in a URLconf looks like this::\n\n        path('client/<int:id>/', views.client_details, name='client-detail-view')\n\n    and this app's URLconf is included into the project's URLconf under some\n    path::\n\n        path('clients/', include('app_name.urls'))\n\n    then in a template you can create a link for a certain client like this::\n\n        {% url \"client-detail-view\" client.id %}\n\n    The URL will look like ``/clients/client/123/``.\n\n    The first argument may also be the name of a template variable that will be\n    evaluated to obtain the view name or the URL name, e.g.::\n\n        {% with url_name=\"client-detail-view\" %}\n        {% url url_name client.id %}\n        {% endwith %}\n    \"\"\"\n    bits = token.split_contents()\n    if len(bits) < 2:\n        raise TemplateSyntaxError(\n            \"'%s' takes at least one argument, a URL pattern name.\" % bits[0]\n        )\n    viewname = parser.compile_filter(bits[1])\n    args = []\n    kwargs = {}\n    asvar = None\n    bits = bits[2:]\n    if len(bits) >= 2 and bits[-2] == \"as\":\n        asvar = bits[-1]\n        bits = bits[:-2]\n\n    for bit in bits:\n        match = kwarg_re.match(bit)\n        if not match:\n            raise TemplateSyntaxError(\"Malformed arguments to url tag\")\n        name, value = match.groups()\n        if name:\n            kwargs[name] = parser.compile_filter(value)\n        else:\n            args.append(parser.compile_filter(value))\n\n    return URLNode(viewname, args, kwargs, asvar)",
+    "token_count": 534,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.defaulttags.url"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 47,
+     "rerank_score": -3.2645254135131836,
+     "bm25_rank": 23,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 534
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/security.py:21-31",
+    "content": "# django/middleware/security.py:21-31  (django.middleware.security.SecurityMiddleware.process_request)\nclass SecurityMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        path = request.path.lstrip(\"/\")\n        if (\n            self.redirect\n            and not request.is_secure()\n            and not any(pattern.search(path) for pattern in self.redirect_exempt)\n        ):\n            host = self.redirect_host or request.get_host()\n            return HttpResponsePermanentRedirect(\n                \"https://%s%s\" % (host, request.get_full_path())\n            )",
+    "token_count": 111,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.security.SecurityMiddleware.process_request"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 37,
+     "rerank_score": -3.5954041481018066,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:202-241",
+    "content": "# django/http/request.py:202-241  (django.http.request.HttpRequest.build_absolute_uri)\nclass HttpRequest:\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)",
+    "token_count": 442,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.build_absolute_uri"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 36,
+     "rerank_score": -3.698105812072754,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 442
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/contenttypes_tests/test_views.py:79-93",
+    "content": "# tests/contenttypes_tests/test_views.py:79-93  (tests.contenttypes_tests.test_views.ContentTypesViewsTests.test_shortcut_with_absolute_url_including_scheme)\nclass ContentTypesViewsTests(TestCase):\n    def test_shortcut_with_absolute_url_including_scheme(self):\n        \"\"\"\n        Can view a shortcut when object's get_absolute_url returns a full URL\n        the tested URLs are: \"http://...\", \"https://...\" and \"//...\"\n        \"\"\"\n        for obj in SchemeIncludedURL.objects.all():\n            with self.subTest(obj=obj):\n                short_url = \"/shortcut/%s/%s/\" % (\n                    ContentType.objects.get_for_model(SchemeIncludedURL).id,\n                    obj.pk,\n                )\n                response = self.client.get(short_url)\n                self.assertRedirects(\n                    response, obj.get_absolute_url(), fetch_redirect_response=False\n                )",
+    "token_count": 173,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.contenttypes_tests.test_views.ContentTypesViewsTests.test_shortcut_with_absolute_url_including_scheme"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 48,
+     "rerank_score": -3.7719473838806152,
+     "bm25_rank": 24,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 173
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:1-10",
+    "content": "# django/middleware/common.py:1-10  (django.middleware.common)\nimport re\nfrom urllib.parse import urlparse\n\nfrom django.conf import settings\nfrom django.core.exceptions import PermissionDenied\nfrom django.core.mail import mail_managers\nfrom django.http import HttpResponsePermanentRedirect\nfrom django.urls import is_valid_path\nfrom django.utils.deprecation import MiddlewareMixin\nfrom django.utils.http import escape_leading_slashes",
+    "token_count": 84,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 50,
+     "rerank_score": -3.8269639015197754,
+     "bm25_rank": null,
+     "dense_rank": 25,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/decorators.py:1-7",
+    "content": "# django/contrib/auth/decorators.py:1-7  (django.contrib.auth.decorators)\nfrom functools import wraps\nfrom urllib.parse import urlparse\n\nfrom django.conf import settings\nfrom django.contrib.auth import REDIRECT_FIELD_NAME\nfrom django.core.exceptions import PermissionDenied\nfrom django.shortcuts import resolve_url",
+    "token_count": 61,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 27,
+     "rerank_score": -3.8995866775512695,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:14-32",
+    "content": "# django/middleware/common.py:14-32  (django.middleware.common.CommonMiddleware)\nclass CommonMiddleware(MiddlewareMixin):\n    \"\"\"\n    \"Common\" middleware for taking care of some basic operations:\n\n        - Forbid access to User-Agents in settings.DISALLOWED_USER_AGENTS\n\n        - URL rewriting: Based on the APPEND_SLASH and PREPEND_WWW settings,\n          append missing slashes and/or prepends missing \"www.\"s.\n\n            - If APPEND_SLASH is set and the initial URL doesn't end with a\n              slash, and it is not found in urlpatterns, form a new URL by\n              appending a slash at the end. If this new URL is found in\n              urlpatterns, return an HTTP redirect to this new URL; otherwise\n              process the initial URL as usual.\n\n          This behavior can be customized by subclassing CommonMiddleware and\n          overriding the response_redirect_class attribute.\n    \"\"\"\n\n    response_redirect_class = HttpResponsePermanentRedirect",
+    "token_count": 199,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 19,
+     "rerank_score": -3.964813232421875,
+     "bm25_rank": 29,
+     "dense_rank": 46,
+     "oversized_chunk": false,
+     "engine_token_count": 199
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client_regress/tests.py:568-587",
+    "content": "# tests/test_client_regress/tests.py:568-587  (tests.test_client_regress.tests.AssertRedirectsTests.test_redirect_scheme)\nclass AssertRedirectsTests(SimpleTestCase):\n    def test_redirect_scheme(self):\n        \"\"\"\n        An assertion is raised if the response doesn't have the scheme\n        specified in expected_url.\n        \"\"\"\n\n        # For all possible True/False combinations of follow and secure\n        for follow, secure in itertools.product([True, False], repeat=2):\n            # always redirects to https\n            response = self.client.get(\n                \"/https_redirect_view/\", follow=follow, secure=secure\n            )\n            # the goal scheme is https\n            self.assertRedirects(\n                response, \"https://testserver/secure_view/\", status_code=302\n            )\n            with self.assertRaises(AssertionError):\n                self.assertRedirects(\n                    response, \"http://testserver/secure_view/\", status_code=302\n                )",
+    "token_count": 205,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client_regress.tests.AssertRedirectsTests.test_redirect_scheme"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": -4.114051818847656,
+     "bm25_rank": 44,
+     "dense_rank": 83,
+     "oversized_chunk": false,
+     "engine_token_count": 205
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/exceptions.py:50-52",
+    "content": "# django/core/exceptions.py:50-52  (django.core.exceptions.DisallowedHost)\nclass DisallowedHost(SuspiciousOperation):\n    \"\"\"HTTP_HOST header contains invalid value\"\"\"\n\n    pass",
+    "token_count": 41,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.exceptions.DisallowedHost"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 40,
+     "rerank_score": -4.271188735961914,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:145-151",
+    "content": "# django/middleware/common.py:145-151  (django.middleware.common.BrokenLinkEmailsMiddleware.is_internal_request)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def is_internal_request(self, domain, referer):\n        \"\"\"\n        Return True if the referring URL is the same domain as the current\n        request.\n        \"\"\"\n        # Different subdomains are treated as different domains.\n        return bool(re.match(\"^https?://%s/\" % re.escape(domain), referer))",
+    "token_count": 103,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.BrokenLinkEmailsMiddleware.is_internal_request"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 43,
+     "rerank_score": -4.913761615753174,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 103
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:153-178",
+    "content": "# django/middleware/common.py:153-178  (django.middleware.common.BrokenLinkEmailsMiddleware.is_ignorable_request)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def is_ignorable_request(self, request, uri, domain, referer):\n        \"\"\"\n        Return True if the given request *shouldn't* notify the site managers\n        according to project settings or in situations outlined by the inline\n        comments.\n        \"\"\"\n        # The referer is empty.\n        if not referer:\n            return True\n\n        # APPEND_SLASH is enabled and the referer is equal to the current URL\n        # without a trailing slash indicating an internal redirect.\n        if settings.APPEND_SLASH and uri.endswith(\"/\") and referer == uri[:-1]:\n            return True\n\n        # A '?' in referer is identified as a search engine source.\n        if not self.is_internal_request(domain, referer) and \"?\" in referer:\n            return True\n\n        # The referer is equal to the current URL, ignoring the scheme (assumed\n        # to be a poorly implemented bot).\n        parsed_referer = urlparse(referer)\n        if parsed_referer.netloc in [\"\", domain] and parsed_referer.path == uri:\n            return True\n\n        return any(pattern.search(uri) for pattern in settings.IGNORABLE_404_URLS)",
+    "token_count": 288,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.BrokenLinkEmailsMiddleware.is_ignorable_request"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 23,
+     "rerank_score": -5.031620979309082,
+     "bm25_rank": 93,
+     "dense_rank": 39,
+     "oversized_chunk": false,
+     "engine_token_count": 288
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/locale.py:1-7",
+    "content": "# django/middleware/locale.py:1-7  (django.middleware.locale)\nfrom django.conf import settings\nfrom django.conf.urls.i18n import is_language_prefix_patterns_used\nfrom django.http import HttpResponseRedirect\nfrom django.urls import get_script_prefix, is_valid_path\nfrom django.utils import translation\nfrom django.utils.cache import patch_vary_headers\nfrom django.utils.deprecation import MiddlewareMixin",
+    "token_count": 79,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -5.112005710601807,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:1-16",
+    "content": "# django/views/i18n.py:1-16  (django.views.i18n)\nimport json\nimport os\nimport re\n\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.http import HttpResponse, HttpResponseRedirect, JsonResponse\nfrom django.template import Context, Engine\nfrom django.urls import translate_url\nfrom django.utils.formats import get_format\nfrom django.utils.http import url_has_allowed_host_and_scheme\nfrom django.utils.translation import check_for_language, get_language\nfrom django.utils.translation.trans_real import DjangoTranslation\nfrom django.views.generic import View\n\nLANGUAGE_QUERY_PARAMETER = \"language\"",
+    "token_count": 125,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 39,
+     "rerank_score": -5.181615829467773,
+     "bm25_rank": 14,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 125
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 11027,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are debugging why a redirect URL is rejected as unsafe in\ndjango/utils/http.py. Starting from\n`url_has_allowed_host_and_scheme`, trace the real causal pipeline\nthat validates the URL, in the order each stage is actually reached,\nup to and including the call that parses the URL into its components.\nAssume the URL does not begin with three slashes (`///`) - the one\nguard clause before parsing is reached.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.utils.http.url_has_allowed_host_and_scheme\", \"django.utils.http._url_has_allowed_host_and_scheme\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "tests/validators/tests.py:43-609#part2of2",
+    "django/http/request.py:53-428"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1134.26635
+    ],
+    "L_embed_query": [
+     286.489828
+    ],
+    "L_dense": [
+     50.771373
+    ],
+    "L_rrf": [
+     0.180066
+    ],
+    "L_rerank": [
+     25184.477997
+    ],
+    "L_retrieve": [
+     26736.377968
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 11027,
+   "prompt_tokens": 11350,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 11363,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme)\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    \"\"\"\n    Return ``True`` if the url uses an allowed host and a safe scheme.\n\n    Always return ``False`` on an empty url.\n\n    If ``require_https`` is ``True``, only 'https' will be considered a valid\n    scheme, as opposed to 'http' and 'https' with the default, ``False``.\n\n    Note: \"True\" doesn't entail that a URL is \"safe\". It may still be e.g.\n    quoted incorrectly. Ensure to also use django.utils.encoding.iri_to_uri()\n    on the path component of untrusted URLs.\n    \"\"\"\n    if url is not None:\n        url = url.strip()\n    if not url:\n        return False\n    if allowed_hosts is None:\n        allowed_hosts = set()\n    elif isinstance(allowed_hosts, str):\n        allowed_hosts = {allowed_hosts}\n    # Chrome treats \\ completely as / in paths but it could be part of some\n    # basic auth credentials so we need to check both URLs.\n    return _url_has_allowed_host_and_scheme(\n        url, allowed_hosts, require_https=require_https\n    ) and _url_has_allowed_host_and_scheme(\n        url.replace(\"\\\\\", \"/\"), allowed_hosts, require_https=require_https\n    )\n\n# tests/logging_tests/urls.py:1-15  (tests.logging_tests.urls)\nfrom django.urls import path\n\nfrom . import views\n\nurlpatterns = [\n    path(\"innocent/\", views.innocent),\n    path(\"redirect/\", views.redirect),\n    path(\"suspicious/\", views.suspicious),\n    path(\"suspicious_spec/\", views.suspicious_spec),\n    path(\"internal_server_error/\", views.internal_server_error),\n    path(\"uncaught_exception/\", views.uncaught_exception),\n    path(\"permission_denied/\", views.permission_denied),\n    path(\"multi_part_parser_error/\", views.multi_part_parser_error),\n    path(\"does_not_exist_raised/\", views.does_not_exist_raised),\n]\n\n# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme)\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    if url.startswith(\"///\"):\n        return False\n    try:\n        url_info = _urlparse(url)\n    except ValueError:  # e.g. invalid IPv6 addresses\n        return False\n    # Forbid URLs like http:///example.com - with a scheme, but without a hostname.\n    # In that URL, example.com is not the hostname but, a path component. However,\n    # Chrome will still consider example.com to be the hostname, so we must not\n    # allow this syntax.\n    if not url_info.netloc and url_info.scheme:\n        return False\n    # Forbid URLs that start with control characters. Some browsers (like\n    # Chrome) ignore quite a few control characters at the start of a\n    # URL and might consider the URL as scheme relative.\n    if unicodedata.category(url[0])[0] == \"C\":\n        return False\n    scheme = url_info.scheme\n    # Consider URLs without a scheme (e.g. //example.com/p) to be http.\n    if not url_info.scheme and url_info.netloc:\n        scheme = \"http\"\n    valid_schemes = [\"https\"] if require_https else [\"http\", \"https\"]\n    return (not url_info.netloc or url_info.netloc in allowed_hosts) and (\n        not scheme or scheme in valid_schemes\n    )\n\n# tests/csrf_tests/tests.py:694-745  (tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_https_malformed_referer)\nclass CsrfViewMiddlewareTestMixin(CsrfFunctionTestMixin):\n    @override_settings(DEBUG=True)\n    def test_https_malformed_referer(self):\n        \"\"\"\n        A POST HTTPS request with a bad referer is rejected.\n        \"\"\"\n        malformed_referer_msg = \"Referer checking failed - Referer is malformed.\"\n        req = self._get_POST_request_with_token()\n        req._is_secure_override = True\n        req.META[\"HTTP_REFERER\"] = \"http://http://www.example.com/\"\n        mw = CsrfViewMiddleware(post_form_view)\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(\n            response,\n            \"Referer checking failed - Referer is insecure while host is secure.\",\n            status_code=403,\n        )\n        # Empty\n        req.META[\"HTTP_REFERER\"] = \"\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n        # Non-ASCII\n        req.META[\"HTTP_REFERER\"] = \"\u00d8B\u00f6I\u00df\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n        # missing scheme\n        # >>> urlparse('//example.com/')\n        # ParseResult(\n        #   scheme='', netloc='example.com', path='/', params='', query='', fragment='',\n        # )\n        req.META[\"HTTP_REFERER\"] = \"//example.com/\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n        # missing netloc\n        # >>> urlparse('https://')\n        # ParseResult(\n        #   scheme='https', netloc='', path='', params='', query='', fragment='',\n        # )\n        req.META[\"HTTP_REFERER\"] = \"https://\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n        # Invalid URL\n        # >>> urlparse('https://[')\n        # ValueError: Invalid IPv6 URL\n        req.META[\"HTTP_REFERER\"] = \"https://[\"\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, post_form_view, (), {})\n        self.assertContains(response, malformed_referer_msg, status_code=403)\n\n# django/contrib/auth/views.py:45-55  (django.contrib.auth.views.RedirectURLMixin.get_redirect_url)\nclass RedirectURLMixin:\n    def get_redirect_url(self):\n        \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n        redirect_to = self.request.POST.get(\n            self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n        )\n        url_is_safe = url_has_allowed_host_and_scheme(\n            url=redirect_to,\n            allowed_hosts=self.get_success_url_allowed_hosts(),\n            require_https=self.request.is_secure(),\n        )\n        return redirect_to if url_is_safe else \"\"\n\n# tests/utils_tests/test_http.py:161-202  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_bad_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_bad_urls(self):\n        bad_urls = (\n            \"http://example.com\",\n            \"http:///example.com\",\n            \"https://example.com\",\n            \"ftp://example.com\",\n            r\"\\\\example.com\",\n            r\"\\\\\\example.com\",\n            r\"/\\\\/example.com\",\n            r\"\\\\\\example.com\",\n            r\"\\\\example.com\",\n            r\"\\\\//example.com\",\n            r\"/\\/example.com\",\n            r\"\\/example.com\",\n            r\"/\\example.com\",\n            \"http:///example.com\",\n            r\"http:/\\//example.com\",\n            r\"http:\\/example.com\",\n            r\"http:/\\example.com\",\n            'javascript:alert(\"XSS\")',\n            \"\\njavascript:alert(x)\",\n            \"java\\nscript:alert(x)\",\n            \"\\x08//example.com\",\n            r\"http://otherserver\\@example.com\",\n            r\"http:\\\\testserver\\@example.com\",\n            r\"http://testserver\\me:pass@example.com\",\n            r\"http://testserver\\@example.com\",\n            r\"http:\\\\testserver\\confirm\\me@example.com\",\n            \"http:999999999\",\n            \"ftp:9999999999\",\n            \"\\n\",\n            \"http://[2001:cdba:0000:0000:0000:0000:3257:9652/\",\n            \"http://2001:cdba:0000:0000:0000:0000:3257:9652]/\",\n        )\n        for bad_url in bad_urls:\n            with self.subTest(url=bad_url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        bad_url, allowed_hosts={\"testserver\", \"testserver2\"}\n                    ),\n                    False,\n                )\n\n# tests/utils_tests/test_http.py:251-263  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_allowed_hosts_str(self):\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"http://good.com/good\", allowed_hosts=\"good.com\"\n            ),\n            True,\n        )\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"http://good.co/evil\", allowed_hosts=\"good.com\"\n            ),\n            False,\n        )\n\n# django/utils/http.py:332-365  (django.utils.http._urlsplit)\ndef _urlsplit(url, scheme=\"\", allow_fragments=True):\n    \"\"\"Parse a URL into 5 components:\n    <scheme>://<netloc>/<path>?<query>#<fragment>\n    Return a 5-tuple: (scheme, netloc, path, query, fragment).\n    Note that we don't break the components up in smaller bits\n    (e.g. netloc is a single string) and we don't expand % escapes.\"\"\"\n    url, scheme, _coerce_result = _coerce_args(url, scheme)\n    url = _remove_unsafe_bytes_from_url(url)\n    scheme = _remove_unsafe_bytes_from_url(scheme)\n\n    netloc = query = fragment = \"\"\n    i = url.find(\":\")\n    if i > 0:\n        for c in url[:i]:\n            if c not in scheme_chars:\n                break\n        else:\n            scheme, url = url[:i].lower(), url[i + 1 :]\n\n    if url[:2] == \"//\":\n        netloc, url = _splitnetloc(url, 2)\n        if (\"[\" in netloc and \"]\" not in netloc) or (\n            \"]\" in netloc and \"[\" not in netloc\n        ):\n            raise ValueError(\"Invalid IPv6 URL\")\n        if \"[\" in netloc and \"]\" in netloc:\n            bracketed_host = netloc.partition(\"[\")[2].partition(\"]\")[0]\n            _check_bracketed_host(bracketed_host)\n    if allow_fragments and \"#\" in url:\n        url, fragment = url.split(\"#\", 1)\n    if \"?\" in url:\n        url, query = url.split(\"?\", 1)\n    v = SplitResult(scheme, netloc, url, query, fragment)\n    return _coerce_result(v)\n\n# tests/utils_tests/test_http.py:226-233  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_basic_auth(self):\n        # Valid basic auth credentials are allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                r\"http://user:pass@testserver/\", allowed_hosts={\"user:pass@testserver\"}\n            ),\n            True,\n        )\n\n# django/urls/resolvers.py:160-182  (django.urls.resolvers.CheckURLMixin._check_pattern_startswith_slash)\nclass CheckURLMixin:\n    def _check_pattern_startswith_slash(self):\n        \"\"\"\n        Check that the pattern does not begin with a forward slash.\n        \"\"\"\n        regex_pattern = self.regex.pattern\n        if not settings.APPEND_SLASH:\n            # Skip check as it can be useful to start a URL pattern with a slash\n            # when APPEND_SLASH=False.\n            return []\n        if regex_pattern.startswith((\"/\", \"^/\", \"^\\\\/\")) and not regex_pattern.endswith(\n            \"/\"\n        ):\n            warning = Warning(\n                \"Your URL pattern {} has a route beginning with a '/'. Remove this \"\n                \"slash as it is unnecessary. If this pattern is targeted in an \"\n                \"include(), ensure the include() pattern has a trailing '/'.\".format(\n                    self.describe()\n                ),\n                id=\"urls.W002\",\n            )\n            return [warning]\n        else:\n            return []\n\n# django/core/validators.py:114-160  (django.core.validators.URLValidator.__call__)\nclass URLValidator(RegexValidator):\n    def __call__(self, value):\n        if not isinstance(value, str) or len(value) > self.max_length:\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n        if self.unsafe_chars.intersection(value):\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n        # Check if the scheme is valid.\n        scheme = value.split(\"://\")[0].lower()\n        if scheme not in self.schemes:\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n\n        # Then check full URL\n        try:\n            splitted_url = urlsplit(value)\n        except ValueError:\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n        try:\n            super().__call__(value)\n        except ValidationError as e:\n            # Trivial case failed. Try for possible IDN domain\n            if value:\n                scheme, netloc, path, query, fragment = splitted_url\n                try:\n                    netloc = punycode(netloc)  # IDN -> ACE\n                except UnicodeError:  # invalid domain part\n                    raise e\n                url = urlunsplit((scheme, netloc, path, query, fragment))\n                super().__call__(url)\n            else:\n                raise\n        else:\n            # Now verify IPv6 in the netloc part\n            host_match = re.search(r\"^\\[(.+)\\](?::[0-9]{1,5})?$\", splitted_url.netloc)\n            if host_match:\n                potential_ip = host_match[1]\n                try:\n                    validate_ipv6_address(potential_ip)\n                except ValidationError:\n                    raise ValidationError(\n                        self.message, code=self.code, params={\"value\": value}\n                    )\n\n        # The maximum length of a full host name is 253 characters per RFC 1034\n        # section 3.1. It's defined to be 255 bytes or less, but this includes\n        # one byte for the length of the name and one byte for the trailing dot\n        # that's used to indicate absolute names in DNS.\n        if splitted_url.hostname is None or len(splitted_url.hostname) > 253:\n            raise ValidationError(self.message, code=self.code, params={\"value\": value})\n\n# django/utils/http.py:291-305  (django.utils.http._urlparse)\ndef _urlparse(url, scheme=\"\", allow_fragments=True):\n    \"\"\"Parse a URL into 6 components:\n    <scheme>://<netloc>/<path>;<params>?<query>#<fragment>\n    Return a 6-tuple: (scheme, netloc, path, params, query, fragment).\n    Note that we don't break the components up in smaller bits\n    (e.g. netloc is a single string) and we don't expand % escapes.\"\"\"\n    url, scheme, _coerce_result = _coerce_args(url, scheme)\n    splitresult = _urlsplit(url, scheme, allow_fragments)\n    scheme, netloc, url, query, fragment = splitresult\n    if scheme in uses_params and \";\" in url:\n        url, params = _splitparams(url)\n    else:\n        params = \"\"\n    result = ParseResult(scheme, netloc, url, params, query, fragment)\n    return _coerce_result(result)\n\n# tests/utils_tests/test_http.py:265-278  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_secure_param_https_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_secure_param_https_urls(self):\n        secure_urls = (\n            \"https://example.com/p\",\n            \"HTTPS://example.com/p\",\n            \"/view/?param=http://example.com\",\n        )\n        for url in secure_urls:\n            with self.subTest(url=url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        url, allowed_hosts={\"example.com\"}, require_https=True\n                    ),\n                    True,\n                )\n\n# django/utils/http.py:398-406  (django.utils.http.escape_leading_slashes)\ndef escape_leading_slashes(url):\n    \"\"\"\n    If redirecting to an absolute path (two leading slashes), a slash must be\n    escaped to prevent browsers from handling the path as schemaless and\n    redirecting to another host.\n    \"\"\"\n    if url.startswith(\"//\"):\n        url = \"/%2F{}\".format(url[2:])\n    return url\n\n# tests/utils_tests/test_http.py:280-293  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_secure_param_non_https_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_secure_param_non_https_urls(self):\n        insecure_urls = (\n            \"http://example.com/p\",\n            \"ftp://example.com/p\",\n            \"//example.com/p\",\n        )\n        for url in insecure_urls:\n            with self.subTest(url=url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        url, allowed_hosts={\"example.com\"}, require_https=True\n                    ),\n                    False,\n                )\n\n# django/contrib/auth/decorators.py:10-40  (django.contrib.auth.decorators.user_passes_test)\ndef user_passes_test(\n    test_func, login_url=None, redirect_field_name=REDIRECT_FIELD_NAME\n):\n    \"\"\"\n    Decorator for views that checks that the user passes the given test,\n    redirecting to the log-in page if necessary. The test should be a callable\n    that takes the user object and returns True if the user passes.\n    \"\"\"\n\n    def decorator(view_func):\n        @wraps(view_func)\n        def _wrapper_view(request, *args, **kwargs):\n            if test_func(request.user):\n                return view_func(request, *args, **kwargs)\n            path = request.build_absolute_uri()\n            resolved_login_url = resolve_url(login_url or settings.LOGIN_URL)\n            # If the login url is the same scheme and net location then just\n            # use the path as the \"next\" url.\n            login_scheme, login_netloc = urlparse(resolved_login_url)[:2]\n            current_scheme, current_netloc = urlparse(path)[:2]\n            if (not login_scheme or login_scheme == current_scheme) and (\n                not login_netloc or login_netloc == current_netloc\n            ):\n                path = request.get_full_path()\n            from django.contrib.auth.views import redirect_to_login\n\n            return redirect_to_login(path, resolved_login_url, redirect_field_name)\n\n        return _wrapper_view\n\n    return decorator\n\n# tests/auth_tests/test_views.py:1158-1170  (tests.auth_tests.test_views.LoginSuccessURLAllowedHostsTest.test_success_url_allowed_hosts_unsafe_host)\nclass LoginSuccessURLAllowedHostsTest(AuthViewsTestCase):\n    def test_success_url_allowed_hosts_unsafe_host(self):\n        response = self.client.post(\n            \"/login/allowed_hosts/\",\n            {\n                \"username\": \"testclient\",\n                \"password\": \"password\",\n                \"next\": \"https://evil/home\",\n            },\n        )\n        self.assertIn(SESSION_KEY, self.client.session)\n        self.assertRedirects(\n            response, \"/accounts/profile/\", fetch_redirect_response=False\n        )\n\n# tests/utils_tests/test_http.py:204-224  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_good_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_good_urls(self):\n        good_urls = (\n            \"/view/?param=http://example.com\",\n            \"/view/?param=https://example.com\",\n            \"/view?param=ftp://example.com\",\n            \"view/?param=//example.com\",\n            \"https://testserver/\",\n            \"HTTPS://testserver/\",\n            \"//testserver/\",\n            \"http://testserver/confirm?email=me@example.com\",\n            \"/url%20with%20spaces/\",\n            \"path/http:2222222222\",\n        )\n        for good_url in good_urls:\n            with self.subTest(url=good_url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        good_url, allowed_hosts={\"otherserver\", \"testserver\"}\n                    ),\n                    True,\n                )\n\n# tests/check_framework/test_4_0_compatibility.py:8-21  (tests.check_framework.test_4_0_compatibility.CheckCSRFTrustedOrigins.test_invalid_url)\nclass CheckCSRFTrustedOrigins(SimpleTestCase):\n    @override_settings(CSRF_TRUSTED_ORIGINS=[\"example.com\"])\n    def test_invalid_url(self):\n        self.assertEqual(\n            check_csrf_trusted_origins(None),\n            [\n                Error(\n                    \"As of Django 4.0, the values in the CSRF_TRUSTED_ORIGINS \"\n                    \"setting must start with a scheme (usually http:// or \"\n                    \"https://) but found example.com. See the release notes for \"\n                    \"details.\",\n                    id=\"4_0.E001\",\n                )\n            ],\n        )\n\n# tests/forms_tests/field_tests/test_urlfield.py:30-86#part1of2  (tests.forms_tests.field_tests.test_urlfield.URLFieldTest.test_urlfield_clean)\nclass URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):\n    def test_urlfield_clean(self):\n        f = URLField(required=False)\n        tests = [\n            (\"http://localhost\", \"http://localhost\"),\n            (\"http://example.com\", \"http://example.com\"),\n            (\"http://example.com/test\", \"http://example.com/test\"),\n            (\"http://example.com.\", \"http://example.com.\"),\n            (\"http://www.example.com\", \"http://www.example.com\"),\n            (\"http://www.example.com:8000/test\", \"http://www.example.com:8000/test\"),\n            (\n                \"http://example.com?some_param=some_value\",\n                \"http://example.com?some_param=some_value\",\n            ),\n            (\"valid-with-hyphens.com\", \"http://valid-with-hyphens.com\"),\n            (\"subdomain.domain.com\", \"http://subdomain.domain.com\"),\n            (\"http://200.8.9.10\", \"http://200.8.9.10\"),\n            (\"http://200.8.9.10:8000/test\", \"http://200.8.9.10:8000/test\"),\n            (\"http://valid-----hyphens.com\", \"http://valid-----hyphens.com\"),\n            (\n                \"http://some.idn.xyz\u00e4\u00f6\u00fc\u00dfabc.domain.com:123/blah\",\n                \"http://some.idn.xyz\\xe4\\xf6\\xfc\\xdfabc.domain.com:123/blah\",\n            ),\n            (\n                \"www.example.com/s/http://code.djangoproject.com/ticket/13804\",\n                \"http://www.example.com/s/http://code.djangoproject.com/ticket/13804\",\n            ),\n            # Normalization.\n            (\"http://example.com/     \", \"http://example.com/\"),\n            # Valid IDN.\n            (\"http://\u05e2\u05d1\u05e8\u05d9\u05ea.idn.icann.org/\", \"http://\u05e2\u05d1\u05e8\u05d9\u05ea.idn.icann.org/\"),\n            (\"http://s\u00e3opaulo.com/\", \"http://s\u00e3opaulo.com/\"),\n            (\"http://s\u00e3opaulo.com.br/\", \"http://s\u00e3opaulo.com.br/\"),\n            (\"http://\u043f\u0440\u0438\u043c\u0435\u0440.\u0438\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u0435/\", \"http://\u043f\u0440\u0438\u043c\u0435\u0440.\u0438\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u0435/\"),\n            (\"http://\u0645\u062b\u0627\u0644.\u0625\u062e\u062a\u0628\u0627\u0631/\", \"http://\u0645\u062b\u0627\u0644.\u0625\u062e\u062a\u0628\u0627\u0631/\"),\n            (\"http://\u4f8b\u5b50.\u6d4b\u8bd5/\", \"http://\u4f8b\u5b50.\u6d4b\u8bd5/\"),\n            (\"http://\u4f8b\u5b50.\u6e2c\u8a66/\", \"http://\u4f8b\u5b50.\u6e2c\u8a66/\"),\n            (\n                \"http://\u0909\u0926\u093e\u0939\u0930\u0923.\u092a\u0930\u0940\u0915\u094d\u0937\u093e/\",\n                \"http://\u0909\u0926\u093e\u0939\u0930\u0923.\u092a\u0930\u0940\u0915\u094d\u0937\u093e/\",\n            ),\n            (\"http://\u4f8b\u3048.\u30c6\u30b9\u30c8/\", \"http://\u4f8b\u3048.\u30c6\u30b9\u30c8/\"),\n            (\"http://\u0645\u062b\u0627\u0644.\u0622\u0632\u0645\u0627\u06cc\u0634\u06cc/\", \"http://\u0645\u062b\u0627\u0644.\u0622\u0632\u0645\u0627\u06cc\u0634\u06cc/\"),\n            (\"http://\uc2e4\ub840.\ud14c\uc2a4\ud2b8/\", \"http://\uc2e4\ub840.\ud14c\uc2a4\ud2b8/\"),\n            (\"http://\u0627\u0644\u0639\u0631\u0628\u064a\u0629.idn.icann.org/\", \"http://\u0627\u0644\u0639\u0631\u0628\u064a\u0629.idn.icann.org/\"),\n            # IPv6.\n            (\"http://[12:34::3a53]/\", \"http://[12:34::3a53]/\"),\n            (\"http://[a34:9238::]:8080/\", \"http://[a34:9238::]:8080/\"),\n            # IPv6 without scheme.\n            (\"[12:34::3a53]/\", \"http://[12:34::3a53]/\"),\n            # IDN domain without scheme but with port.\n            (\"\u00f1and\u00fa.es:8080/\", \"http://\u00f1and\u00fa.es:8080/\"),\n            # Scheme-relative.\n            (\"//example.com\", \"http://example.com\"),\n            (\"//example.com/path\", \"http://example.com/path\"),\n            # Whitespace stripped.\n            (\"\\t\\n//example.com  \\n\\t\\n\", \"http://example.com\"),\n            (\"\\t\\nhttp://example.com  \\n\\t\\n\", \"http://example.com\"),\n        ]\n\n# tests/httpwrappers/tests.py:502-513  (tests.httpwrappers.tests.HttpResponseTests.test_unsafe_redirect)\nclass HttpResponseTests(SimpleTestCase):\n    def test_unsafe_redirect(self):\n        bad_urls = [\n            'data:text/html,<script>window.alert(\"xss\")</script>',\n            \"mailto:test@example.com\",\n            \"file:///etc/passwd\",\n            \"\u00e9\" * (MAX_URL_REDIRECT_LENGTH + 1),\n        ]\n        for url in bad_urls:\n            with self.assertRaises(DisallowedRedirect):\n                HttpResponseRedirect(url)\n            with self.assertRaises(DisallowedRedirect):\n                HttpResponsePermanentRedirect(url)\n\n# django/contrib/auth/views.py:57-58  (django.contrib.auth.views.RedirectURLMixin.get_success_url_allowed_hosts)\nclass RedirectURLMixin:\n    def get_success_url_allowed_hosts(self):\n        return {self.request.get_host(), *self.success_url_allowed_hosts}\n\n# tests/utils_tests/test_http.py:316-333  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_splitting_bracketed_hosts)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_splitting_bracketed_hosts(self):\n        # Port of urllib.parse.urlsplit() tests from Python.\n        p1 = _urlsplit(\"scheme://user@[v6a.ip]/path?query\")\n        self.assertEqual(p1.hostname, \"v6a.ip\")\n        self.assertEqual(p1.username, \"user\")\n        self.assertEqual(p1.path, \"/path\")\n        # Removed the '%test' suffix from ported tests as %scope_id suffixes were\n        # added in Python 3.9: https://docs.python.org/3/whatsnew/3.9.html#ipaddress\n        p2 = _urlsplit(\"scheme://user@[0439:23af:2309::fae7]/path?query\")\n        self.assertEqual(p2.hostname, \"0439:23af:2309::fae7\")\n        self.assertEqual(p2.username, \"user\")\n        self.assertEqual(p2.path, \"/path\")\n        p3 = _urlsplit(\n            \"scheme://user@[0439:23af:2309::fae7:1234:192.0.2.146]/path?query\"\n        )\n        self.assertEqual(p3.hostname, \"0439:23af:2309::fae7:1234:192.0.2.146\")\n        self.assertEqual(p3.username, \"user\")\n        self.assertEqual(p3.path, \"/path\")\n\n# tests/utils_tests/test_http.py:296-313  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_invalid_bracketed_hosts)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_invalid_bracketed_hosts(self):\n        # Port of urllib.parse.urlsplit() tests from Python.\n        tests = [\n            \"Scheme://user@[192.0.2.146]/Path?Query\",\n            \"Scheme://user@[important.com:8000]/Path?Query\",\n            \"Scheme://user@[v123r.IP]/Path?Query\",\n            \"Scheme://user@[v12ae]/Path?Query\",\n            \"Scheme://user@[v.IP]/Path?Query\",\n            \"Scheme://user@[v123.]/Path?Query\",\n            \"Scheme://user@[v]/Path?Query\",\n            \"Scheme://user@[0439:23af::2309::fae7:1234]/Path?Query\",\n            \"Scheme://user@[0439:23af:2309::fae7:1234:2342:438e:192.0.2.146]/\"\n            \"Path?Query\",\n            \"Scheme://user@]v6a.ip[/Path\",\n        ]\n        for invalid_url in tests:\n            with self.subTest(invalid_url=invalid_url):\n                self.assertRaises(ValueError, _urlsplit, invalid_url)\n\n# tests/utils_tests/test_http.py:235-249  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_no_allowed_hosts(self):\n        # A path without host is allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"/confirm/me@example.com\", allowed_hosts=None\n            ),\n            True,\n        )\n        # Basic auth without host is not allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                r\"http://testserver\\@example.com\", allowed_hosts=None\n            ),\n            False,\n        )\n\n# django/core/exceptions.py:56-58  (django.core.exceptions.DisallowedRedirect)\nclass DisallowedRedirect(SuspiciousOperation):\n    \"\"\"Redirect to scheme not in allowed list\"\"\"\n\n    pass\n\n# django/urls/resolvers.py:1-30  (django.urls.resolvers)\n\"\"\"\nThis module converts requested URLs to callback view functions.\n\nURLResolver is the main class here. Its resolve() method takes a URL (as\na string) and returns a ResolverMatch object which provides access to all\nattributes of the resolved URL match.\n\"\"\"\nimport functools\nimport inspect\nimport re\nimport string\nfrom importlib import import_module\nfrom pickle import PicklingError\nfrom urllib.parse import quote\n\nfrom asgiref.local import Local\n\nfrom django.conf import settings\nfrom django.core.checks import Error, Warning\nfrom django.core.checks.urls import check_resolver\nfrom django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.functional import cached_property\nfrom django.utils.http import RFC3986_SUBDELIMS, escape_leading_slashes\nfrom django.utils.regex_helper import _lazy_re_compile, normalize\nfrom django.utils.translation import get_language\n\nfrom .converters import get_converter\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .utils import get_callable\n\n# django/middleware/common.py:34-60  (django.middleware.common.CommonMiddleware.process_request)\nclass CommonMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        \"\"\"\n        Check for denied User-Agents and rewrite the URL based on\n        settings.APPEND_SLASH and settings.PREPEND_WWW\n        \"\"\"\n\n        # Check for denied User-Agents\n        user_agent = request.META.get(\"HTTP_USER_AGENT\")\n        if user_agent is not None:\n            for user_agent_regex in settings.DISALLOWED_USER_AGENTS:\n                if user_agent_regex.search(user_agent):\n                    raise PermissionDenied(\"Forbidden user agent\")\n\n        # Check for a redirect based on settings.PREPEND_WWW\n        host = request.get_host()\n\n        if settings.PREPEND_WWW and host and not host.startswith(\"www.\"):\n            # Check if we also need to append a slash so we can do it all\n            # with a single redirect. (This check may be somewhat expensive,\n            # so we only do it if we already know we're sending a redirect,\n            # or in process_response if we get a 404.)\n            if self.should_redirect_with_slash(request):\n                path = self.get_full_path_with_slash(request)\n            else:\n                path = request.get_full_path()\n\n            return self.response_redirect_class(f\"{request.scheme}://www.{host}{path}\")\n\n# django/http/response.py:618-630  (django.http.response.HttpResponseRedirectBase.__init__)\nclass HttpResponseRedirectBase(HttpResponse):\n    def __init__(self, redirect_to, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Location\"] = iri_to_uri(redirect_to)\n        redirect_to_str = str(redirect_to)\n        if len(redirect_to_str) > MAX_URL_REDIRECT_LENGTH:\n            raise DisallowedRedirect(\n                f\"Unsafe redirect exceeding {MAX_URL_REDIRECT_LENGTH} characters\"\n            )\n        parsed = urlparse(redirect_to_str)\n        if parsed.scheme and parsed.scheme not in self.allowed_schemes:\n            raise DisallowedRedirect(\n                \"Unsafe redirect to URL with protocol '%s'\" % parsed.scheme\n            )\n\n# django/http/response.py:616-632  (django.http.response.HttpResponseRedirectBase)\nclass HttpResponseRedirectBase(HttpResponse):\n    allowed_schemes = [\"http\", \"https\", \"ftp\"]\n\n    def __init__(self, redirect_to, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Location\"] = iri_to_uri(redirect_to)\n        redirect_to_str = str(redirect_to)\n        if len(redirect_to_str) > MAX_URL_REDIRECT_LENGTH:\n            raise DisallowedRedirect(\n                f\"Unsafe redirect exceeding {MAX_URL_REDIRECT_LENGTH} characters\"\n            )\n        parsed = urlparse(redirect_to_str)\n        if parsed.scheme and parsed.scheme not in self.allowed_schemes:\n            raise DisallowedRedirect(\n                \"Unsafe redirect to URL with protocol '%s'\" % parsed.scheme\n            )\n\n    url = property(lambda self: self[\"Location\"])\n\n# django/http/request.py:743-760  (django.http.request.validate_host)\ndef validate_host(host, allowed_hosts):\n    \"\"\"\n    Validate the given host for this site.\n\n    Check that the host looks valid and matches a host or host pattern in the\n    given list of ``allowed_hosts``. Any pattern beginning with a period\n    matches a domain and all its subdomains (e.g. ``.example.com`` matches\n    ``example.com`` and any subdomain), ``*`` matches anything, and anything\n    else must match exactly.\n\n    Note: This function assumes that the given host is lowercased and has\n    already had the port, if any, stripped off.\n\n    Return ``True`` for a valid host, ``False`` otherwise.\n    \"\"\"\n    return any(\n        pattern == \"*\" or is_same_domain(host, pattern) for pattern in allowed_hosts\n    )\n\n# tests/utils_tests/test_http.py:1-24  (tests.utils_tests.test_http)\nimport platform\nimport unittest\nfrom datetime import datetime, timezone\nfrom unittest import mock\n\nfrom django.test import SimpleTestCase\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.http import (\n    _urlsplit,\n    base36_to_int,\n    content_disposition_header,\n    escape_leading_slashes,\n    http_date,\n    int_to_base36,\n    is_same_domain,\n    parse_etags,\n    parse_header_parameters,\n    parse_http_date,\n    quote_etag,\n    url_has_allowed_host_and_scheme,\n    urlencode,\n    urlsafe_base64_decode,\n    urlsafe_base64_encode,\n)\n\n# django/views/i18n.py:19-63  (django.views.i18n.set_language)\ndef set_language(request):\n    \"\"\"\n    Redirect to a given URL while setting the chosen language in the session\n    (if enabled) and in a cookie. The URL and the language code need to be\n    specified in the request parameters.\n\n    Since this view changes how the user will see the rest of the site, it must\n    only be accessed as a POST request. If called as a GET request, it will\n    redirect to the page in the request (the 'next' parameter) without changing\n    any state.\n    \"\"\"\n    next_url = request.POST.get(\"next\", request.GET.get(\"next\"))\n    if (\n        next_url or request.accepts(\"text/html\")\n    ) and not url_has_allowed_host_and_scheme(\n        url=next_url,\n        allowed_hosts={request.get_host()},\n        require_https=request.is_secure(),\n    ):\n        next_url = request.META.get(\"HTTP_REFERER\")\n        if not url_has_allowed_host_and_scheme(\n            url=next_url,\n            allowed_hosts={request.get_host()},\n            require_https=request.is_secure(),\n        ):\n            next_url = \"/\"\n    response = HttpResponseRedirect(next_url) if next_url else HttpResponse(status=204)\n    if request.method == \"POST\":\n        lang_code = request.POST.get(LANGUAGE_QUERY_PARAMETER)\n        if lang_code and check_for_language(lang_code):\n            if next_url:\n                next_trans = translate_url(next_url, lang_code)\n                if next_trans != next_url:\n                    response = HttpResponseRedirect(next_trans)\n            response.set_cookie(\n                settings.LANGUAGE_COOKIE_NAME,\n                lang_code,\n                max_age=settings.LANGUAGE_COOKIE_AGE,\n                path=settings.LANGUAGE_COOKIE_PATH,\n                domain=settings.LANGUAGE_COOKIE_DOMAIN,\n                secure=settings.LANGUAGE_COOKIE_SECURE,\n                httponly=settings.LANGUAGE_COOKIE_HTTPONLY,\n                samesite=settings.LANGUAGE_COOKIE_SAMESITE,\n            )\n    return response\n\n# django/urls/resolvers.py:391-403  (django.urls.resolvers.URLPattern._check_pattern_name)\nclass URLPattern:\n    def _check_pattern_name(self):\n        \"\"\"\n        Check that the pattern name does not contain a colon.\n        \"\"\"\n        if self.pattern.name is not None and \":\" in self.pattern.name:\n            warning = Warning(\n                \"Your URL pattern {} has a name including a ':'. Remove the colon, to \"\n                \"avoid ambiguous namespace references.\".format(self.pattern.describe()),\n                id=\"urls.W003\",\n            )\n            return [warning]\n        else:\n            return []\n\n# django/contrib/auth/mixins.py:1-7  (django.contrib.auth.mixins)\nfrom urllib.parse import urlparse\n\nfrom django.conf import settings\nfrom django.contrib.auth import REDIRECT_FIELD_NAME\nfrom django.contrib.auth.views import redirect_to_login\nfrom django.core.exceptions import ImproperlyConfigured, PermissionDenied\nfrom django.shortcuts import resolve_url\n\n# django/template/defaulttags.py:1325-1391  (django.template.defaulttags.url)\n@register.tag\ndef url(parser, token):\n    r\"\"\"\n    Return an absolute URL matching the given view with its parameters.\n\n    This is a way to define links that aren't tied to a particular URL\n    configuration::\n\n        {% url \"url_name\" arg1 arg2 %}\n\n        or\n\n        {% url \"url_name\" name1=value1 name2=value2 %}\n\n    The first argument is a URL pattern name. Other arguments are\n    space-separated values that will be filled in place of positional and\n    keyword arguments in the URL. Don't mix positional and keyword arguments.\n    All arguments for the URL must be present.\n\n    For example, if you have a view ``app_name.views.client_details`` taking\n    the client's id and the corresponding line in a URLconf looks like this::\n\n        path('client/<int:id>/', views.client_details, name='client-detail-view')\n\n    and this app's URLconf is included into the project's URLconf under some\n    path::\n\n        path('clients/', include('app_name.urls'))\n\n    then in a template you can create a link for a certain client like this::\n\n        {% url \"client-detail-view\" client.id %}\n\n    The URL will look like ``/clients/client/123/``.\n\n    The first argument may also be the name of a template variable that will be\n    evaluated to obtain the view name or the URL name, e.g.::\n\n        {% with url_name=\"client-detail-view\" %}\n        {% url url_name client.id %}\n        {% endwith %}\n    \"\"\"\n    bits = token.split_contents()\n    if len(bits) < 2:\n        raise TemplateSyntaxError(\n            \"'%s' takes at least one argument, a URL pattern name.\" % bits[0]\n        )\n    viewname = parser.compile_filter(bits[1])\n    args = []\n    kwargs = {}\n    asvar = None\n    bits = bits[2:]\n    if len(bits) >= 2 and bits[-2] == \"as\":\n        asvar = bits[-1]\n        bits = bits[:-2]\n\n    for bit in bits:\n        match = kwarg_re.match(bit)\n        if not match:\n            raise TemplateSyntaxError(\"Malformed arguments to url tag\")\n        name, value = match.groups()\n        if name:\n            kwargs[name] = parser.compile_filter(value)\n        else:\n            args.append(parser.compile_filter(value))\n\n    return URLNode(viewname, args, kwargs, asvar)\n\n# django/middleware/security.py:21-31  (django.middleware.security.SecurityMiddleware.process_request)\nclass SecurityMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        path = request.path.lstrip(\"/\")\n        if (\n            self.redirect\n            and not request.is_secure()\n            and not any(pattern.search(path) for pattern in self.redirect_exempt)\n        ):\n            host = self.redirect_host or request.get_host()\n            return HttpResponsePermanentRedirect(\n                \"https://%s%s\" % (host, request.get_full_path())\n            )\n\n# django/http/request.py:202-241  (django.http.request.HttpRequest.build_absolute_uri)\nclass HttpRequest:\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)\n\n# tests/contenttypes_tests/test_views.py:79-93  (tests.contenttypes_tests.test_views.ContentTypesViewsTests.test_shortcut_with_absolute_url_including_scheme)\nclass ContentTypesViewsTests(TestCase):\n    def test_shortcut_with_absolute_url_including_scheme(self):\n        \"\"\"\n        Can view a shortcut when object's get_absolute_url returns a full URL\n        the tested URLs are: \"http://...\", \"https://...\" and \"//...\"\n        \"\"\"\n        for obj in SchemeIncludedURL.objects.all():\n            with self.subTest(obj=obj):\n                short_url = \"/shortcut/%s/%s/\" % (\n                    ContentType.objects.get_for_model(SchemeIncludedURL).id,\n                    obj.pk,\n                )\n                response = self.client.get(short_url)\n                self.assertRedirects(\n                    response, obj.get_absolute_url(), fetch_redirect_response=False\n                )\n\n# django/middleware/common.py:1-10  (django.middleware.common)\nimport re\nfrom urllib.parse import urlparse\n\nfrom django.conf import settings\nfrom django.core.exceptions import PermissionDenied\nfrom django.core.mail import mail_managers\nfrom django.http import HttpResponsePermanentRedirect\nfrom django.urls import is_valid_path\nfrom django.utils.deprecation import MiddlewareMixin\nfrom django.utils.http import escape_leading_slashes\n\n# django/contrib/auth/decorators.py:1-7  (django.contrib.auth.decorators)\nfrom functools import wraps\nfrom urllib.parse import urlparse\n\nfrom django.conf import settings\nfrom django.contrib.auth import REDIRECT_FIELD_NAME\nfrom django.core.exceptions import PermissionDenied\nfrom django.shortcuts import resolve_url\n\n# django/middleware/common.py:14-32  (django.middleware.common.CommonMiddleware)\nclass CommonMiddleware(MiddlewareMixin):\n    \"\"\"\n    \"Common\" middleware for taking care of some basic operations:\n\n        - Forbid access to User-Agents in settings.DISALLOWED_USER_AGENTS\n\n        - URL rewriting: Based on the APPEND_SLASH and PREPEND_WWW settings,\n          append missing slashes and/or prepends missing \"www.\"s.\n\n            - If APPEND_SLASH is set and the initial URL doesn't end with a\n              slash, and it is not found in urlpatterns, form a new URL by\n              appending a slash at the end. If this new URL is found in\n              urlpatterns, return an HTTP redirect to this new URL; otherwise\n              process the initial URL as usual.\n\n          This behavior can be customized by subclassing CommonMiddleware and\n          overriding the response_redirect_class attribute.\n    \"\"\"\n\n    response_redirect_class = HttpResponsePermanentRedirect\n\n# tests/test_client_regress/tests.py:568-587  (tests.test_client_regress.tests.AssertRedirectsTests.test_redirect_scheme)\nclass AssertRedirectsTests(SimpleTestCase):\n    def test_redirect_scheme(self):\n        \"\"\"\n        An assertion is raised if the response doesn't have the scheme\n        specified in expected_url.\n        \"\"\"\n\n        # For all possible True/False combinations of follow and secure\n        for follow, secure in itertools.product([True, False], repeat=2):\n            # always redirects to https\n            response = self.client.get(\n                \"/https_redirect_view/\", follow=follow, secure=secure\n            )\n            # the goal scheme is https\n            self.assertRedirects(\n                response, \"https://testserver/secure_view/\", status_code=302\n            )\n            with self.assertRaises(AssertionError):\n                self.assertRedirects(\n                    response, \"http://testserver/secure_view/\", status_code=302\n                )\n\n# django/core/exceptions.py:50-52  (django.core.exceptions.DisallowedHost)\nclass DisallowedHost(SuspiciousOperation):\n    \"\"\"HTTP_HOST header contains invalid value\"\"\"\n\n    pass\n\n# django/middleware/common.py:145-151  (django.middleware.common.BrokenLinkEmailsMiddleware.is_internal_request)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def is_internal_request(self, domain, referer):\n        \"\"\"\n        Return True if the referring URL is the same domain as the current\n        request.\n        \"\"\"\n        # Different subdomains are treated as different domains.\n        return bool(re.match(\"^https?://%s/\" % re.escape(domain), referer))\n\n# django/middleware/common.py:153-178  (django.middleware.common.BrokenLinkEmailsMiddleware.is_ignorable_request)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def is_ignorable_request(self, request, uri, domain, referer):\n        \"\"\"\n        Return True if the given request *shouldn't* notify the site managers\n        according to project settings or in situations outlined by the inline\n        comments.\n        \"\"\"\n        # The referer is empty.\n        if not referer:\n            return True\n\n        # APPEND_SLASH is enabled and the referer is equal to the current URL\n        # without a trailing slash indicating an internal redirect.\n        if settings.APPEND_SLASH and uri.endswith(\"/\") and referer == uri[:-1]:\n            return True\n\n        # A '?' in referer is identified as a search engine source.\n        if not self.is_internal_request(domain, referer) and \"?\" in referer:\n            return True\n\n        # The referer is equal to the current URL, ignoring the scheme (assumed\n        # to be a poorly implemented bot).\n        parsed_referer = urlparse(referer)\n        if parsed_referer.netloc in [\"\", domain] and parsed_referer.path == uri:\n            return True\n\n        return any(pattern.search(uri) for pattern in settings.IGNORABLE_404_URLS)\n\n# django/middleware/locale.py:1-7  (django.middleware.locale)\nfrom django.conf import settings\nfrom django.conf.urls.i18n import is_language_prefix_patterns_used\nfrom django.http import HttpResponseRedirect\nfrom django.urls import get_script_prefix, is_valid_path\nfrom django.utils import translation\nfrom django.utils.cache import patch_vary_headers\nfrom django.utils.deprecation import MiddlewareMixin\n\n# django/views/i18n.py:1-16  (django.views.i18n)\nimport json\nimport os\nimport re\n\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.http import HttpResponse, HttpResponseRedirect, JsonResponse\nfrom django.template import Context, Engine\nfrom django.urls import translate_url\nfrom django.utils.formats import get_format\nfrom django.utils.http import url_has_allowed_host_and_scheme\nfrom django.utils.translation import check_for_language, get_language\nfrom django.utils.translation.trans_real import DjangoTranslation\nfrom django.views.generic import View\n\nLANGUAGE_QUERY_PARAMETER = \"language\"\n\n## Task\n\nYou are debugging why a redirect URL is rejected as unsafe in\ndjango/utils/http.py. Starting from\n`url_has_allowed_host_and_scheme`, trace the real causal pipeline\nthat validates the URL, in the order each stage is actually reached,\nup to and including the call that parses the URL into its components.\nAssume the URL does not begin with three slashes (`///`) - the one\nguard clause before parsing is reached.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.utils.http.url_has_allowed_host_and_scheme\", \"django.utils.http._url_has_allowed_host_and_scheme\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -96,8 +96,8 @@ class TestCandidateManifest:
     def test_manifest_line_shape(self, engine, django_tasks):
         """Phase B patch: a `role == "caller"` row carries two additional
         pipe-delimited contract fields (`binds_return=`/
-        `nontrivial_args=`) beyond the base 5 - every other role stays
-        at exactly 5 fields, unchanged."""
+        `nontrivial_args=`) beyond the base 5; every row then ends with
+        `lines=N` (6 fields, 8 for a caller row)."""
         task = django_tasks["django_t02_009_queryset_filter_clone"]
         manifest_text, candidate_universe = engine.build_candidate_manifest(task.seed_symbol)
         assert manifest_text.startswith("<candidate_index>\n")
@@ -110,12 +110,13 @@ class TestCandidateManifest:
             qname, role, _kind, _signature, calls_field = parts[:5]
             assert role in ("seed", "callee", "caller", "transitive")
             if role == "caller":
-                assert len(parts) == 7, f"expected 7 pipe-delimited fields for a caller row, got {line!r}"
+                assert len(parts) == 8, f"expected 8 pipe-delimited fields for a caller row, got {line!r}"
                 binds_return_field, nontrivial_args_field = parts[5], parts[6]
                 assert binds_return_field in ("binds_return=true", "binds_return=false")
                 assert nontrivial_args_field in ("nontrivial_args=true", "nontrivial_args=false")
             else:
-                assert len(parts) == 5, f"expected 5 pipe-delimited fields (qname|role|kind|signature|calls), got {line!r}"
+                assert len(parts) == 6, f"expected 6 pipe-delimited fields (qname|role|kind|signature|calls|lines), got {line!r}"
+            assert parts[-1].startswith("lines=") and int(parts[-1][len("lines="):]) >= 1
             assert qname in candidate_universe
             assert calls_field.startswith("calls=[") and calls_field.endswith("]")
             seen.add(qname)

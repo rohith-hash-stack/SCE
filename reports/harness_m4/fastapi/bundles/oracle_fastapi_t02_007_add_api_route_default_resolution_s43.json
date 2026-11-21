@@ -1,0 +1,76 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "fastapi_t02_007_add_api_route_default_resolution",
+  "items": [
+   {
+    "source_id": "fastapi/routing.py:882-962",
+    "content": "# fastapi/routing.py:882-962  (fastapi.routing.APIRouter.add_api_route)\n    def add_api_route(\n        self,\n        path: str,\n        endpoint: Callable[..., Any],\n        *,\n        response_model: Any = Default(None),\n        status_code: Optional[int] = None,\n        tags: Optional[List[Union[str, Enum]]] = None,\n        dependencies: Optional[Sequence[params.Depends]] = None,\n        summary: Optional[str] = None,\n        description: Optional[str] = None,\n        response_description: str = \"Successful Response\",\n        responses: Optional[Dict[Union[int, str], Dict[str, Any]]] = None,\n        deprecated: Optional[bool] = None,\n        methods: Optional[Union[Set[str], List[str]]] = None,\n        operation_id: Optional[str] = None,\n        response_model_include: Optional[IncEx] = None,\n        response_model_exclude: Optional[IncEx] = None,\n        response_model_by_alias: bool = True,\n        response_model_exclude_unset: bool = False,\n        response_model_exclude_defaults: bool = False,\n        response_model_exclude_none: bool = False,\n        include_in_schema: bool = True,\n        response_class: Union[Type[Response], DefaultPlaceholder] = Default(\n            JSONResponse\n        ),\n        name: Optional[str] = None,\n        route_class_override: Optional[Type[APIRoute]] = None,\n        callbacks: Optional[List[BaseRoute]] = None,\n        openapi_extra: Optional[Dict[str, Any]] = None,\n        generate_unique_id_function: Union[\n            Callable[[APIRoute], str], DefaultPlaceholder\n        ] = Default(generate_unique_id),\n    ) -> None:\n        route_class = route_class_override or self.route_class\n        responses = responses or {}\n        combined_responses = {**self.responses, **responses}\n        current_response_class = get_value_or_default(\n            response_class, self.default_response_class\n        )\n        current_tags = self.tags.copy()\n        if tags:\n            current_tags.extend(tags)\n        current_dependencies = self.dependencies.copy()\n        if dependencies:\n            current_dependencies.extend(dependencies)\n        current_callbacks = self.callbacks.copy()\n        if callbacks:\n            current_callbacks.extend(callbacks)\n        current_generate_unique_id = get_value_or_default(\n            generate_unique_id_function, self.generate_unique_id_function\n        )\n        route = route_class(\n            self.prefix + path,\n            endpoint=endpoint,\n            response_model=response_model,\n            status_code=status_code,\n            tags=current_tags,\n            dependencies=current_dependencies,\n            summary=summary,\n            description=description,\n            response_description=response_description,\n            responses=combined_responses,\n            deprecated=deprecated or self.deprecated,\n            methods=methods,\n            operation_id=operation_id,\n            response_model_include=response_model_include,\n            response_model_exclude=response_model_exclude,\n            response_model_by_alias=response_model_by_alias,\n            response_model_exclude_unset=response_model_exclude_unset,\n            response_model_exclude_defaults=response_model_exclude_defaults,\n            response_model_exclude_none=response_model_exclude_none,\n            include_in_schema=include_in_schema and self.include_in_schema,\n            response_class=current_response_class,\n            name=name,\n            dependency_overrides_provider=self.dependency_overrides_provider,\n            callbacks=current_callbacks,\n            openapi_extra=openapi_extra,\n            generate_unique_id_function=current_generate_unique_id,\n        )\n        self.routes.append(route)",
+    "token_count": 701,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.routing.APIRouter.add_api_route"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 701
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:205-220",
+    "content": "# fastapi/utils.py:205-220  (fastapi.utils.get_value_or_default)\ndef get_value_or_default(\n    first_item: Union[DefaultPlaceholder, DefaultType],\n    *extra_items: Union[DefaultPlaceholder, DefaultType],\n) -> Union[DefaultPlaceholder, DefaultType]:\n    \"\"\"\n    Pass items or `DefaultPlaceholder`s by descending priority.\n\n    The first one to _not_ be a `DefaultPlaceholder` will be returned.\n\n    Otherwise, the first item (a `DefaultPlaceholder`) will be returned.\n    \"\"\"\n    items = (first_item,) + extra_items\n    for item in items:\n        if not isinstance(item, DefaultPlaceholder):\n            return item\n    return first_item",
+    "token_count": 148,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.utils.get_value_or_default"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 148
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/datastructures.py:197-204",
+    "content": "# fastapi/datastructures.py:197-204  (fastapi.datastructures.Default)\ndef Default(value: DefaultType) -> DefaultType:\n    \"\"\"\n    You shouldn't use this function directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n    return DefaultPlaceholder(value)  # type: ignore",
+    "token_count": 84,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.datastructures.Default"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 933,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how FastAPI resolves per-route configuration defaults (like response_class) that fall back to the router's own config in fastapi/routing.py and fastapi/utils.py. Starting from `add_api_route`, trace how an unset per-route option is resolved to its real effective value.",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 3,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 933,
+   "prompt_tokens": 1128,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1141,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/routing.py:882-962  (fastapi.routing.APIRouter.add_api_route)\n    def add_api_route(\n        self,\n        path: str,\n        endpoint: Callable[..., Any],\n        *,\n        response_model: Any = Default(None),\n        status_code: Optional[int] = None,\n        tags: Optional[List[Union[str, Enum]]] = None,\n        dependencies: Optional[Sequence[params.Depends]] = None,\n        summary: Optional[str] = None,\n        description: Optional[str] = None,\n        response_description: str = \"Successful Response\",\n        responses: Optional[Dict[Union[int, str], Dict[str, Any]]] = None,\n        deprecated: Optional[bool] = None,\n        methods: Optional[Union[Set[str], List[str]]] = None,\n        operation_id: Optional[str] = None,\n        response_model_include: Optional[IncEx] = None,\n        response_model_exclude: Optional[IncEx] = None,\n        response_model_by_alias: bool = True,\n        response_model_exclude_unset: bool = False,\n        response_model_exclude_defaults: bool = False,\n        response_model_exclude_none: bool = False,\n        include_in_schema: bool = True,\n        response_class: Union[Type[Response], DefaultPlaceholder] = Default(\n            JSONResponse\n        ),\n        name: Optional[str] = None,\n        route_class_override: Optional[Type[APIRoute]] = None,\n        callbacks: Optional[List[BaseRoute]] = None,\n        openapi_extra: Optional[Dict[str, Any]] = None,\n        generate_unique_id_function: Union[\n            Callable[[APIRoute], str], DefaultPlaceholder\n        ] = Default(generate_unique_id),\n    ) -> None:\n        route_class = route_class_override or self.route_class\n        responses = responses or {}\n        combined_responses = {**self.responses, **responses}\n        current_response_class = get_value_or_default(\n            response_class, self.default_response_class\n        )\n        current_tags = self.tags.copy()\n        if tags:\n            current_tags.extend(tags)\n        current_dependencies = self.dependencies.copy()\n        if dependencies:\n            current_dependencies.extend(dependencies)\n        current_callbacks = self.callbacks.copy()\n        if callbacks:\n            current_callbacks.extend(callbacks)\n        current_generate_unique_id = get_value_or_default(\n            generate_unique_id_function, self.generate_unique_id_function\n        )\n        route = route_class(\n            self.prefix + path,\n            endpoint=endpoint,\n            response_model=response_model,\n            status_code=status_code,\n            tags=current_tags,\n            dependencies=current_dependencies,\n            summary=summary,\n            description=description,\n            response_description=response_description,\n            responses=combined_responses,\n            deprecated=deprecated or self.deprecated,\n            methods=methods,\n            operation_id=operation_id,\n            response_model_include=response_model_include,\n            response_model_exclude=response_model_exclude,\n            response_model_by_alias=response_model_by_alias,\n            response_model_exclude_unset=response_model_exclude_unset,\n            response_model_exclude_defaults=response_model_exclude_defaults,\n            response_model_exclude_none=response_model_exclude_none,\n            include_in_schema=include_in_schema and self.include_in_schema,\n            response_class=current_response_class,\n            name=name,\n            dependency_overrides_provider=self.dependency_overrides_provider,\n            callbacks=current_callbacks,\n            openapi_extra=openapi_extra,\n            generate_unique_id_function=current_generate_unique_id,\n        )\n        self.routes.append(route)\n\n# fastapi/utils.py:205-220  (fastapi.utils.get_value_or_default)\ndef get_value_or_default(\n    first_item: Union[DefaultPlaceholder, DefaultType],\n    *extra_items: Union[DefaultPlaceholder, DefaultType],\n) -> Union[DefaultPlaceholder, DefaultType]:\n    \"\"\"\n    Pass items or `DefaultPlaceholder`s by descending priority.\n\n    The first one to _not_ be a `DefaultPlaceholder` will be returned.\n\n    Otherwise, the first item (a `DefaultPlaceholder`) will be returned.\n    \"\"\"\n    items = (first_item,) + extra_items\n    for item in items:\n        if not isinstance(item, DefaultPlaceholder):\n            return item\n    return first_item\n\n# fastapi/datastructures.py:197-204  (fastapi.datastructures.Default)\ndef Default(value: DefaultType) -> DefaultType:\n    \"\"\"\n    You shouldn't use this function directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n    return DefaultPlaceholder(value)  # type: ignore\n\n## Task\n\nYou are investigating how FastAPI resolves per-route configuration defaults (like response_class) that fall back to the router's own config in fastapi/routing.py and fastapi/utils.py. Starting from `add_api_route`, trace how an unset per-route option is resolved to its real effective value.\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

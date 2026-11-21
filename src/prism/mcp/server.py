@@ -42,6 +42,7 @@ docstring.
 from __future__ import annotations
 
 import difflib
+import json
 import os
 from typing import Any
 
@@ -54,8 +55,12 @@ from prism.language_tiers import precision_tier_for
 from prism.mcp.auth import enforce as enforce_auth
 from prism.mcp.cache import GraphCache, RepoNotFoundError
 from prism.mcp.security import SecurityError, validate_symbol_name, validate_tag, validate_token_budget
+from prism.engine import PrismEngine
+from prism.graph.symbol_table import SymbolRole
+from prism.packer.candidate_index import upstream_callers_by_hop
 from prism.packer.submodular_knapsack import DEFAULT_MAX_HOPS
 from prism.query.errors import QueryValidationError
+from prism.query.locate import qualified_name_matches
 from prism.query.schema import PrismQuery
 from prism.serializers.markdown import render_markdown
 from prism.slicer.blueprint import mine_sibling_blueprint
@@ -279,12 +284,19 @@ def get_graph_status(repo_path: str | None = None) -> dict[str, Any]:
     symbols, total call edges, how many of those edges a runtime trace
     has confirmed (`CONFIRMED_RUNTIME`) vs. how many the static resolver
     never found at all until a trace revealed them (`RUNTIME_DISCOVERED`),
-    and a per-tag symbol count.
+    and a per-tag symbol count. `snapshot_signature` identifies what the
+    served index was built from (its parsed sources and merged runtime
+    state); it changes only on `reindex_repo`, never with the disk.
+    `summary_index` reports the offline
+    summaries `prism.ask` uses (`prism summarize`): coverage of the
+    functions, whether the locked pipeline built them, and the summary
+    weight that follows (0.5 at >= 95% coverage, else 0).
 
     Args:
         repo_path: Absolute path to the repository root. Defaults to the
             server's current working directory.
     """
+    from prism.summaries.index import state_for
     ctx = _repo_context(repo_path)
     g = ctx.builder.graph
 
@@ -310,6 +322,8 @@ def get_graph_status(repo_path: str | None = None) -> dict[str, Any]:
         "tag_counts": dict(sorted(tag_counts.items())),
         "trace_files_ingested": len(ctx.runtime_state.get("trace_files", [])),
         "indexed_at": ctx.indexed_at,
+        "snapshot_signature": ctx.snapshot_signature,
+        "summary_index": state_for(ctx.builder, ctx.repo_root).status(),
     }
 
 
@@ -318,12 +332,14 @@ def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
     """Drop the cached graph for a repository (if any) and rebuild it
     from source, re-merging `.prism/runtime_state.json` if present. Call
     this after editing source files or after a new `prism trace` run, since
-    nothing here watches the filesystem automatically.
+    nothing here watches the filesystem automatically. Returns the same
+    statistics as `get_graph_status`.
 
     Args:
         repo_path: Absolute path to the repository root. Defaults to the
             server's current working directory.
     """
+    from prism.summaries.index import state_for
     try:
         ctx = _cache.reindex(repo_path)
     except (RepoNotFoundError, SecurityError) as exc:
@@ -334,6 +350,8 @@ def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
         "total_edges": ctx.builder.graph.number_of_edges(),
         "trace_files_ingested": len(ctx.runtime_state.get("trace_files", [])),
         "indexed_at": ctx.indexed_at,
+        "snapshot_signature": ctx.snapshot_signature,
+        "summary_index": state_for(ctx.builder, ctx.repo_root).status(),
     }
 
 
@@ -364,13 +382,41 @@ def _repo_context_for_surface(repo_path: str):
         raise MCPError(code=-32001, message=str(exc)) from exc
 
 
-def _resolve_seed_or_raise(repo_ctx, seed_symbol: str) -> None:
-    """-32002, with a fuzzy-matched `candidates` list in `data` when one
-    exists - `difflib.get_close_matches` against every indexed qualified
-    name, the same "did you mean" a human would want typing a symbol name
-    from memory."""
+#: Most candidates listed in an ambiguous-name error (`data.match_count`
+#: always carries the full count, `data.truncated` whether any were cut).
+_AMBIGUOUS_CANDIDATE_LIMIT = 20
+
+
+def _resolve_seed_or_raise(repo_ctx, seed_symbol: str) -> str:
+    """The seed's qualified name.
+
+    - An indexed qualified name is returned unchanged.
+    - A bare (`include_router`) or partially qualified
+      (`Router.include_router`) name that exactly one indexed symbol
+      matches on whole trailing segments is resolved to that symbol
+      (`prism.query.locate.qualified_name_matches`).
+    - A name several symbols match is never guessed: -32002 with
+      `data = {"ambiguous": True, "match_count": n, "truncated": bool,
+      "candidates": [...]}` (sorted qualified names, at most
+      `_AMBIGUOUS_CANDIDATE_LIMIT`).
+    - Otherwise -32002, with a fuzzy-matched `candidates` list in `data`
+      when one exists - `difflib.get_close_matches` against every indexed
+      qualified name, the same "did you mean" a human would want typing a
+      symbol name from memory."""
     if seed_symbol in repo_ctx.symbol_table:
-        return
+        return seed_symbol
+    matches = qualified_name_matches(repo_ctx.builder, seed_symbol)
+    if len(matches) == 1:
+        return matches[0]
+    if matches:
+        shown = matches[:_AMBIGUOUS_CANDIDATE_LIMIT]
+        raise MCPError(
+            code=-32002,
+            message=(f"symbol '{seed_symbol}' is ambiguous in '{repo_ctx.repo_root}': {len(matches)} symbols match "
+                     f"'{seed_symbol}' - pass one of the candidates' qualified names"),
+            data={"ambiguous": True, "match_count": len(matches), "truncated": len(matches) > len(shown),
+                  "candidates": shown},
+        )
     all_names = [s.qualified_name for s in repo_ctx.symbol_table]
     candidates = difflib.get_close_matches(seed_symbol, all_names, n=5, cutoff=0.5)
     raise MCPError(
@@ -480,7 +526,7 @@ def _build_envelope_response(
     enforce_auth(_authorization_header(ctx), api_key)
 
     repo_ctx = _repo_context_for_surface(repo_path)
-    _resolve_seed_or_raise(repo_ctx, resolved_seed)
+    resolved_seed = _resolve_seed_or_raise(repo_ctx, resolved_seed)
 
     seed_cost = count_tokens(_node_body(repo_ctx.builder, resolved_seed))
     if seed_cost > budget_tokens:
@@ -596,6 +642,285 @@ def prism_explain(
         repo_path, seed_symbol, seeds, budget_tokens, language_tier, format, task_type, d_max, include_warnings, api_key, ctx,
         detail_level=detail_level,
     )
+
+
+#: Same budget the benchmark's Arm 5 used for the blast-radius manifest and
+#: for hydrating it (`harness.config.RETRIEVAL_BUDGET`).
+BLAST_RADIUS_DEFAULT_BUDGET = 13_000
+#: The returned `callers` list is names and locations only, but a hub seed
+#: can have thousands of transitive callers; past this it is cut (sorted by
+#: hop) and `callers_truncated` is set.
+BLAST_RADIUS_MAX_LISTED_CALLERS = 500
+
+
+def _manifest_roles(manifest: str) -> list[tuple[str, str]]:
+    rows = []
+    for line in manifest.splitlines():
+        parts = line.split("|")
+        if len(parts) >= 2 and not line.startswith("<"):
+            rows.append((parts[0], parts[1]))
+    return rows
+
+
+@server.tool(name="prism.blast_radius")
+def prism_blast_radius(
+    repo_path: str,
+    seed_symbol: str,
+    budget_tokens: int = BLAST_RADIUS_DEFAULT_BUDGET,
+    include_tests: bool = True,
+    format: str = "xml",
+    api_key: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """What may break if `seed_symbol` changes: every transitive caller
+    (tests included by default), plus a token-budgeted context envelope
+    with the callers' code.
+
+    This is the retrieval the benchmark measured for blast-radius tasks
+    (`reports/harness_r0r1/R0_vs_R1_T5.md`, config R0): the bidirectional
+    candidate manifest (transitive callers up to 6 hops, interleaved with
+    the seed's downstream dependencies under `budget_tokens`), with every
+    `caller` row selected by rule - no model picks - then hydrated by
+    `PrismEngine.retrieve_requested`. `prism.slice` uses a different packer
+    with a shallower caller search (at most 3 callers per step, 1.5 hops).
+
+    Args:
+        repo_path: Absolute path to the repository root (same sandbox rules
+            as `prism.slice`).
+        seed_symbol: Fully qualified symbol name, exactly as indexed.
+            Unknown names return `-32002` with candidates. Playwright/Jest
+            tests are `<module>.<describe>.<title>`, Robot Framework tests
+            and keywords `<module>.<Name_With_Underscores>`.
+        budget_tokens: 500-128000 (default 13000): the manifest and the
+            hydrated envelope share it.
+        include_tests: Keep test code (Playwright/Jest/Mocha tests, hooks
+            and fixtures, Robot test cases, pytest tests) among the callers.
+            `False` gives production callers only, as the benchmark did.
+        format: "xml" (the `<prism_context>` envelope) or "json".
+
+    Returns `{seed, callers, callers_total, callers_truncated,
+    callers_in_context, references, references_total, envelope, token_count,
+    truncated}`. `references` are the seed's uses other than calls (imports,
+    `__all__`, type annotations, isinstance/except, values, decorators,
+    attribute reads; `prism.graph.references.references_to`): each with its
+    `source` (a definition, or a module for module-level code), `kinds`,
+    `count`, `file` and `lines`. `callers` lists
+    each caller's `symbol`, `hop`, `is_test`, `language`, `file` and `line`,
+    nearest first, with no budget applied; `callers_in_context` are the
+    ones whose code is in `envelope`.
+    """
+    if not (500 <= budget_tokens <= 128_000):
+        raise MCPError(code=-32602, message=f"budget_tokens must be between 500 and 128000, got {budget_tokens}")
+    if format not in ("xml", "json"):
+        raise MCPError(code=-32602, message=f"format must be 'xml' or 'json' - got {format!r}")
+    try:
+        seed_symbol = validate_symbol_name(seed_symbol)
+    except SecurityError as exc:
+        raise MCPError(code=-32602, message=str(exc)) from exc
+    enforce_auth(_authorization_header(ctx), api_key)
+
+    repo_ctx = _repo_context_for_surface(repo_path)
+    seed_symbol = _resolve_seed_or_raise(repo_ctx, seed_symbol)
+    builder = repo_ctx.builder
+
+    engine = PrismEngine(builder, repo_ctx.repo_root, contracts=repo_ctx.contracts)
+    manifest, universe = engine.build_candidate_manifest(
+        seed_symbol, direction="both", budget_tokens=budget_tokens, include_tests=include_tests,
+    )
+    requested = [q for q, role in _manifest_roles(manifest) if role == "caller" and q != seed_symbol]
+    pkg, _skipped = engine.retrieve_requested(seed_symbol, budget_tokens, requested, universe, task_type="blast")
+    walked = upstream_callers_by_hop(builder, seed_symbol, include_tests=include_tests)
+    # The packer labels only direct callers `caller`; a caller two or more
+    # hops up comes back as `transitive` with no distance. Label it by hop.
+    pkg = pkg.model_copy(update={"nodes": [
+        n.model_copy(update={"role": "caller", "distance": float(walked[n.id])})
+        if n.id in walked and n.role == "transitive" else n
+        for n in pkg.nodes
+    ]})
+    envelope = pkg.model_dump_json(indent=2) if format == "json" else render(pkg, RenderOptions())
+    token_count = count_tokens(envelope)
+
+    ordered = sorted(walked, key=lambda q: (walked[q], q))
+    callers = []
+    for qname in ordered[:BLAST_RADIUS_MAX_LISTED_CALLERS]:
+        info = builder.symbol_table.get(qname)
+        callers.append({
+            "symbol": qname,
+            "hop": walked[qname],
+            "is_test": info is not None and info.role == SymbolRole.VERIFICATION,
+            "language": info.language_id if info is not None else None,
+            "file": _relative_path(repo_ctx.repo_root, info.file) if info is not None else None,
+            "line": info.line_range[0] if info is not None else None,
+        })
+    in_context = sorted({n.id for n in pkg.nodes if n.role != "seed"} & set(walked))
+    from prism.graph.references import references_to
+    refs = references_to(builder, seed_symbol, include_tests=include_tests, skip=set(walked))
+    references = [{"source": r["source"], "is_module": r["is_module"], "kinds": r["kinds"], "count": r["count"],
+                   "is_test": r["is_test"], "lines": r["lines"],
+                   "file": _relative_path(repo_ctx.repo_root, r["file"]) if r["file"] else None}
+                  for r in refs[:BLAST_RADIUS_MAX_LISTED_CALLERS]]
+    return {
+        "seed": seed_symbol,
+        "callers": callers,
+        "callers_total": len(walked),
+        "callers_truncated": len(walked) > BLAST_RADIUS_MAX_LISTED_CALLERS,
+        "callers_in_context": in_context,
+        "references": references,
+        "references_total": len(refs),
+        "envelope": envelope,
+        "token_count": token_count,
+        "truncated": token_count > budget_tokens,
+    }
+
+
+#: Bounds on `prism.ask` arguments.
+ASK_MAX_QUESTION_CHARS = 2000
+ASK_MAX_TOP_K = 50
+#: One `NLQIndex` per indexed repository, keyed by the cached builder (a
+#: `reindex_repo` - a new builder - gets a fresh one) and the summary
+#: index's mtime (a new `prism summarize` run does too).
+_nlq_indexes: dict[tuple, Any] = {}
+
+
+@server.tool(name="prism.change_context")
+def prism_change_context(
+    repo_path: str,
+    symbol: str,
+    budget_tokens: int = 12000,
+    include_tests: bool = True,
+    format: str = "markdown",
+    visible: list[str] | None = None,
+    new_code: str | None = None,
+    api_key: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Everything to read before changing `symbol`, in one package (`prism.impact.context`):
+
+    1. the codebase's largest directories and how they call each other;
+    2. the symbol's directory: its API, dependencies and conventions;
+    3. the symbol's full code and its digest (line-cited facts with conditions and certainty);
+    4. who depends on it: per caller, what it does with the result, which of the symbol's errors it
+       catches or lets propagate, the arguments it passes, whether it awaits;
+    5. what it depends on in its callees (their errors, empty returns, state changes);
+    6. the conventions and the full code of its two closest siblings, to follow the same style;
+    7. its callers' code (full where the budget allows, the call-site windows of long callers, digests after);
+    8. its wider impact: transitive callers by hop, entry points and tests that reach it.
+
+    Args:
+        repo_path: Absolute path to the repository root (same sandbox rules as `prism.slice`).
+        symbol: Fully qualified symbol name, exactly as indexed.
+        budget_tokens: 1000-128000 (default 12000) for the whole package.
+        include_tests: Keep test callers (default True).
+        format: "markdown" (the rendered package) or "json".
+        visible: Code the agent already has open, as repo-relative `"file"` or `"file:FIRST-LAST"`; code
+            entirely inside it is sent as a pointer to its lines instead of again.
+        new_code: The symbol's proposed new code. Adds, first, the calls it breaks (a removed or renamed
+            keyword, a new required parameter, arguments that now land in another parameter, a new
+            uncaught exception, a new empty return the call uses), each with its file and line.
+
+    Returns `{symbol, context, token_count, callers, transitive_callers, references, references_total, breaks}`
+    (`breaks` with new_code); `references` are the sources of its uses other than calls, listed in section 4.
+    """
+    from prism.impact.context import ChangeContextBuilder, parse_visible, render as render_change_context
+    if not (1000 <= budget_tokens <= 128_000):
+        raise MCPError(code=-32602, message=f"budget_tokens must be between 1000 and 128000, got {budget_tokens}")
+    if format not in ("markdown", "json"):
+        raise MCPError(code=-32602, message=f"format must be 'markdown' or 'json' - got {format!r}")
+    try:
+        symbol = validate_symbol_name(symbol)
+    except SecurityError as exc:
+        raise MCPError(code=-32602, message=str(exc)) from exc
+    enforce_auth(_authorization_header(ctx), api_key)
+    repo_ctx = _repo_context_for_surface(repo_path)
+    symbol = _resolve_seed_or_raise(repo_ctx, symbol)
+    change = ChangeContextBuilder(repo_ctx.builder, repo_ctx.repo_root).build(
+        symbol, budget_tokens=budget_tokens, include_tests=include_tests, visible=parse_visible(visible),
+        new_code=new_code)
+    body = json.dumps(change.to_dict(), default=str) if format == "json" else render_change_context(change)
+    return {
+        "symbol": symbol,
+        "context": body,
+        "token_count": change.token_count,
+        "callers": [r.caller for r in change.callers],
+        "transitive_callers": change.impact.get("transitive_callers", 0),
+        "references": [r["source"] for r in change.references],
+        "references_total": change.references_total,
+        **({"breaks": [{"caller": x.caller, "file": x.file, "line": x.line, "severity": x.severity,
+                        "problem": x.problem} for x in change.breaks]} if change.breaks is not None else {}),
+    }
+
+
+@server.tool(name="prism.ask")
+def prism_ask(
+    question: str,
+    repo_path: str | None = None,
+    top_k: int = 10,
+    action: str | None = None,
+    capability: str | None = None,
+    api_key: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Answer a natural-language question about the code with ranked
+    symbols (`prism.query.nlq`): BM25 over each function/method/class,
+    re-ranked by the triad (stems x physical action x capability), a class
+    never above its own matching method, migration files last unless asked
+    for. Each hit carries its upstream entry points as display-only
+    breadcrumbs, e.g. `[Entry: POST /follow/<username>] -> follow()`.
+
+    Routing is automatic and deterministic (no model is called):
+    - the query is classified `identifier` ("Router.include_router"),
+      `mixed` (a question naming `user_id`) or `natural_language`; for the
+      first two, symbols whose qualified name the query names are pinned
+      first (`pinned: true`), the ranked hits follow;
+    - when the repository has an offline summary index (`prism summarize`)
+      built by the locked pipeline and covering >= 95% of its functions,
+      each function's one-line summary is scored as a second field at
+      weight 0.5; otherwise the weight is 0.
+    Both are reported in `intent.route` and `intent.summary_weight`.
+
+    Args:
+        question: The question, e.g. "Where are notifications saved to the
+            database?" (1-2000 characters).
+        repo_path: Absolute path to the repository root (same sandbox rules
+            as `prism.slice`).
+        top_k: Hits to return, 1-50 (default 10).
+        action / capability: Override the intent read off the question - an
+            action of `READ`, `MUTATE`, `SEND`, `RECEIVE`, `EXECUTE`, `WAIT`
+            or `CONNECT`; a capability of `DATABASE_IO` or a primitive name
+            such as `PRIM_NET_CONNECT`. Give either to use your own reading
+            of the question; omit both for the built-in rule.
+
+    Returns `{question, intent: {action?, capability?, source, route,
+    summary_weight}, hits: [{rank, qname, kind, location, score, pinned,
+    legs: {stems, capability, action, capability_source}, entry_context}]}`. Feed a hit's `qname` to
+    `prism.slice` or `prism.blast_radius` for its context.
+    """
+    from prism.query.nlq import NLQIndex
+    from prism.semantics.bitmask import FeatureBit
+    from prism.semantics.triad import DATABASE_IO, PHYSICAL_ACTIONS
+    from prism.summaries.index import index_path
+    if not isinstance(question, str) or not question.strip() or len(question) > ASK_MAX_QUESTION_CHARS:
+        raise MCPError(code=-32602, message=f"question must be 1-{ASK_MAX_QUESTION_CHARS} characters")
+    if not (1 <= top_k <= ASK_MAX_TOP_K):
+        raise MCPError(code=-32602, message=f"top_k must be between 1 and {ASK_MAX_TOP_K}, got {top_k}")
+    if action is not None and action not in PHYSICAL_ACTIONS:
+        raise MCPError(code=-32602, message=f"action must be one of {sorted(PHYSICAL_ACTIONS)} - got {action!r}")
+    if capability is not None and capability != DATABASE_IO and not (
+        capability.startswith("PRIM_") and capability in FeatureBit.__members__
+    ):
+        raise MCPError(code=-32602, message=f"capability must be DATABASE_IO or a PRIM_* primitive - got {capability!r}")
+    enforce_auth(_authorization_header(ctx), api_key)
+    repo_ctx = _repo_context_for_surface(repo_path)
+    summaries = index_path(repo_ctx.repo_root)
+    # a new `prism summarize` run (a changed summaries.json) rebuilds the index
+    key = (id(repo_ctx.builder), summaries.stat().st_mtime_ns if summaries.exists() else None)
+    if key not in _nlq_indexes:
+        _nlq_indexes.clear()  # one live index: the builder it was made for may be gone
+        _nlq_indexes[key] = NLQIndex(repo_ctx.builder, repo_ctx.repo_root, summaries="auto")
+    intent: Any = "rule"
+    if action is not None or capability is not None:
+        intent = {k: v for k, v in (("action", action), ("capability", capability)) if v is not None}
+    return _nlq_indexes[key].search(question, top_k=top_k, intent=intent)
 
 
 def run_server(transport: str = "stdio", repo_path: str | None = None) -> None:

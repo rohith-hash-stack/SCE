@@ -1,0 +1,312 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "fastapi_t5_004_add_api_websocket_route",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"glob\": \"**/*.py\", \"pattern\": \"add_api_websocket_route\"})\nfastapi/applications.py:1175:    def add_api_websocket_route(\nfastapi/applications.py:1183:        self.router.add_api_websocket_route(\nfastapi/applications.py:1245:            self.add_api_websocket_route(\nfastapi/routing.py:1026:    def add_api_websocket_route(\nfastapi/routing.py:1107:            self.add_api_websocket_route(\nfastapi/routing.py:1348:                self.add_api_websocket_route(",
+    "token_count": 140,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [
+     "fastapi.applications.FastAPI.add_api_websocket_route",
+     "fastapi.applications.FastAPI.websocket.decorator",
+     "fastapi.routing.APIRouter.add_api_websocket_route",
+     "fastapi.routing.APIRouter.websocket.decorator",
+     "fastapi.routing.APIRouter.include_router"
+    ],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "add_api_websocket_route",
+      "glob": "**/*.py"
+     },
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 1107, \"path\": \"fastapi/routing.py\", \"start_line\": 1026})\n1026:     def add_api_websocket_route(\n1027:         self,\n1028:         path: str,\n1029:         endpoint: Callable[..., Any],\n1030:         name: Optional[str] = None,\n1031:         *,\n1032:         dependencies: Optional[Sequence[params.Depends]] = None,\n1033:     ) -> None:\n1034:         current_dependencies = self.dependencies.copy()\n1035:         if dependencies:\n1036:             current_dependencies.extend(dependencies)\n1037: \n1038:         route = APIWebSocketRoute(\n1039:             self.prefix + path,\n1040:             endpoint=endpoint,\n1041:             name=name,\n1042:             dependencies=current_dependencies,\n1043:             dependency_overrides_provider=self.dependency_overrides_provider,\n1044:         )\n1045:         self.routes.append(route)\n1046: \n1047:     def websocket(\n1048:         self,\n1049:         path: Annotated[\n1050:             str,\n1051:             Doc(\n1052:                 \"\"\"\n1053:                 WebSocket path.\n1054:                 \"\"\"\n1055:             ),\n1056:         ],\n1057:         name: Annotated[\n1058:             Optional[str],\n1059:             Doc(\n1060:                 \"\"\"\n1061:                 A name for the WebSocket. Only used internally.\n1062:                 \"\"\"\n1063:             ),\n1064:         ] = None,\n1065:         *,\n1066:         dependencies: Annotated[\n1067:             Optional[Sequence[params.Depends]],\n1068:             Doc(\n1069:                 \"\"\"\n1070:                 A list of dependencies (using `Depends()`) to be used for this\n1071:                 WebSocket.\n1072: \n1073:                 Read more about it in the\n1074:                 [FastAPI docs for WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).\n1075:                 \"\"\"\n1076:             ),\n1077:         ] = None,\n1078:     ) -> Callable[[DecoratedCallable], DecoratedCallable]:\n1079:         \"\"\"\n1080:         Decorate a WebSocket function.\n1081: \n1082:         Read more about it in the\n1083:         [FastAPI docs for WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).\n1084: \n1085:         **Example**\n1086: \n1087:         ## Example\n1088: \n1089:         ```python\n1090:         from fastapi import APIRouter, FastAPI, WebSocket\n1091: \n1092:         app = FastAPI()\n1093:         router = APIRouter()\n1094: \n1095:         @router.websocket(\"/ws\")\n1096:         async def websocket_endpoint(websocket: WebSocket):\n1097:             await websocket.accept()\n1098:             while True:\n1099:                 data = await websocket.receive_text()\n1100:                 await websocket.send_text(f\"Message text was: {data}\")\n1101: \n1102:         app.include_router(router)\n1103:         ```\n1104:         \"\"\"\n1105: \n1106:         def decorator(func: DecoratedCallable) -> DecoratedCallable:\n1107:             self.add_api_websocket_route(\n[lines 1026-1107 of 4441]",
+    "token_count": 918,
+    "rank": 2,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.routing.APIRouter",
+     "fastapi.routing.APIRouter.add_api_websocket_route",
+     "fastapi.routing.APIRouter.websocket",
+     "fastapi.routing.APIRouter.websocket.decorator"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/routing.py",
+      "start_line": 1026,
+      "end_line": 1107
+     },
+     "engine_token_count": 918
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.2",
+    "content": "# r2.2  (read {\"end_line\": 1429, \"path\": \"fastapi/routing.py\", \"start_line\": 1348})\n1348:                 self.add_api_websocket_route(\n1349:                     prefix + route.path,\n1350:                     route.endpoint,\n1351:                     dependencies=current_dependencies,\n1352:                     name=route.name,\n1353:                 )\n1354:             elif isinstance(route, routing.WebSocketRoute):\n1355:                 self.add_websocket_route(\n1356:                     prefix + route.path, route.endpoint, name=route.name\n1357:                 )\n1358:         for handler in router.on_startup:\n1359:             self.add_event_handler(\"startup\", handler)\n1360:         for handler in router.on_shutdown:\n1361:             self.add_event_handler(\"shutdown\", handler)\n1362:         self.lifespan_context = _merge_lifespan_context(\n1363:             self.lifespan_context,\n1364:             router.lifespan_context,\n1365:         )\n1366: \n1367:     def get(\n1368:         self,\n1369:         path: Annotated[\n1370:             str,\n1371:             Doc(\n1372:                 \"\"\"\n1373:                 The URL path to be used for this *path operation*.\n1374: \n1375:                 For example, in `http://example.com/items`, the path is `/items`.\n1376:                 \"\"\"\n1377:             ),\n1378:         ],\n1379:         *,\n1380:         response_model: Annotated[\n1381:             Any,\n1382:             Doc(\n1383:                 \"\"\"\n1384:                 The type to use for the response.\n1385: \n1386:                 It could be any valid Pydantic *field* type. So, it doesn't have to\n1387:                 be a Pydantic model, it could be other things, like a `list`, `dict`,\n1388:                 etc.\n1389: \n1390:                 It will be used for:\n1391: \n1392:                 * Documentation: the generated OpenAPI (and the UI at `/docs`) will\n1393:                     show it as the response (JSON Schema).\n1394:                 * Serialization: you could return an arbitrary object and the\n1395:                     `response_model` would be used to serialize that object into the\n1396:                     corresponding JSON.\n1397:                 * Filtering: the JSON sent to the client will only contain the data\n1398:                     (fields) defined in the `response_model`. If you returned an object\n1399:                     that contains an attribute `password` but the `response_model` does\n1400:                     not include that field, the JSON sent to the client would not have\n1401:                     that `password`.\n1402:                 * Validation: whatever you return will be serialized with the\n1403:                     `response_model`, converting any data as necessary to generate the\n1404:                     corresponding JSON. But if the data in the object returned is not\n1405:                     valid, that would mean a violation of the contract with the client,\n1406:                     so it's an error from the API developer. So, FastAPI will raise an\n1407:                     error and return a 500 error code (Internal Server Error).\n1408: \n1409:                 Read more about it in the\n1410:                 [FastAPI docs for Response Model](https://fastapi.tiangolo.com/tutorial/response-model/).\n1411:                 \"\"\"\n1412:             ),\n1413:         ] = Default(None),\n1414:         status_code: Annotated[\n1415:             Optional[int],\n1416:             Doc(\n1417:                 \"\"\"\n1418:                 The default status code to be used for the response.\n1419: \n1420:                 You could override the status code by returning a response directly.\n1421: \n1422:                 Read more about it in the\n1423:                 [FastAPI docs for Response Status Code](https://fastapi.tiangolo.com/tutorial/response-status-code/).\n1424:                 \"\"\"\n1425:             ),\n1426:         ] = None,\n1427:         tags: Annotated[\n1428:             Optional[List[Union[str, Enum]]],\n1429:             Doc(\n[lines 1348-1429 of 4441]",
+    "token_count": 1107,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.routing.APIRouter",
+     "fastapi.routing.APIRouter.include_router",
+     "fastapi.routing.APIRouter.get"
+    ],
+    "provenance": {
+     "msg_id": "r2.2",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/routing.py",
+      "start_line": 1348,
+      "end_line": 1429
+     },
+     "engine_token_count": 1107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (read {\"end_line\": 1245, \"path\": \"fastapi/applications.py\", \"start_line\": 1175})\n1175:     def add_api_websocket_route(\n1176:         self,\n1177:         path: str,\n1178:         endpoint: Callable[..., Any],\n1179:         name: Optional[str] = None,\n1180:         *,\n1181:         dependencies: Optional[Sequence[Depends]] = None,\n1182:     ) -> None:\n1183:         self.router.add_api_websocket_route(\n1184:             path,\n1185:             endpoint,\n1186:             name=name,\n1187:             dependencies=dependencies,\n1188:         )\n1189: \n1190:     def websocket(\n1191:         self,\n1192:         path: Annotated[\n1193:             str,\n1194:             Doc(\n1195:                 \"\"\"\n1196:                 WebSocket path.\n1197:                 \"\"\"\n1198:             ),\n1199:         ],\n1200:         name: Annotated[\n1201:             Optional[str],\n1202:             Doc(\n1203:                 \"\"\"\n1204:                 A name for the WebSocket. Only used internally.\n1205:                 \"\"\"\n1206:             ),\n1207:         ] = None,\n1208:         *,\n1209:         dependencies: Annotated[\n1210:             Optional[Sequence[Depends]],\n1211:             Doc(\n1212:                 \"\"\"\n1213:                 A list of dependencies (using `Depends()`) to be used for this\n1214:                 WebSocket.\n1215: \n1216:                 Read more about it in the\n1217:                 [FastAPI docs for WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).\n1218:                 \"\"\"\n1219:             ),\n1220:         ] = None,\n1221:     ) -> Callable[[DecoratedCallable], DecoratedCallable]:\n1222:         \"\"\"\n1223:         Decorate a WebSocket function.\n1224: \n1225:         Read more about it in the\n1226:         [FastAPI docs for WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).\n1227: \n1228:         **Example**\n1229: \n1230:         ```python\n1231:         from fastapi import FastAPI, WebSocket\n1232: \n1233:         app = FastAPI()\n1234: \n1235:         @app.websocket(\"/ws\")\n1236:         async def websocket_endpoint(websocket: WebSocket):\n1237:             await websocket.accept()\n1238:             while True:\n1239:                 data = await websocket.receive_text()\n1240:                 await websocket.send_text(f\"Message text was: {data}\")\n1241:         ```\n1242:         \"\"\"\n1243: \n1244:         def decorator(func: DecoratedCallable) -> DecoratedCallable:\n1245:             self.add_api_websocket_route(\n[lines 1175-1245 of 4589]",
+    "token_count": 799,
+    "rank": 4,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.applications.FastAPI",
+     "fastapi.applications.FastAPI.add_api_websocket_route",
+     "fastapi.applications.FastAPI.websocket",
+     "fastapi.applications.FastAPI.websocket.decorator"
+    ],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/applications.py",
+      "start_line": 1175,
+      "end_line": 1245
+     },
+     "engine_token_count": 799
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2964,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "What breaks if `fastapi.routing.APIRouter.add_api_websocket_route` changes?",
+   "task_type": "T5_blast_radius",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 4,
+   "tool_calls": 4,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "Let's start by identifying where `fastapi.routing.APIRouter.add_api_websocket_route` is used in the repository.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"add_api_websocket_route\", \"glob\": \"**/*.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "add_api_websocket_route",
+        "glob": "**/*.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "add_api_websocket_route",
+        "glob": "**/*.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 56,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The `add_api_websocket_route` method is defined in `fastapi/routing.py` and used in the same file as well as in `fastapi/applications.py`. To understand what breaks if this method changes, we need to look at how it is used in these files.\n\nFirst, let's read the relevant parts of `fastapi/routing.py`.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/routing.py\", \"start_line\": 1026, \"end_line\": 1107}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/routing.py\", \"start_line\": 1348, \"end_line\": 1429}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/routing.py",
+        "start_line": 1026,
+        "end_line": 1107
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/routing.py",
+        "start_line": 1348,
+        "end_line": 1429
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/routing.py",
+        "start_line": 1026,
+        "end_line": 1107
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/routing.py",
+        "start_line": 1348,
+        "end_line": 1429
+       },
+       "msg_id": "r2.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 161,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "The `add_api_websocket_route` method is used to add WebSocket routes to the router. It is called within the `websocket` decorator and also within the `include_router` method. If this method changes, it could potentially break any code that relies on its current behavior, such as adding WebSocket routes to the application.\n\nLet's now look at how it is used in `fastapi/applications.py`.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/applications.py\", \"start_line\": 1175, \"end_line\": 1245}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/applications.py",
+        "start_line": 1175,
+        "end_line": 1245
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/applications.py",
+        "start_line": 1175,
+        "end_line": 1245
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 126,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "raw_text": "In `fastapi/applications.py`, the `add_api_websocket_route` method is called within the `websocket` decorator. This method is also directly exposed in the `FastAPI` class, allowing developers to add WebSocket routes manually.\n\nIf `fastapi.routing.APIRouter.add_api_websocket_route` changes, it could break any code that relies on its current behavior, such as adding WebSocket routes to the application. Specifically, changes to the method signature or its implementation could affect how WebSocket routes are added and processed.\n\nGiven the information, let's summarize the potential impact:\n\n- Any code that uses the `add_api_websocket_route` method directly or through the `websocket` decorator in `fastapi/applications.py`.\n- Any code that relies on the behavior of adding WebSocket routes to the application.\n\nSince we have identified the relevant parts of the code, we can now call the `answer` tool to provide the final response.\n\n<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"Changes to fastapi.routing.APIRouter.add_api_websocket_route could break any code that relies on its current behavior, such as adding WebSocket routes to the application. Specifically, changes to the method signature or its implementation could affect how WebSocket routes are added and processed.\\\", \\\"symbols\\\": [\\\"fastapi.routing.APIRouter.add_api_websocket_route\\\", \\\"fastapi.applications.FastAPI.add_api_websocket_route\\\", \\\"fastapi.applications.FastAPI.websocket\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"Changes to fastapi.routing.APIRouter.add_api_websocket_route could break any code that relies on its current behavior, such as adding WebSocket routes to the application. Specifically, changes to the method signature or its implementation could affect how WebSocket routes are added and processed.\", \"symbols\": [\"fastapi.routing.APIRouter.add_api_websocket_route\", \"fastapi.applications.FastAPI.add_api_websocket_route\", \"fastapi.applications.FastAPI.websocket\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 311,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     4726.484551,
+     10392.561946,
+     10922.343743,
+     21997.717578
+    ],
+    "L_tool_exec": [
+     23.798025,
+     1.01888,
+     0.706543,
+     1.642857
+    ],
+    "L_retrieve": [
+     48166.61163
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 3946,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"Changes to fastapi.routing.APIRouter.add_api_websocket_route could break any code that relies on its current behavior, such as adding WebSocket routes to the application. Specifically, changes to the method signature or its implementation could affect how WebSocket routes are added and processed.\", \"symbols\": [\"fastapi.routing.APIRouter.add_api_websocket_route\", \"fastapi.applications.FastAPI.add_api_websocket_route\", \"fastapi.applications.FastAPI.websocket\"]}\n```",
+    "generation_tokens": 311,
+    "latency_seconds": 21.99745199500103,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 3989,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2964,
+   "prompt_tokens": 3946,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3989,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

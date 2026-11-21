@@ -1,0 +1,994 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "express_t02_015_path_to_regexp_alias_mismatch",
+  "items": [
+   {
+    "source_id": "lib/application.js:1-62",
+    "content": "# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */",
+    "token_count": 347,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 13,
+     "rerank_score": 1.086927890777588,
+     "bm25_rank": 55,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:1010-1132#part3of3",
+    "content": "# test/app.router.js:1010-1132#part3of3  (test.app.router)\ndescribe('app.router', function(){\n  describe('when next(err) is called', function(){\n    it('should break out of app.router', function(done){\n      var app = express()\n        , calls = [];\n\n      app.get('/foo/:bar?', function(req, res, next){\n        calls.push('/foo/:bar?');\n        next();\n      });\n\n      app.get('/bar', function () {\n        assert(0);\n      });\n\n      app.get('/foo', function(req, res, next){\n        calls.push('/foo');\n        next(new Error('fail'));\n      });\n\n      app.get('/foo', function () {\n        assert(0);\n      });\n\n      app.use(function(err, req, res, next){\n        res.json({\n          calls: calls,\n          error: err.message\n        })\n      })\n\n      request(app)\n      .get('/foo')\n      .expect(200, { calls: ['/foo/:bar?', '/foo'], error: 'fail' }, done)\n    })\n\n    it('should call handler in same route, if exists', function(done){\n      var app = express();\n\n      function fn1(req, res, next) {\n        next(new Error('boom!'));\n      }\n\n      function fn2(req, res, next) {\n        res.send('foo here');\n      }\n\n      function fn3(err, req, res, next) {\n        res.send('route go ' + err.message);\n      }\n\n      app.get('/foo', fn1, fn2, fn3);\n\n      app.use(function (err, req, res, next) {\n        res.end('error!');\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('route go boom!', done)\n    })\n  })\n\n  it('should allow rewriting of the url', function(done){\n    var app = express();\n\n    app.get('/account/edit', function(req, res, next){\n      req.user = { id: 12 }; // faux authenticated user\n      req.url = '/user/' + req.user.id + '/edit';\n      next();\n    });\n\n    app.get('/user/:id/edit', function(req, res){\n      res.send('editing user ' + req.params.id);\n    });\n\n    request(app)\n    .get('/account/edit')\n    .expect('editing user 12', done);\n  })\n\n  it('should run in order added', function(done){\n    var app = express();\n    var path = [];\n\n    app.get('*', function(req, res, next){\n      path.push(0);\n      next();\n    });\n\n    app.get('/user/:id', function(req, res, next){\n      path.push(1);\n      next();\n    });\n\n    app.use(function(req, res, next){\n      path.push(2);\n      next();\n    });\n\n    app.all('/user/:id', function(req, res, next){\n      path.push(3);\n      next();\n    });\n\n    app.get('*', function(req, res, next){\n      path.push(4);\n      next();\n    });\n\n    app.use(function(req, res, next){\n      path.push(5);\n      res.end(path.join(','))\n    });\n\n    request(app)\n    .get('/user/1')\n    .expect(200, '0,1,2,3,4,5', done);\n  })\n\n  it('should be chainable', function(){\n    var app = express();\n    assert.strictEqual(app.get('/', function () {}), app)\n  })\n})",
+    "token_count": 733,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 35,
+     "rerank_score": 0.5283031463623047,
+     "bm25_rank": 52,
+     "dense_rank": 96,
+     "oversized_chunk": false,
+     "engine_token_count": 733
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:1-31",
+    "content": "# lib/router/layer.js:1-31  (lib.router.layer)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar pathRegexp = require('path-to-regexp');\nvar debug = require('debug')('express:router:layer');\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = Layer;",
+    "token_count": 151,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": 0.2790639400482178,
+     "bm25_rank": 3,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 151
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:144-241#part2of3",
+    "content": "# test/app.router.js:144-241#part2of3  (test.app.router)\ndescribe('app.router', function(){\n  it('should be .use()able', function(done){\n    var app = express();\n\n    var calls = [];\n\n    app.use(function(req, res, next){\n      calls.push('before');\n      next();\n    });\n\n    app.get('/', function(req, res, next){\n      calls.push('GET /')\n      next();\n    });\n\n    app.use(function(req, res, next){\n      calls.push('after');\n      res.json(calls)\n    });\n\n    request(app)\n    .get('/')\n    .expect(200, ['before', 'GET /', 'after'], done)\n  })\n\n  describe('when given a regexp', function(){\n    it('should match the pathname only', function(done){\n      var app = express();\n\n      app.get(/^\\/user\\/[0-9]+$/, function(req, res){\n        res.end('user');\n      });\n\n      request(app)\n      .get('/user/12?foo=bar')\n      .expect('user', done);\n    })\n\n    it('should populate req.params with the captures', function(done){\n      var app = express();\n\n      app.get(/^\\/user\\/([0-9]+)\\/(view|edit)?$/, function(req, res){\n        var id = req.params[0]\n          , op = req.params[1];\n        res.end(op + 'ing user ' + id);\n      });\n\n      request(app)\n      .get('/user/10/edit')\n      .expect('editing user 10', done);\n    })\n\n    if (supportsRegexp('(?<foo>.*)')) {\n      it('should populate req.params with named captures', function(done){\n        var app = express();\n        var re = new RegExp('^/user/(?<userId>[0-9]+)/(view|edit)?$');\n\n        app.get(re, function(req, res){\n          var id = req.params.userId\n            , op = req.params[0];\n          res.end(op + 'ing user ' + id);\n        });\n\n        request(app)\n        .get('/user/10/edit')\n        .expect('editing user 10', done);\n      })\n    }\n\n    it('should ensure regexp matches path prefix', function (done) {\n      var app = express()\n      var p = []\n\n      app.use(/\\/api.*/, function (req, res, next) {\n        p.push('a')\n        next()\n      })\n      app.use(/api/, function (req, res, next) {\n        p.push('b')\n        next()\n      })\n      app.use(/\\/test/, function (req, res, next) {\n        p.push('c')\n        next()\n      })\n      app.use(function (req, res) {\n        res.end()\n      })\n\n      request(app)\n        .get('/test/api/1234')\n        .expect(200, function (err) {\n          if (err) return done(err)\n          assert.deepEqual(p, ['c'])\n          done()\n        })\n    })\n  })\n})",
+    "token_count": 646,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": 0.07956503331661224,
+     "bm25_rank": 33,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 646
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:1-41",
+    "content": "# lib/router/index.js:1-41  (lib.router)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar Route = require('./route');\nvar Layer = require('./layer');\nvar methods = require('methods');\nvar mixin = require('utils-merge');\nvar debug = require('debug')('express:router');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar parseUrl = require('parseurl');\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar objectRegExp = /^\\[object (\\S+)\\]$/;\nvar slice = Array.prototype.slice;\nvar toString = Object.prototype.toString;\n\n/**\n * Initialize a new `Router` with the given `options`.\n *\n * @param {Object} [options]\n * @return {Router} which is a callable function\n * @public\n */",
+    "token_count": 252,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": -0.14816688001155853,
+     "bm25_rank": 27,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 252
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:261-264",
+    "content": "# lib/application.js:261-264  (lib.application.route)\napp.route = function route(path) {\n  this.lazyrouter();\n  return this._router.route(path);\n};",
+    "token_count": 40,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.route"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 40,
+     "rerank_score": -0.18628676235675812,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.param.js:8-79",
+    "content": "# test/app.param.js:8-79  (test.app.param)\ndescribe('app', function(){\n  describe('.param(fn)', function(){\n    it('should map app.param(name, ...) logic', function(done){\n      var app = express();\n\n      app.param(function(name, regexp){\n        if (Object.prototype.toString.call(regexp) === '[object RegExp]') { // See #1557\n          return function(req, res, next, val){\n            var captures;\n            if (captures = regexp.exec(String(val))) {\n              req.params[name] = captures[1];\n              next();\n            } else {\n              next('route');\n            }\n          }\n        }\n      })\n\n      app.param(':name', /^([a-zA-Z]+)$/);\n\n      app.get('/user/:name', function(req, res){\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/user/tj')\n      .expect(200, 'tj', function (err) {\n        if (err) return done(err)\n        request(app)\n        .get('/user/123')\n        .expect(404, done);\n      });\n\n    })\n\n    it('should fail if not given fn', function(){\n      var app = express();\n      assert.throws(app.param.bind(app, ':name', 'bob'))\n    })\n  })\n\n  describe('.param(names, fn)', function(){\n    it('should map the array', function(done){\n      var app = express();\n\n      app.param(['id', 'uid'], function(req, res, next, id){\n        id = Number(id);\n        if (isNaN(id)) return next('route');\n        req.params.id = id;\n        next();\n      });\n\n      app.get('/post/:id', function(req, res){\n        var id = req.params.id;\n        res.send((typeof id) + ':' + id)\n      });\n\n      app.get('/user/:uid', function(req, res){\n        var id = req.params.id;\n        res.send((typeof id) + ':' + id)\n      });\n\n      request(app)\n        .get('/user/123')\n        .expect(200, 'number:123', function (err) {\n          if (err) return done(err)\n          request(app)\n            .get('/post/123')\n            .expect('number:123', done)\n        })\n    })\n  })\n})",
+    "token_count": 499,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": -0.5387680530548096,
+     "bm25_rank": 39,
+     "dense_rank": 46,
+     "oversized_chunk": false,
+     "engine_token_count": 499
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:1-41",
+    "content": "# lib/router/route.js:1-41  (lib.router.route)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar debug = require('debug')('express:router:route');\nvar flatten = require('array-flatten');\nvar Layer = require('./layer');\nvar methods = require('methods');\n\n/**\n * Module variables.\n * @private\n */\n\nvar slice = Array.prototype.slice;\nvar toString = Object.prototype.toString;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = Route;\n\n/**\n * Initialize `Route` with the given `path`,\n *\n * @param {String} path\n * @public\n */",
+    "token_count": 195,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 8,
+     "rerank_score": -0.6434423327445984,
+     "bm25_rank": 35,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 195
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:577-607",
+    "content": "# test/app.router.js:577-607  (test.app.router)\ndescribe('app.router', function(){\n  it('should allow escaped regexp', function(done){\n    var app = express();\n\n    app.get('/user/\\\\d+', function(req, res){\n      res.end('woot');\n    });\n\n    request(app)\n    .get('/user/10')\n    .expect(200, function (err) {\n      if (err) return done(err)\n      request(app)\n      .get('/user/tj')\n      .expect(404, done);\n    });\n  })\n\n  it('should allow literal \".\"', function(done){\n    var app = express();\n\n    app.get('/api/users/:from..:to', function(req, res){\n      var from = req.params.from\n        , to = req.params.to;\n\n      res.end('users from ' + from + ' to ' + to);\n    });\n\n    request(app)\n    .get('/api/users/1..50')\n    .expect('users from 1 to 50', done);\n  })\n})",
+    "token_count": 229,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -0.6657829880714417,
+     "bm25_rank": 84,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 229
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/static-files/index.js:1-43",
+    "content": "# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');",
+    "token_count": 348,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -0.8358013033866882,
+     "bm25_rank": 8,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 348
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/mvc/lib/boot.js:1-83",
+    "content": "# examples/mvc/lib/boot.js:1-83  (examples.mvc.lib.boot)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../..');\nvar fs = require('fs');\nvar path = require('path');\n\nmodule.exports = function(parent, options){\n  var dir = path.join(__dirname, '..', 'controllers');\n  var verbose = options.verbose;\n  fs.readdirSync(dir).forEach(function(name){\n    var file = path.join(dir, name)\n    if (!fs.statSync(file).isDirectory()) return;\n    verbose && console.log('\\n   %s:', name);\n    var obj = require(file);\n    var name = obj.name || name;\n    var prefix = obj.prefix || '';\n    var app = express();\n    var handler;\n    var method;\n    var url;\n\n    // allow specifying the view engine\n    if (obj.engine) app.set('view engine', obj.engine);\n    app.set('views', path.join(__dirname, '..', 'controllers', name, 'views'));\n\n    // generate routes based\n    // on the exported methods\n    for (var key in obj) {\n      // \"reserved\" exports\n      if (~['name', 'prefix', 'engine', 'before'].indexOf(key)) continue;\n      // route exports\n      switch (key) {\n        case 'show':\n          method = 'get';\n          url = '/' + name + '/:' + name + '_id';\n          break;\n        case 'list':\n          method = 'get';\n          url = '/' + name + 's';\n          break;\n        case 'edit':\n          method = 'get';\n          url = '/' + name + '/:' + name + '_id/edit';\n          break;\n        case 'update':\n          method = 'put';\n          url = '/' + name + '/:' + name + '_id';\n          break;\n        case 'create':\n          method = 'post';\n          url = '/' + name;\n          break;\n        case 'index':\n          method = 'get';\n          url = '/';\n          break;\n        default:\n          /* istanbul ignore next */\n          throw new Error('unrecognized route: ' + name + '.' + key);\n      }\n\n      // setup\n      handler = obj[key];\n      url = prefix + url;\n\n      // before middleware support\n      if (obj.before) {\n        app[method](url, obj.before, handler);\n        verbose && console.log('     %s %s -> before -> %s', method.toUpperCase(), url, key);\n      } else {\n        app[method](url, handler);\n        verbose && console.log('     %s %s -> %s', method.toUpperCase(), url, key);\n      }\n    }\n\n    // mount the app\n    parent.use(app);\n  });\n};",
+    "token_count": 566,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 32,
+     "rerank_score": -1.1589797735214233,
+     "bm25_rank": 47,
+     "dense_rank": 91,
+     "oversized_chunk": false,
+     "engine_token_count": 566
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:887-1008#part2of3",
+    "content": "# test/app.router.js:887-1008#part2of3  (test.app.router)\ndescribe('app.router', function(){\n  describe('.:name', function(){\n    it('should denote a format', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/:name.:format', function(req, res){\n        res.end(req.params.name + ' as ' + req.params.format);\n      });\n\n      request(app)\n        .get('/foo.json')\n        .expect(200, 'foo as json', cb)\n\n      request(app)\n        .get('/foo')\n        .expect(404, cb)\n    })\n  })\n\n  describe('.:name?', function(){\n    it('should denote an optional format', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/:name.:format?', function(req, res){\n        res.end(req.params.name + ' as ' + (req.params.format || 'html'));\n      });\n\n      request(app)\n        .get('/foo')\n        .expect(200, 'foo as html', cb)\n\n      request(app)\n        .get('/foo.json')\n        .expect(200, 'foo as json', cb)\n    })\n  })\n\n  describe('when next() is called', function(){\n    it('should continue lookup', function(done){\n      var app = express()\n        , calls = [];\n\n      app.get('/foo/:bar?', function(req, res, next){\n        calls.push('/foo/:bar?');\n        next();\n      });\n\n      app.get('/bar', function () {\n        assert(0);\n      });\n\n      app.get('/foo', function(req, res, next){\n        calls.push('/foo');\n        next();\n      });\n\n      app.get('/foo', function (req, res) {\n        calls.push('/foo 2');\n        res.json(calls)\n      });\n\n      request(app)\n      .get('/foo')\n      .expect(200, ['/foo/:bar?', '/foo', '/foo 2'], done)\n    })\n  })\n\n  describe('when next(\"route\") is called', function(){\n    it('should jump to next route', function(done){\n      var app = express()\n\n      function fn(req, res, next){\n        res.set('X-Hit', '1')\n        next('route')\n      }\n\n      app.get('/foo', fn, function (req, res) {\n        res.end('failure')\n      });\n\n      app.get('/foo', function(req, res){\n        res.end('success')\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('X-Hit', '1')\n      .expect(200, 'success', done)\n    })\n  })\n\n  describe('when next(\"router\") is called', function () {\n    it('should jump out of router', function (done) {\n      var app = express()\n      var router = express.Router()\n\n      function fn (req, res, next) {\n        res.set('X-Hit', '1')\n        next('router')\n      }\n\n      router.get('/foo', fn, function (req, res) {\n        res.end('failure')\n      })\n\n      router.get('/foo', function (req, res) {\n        res.end('failure')\n      })\n\n      app.use(router)\n\n      app.get('/foo', function (req, res) {\n        res.end('success')\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('X-Hit', '1')\n      .expect(200, 'success', done)\n    })\n  })\n})",
+    "token_count": 756,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -1.1704204082489014,
+     "bm25_rank": 77,
+     "dense_rank": 36,
+     "oversized_chunk": false,
+     "engine_token_count": 756
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:502-515",
+    "content": "# lib/router/index.js:502-515  (lib.router.route)\nproto.route = function route(path) {\n  var route = new Route(path);\n\n  var layer = new Layer(path, {\n    sensitive: this.caseSensitive,\n    strict: this.strict,\n    end: true\n  }, route.dispatch.bind(route));\n\n  layer.route = route;\n\n  this.stack.push(layer);\n  return route;\n};",
+    "token_count": 86,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.route"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 12,
+     "rerank_score": -1.262150526046753,
+     "bm25_rank": 49,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:184-192",
+    "content": "# lib/application.js:184-192  (lib.application)\n/**\n * Proxy `Router#use()` to add middleware to the app router.\n * See Router#use() documentation for details.\n *\n * If the _fn_ parameter is an express app, then it will be\n * mounted at the _route_ specified.\n *\n * @public\n */",
+    "token_count": 76,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 31,
+     "rerank_score": -1.8024438619613647,
+     "bm25_rank": 97,
+     "dense_rank": 41,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:485-512",
+    "content": "# lib/application.js:485-512  (lib.application)\n/**\n * Delegate `.VERB(...)` calls to `router.VERB(...)`.\n */\n\nmethods.forEach(function(method){\n  app[method] = function(path){\n    if (method === 'get' && arguments.length === 1) {\n      // app.get(setting)\n      return this.set(path);\n    }\n\n    this.lazyrouter();\n\n    var route = this._router.route(path);\n    route[method].apply(route, slice.call(arguments, 1));\n    return this;\n  };\n});\n\n/**\n * Special-cased \"all\" method, applying the given route `path`,\n * middleware, and callback to _every_ HTTP method.\n *\n * @param {String} path\n * @param {Function} ...\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 173,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 30,
+     "rerank_score": -1.9562194347381592,
+     "bm25_rank": 43,
+     "dense_rank": 90,
+     "oversized_chunk": false,
+     "engine_token_count": 173
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:177-291#part2of3",
+    "content": "# lib/router/index.js:177-291#part2of3  (lib.router.handle)\nproto.handle = function handle(req, res, out) {\n  function next(err) {\n    var layerError = err === 'route'\n      ? null\n      : err;\n\n    // remove added slash\n    if (slashAdded) {\n      req.url = req.url.slice(1)\n      slashAdded = false;\n    }\n\n    // restore altered req.url\n    if (removed.length !== 0) {\n      req.baseUrl = parentUrl;\n      req.url = protohost + removed + req.url.slice(protohost.length)\n      removed = '';\n    }\n\n    // signal to exit router\n    if (layerError === 'router') {\n      setImmediate(done, null)\n      return\n    }\n\n    // no more matching layers\n    if (idx >= stack.length) {\n      setImmediate(done, layerError);\n      return;\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    // get pathname of request\n    var path = getPathname(req);\n\n    if (path == null) {\n      return done(layerError);\n    }\n\n    // find next matching layer\n    var layer;\n    var match;\n    var route;\n\n    while (match !== true && idx < stack.length) {\n      layer = stack[idx++];\n      match = matchLayer(layer, path);\n      route = layer.route;\n\n      if (typeof match !== 'boolean') {\n        // hold on to layerError\n        layerError = layerError || match;\n      }\n\n      if (match !== true) {\n        continue;\n      }\n\n      if (!route) {\n        // process non-route handlers normally\n        continue;\n      }\n\n      if (layerError) {\n        // routes do not match with a pending error\n        match = false;\n        continue;\n      }\n\n      var method = req.method;\n      var has_method = route._handles_method(method);\n\n      // build up automatic options response\n      if (!has_method && method === 'OPTIONS') {\n        appendMethods(options, route._options());\n      }\n\n      // don't even bother matching route\n      if (!has_method && method !== 'HEAD') {\n        match = false;\n      }\n    }\n\n    // no match\n    if (match !== true) {\n      return done(layerError);\n    }\n\n    // store route for dispatch on change\n    if (route) {\n      req.route = route;\n    }\n\n    // Capture one-time layer values\n    req.params = self.mergeParams\n      ? mergeParams(layer.params, parentParams)\n      : layer.params;\n    var layerPath = layer.path;\n\n    // this should be done for the layer\n    self.process_params(layer, paramcalled, req, res, function (err) {\n      if (err) {\n        next(layerError || err)\n      } else if (route) {\n        layer.handle_request(req, res, next)\n      } else {\n        trim_prefix(layer, layerError, layerPath, path)\n      }\n\n      sync = 0\n    });\n  }\n};",
+    "token_count": 646,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.handle"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 7,
+     "rerank_score": -2.0155887603759766,
+     "bm25_rank": 19,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 646
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:439-487",
+    "content": "# lib/router/index.js:439-487  (lib.router.use)\nproto.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate router.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var callbacks = flatten(slice.call(arguments, offset));\n\n  if (callbacks.length === 0) {\n    throw new TypeError('Router.use() requires a middleware function')\n  }\n\n  for (var i = 0; i < callbacks.length; i++) {\n    var fn = callbacks[i];\n\n    if (typeof fn !== 'function') {\n      throw new TypeError('Router.use() requires a middleware function but got a ' + gettype(fn))\n    }\n\n    // add the middleware\n    debug('use %o %s', path, fn.name || '<anonymous>')\n\n    var layer = new Layer(path, {\n      sensitive: this.caseSensitive,\n      strict: false,\n      end: false\n    }, fn);\n\n    layer.route = undefined;\n\n    this.stack.push(layer);\n  }\n\n  return this;\n};",
+    "token_count": 296,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.use"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 3,
+     "rerank_score": -2.020195484161377,
+     "bm25_rank": 7,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 296
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:583-589",
+    "content": "# lib/router/index.js:583-589  (lib.router.matchLayer)\nfunction matchLayer(layer, path) {\n  try {\n    return layer.match(path);\n  } catch (err) {\n    return err;\n  }\n}",
+    "token_count": 51,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.matchLayer"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 14,
+     "rerank_score": -2.1314198970794678,
+     "bm25_rank": 42,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:101-154",
+    "content": "# lib/router/route.js:101-154  (lib.router.route.dispatch)\nRoute.prototype.dispatch = function dispatch(req, res, done) {\n  var idx = 0;\n  var stack = this.stack;\n  var sync = 0\n\n  if (stack.length === 0) {\n    return done();\n  }\n  var method = typeof req.method === 'string'\n    ? req.method.toLowerCase()\n    : req.method\n\n  if (method === 'head' && !this.methods['head']) {\n    method = 'get';\n  }\n\n  req.route = this;\n\n  next();\n\n  function next(err) {\n    // signal to exit route\n    if (err && err === 'route') {\n      return done();\n    }\n\n    // signal to exit router\n    if (err && err === 'router') {\n      return done(err)\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    var layer = stack[idx++]\n\n    // end of layers\n    if (!layer) {\n      return done(err)\n    }\n\n    if (layer.method && layer.method !== method) {\n      next(err)\n    } else if (err) {\n      layer.handle_error(err, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n\n    sync = 0\n  }\n};",
+    "token_count": 296,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.route.dispatch",
+     "lib.router.route.dispatch.next"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 37,
+     "rerank_score": -2.188732385635376,
+     "bm25_rank": 61,
+     "dense_rank": 95,
+     "oversized_chunk": false,
+     "engine_token_count": 296
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:251-259",
+    "content": "# lib/application.js:251-259  (lib.application)\n/**\n * Proxy to the app `Router#route()`\n * Returns a new `Route` instance for the _path_.\n *\n * Routes are isolated middleware stacks for specific paths.\n * See the Route api docs for details.\n *\n * @public\n */",
+    "token_count": 69,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 19,
+     "rerank_score": -2.2539377212524414,
+     "bm25_rank": 93,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:110-156",
+    "content": "# lib/router/layer.js:110-156  (lib.router.layer.match)\nLayer.prototype.match = function match(path) {\n  var match\n\n  if (path != null) {\n    // fast path non-ending match for / (any path matches)\n    if (this.regexp.fast_slash) {\n      this.params = {}\n      this.path = ''\n      return true\n    }\n\n    // fast path for * (everything matched in a param)\n    if (this.regexp.fast_star) {\n      this.params = {'0': decode_param(path)}\n      this.path = path\n      return true\n    }\n\n    // match the path\n    match = this.regexp.exec(path)\n  }\n\n  if (!match) {\n    this.params = undefined;\n    this.path = undefined;\n    return false;\n  }\n\n  // store values\n  this.params = {};\n  this.path = match[0]\n\n  var keys = this.keys;\n  var params = this.params;\n\n  for (var i = 1; i < match.length; i++) {\n    var key = keys[i - 1];\n    var prop = key.name;\n    var val = decode_param(match[i])\n\n    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {\n      params[prop] = val;\n    }\n  }\n\n  return true;\n};",
+    "token_count": 277,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.match"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 2,
+     "rerank_score": -2.3783364295959473,
+     "bm25_rank": 1,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 277
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:575-581",
+    "content": "# lib/router/index.js:575-581  (lib.router)\n/**\n * Match path to a layer.\n *\n * @param {Layer} layer\n * @param {string} path\n * @private\n */",
+    "token_count": 48,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 6,
+     "rerank_score": -2.456098794937134,
+     "bm25_rank": 30,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:266-298",
+    "content": "# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 321,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 15,
+     "rerank_score": -2.588705539703369,
+     "bm25_rank": 6,
+     "dense_rank": 74,
+     "oversized_chunk": false,
+     "engine_token_count": 321
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/express.js:59-116",
+    "content": "# lib/express.js:59-116  (lib.express)\n/**\n * Expose the prototypes.\n */\n\nexports.application = proto;\nexports.request = req;\nexports.response = res;\n\n/**\n * Expose constructors.\n */\n\nexports.Route = Route;\nexports.Router = Router;\n\n/**\n * Expose middleware\n */\n\nexports.json = bodyParser.json\nexports.query = require('./middleware/query');\nexports.raw = bodyParser.raw\nexports.static = require('serve-static');\nexports.text = bodyParser.text\nexports.urlencoded = bodyParser.urlencoded\n\n/**\n * Replace removed middleware with an appropriate error message.\n */\n\nvar removedMiddlewares = [\n  'bodyParser',\n  'compress',\n  'cookieSession',\n  'session',\n  'logger',\n  'cookieParser',\n  'favicon',\n  'responseTime',\n  'errorHandler',\n  'timeout',\n  'methodOverride',\n  'vhost',\n  'csrf',\n  'directory',\n  'limit',\n  'multipart',\n  'staticCache'\n]\n\nremovedMiddlewares.forEach(function (name) {\n  Object.defineProperty(exports, name, {\n    get: function () {\n      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');\n    },\n    configurable: true\n  });\n});",
+    "token_count": 273,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -2.6776249408721924,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 273
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:293-330#part3of3",
+    "content": "# lib/router/index.js:293-330#part3of3  (lib.router.handle)\nproto.handle = function handle(req, res, out) {\n  function trim_prefix(layer, layerError, layerPath, path) {\n    if (layerPath.length !== 0) {\n      // Validate path is a prefix match\n      if (layerPath !== path.slice(0, layerPath.length)) {\n        next(layerError)\n        return\n      }\n\n      // Validate path breaks on a path separator\n      var c = path[layerPath.length]\n      if (c && c !== '/' && c !== '.') return next(layerError)\n\n      // Trim off the part of the url that matches the route\n      // middleware (.use stuff) needs to have the path stripped\n      debug('trim prefix (%s) from url %s', layerPath, req.url);\n      removed = layerPath;\n      req.url = protohost + req.url.slice(protohost.length + removed.length)\n\n      // Ensure leading slash\n      if (!protohost && req.url[0] !== '/') {\n        req.url = '/' + req.url;\n        slashAdded = true;\n      }\n\n      // Setup base URL (no trailing slash)\n      req.baseUrl = parentUrl + (removed[removed.length - 1] === '/'\n        ? removed.substring(0, removed.length - 1)\n        : removed);\n    }\n\n    debug('%s %s : %s', layer.name, layerPath, req.originalUrl);\n\n    if (layerError) {\n      layer.handle_error(layerError, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n  }\n};",
+    "token_count": 346,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.handle"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 4,
+     "rerank_score": -2.7627477645874023,
+     "bm25_rank": 2,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 346
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:316-326",
+    "content": "# lib/application.js:316-326  (lib.application)\n/**\n * Proxy to `Router#param()` with one added api feature. The _name_ parameter\n * can be an array of names.\n *\n * See the Router#param() docs for more details.\n *\n * @param {String|Array} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 92,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 26,
+     "rerank_score": -2.873136520385742,
+     "bm25_rank": 56,
+     "dense_rank": 43,
+     "oversized_chunk": false,
+     "engine_token_count": 92
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/route-map/index.js:14-29",
+    "content": "# examples/route-map/index.js:14-29  (examples.route-map.map)\napp.map = function(a, route){\n  route = route || '';\n  for (var key in a) {\n    switch (typeof a[key]) {\n      // { '/path': { ... }}\n      case 'object':\n        app.map(a[key], route + key);\n        break;\n      // get: function(){ ... }\n      case 'function':\n        if (verbose) console.log('%s %s', key, route);\n        app[key](route, a[key]);\n        break;\n    }\n  }\n};",
+    "token_count": 124,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.route-map.map"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 21,
+     "rerank_score": -2.8956403732299805,
+     "bm25_rank": 72,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 124
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:184-204",
+    "content": "# lib/router/route.js:184-204  (lib.router.route.all)\nRoute.prototype.all = function all() {\n  var handles = flatten(slice.call(arguments));\n\n  for (var i = 0; i < handles.length; i++) {\n    var handle = handles[i];\n\n    if (typeof handle !== 'function') {\n      var type = toString.call(handle);\n      var msg = 'Route.all() requires a callback function but got a ' + type\n      throw new TypeError(msg);\n    }\n\n    var layer = Layer('/', {}, handle);\n    layer.method = undefined;\n\n    this.methods._all = true;\n    this.stack.push(layer);\n  }\n\n  return this;\n};",
+    "token_count": 143,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.route.all"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 24,
+     "rerank_score": -2.920421600341797,
+     "bm25_rank": 40,
+     "dense_rank": 59,
+     "oversized_chunk": false,
+     "engine_token_count": 143
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "index.js:1-11",
+    "content": "# index.js:1-11\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\nmodule.exports = require('./lib/express');",
+    "token_count": 84,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 46,
+     "rerank_score": -2.950057029724121,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:627-682",
+    "content": "# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 384,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 34,
+     "rerank_score": -2.954535961151123,
+     "bm25_rank": 5,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 384
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:206-230",
+    "content": "# lib/router/route.js:206-230  (lib.router.route)\nmethods.forEach(function(method){\n  Route.prototype[method] = function(){\n    var handles = flatten(slice.call(arguments));\n\n    for (var i = 0; i < handles.length; i++) {\n      var handle = handles[i];\n\n      if (typeof handle !== 'function') {\n        var type = toString.call(handle);\n        var msg = 'Route.' + method + '() requires a callback function but got a ' + type\n        throw new Error(msg);\n      }\n\n      debug('%s %o', method, this.path)\n\n      var layer = Layer('/', {}, handle);\n      layer.method = method;\n\n      this.methods[method] = true;\n      this.stack.push(layer);\n    }\n\n    return this;\n  };\n});",
+    "token_count": 165,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 10,
+     "rerank_score": -3.0654940605163574,
+     "bm25_rank": 18,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 165
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:33-50",
+    "content": "# lib/router/layer.js:33-50  (lib.router.layer.Layer)\nfunction Layer(path, options, fn) {\n  if (!(this instanceof Layer)) {\n    return new Layer(path, options, fn);\n  }\n\n  debug('new %o', path)\n  var opts = options || {};\n\n  this.handle = fn;\n  this.name = fn.name || '<anonymous>';\n  this.params = undefined;\n  this.path = undefined;\n  this.regexp = pathRegexp(path, this.keys = [], opts);\n\n  // set fast path flags\n  this.regexp.fast_star = path === '*'\n  this.regexp.fast_slash = path === '/' && opts.end === false\n}",
+    "token_count": 144,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.Layer"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 9,
+     "rerank_score": -3.116913318634033,
+     "bm25_rank": 10,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 144
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:424-437",
+    "content": "# lib/router/index.js:424-437  (lib.router)\n/**\n * Use the given middleware function, with optional path, defaulting to \"/\".\n *\n * Use (like `.all`) will run for any http METHOD, but it will not add\n * handlers for those methods so OPTIONS requests will not consider `.use`\n * functions even if they could respond.\n *\n * The other difference is that _route_ path is stripped and not visible\n * to the handler function. The main effect of this feature is that mounted\n * handlers can operate without any code changes regardless of the \"prefix\"\n * pathname.\n *\n * @public\n */",
+    "token_count": 134,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 27,
+     "rerank_score": -3.3135602474212646,
+     "bm25_rank": 28,
+     "dense_rank": 93,
+     "oversized_chunk": false,
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-constructor/index.js:1-48",
+    "content": "# examples/view-constructor/index.js:1-48  (examples.view-constructor)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar GithubView = require('./github-view');\nvar md = require('marked').parse;\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\napp.engine('md', function(str, options, fn){\n  try {\n    var html = md(str);\n    html = html.replace(/\\{([^}]+)\\}/g, function(_, name){\n      return options[name] || '';\n    });\n    fn(null, html);\n  } catch(err) {\n    fn(err);\n  }\n});\n\n// pointing to a particular github repo to load files from it\napp.set('views', 'expressjs/express');\n\n// register a new view constructor\napp.set('view', GithubView);\n\napp.get('/', function(req, res){\n  // rendering a view relative to the repo.\n  // app.locals, res.locals, and locals passed\n  // work like they normally would\n  res.render('examples/markdown/views/index.md', { title: 'Example' });\n});\n\napp.get('/Readme.md', function(req, res){\n  // rendering a view from https://github.com/expressjs/express/blob/master/Readme.md\n  res.render('Readme.md');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 316,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": -3.374358892440796,
+     "bm25_rank": 25,
+     "dense_rank": 92,
+     "oversized_chunk": false,
+     "engine_token_count": 316
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:489-500",
+    "content": "# lib/router/index.js:489-500  (lib.router)\n/**\n * Create a new Route for the given path.\n *\n * Each route contains a separate middleware stack and VERB handlers.\n *\n * See the Route api documentation for details on adding handlers\n * and middleware to routes.\n *\n * @param {String} path\n * @return {Route}\n * @public\n */",
+    "token_count": 82,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 17,
+     "rerank_score": -3.478806972503662,
+     "bm25_rank": 44,
+     "dense_rank": 28,
+     "oversized_chunk": false,
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:1-18",
+    "content": "# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.",
+    "token_count": 114,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 36,
+     "rerank_score": -3.503401041030884,
+     "bm25_rank": 64,
+     "dense_rank": 79,
+     "oversized_chunk": false,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:97-129",
+    "content": "# lib/router/index.js:97-129  (lib.router.param)\nproto.param = function param(name, fn) {\n  // param logic\n  if (typeof name === 'function') {\n    deprecate('router.param(fn): Refactor to use path params');\n    this._params.push(name);\n    return;\n  }\n\n  // apply param functions\n  var params = this._params;\n  var len = params.length;\n  var ret;\n\n  if (name[0] === ':') {\n    deprecate('router.param(' + JSON.stringify(name) + ', fn): Use router.param(' + JSON.stringify(name.slice(1)) + ', fn) instead')\n    name = name.slice(1)\n  }\n\n  for (var i = 0; i < len; ++i) {\n    if (ret = params[i](name, fn)) {\n      fn = ret;\n    }\n  }\n\n  // ensure we end up with a\n  // middleware function\n  if ('function' !== typeof fn) {\n    throw new Error('invalid param() call for ' + name + ', got ' + fn);\n  }\n\n  (this.params[name] = this.params[name] || []).push(fn);\n  return this;\n};",
+    "token_count": 258,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.param"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 43,
+     "rerank_score": -3.6963717937469482,
+     "bm25_rank": 89,
+     "dense_rank": 76,
+     "oversized_chunk": false,
+     "engine_token_count": 258
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:86-99",
+    "content": "# lib/router/layer.js:86-99  (lib.router.layer.handle_request)\nLayer.prototype.handle_request = function handle(req, res, next) {\n  var fn = this.handle;\n\n  if (fn.length > 3) {\n    // not a standard request handler\n    return next();\n  }\n\n  try {\n    fn(req, res, next);\n  } catch (err) {\n    next(err);\n  }\n};",
+    "token_count": 90,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.handle_request"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 45,
+     "rerank_score": -4.188295364379883,
+     "bm25_rank": 86,
+     "dense_rank": 81,
+     "oversized_chunk": false,
+     "engine_token_count": 90
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:194-249",
+    "content": "# lib/application.js:194-249  (lib.application.use)\napp.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate app.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var fns = flatten(slice.call(arguments, offset));\n\n  if (fns.length === 0) {\n    throw new TypeError('app.use() requires a middleware function')\n  }\n\n  // setup router\n  this.lazyrouter();\n  var router = this._router;\n\n  fns.forEach(function (fn) {\n    // non-express app\n    if (!fn || !fn.handle || !fn.set) {\n      return router.use(path, fn);\n    }\n\n    debug('.use app under %s', path);\n    fn.mountpath = path;\n    fn.parent = this;\n\n    // restore .app property on req and res\n    router.use(path, function mounted_app(req, res, next) {\n      var orig = req.app;\n      fn.handle(req, res, function (err) {\n        setPrototypeOf(req, orig.request)\n        setPrototypeOf(res, orig.response)\n        next(err);\n      });\n    });\n\n    // mounted an app\n    fn.emit('mount', this);\n  }, this);\n\n  return this;\n};",
+    "token_count": 341,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.use"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 23,
+     "rerank_score": -4.240356922149658,
+     "bm25_rank": 23,
+     "dense_rank": 83,
+     "oversized_chunk": false,
+     "engine_token_count": 341
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:77-84",
+    "content": "# lib/router/layer.js:77-84  (lib.router.layer)\n/**\n * Handle the request for the layer.\n *\n * @param {Request} req\n * @param {Response} res\n * @param {function} next\n * @api private\n */",
+    "token_count": 58,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 16,
+     "rerank_score": -4.538678169250488,
+     "bm25_rank": 57,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:63-95",
+    "content": "# lib/router/index.js:63-95  (lib.router)\n/**\n * Map the given param placeholder `name`(s) to the given callback.\n *\n * Parameter mapping is used to provide pre-conditions to routes\n * which use normalized placeholders. For example a _:user_id_ parameter\n * could automatically load a user's information from the database without\n * any additional code,\n *\n * The callback uses the same signature as middleware, the only difference\n * being that the value of the placeholder is passed, in this case the _id_\n * of the user. Once the `next()` function is invoked, just like middleware\n * it will continue on to execute the route, or subsequent parameter functions.\n *\n * Just like in middleware, you must either respond to the request or call next\n * to avoid stalling the request.\n *\n *  app.param('user_id', function(req, res, next, id){\n *    User.find(id, function(err, user){\n *      if (err) {\n *        return next(err);\n *      } else if (!user) {\n *        return next(new Error('failed to load user'));\n *      }\n *      req.user = user;\n *      next();\n *    });\n *  });\n *\n * @param {String} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 286,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 33,
+     "rerank_score": -4.60728645324707,
+     "bm25_rank": 4,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 286
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:1135-1142",
+    "content": "# test/app.router.js:1135-1142  (test.app.router.supportsRegexp)\nfunction supportsRegexp(source) {\n  try {\n    new RegExp(source)\n    return true\n  } catch (e) {\n    return false\n  }\n}",
+    "token_count": 58,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "test.app.router.supportsRegexp"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 44,
+     "rerank_score": -4.755427360534668,
+     "bm25_rank": 100,
+     "dense_rank": 70,
+     "oversized_chunk": false,
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:52-60",
+    "content": "# lib/router/layer.js:52-60  (lib.router.layer)\n/**\n * Handle the error for the layer.\n *\n * @param {Error} error\n * @param {Request} req\n * @param {Response} res\n * @param {function} next\n * @api private\n */",
+    "token_count": 66,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": -5.038857936859131,
+     "bm25_rank": 60,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 66
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:136-154",
+    "content": "# lib/application.js:136-154  (lib.application.lazyrouter)\n/**\n * lazily adds the base router if it has not yet been added.\n *\n * We cannot add the base router in the defaultConfiguration because\n * it reads app settings which might be set after that has run.\n *\n * @private\n */\napp.lazyrouter = function lazyrouter() {\n  if (!this._router) {\n    this._router = new Router({\n      caseSensitive: this.enabled('case sensitive routing'),\n      strict: this.enabled('strict routing')\n    });\n\n    this._router.use(query(this.get('query parser fn')));\n    this._router.use(middleware.init(this));\n  }\n};",
+    "token_count": 142,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.lazyrouter"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 29,
+     "rerank_score": -5.259185314178467,
+     "bm25_rank": 99,
+     "dense_rank": 30,
+     "oversized_chunk": false,
+     "engine_token_count": 142
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:62-75",
+    "content": "# lib/router/layer.js:62-75  (lib.router.layer.handle_error)\nLayer.prototype.handle_error = function handle_error(error, req, res, next) {\n  var fn = this.handle;\n\n  if (fn.length !== 4) {\n    // not a standard error handler\n    return next(error);\n  }\n\n  try {\n    fn(error, req, res, next);\n  } catch (err) {\n    next(err);\n  }\n};",
+    "token_count": 96,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.handle_error"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 39,
+     "rerank_score": -5.803201198577881,
+     "bm25_rank": 70,
+     "dense_rank": 84,
+     "oversized_chunk": false,
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:378-417",
+    "content": "# lib/response.js:378-417  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendFile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendFile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendFile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */",
+    "token_count": 357,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -6.54160737991333,
+     "bm25_rank": 11,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 357
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:460-499",
+    "content": "# lib/response.js:460-499  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendfile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendfile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendfile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */",
+    "token_count": 360,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 41,
+     "rerank_score": -6.564729690551758,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 360
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:29-53",
+    "content": "# examples/error/index.js:29-53  (examples.error)\napp.get('/', function () {\n  // Caught and passed down to the errorHandler middleware\n  throw new Error('something broke!');\n});\n\napp.get('/next', function(req, res, next){\n  // We can also pass exceptions to next()\n  // The reason for process.nextTick() is to show that\n  // next() can be called inside an async operation,\n  // in real life it can be a DB read or HTTP request.\n  process.nextTick(function(){\n    next(new Error('oh no!'));\n  });\n});\n\n// the error handler is placed after routes\n// if it were above it would not receive errors\n// from app.get() etc\napp.use(error);\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 191,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -6.585123062133789,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 191
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:184-210",
+    "content": "# lib/request.js:184-210  (lib.request)\nreq.acceptsLanguage = deprecate.function(req.acceptsLanguages,\n  'req.acceptsLanguage: Use acceptsLanguages instead');\n\n/**\n * Parse Range header field, capping to the given `size`.\n *\n * Unspecified ranges such as \"0-\" require knowledge of your resource length. In\n * the case of a byte range this is of course the total number of bytes. If the\n * Range header field is not given `undefined` is returned, `-1` when unsatisfiable,\n * and `-2` when syntactically invalid.\n *\n * When ranges are returned, the array has a \"type\" property which is the type of\n * range that is required (most commonly, \"bytes\"). Each array element is an object\n * with a \"start\" and \"end\" property for the portion of the range.\n *\n * The \"combine\" option can be set to `true` and overlapping & adjacent ranges\n * will be combined into a single range.\n *\n * NOTE: remember that ranges are inclusive, so for example \"Range: users=0-3\"\n * should respond with 4 users when available, not 3.\n *\n * @param {number} size\n * @param {object} [options]\n * @param {boolean} [options.combine=false]\n * @return {number|array}\n * @public\n */",
+    "token_count": 293,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 50,
+     "rerank_score": -7.223281383514404,
+     "bm25_rank": 14,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 293
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:292-414#part1of2",
+    "content": "# lib/request.js:292-414#part1of2  (lib.request)\n/**\n * Return the protocol string \"http\" or \"https\"\n * when requested with TLS. When the \"trust proxy\"\n * setting trusts the socket address, the\n * \"X-Forwarded-Proto\" header field will be trusted\n * and used if present.\n *\n * If you're running behind a reverse proxy that\n * supplies https for you this may be enabled.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'protocol', function protocol(){\n  var proto = this.connection.encrypted\n    ? 'https'\n    : 'http';\n  var trust = this.app.get('trust proxy fn');\n\n  if (!trust(this.connection.remoteAddress, 0)) {\n    return proto;\n  }\n\n  // Note: X-Forwarded-Proto is normally only ever a\n  //       single value, but this is to be safe.\n  var header = this.get('X-Forwarded-Proto') || proto\n  var index = header.indexOf(',')\n\n  return index !== -1\n    ? header.substring(0, index).trim()\n    : header.trim()\n});\n\n/**\n * Short-hand for:\n *\n *    req.protocol === 'https'\n *\n * @return {Boolean}\n * @public\n */\n\ndefineGetter(req, 'secure', function secure(){\n  return this.protocol === 'https';\n});\n\n/**\n * Return the remote address from the trusted proxy.\n *\n * The is the remote address on the socket unless\n * \"trust proxy\" is set.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'ip', function ip(){\n  var trust = this.app.get('trust proxy fn');\n  return proxyaddr(this, trust);\n});\n\n/**\n * When \"trust proxy\" is set, trusted proxy addresses + client.\n *\n * For example if the value were \"client, proxy1, proxy2\"\n * you would receive the array `[\"client\", \"proxy1\", \"proxy2\"]`\n * where \"proxy2\" is the furthest down-stream and \"proxy1\" and\n * \"proxy2\" were trusted.\n *\n * @return {Array}\n * @public\n */\n\ndefineGetter(req, 'ips', function ips() {\n  var trust = this.app.get('trust proxy fn');\n  var addrs = proxyaddr.all(this, trust);\n\n  // reverse the order (to farthest -> closest)\n  // and remove socket address\n  addrs.reverse().pop()\n\n  return addrs\n});\n\n/**\n * Return subdomains as an array.\n *\n * Subdomains are the dot-separated parts of the host before the main domain of\n * the app. By default, the domain of the app is assumed to be the last two\n * parts of the host. This can be changed by setting \"subdomain offset\".\n *\n * For example, if the domain is \"tobi.ferrets.example.com\":\n * If \"subdomain offset\" is not set, req.subdomains is `[\"ferrets\", \"tobi\"]`.\n * If \"subdomain offset\" is 3, req.subdomains is `[\"tobi\"]`.\n *\n * @return {Array}\n * @public\n */\n\ndefineGetter(req, 'subdomains', function subdomains() {\n  var hostname = this.hostname;\n\n  if (!hostname) return [];\n\n  var offset = this.app.get('subdomain offset');\n  var subdomains = !isIP(hostname)\n    ? hostname.split('.').reverse()\n    : [hostname];\n\n  return subdomains.slice(offset);\n});\n\n/**\n * Short-hand for `url.parse(req.url).pathname`.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'path', function path() {\n  return parse(this).pathname;\n});",
+    "token_count": 781,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -7.339111328125,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 781
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12879,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are investigating how Express compiles a route path into a matchable regular expression, starting from the `Layer` constructor in lib/router/layer.js. Identify the real third-party npm package function it delegates path-to-regexp compilation to, and that function's own real signature - note that the local variable name used to call it may not match the function's own real internal name.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.layer.Layer\", \"path-to-regexp.index.pathToRegexp\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 586,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "typescript",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     15.426158
+    ],
+    "L_embed_query": [
+     315.263931
+    ],
+    "L_dense": [
+     0.545559
+    ],
+    "L_rrf": [
+     0.10461
+    ],
+    "L_rerank": [
+     25472.153263
+    ],
+    "L_retrieve": [
+     25856.938071
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12879,
+   "prompt_tokens": 13178,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13191,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */\n\n# test/app.router.js:1010-1132#part3of3  (test.app.router)\ndescribe('app.router', function(){\n  describe('when next(err) is called', function(){\n    it('should break out of app.router', function(done){\n      var app = express()\n        , calls = [];\n\n      app.get('/foo/:bar?', function(req, res, next){\n        calls.push('/foo/:bar?');\n        next();\n      });\n\n      app.get('/bar', function () {\n        assert(0);\n      });\n\n      app.get('/foo', function(req, res, next){\n        calls.push('/foo');\n        next(new Error('fail'));\n      });\n\n      app.get('/foo', function () {\n        assert(0);\n      });\n\n      app.use(function(err, req, res, next){\n        res.json({\n          calls: calls,\n          error: err.message\n        })\n      })\n\n      request(app)\n      .get('/foo')\n      .expect(200, { calls: ['/foo/:bar?', '/foo'], error: 'fail' }, done)\n    })\n\n    it('should call handler in same route, if exists', function(done){\n      var app = express();\n\n      function fn1(req, res, next) {\n        next(new Error('boom!'));\n      }\n\n      function fn2(req, res, next) {\n        res.send('foo here');\n      }\n\n      function fn3(err, req, res, next) {\n        res.send('route go ' + err.message);\n      }\n\n      app.get('/foo', fn1, fn2, fn3);\n\n      app.use(function (err, req, res, next) {\n        res.end('error!');\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('route go boom!', done)\n    })\n  })\n\n  it('should allow rewriting of the url', function(done){\n    var app = express();\n\n    app.get('/account/edit', function(req, res, next){\n      req.user = { id: 12 }; // faux authenticated user\n      req.url = '/user/' + req.user.id + '/edit';\n      next();\n    });\n\n    app.get('/user/:id/edit', function(req, res){\n      res.send('editing user ' + req.params.id);\n    });\n\n    request(app)\n    .get('/account/edit')\n    .expect('editing user 12', done);\n  })\n\n  it('should run in order added', function(done){\n    var app = express();\n    var path = [];\n\n    app.get('*', function(req, res, next){\n      path.push(0);\n      next();\n    });\n\n    app.get('/user/:id', function(req, res, next){\n      path.push(1);\n      next();\n    });\n\n    app.use(function(req, res, next){\n      path.push(2);\n      next();\n    });\n\n    app.all('/user/:id', function(req, res, next){\n      path.push(3);\n      next();\n    });\n\n    app.get('*', function(req, res, next){\n      path.push(4);\n      next();\n    });\n\n    app.use(function(req, res, next){\n      path.push(5);\n      res.end(path.join(','))\n    });\n\n    request(app)\n    .get('/user/1')\n    .expect(200, '0,1,2,3,4,5', done);\n  })\n\n  it('should be chainable', function(){\n    var app = express();\n    assert.strictEqual(app.get('/', function () {}), app)\n  })\n})\n\n# lib/router/layer.js:1-31  (lib.router.layer)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar pathRegexp = require('path-to-regexp');\nvar debug = require('debug')('express:router:layer');\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = Layer;\n\n# test/app.router.js:144-241#part2of3  (test.app.router)\ndescribe('app.router', function(){\n  it('should be .use()able', function(done){\n    var app = express();\n\n    var calls = [];\n\n    app.use(function(req, res, next){\n      calls.push('before');\n      next();\n    });\n\n    app.get('/', function(req, res, next){\n      calls.push('GET /')\n      next();\n    });\n\n    app.use(function(req, res, next){\n      calls.push('after');\n      res.json(calls)\n    });\n\n    request(app)\n    .get('/')\n    .expect(200, ['before', 'GET /', 'after'], done)\n  })\n\n  describe('when given a regexp', function(){\n    it('should match the pathname only', function(done){\n      var app = express();\n\n      app.get(/^\\/user\\/[0-9]+$/, function(req, res){\n        res.end('user');\n      });\n\n      request(app)\n      .get('/user/12?foo=bar')\n      .expect('user', done);\n    })\n\n    it('should populate req.params with the captures', function(done){\n      var app = express();\n\n      app.get(/^\\/user\\/([0-9]+)\\/(view|edit)?$/, function(req, res){\n        var id = req.params[0]\n          , op = req.params[1];\n        res.end(op + 'ing user ' + id);\n      });\n\n      request(app)\n      .get('/user/10/edit')\n      .expect('editing user 10', done);\n    })\n\n    if (supportsRegexp('(?<foo>.*)')) {\n      it('should populate req.params with named captures', function(done){\n        var app = express();\n        var re = new RegExp('^/user/(?<userId>[0-9]+)/(view|edit)?$');\n\n        app.get(re, function(req, res){\n          var id = req.params.userId\n            , op = req.params[0];\n          res.end(op + 'ing user ' + id);\n        });\n\n        request(app)\n        .get('/user/10/edit')\n        .expect('editing user 10', done);\n      })\n    }\n\n    it('should ensure regexp matches path prefix', function (done) {\n      var app = express()\n      var p = []\n\n      app.use(/\\/api.*/, function (req, res, next) {\n        p.push('a')\n        next()\n      })\n      app.use(/api/, function (req, res, next) {\n        p.push('b')\n        next()\n      })\n      app.use(/\\/test/, function (req, res, next) {\n        p.push('c')\n        next()\n      })\n      app.use(function (req, res) {\n        res.end()\n      })\n\n      request(app)\n        .get('/test/api/1234')\n        .expect(200, function (err) {\n          if (err) return done(err)\n          assert.deepEqual(p, ['c'])\n          done()\n        })\n    })\n  })\n})\n\n# lib/router/index.js:1-41  (lib.router)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar Route = require('./route');\nvar Layer = require('./layer');\nvar methods = require('methods');\nvar mixin = require('utils-merge');\nvar debug = require('debug')('express:router');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar parseUrl = require('parseurl');\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar objectRegExp = /^\\[object (\\S+)\\]$/;\nvar slice = Array.prototype.slice;\nvar toString = Object.prototype.toString;\n\n/**\n * Initialize a new `Router` with the given `options`.\n *\n * @param {Object} [options]\n * @return {Router} which is a callable function\n * @public\n */\n\n# lib/application.js:261-264  (lib.application.route)\napp.route = function route(path) {\n  this.lazyrouter();\n  return this._router.route(path);\n};\n\n# test/app.param.js:8-79  (test.app.param)\ndescribe('app', function(){\n  describe('.param(fn)', function(){\n    it('should map app.param(name, ...) logic', function(done){\n      var app = express();\n\n      app.param(function(name, regexp){\n        if (Object.prototype.toString.call(regexp) === '[object RegExp]') { // See #1557\n          return function(req, res, next, val){\n            var captures;\n            if (captures = regexp.exec(String(val))) {\n              req.params[name] = captures[1];\n              next();\n            } else {\n              next('route');\n            }\n          }\n        }\n      })\n\n      app.param(':name', /^([a-zA-Z]+)$/);\n\n      app.get('/user/:name', function(req, res){\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/user/tj')\n      .expect(200, 'tj', function (err) {\n        if (err) return done(err)\n        request(app)\n        .get('/user/123')\n        .expect(404, done);\n      });\n\n    })\n\n    it('should fail if not given fn', function(){\n      var app = express();\n      assert.throws(app.param.bind(app, ':name', 'bob'))\n    })\n  })\n\n  describe('.param(names, fn)', function(){\n    it('should map the array', function(done){\n      var app = express();\n\n      app.param(['id', 'uid'], function(req, res, next, id){\n        id = Number(id);\n        if (isNaN(id)) return next('route');\n        req.params.id = id;\n        next();\n      });\n\n      app.get('/post/:id', function(req, res){\n        var id = req.params.id;\n        res.send((typeof id) + ':' + id)\n      });\n\n      app.get('/user/:uid', function(req, res){\n        var id = req.params.id;\n        res.send((typeof id) + ':' + id)\n      });\n\n      request(app)\n        .get('/user/123')\n        .expect(200, 'number:123', function (err) {\n          if (err) return done(err)\n          request(app)\n            .get('/post/123')\n            .expect('number:123', done)\n        })\n    })\n  })\n})\n\n# lib/router/route.js:1-41  (lib.router.route)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar debug = require('debug')('express:router:route');\nvar flatten = require('array-flatten');\nvar Layer = require('./layer');\nvar methods = require('methods');\n\n/**\n * Module variables.\n * @private\n */\n\nvar slice = Array.prototype.slice;\nvar toString = Object.prototype.toString;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = Route;\n\n/**\n * Initialize `Route` with the given `path`,\n *\n * @param {String} path\n * @public\n */\n\n# test/app.router.js:577-607  (test.app.router)\ndescribe('app.router', function(){\n  it('should allow escaped regexp', function(done){\n    var app = express();\n\n    app.get('/user/\\\\d+', function(req, res){\n      res.end('woot');\n    });\n\n    request(app)\n    .get('/user/10')\n    .expect(200, function (err) {\n      if (err) return done(err)\n      request(app)\n      .get('/user/tj')\n      .expect(404, done);\n    });\n  })\n\n  it('should allow literal \".\"', function(done){\n    var app = express();\n\n    app.get('/api/users/:from..:to', function(req, res){\n      var from = req.params.from\n        , to = req.params.to;\n\n      res.end('users from ' + from + ' to ' + to);\n    });\n\n    request(app)\n    .get('/api/users/1..50')\n    .expect('users from 1 to 50', done);\n  })\n})\n\n# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');\n\n# examples/mvc/lib/boot.js:1-83  (examples.mvc.lib.boot)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../..');\nvar fs = require('fs');\nvar path = require('path');\n\nmodule.exports = function(parent, options){\n  var dir = path.join(__dirname, '..', 'controllers');\n  var verbose = options.verbose;\n  fs.readdirSync(dir).forEach(function(name){\n    var file = path.join(dir, name)\n    if (!fs.statSync(file).isDirectory()) return;\n    verbose && console.log('\\n   %s:', name);\n    var obj = require(file);\n    var name = obj.name || name;\n    var prefix = obj.prefix || '';\n    var app = express();\n    var handler;\n    var method;\n    var url;\n\n    // allow specifying the view engine\n    if (obj.engine) app.set('view engine', obj.engine);\n    app.set('views', path.join(__dirname, '..', 'controllers', name, 'views'));\n\n    // generate routes based\n    // on the exported methods\n    for (var key in obj) {\n      // \"reserved\" exports\n      if (~['name', 'prefix', 'engine', 'before'].indexOf(key)) continue;\n      // route exports\n      switch (key) {\n        case 'show':\n          method = 'get';\n          url = '/' + name + '/:' + name + '_id';\n          break;\n        case 'list':\n          method = 'get';\n          url = '/' + name + 's';\n          break;\n        case 'edit':\n          method = 'get';\n          url = '/' + name + '/:' + name + '_id/edit';\n          break;\n        case 'update':\n          method = 'put';\n          url = '/' + name + '/:' + name + '_id';\n          break;\n        case 'create':\n          method = 'post';\n          url = '/' + name;\n          break;\n        case 'index':\n          method = 'get';\n          url = '/';\n          break;\n        default:\n          /* istanbul ignore next */\n          throw new Error('unrecognized route: ' + name + '.' + key);\n      }\n\n      // setup\n      handler = obj[key];\n      url = prefix + url;\n\n      // before middleware support\n      if (obj.before) {\n        app[method](url, obj.before, handler);\n        verbose && console.log('     %s %s -> before -> %s', method.toUpperCase(), url, key);\n      } else {\n        app[method](url, handler);\n        verbose && console.log('     %s %s -> %s', method.toUpperCase(), url, key);\n      }\n    }\n\n    // mount the app\n    parent.use(app);\n  });\n};\n\n# test/app.router.js:887-1008#part2of3  (test.app.router)\ndescribe('app.router', function(){\n  describe('.:name', function(){\n    it('should denote a format', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/:name.:format', function(req, res){\n        res.end(req.params.name + ' as ' + req.params.format);\n      });\n\n      request(app)\n        .get('/foo.json')\n        .expect(200, 'foo as json', cb)\n\n      request(app)\n        .get('/foo')\n        .expect(404, cb)\n    })\n  })\n\n  describe('.:name?', function(){\n    it('should denote an optional format', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/:name.:format?', function(req, res){\n        res.end(req.params.name + ' as ' + (req.params.format || 'html'));\n      });\n\n      request(app)\n        .get('/foo')\n        .expect(200, 'foo as html', cb)\n\n      request(app)\n        .get('/foo.json')\n        .expect(200, 'foo as json', cb)\n    })\n  })\n\n  describe('when next() is called', function(){\n    it('should continue lookup', function(done){\n      var app = express()\n        , calls = [];\n\n      app.get('/foo/:bar?', function(req, res, next){\n        calls.push('/foo/:bar?');\n        next();\n      });\n\n      app.get('/bar', function () {\n        assert(0);\n      });\n\n      app.get('/foo', function(req, res, next){\n        calls.push('/foo');\n        next();\n      });\n\n      app.get('/foo', function (req, res) {\n        calls.push('/foo 2');\n        res.json(calls)\n      });\n\n      request(app)\n      .get('/foo')\n      .expect(200, ['/foo/:bar?', '/foo', '/foo 2'], done)\n    })\n  })\n\n  describe('when next(\"route\") is called', function(){\n    it('should jump to next route', function(done){\n      var app = express()\n\n      function fn(req, res, next){\n        res.set('X-Hit', '1')\n        next('route')\n      }\n\n      app.get('/foo', fn, function (req, res) {\n        res.end('failure')\n      });\n\n      app.get('/foo', function(req, res){\n        res.end('success')\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('X-Hit', '1')\n      .expect(200, 'success', done)\n    })\n  })\n\n  describe('when next(\"router\") is called', function () {\n    it('should jump out of router', function (done) {\n      var app = express()\n      var router = express.Router()\n\n      function fn (req, res, next) {\n        res.set('X-Hit', '1')\n        next('router')\n      }\n\n      router.get('/foo', fn, function (req, res) {\n        res.end('failure')\n      })\n\n      router.get('/foo', function (req, res) {\n        res.end('failure')\n      })\n\n      app.use(router)\n\n      app.get('/foo', function (req, res) {\n        res.end('success')\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('X-Hit', '1')\n      .expect(200, 'success', done)\n    })\n  })\n})\n\n# lib/router/index.js:502-515  (lib.router.route)\nproto.route = function route(path) {\n  var route = new Route(path);\n\n  var layer = new Layer(path, {\n    sensitive: this.caseSensitive,\n    strict: this.strict,\n    end: true\n  }, route.dispatch.bind(route));\n\n  layer.route = route;\n\n  this.stack.push(layer);\n  return route;\n};\n\n# lib/application.js:184-192  (lib.application)\n/**\n * Proxy `Router#use()` to add middleware to the app router.\n * See Router#use() documentation for details.\n *\n * If the _fn_ parameter is an express app, then it will be\n * mounted at the _route_ specified.\n *\n * @public\n */\n\n# lib/application.js:485-512  (lib.application)\n/**\n * Delegate `.VERB(...)` calls to `router.VERB(...)`.\n */\n\nmethods.forEach(function(method){\n  app[method] = function(path){\n    if (method === 'get' && arguments.length === 1) {\n      // app.get(setting)\n      return this.set(path);\n    }\n\n    this.lazyrouter();\n\n    var route = this._router.route(path);\n    route[method].apply(route, slice.call(arguments, 1));\n    return this;\n  };\n});\n\n/**\n * Special-cased \"all\" method, applying the given route `path`,\n * middleware, and callback to _every_ HTTP method.\n *\n * @param {String} path\n * @param {Function} ...\n * @return {app} for chaining\n * @public\n */\n\n# lib/router/index.js:177-291#part2of3  (lib.router.handle)\nproto.handle = function handle(req, res, out) {\n  function next(err) {\n    var layerError = err === 'route'\n      ? null\n      : err;\n\n    // remove added slash\n    if (slashAdded) {\n      req.url = req.url.slice(1)\n      slashAdded = false;\n    }\n\n    // restore altered req.url\n    if (removed.length !== 0) {\n      req.baseUrl = parentUrl;\n      req.url = protohost + removed + req.url.slice(protohost.length)\n      removed = '';\n    }\n\n    // signal to exit router\n    if (layerError === 'router') {\n      setImmediate(done, null)\n      return\n    }\n\n    // no more matching layers\n    if (idx >= stack.length) {\n      setImmediate(done, layerError);\n      return;\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    // get pathname of request\n    var path = getPathname(req);\n\n    if (path == null) {\n      return done(layerError);\n    }\n\n    // find next matching layer\n    var layer;\n    var match;\n    var route;\n\n    while (match !== true && idx < stack.length) {\n      layer = stack[idx++];\n      match = matchLayer(layer, path);\n      route = layer.route;\n\n      if (typeof match !== 'boolean') {\n        // hold on to layerError\n        layerError = layerError || match;\n      }\n\n      if (match !== true) {\n        continue;\n      }\n\n      if (!route) {\n        // process non-route handlers normally\n        continue;\n      }\n\n      if (layerError) {\n        // routes do not match with a pending error\n        match = false;\n        continue;\n      }\n\n      var method = req.method;\n      var has_method = route._handles_method(method);\n\n      // build up automatic options response\n      if (!has_method && method === 'OPTIONS') {\n        appendMethods(options, route._options());\n      }\n\n      // don't even bother matching route\n      if (!has_method && method !== 'HEAD') {\n        match = false;\n      }\n    }\n\n    // no match\n    if (match !== true) {\n      return done(layerError);\n    }\n\n    // store route for dispatch on change\n    if (route) {\n      req.route = route;\n    }\n\n    // Capture one-time layer values\n    req.params = self.mergeParams\n      ? mergeParams(layer.params, parentParams)\n      : layer.params;\n    var layerPath = layer.path;\n\n    // this should be done for the layer\n    self.process_params(layer, paramcalled, req, res, function (err) {\n      if (err) {\n        next(layerError || err)\n      } else if (route) {\n        layer.handle_request(req, res, next)\n      } else {\n        trim_prefix(layer, layerError, layerPath, path)\n      }\n\n      sync = 0\n    });\n  }\n};\n\n# lib/router/index.js:439-487  (lib.router.use)\nproto.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate router.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var callbacks = flatten(slice.call(arguments, offset));\n\n  if (callbacks.length === 0) {\n    throw new TypeError('Router.use() requires a middleware function')\n  }\n\n  for (var i = 0; i < callbacks.length; i++) {\n    var fn = callbacks[i];\n\n    if (typeof fn !== 'function') {\n      throw new TypeError('Router.use() requires a middleware function but got a ' + gettype(fn))\n    }\n\n    // add the middleware\n    debug('use %o %s', path, fn.name || '<anonymous>')\n\n    var layer = new Layer(path, {\n      sensitive: this.caseSensitive,\n      strict: false,\n      end: false\n    }, fn);\n\n    layer.route = undefined;\n\n    this.stack.push(layer);\n  }\n\n  return this;\n};\n\n# lib/router/index.js:583-589  (lib.router.matchLayer)\nfunction matchLayer(layer, path) {\n  try {\n    return layer.match(path);\n  } catch (err) {\n    return err;\n  }\n}\n\n# lib/router/route.js:101-154  (lib.router.route.dispatch)\nRoute.prototype.dispatch = function dispatch(req, res, done) {\n  var idx = 0;\n  var stack = this.stack;\n  var sync = 0\n\n  if (stack.length === 0) {\n    return done();\n  }\n  var method = typeof req.method === 'string'\n    ? req.method.toLowerCase()\n    : req.method\n\n  if (method === 'head' && !this.methods['head']) {\n    method = 'get';\n  }\n\n  req.route = this;\n\n  next();\n\n  function next(err) {\n    // signal to exit route\n    if (err && err === 'route') {\n      return done();\n    }\n\n    // signal to exit router\n    if (err && err === 'router') {\n      return done(err)\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    var layer = stack[idx++]\n\n    // end of layers\n    if (!layer) {\n      return done(err)\n    }\n\n    if (layer.method && layer.method !== method) {\n      next(err)\n    } else if (err) {\n      layer.handle_error(err, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n\n    sync = 0\n  }\n};\n\n# lib/application.js:251-259  (lib.application)\n/**\n * Proxy to the app `Router#route()`\n * Returns a new `Route` instance for the _path_.\n *\n * Routes are isolated middleware stacks for specific paths.\n * See the Route api docs for details.\n *\n * @public\n */\n\n# lib/router/layer.js:110-156  (lib.router.layer.match)\nLayer.prototype.match = function match(path) {\n  var match\n\n  if (path != null) {\n    // fast path non-ending match for / (any path matches)\n    if (this.regexp.fast_slash) {\n      this.params = {}\n      this.path = ''\n      return true\n    }\n\n    // fast path for * (everything matched in a param)\n    if (this.regexp.fast_star) {\n      this.params = {'0': decode_param(path)}\n      this.path = path\n      return true\n    }\n\n    // match the path\n    match = this.regexp.exec(path)\n  }\n\n  if (!match) {\n    this.params = undefined;\n    this.path = undefined;\n    return false;\n  }\n\n  // store values\n  this.params = {};\n  this.path = match[0]\n\n  var keys = this.keys;\n  var params = this.params;\n\n  for (var i = 1; i < match.length; i++) {\n    var key = keys[i - 1];\n    var prop = key.name;\n    var val = decode_param(match[i])\n\n    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {\n      params[prop] = val;\n    }\n  }\n\n  return true;\n};\n\n# lib/router/index.js:575-581  (lib.router)\n/**\n * Match path to a layer.\n *\n * @param {Layer} layer\n * @param {string} path\n * @private\n */\n\n# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# lib/express.js:59-116  (lib.express)\n/**\n * Expose the prototypes.\n */\n\nexports.application = proto;\nexports.request = req;\nexports.response = res;\n\n/**\n * Expose constructors.\n */\n\nexports.Route = Route;\nexports.Router = Router;\n\n/**\n * Expose middleware\n */\n\nexports.json = bodyParser.json\nexports.query = require('./middleware/query');\nexports.raw = bodyParser.raw\nexports.static = require('serve-static');\nexports.text = bodyParser.text\nexports.urlencoded = bodyParser.urlencoded\n\n/**\n * Replace removed middleware with an appropriate error message.\n */\n\nvar removedMiddlewares = [\n  'bodyParser',\n  'compress',\n  'cookieSession',\n  'session',\n  'logger',\n  'cookieParser',\n  'favicon',\n  'responseTime',\n  'errorHandler',\n  'timeout',\n  'methodOverride',\n  'vhost',\n  'csrf',\n  'directory',\n  'limit',\n  'multipart',\n  'staticCache'\n]\n\nremovedMiddlewares.forEach(function (name) {\n  Object.defineProperty(exports, name, {\n    get: function () {\n      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');\n    },\n    configurable: true\n  });\n});\n\n# lib/router/index.js:293-330#part3of3  (lib.router.handle)\nproto.handle = function handle(req, res, out) {\n  function trim_prefix(layer, layerError, layerPath, path) {\n    if (layerPath.length !== 0) {\n      // Validate path is a prefix match\n      if (layerPath !== path.slice(0, layerPath.length)) {\n        next(layerError)\n        return\n      }\n\n      // Validate path breaks on a path separator\n      var c = path[layerPath.length]\n      if (c && c !== '/' && c !== '.') return next(layerError)\n\n      // Trim off the part of the url that matches the route\n      // middleware (.use stuff) needs to have the path stripped\n      debug('trim prefix (%s) from url %s', layerPath, req.url);\n      removed = layerPath;\n      req.url = protohost + req.url.slice(protohost.length + removed.length)\n\n      // Ensure leading slash\n      if (!protohost && req.url[0] !== '/') {\n        req.url = '/' + req.url;\n        slashAdded = true;\n      }\n\n      // Setup base URL (no trailing slash)\n      req.baseUrl = parentUrl + (removed[removed.length - 1] === '/'\n        ? removed.substring(0, removed.length - 1)\n        : removed);\n    }\n\n    debug('%s %s : %s', layer.name, layerPath, req.originalUrl);\n\n    if (layerError) {\n      layer.handle_error(layerError, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n  }\n};\n\n# lib/application.js:316-326  (lib.application)\n/**\n * Proxy to `Router#param()` with one added api feature. The _name_ parameter\n * can be an array of names.\n *\n * See the Router#param() docs for more details.\n *\n * @param {String|Array} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# examples/route-map/index.js:14-29  (examples.route-map.map)\napp.map = function(a, route){\n  route = route || '';\n  for (var key in a) {\n    switch (typeof a[key]) {\n      // { '/path': { ... }}\n      case 'object':\n        app.map(a[key], route + key);\n        break;\n      // get: function(){ ... }\n      case 'function':\n        if (verbose) console.log('%s %s', key, route);\n        app[key](route, a[key]);\n        break;\n    }\n  }\n};\n\n# lib/router/route.js:184-204  (lib.router.route.all)\nRoute.prototype.all = function all() {\n  var handles = flatten(slice.call(arguments));\n\n  for (var i = 0; i < handles.length; i++) {\n    var handle = handles[i];\n\n    if (typeof handle !== 'function') {\n      var type = toString.call(handle);\n      var msg = 'Route.all() requires a callback function but got a ' + type\n      throw new TypeError(msg);\n    }\n\n    var layer = Layer('/', {}, handle);\n    layer.method = undefined;\n\n    this.methods._all = true;\n    this.stack.push(layer);\n  }\n\n  return this;\n};\n\n# index.js:1-11\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\nmodule.exports = require('./lib/express');\n\n# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# lib/router/route.js:206-230  (lib.router.route)\nmethods.forEach(function(method){\n  Route.prototype[method] = function(){\n    var handles = flatten(slice.call(arguments));\n\n    for (var i = 0; i < handles.length; i++) {\n      var handle = handles[i];\n\n      if (typeof handle !== 'function') {\n        var type = toString.call(handle);\n        var msg = 'Route.' + method + '() requires a callback function but got a ' + type\n        throw new Error(msg);\n      }\n\n      debug('%s %o', method, this.path)\n\n      var layer = Layer('/', {}, handle);\n      layer.method = method;\n\n      this.methods[method] = true;\n      this.stack.push(layer);\n    }\n\n    return this;\n  };\n});\n\n# lib/router/layer.js:33-50  (lib.router.layer.Layer)\nfunction Layer(path, options, fn) {\n  if (!(this instanceof Layer)) {\n    return new Layer(path, options, fn);\n  }\n\n  debug('new %o', path)\n  var opts = options || {};\n\n  this.handle = fn;\n  this.name = fn.name || '<anonymous>';\n  this.params = undefined;\n  this.path = undefined;\n  this.regexp = pathRegexp(path, this.keys = [], opts);\n\n  // set fast path flags\n  this.regexp.fast_star = path === '*'\n  this.regexp.fast_slash = path === '/' && opts.end === false\n}\n\n# lib/router/index.js:424-437  (lib.router)\n/**\n * Use the given middleware function, with optional path, defaulting to \"/\".\n *\n * Use (like `.all`) will run for any http METHOD, but it will not add\n * handlers for those methods so OPTIONS requests will not consider `.use`\n * functions even if they could respond.\n *\n * The other difference is that _route_ path is stripped and not visible\n * to the handler function. The main effect of this feature is that mounted\n * handlers can operate without any code changes regardless of the \"prefix\"\n * pathname.\n *\n * @public\n */\n\n# examples/view-constructor/index.js:1-48  (examples.view-constructor)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar GithubView = require('./github-view');\nvar md = require('marked').parse;\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\napp.engine('md', function(str, options, fn){\n  try {\n    var html = md(str);\n    html = html.replace(/\\{([^}]+)\\}/g, function(_, name){\n      return options[name] || '';\n    });\n    fn(null, html);\n  } catch(err) {\n    fn(err);\n  }\n});\n\n// pointing to a particular github repo to load files from it\napp.set('views', 'expressjs/express');\n\n// register a new view constructor\napp.set('view', GithubView);\n\napp.get('/', function(req, res){\n  // rendering a view relative to the repo.\n  // app.locals, res.locals, and locals passed\n  // work like they normally would\n  res.render('examples/markdown/views/index.md', { title: 'Example' });\n});\n\napp.get('/Readme.md', function(req, res){\n  // rendering a view from https://github.com/expressjs/express/blob/master/Readme.md\n  res.render('Readme.md');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/router/index.js:489-500  (lib.router)\n/**\n * Create a new Route for the given path.\n *\n * Each route contains a separate middleware stack and VERB handlers.\n *\n * See the Route api documentation for details on adding handlers\n * and middleware to routes.\n *\n * @param {String} path\n * @return {Route}\n * @public\n */\n\n# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.\n\n# lib/router/index.js:97-129  (lib.router.param)\nproto.param = function param(name, fn) {\n  // param logic\n  if (typeof name === 'function') {\n    deprecate('router.param(fn): Refactor to use path params');\n    this._params.push(name);\n    return;\n  }\n\n  // apply param functions\n  var params = this._params;\n  var len = params.length;\n  var ret;\n\n  if (name[0] === ':') {\n    deprecate('router.param(' + JSON.stringify(name) + ', fn): Use router.param(' + JSON.stringify(name.slice(1)) + ', fn) instead')\n    name = name.slice(1)\n  }\n\n  for (var i = 0; i < len; ++i) {\n    if (ret = params[i](name, fn)) {\n      fn = ret;\n    }\n  }\n\n  // ensure we end up with a\n  // middleware function\n  if ('function' !== typeof fn) {\n    throw new Error('invalid param() call for ' + name + ', got ' + fn);\n  }\n\n  (this.params[name] = this.params[name] || []).push(fn);\n  return this;\n};\n\n# lib/router/layer.js:86-99  (lib.router.layer.handle_request)\nLayer.prototype.handle_request = function handle(req, res, next) {\n  var fn = this.handle;\n\n  if (fn.length > 3) {\n    // not a standard request handler\n    return next();\n  }\n\n  try {\n    fn(req, res, next);\n  } catch (err) {\n    next(err);\n  }\n};\n\n# lib/application.js:194-249  (lib.application.use)\napp.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate app.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var fns = flatten(slice.call(arguments, offset));\n\n  if (fns.length === 0) {\n    throw new TypeError('app.use() requires a middleware function')\n  }\n\n  // setup router\n  this.lazyrouter();\n  var router = this._router;\n\n  fns.forEach(function (fn) {\n    // non-express app\n    if (!fn || !fn.handle || !fn.set) {\n      return router.use(path, fn);\n    }\n\n    debug('.use app under %s', path);\n    fn.mountpath = path;\n    fn.parent = this;\n\n    // restore .app property on req and res\n    router.use(path, function mounted_app(req, res, next) {\n      var orig = req.app;\n      fn.handle(req, res, function (err) {\n        setPrototypeOf(req, orig.request)\n        setPrototypeOf(res, orig.response)\n        next(err);\n      });\n    });\n\n    // mounted an app\n    fn.emit('mount', this);\n  }, this);\n\n  return this;\n};\n\n# lib/router/layer.js:77-84  (lib.router.layer)\n/**\n * Handle the request for the layer.\n *\n * @param {Request} req\n * @param {Response} res\n * @param {function} next\n * @api private\n */\n\n# lib/router/index.js:63-95  (lib.router)\n/**\n * Map the given param placeholder `name`(s) to the given callback.\n *\n * Parameter mapping is used to provide pre-conditions to routes\n * which use normalized placeholders. For example a _:user_id_ parameter\n * could automatically load a user's information from the database without\n * any additional code,\n *\n * The callback uses the same signature as middleware, the only difference\n * being that the value of the placeholder is passed, in this case the _id_\n * of the user. Once the `next()` function is invoked, just like middleware\n * it will continue on to execute the route, or subsequent parameter functions.\n *\n * Just like in middleware, you must either respond to the request or call next\n * to avoid stalling the request.\n *\n *  app.param('user_id', function(req, res, next, id){\n *    User.find(id, function(err, user){\n *      if (err) {\n *        return next(err);\n *      } else if (!user) {\n *        return next(new Error('failed to load user'));\n *      }\n *      req.user = user;\n *      next();\n *    });\n *  });\n *\n * @param {String} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# test/app.router.js:1135-1142  (test.app.router.supportsRegexp)\nfunction supportsRegexp(source) {\n  try {\n    new RegExp(source)\n    return true\n  } catch (e) {\n    return false\n  }\n}\n\n# lib/router/layer.js:52-60  (lib.router.layer)\n/**\n * Handle the error for the layer.\n *\n * @param {Error} error\n * @param {Request} req\n * @param {Response} res\n * @param {function} next\n * @api private\n */\n\n# lib/application.js:136-154  (lib.application.lazyrouter)\n/**\n * lazily adds the base router if it has not yet been added.\n *\n * We cannot add the base router in the defaultConfiguration because\n * it reads app settings which might be set after that has run.\n *\n * @private\n */\napp.lazyrouter = function lazyrouter() {\n  if (!this._router) {\n    this._router = new Router({\n      caseSensitive: this.enabled('case sensitive routing'),\n      strict: this.enabled('strict routing')\n    });\n\n    this._router.use(query(this.get('query parser fn')));\n    this._router.use(middleware.init(this));\n  }\n};\n\n# lib/router/layer.js:62-75  (lib.router.layer.handle_error)\nLayer.prototype.handle_error = function handle_error(error, req, res, next) {\n  var fn = this.handle;\n\n  if (fn.length !== 4) {\n    // not a standard error handler\n    return next(error);\n  }\n\n  try {\n    fn(error, req, res, next);\n  } catch (err) {\n    next(err);\n  }\n};\n\n# lib/response.js:378-417  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendFile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendFile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendFile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */\n\n# lib/response.js:460-499  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendfile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendfile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendfile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */\n\n# examples/error/index.js:29-53  (examples.error)\napp.get('/', function () {\n  // Caught and passed down to the errorHandler middleware\n  throw new Error('something broke!');\n});\n\napp.get('/next', function(req, res, next){\n  // We can also pass exceptions to next()\n  // The reason for process.nextTick() is to show that\n  // next() can be called inside an async operation,\n  // in real life it can be a DB read or HTTP request.\n  process.nextTick(function(){\n    next(new Error('oh no!'));\n  });\n});\n\n// the error handler is placed after routes\n// if it were above it would not receive errors\n// from app.get() etc\napp.use(error);\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/request.js:184-210  (lib.request)\nreq.acceptsLanguage = deprecate.function(req.acceptsLanguages,\n  'req.acceptsLanguage: Use acceptsLanguages instead');\n\n/**\n * Parse Range header field, capping to the given `size`.\n *\n * Unspecified ranges such as \"0-\" require knowledge of your resource length. In\n * the case of a byte range this is of course the total number of bytes. If the\n * Range header field is not given `undefined` is returned, `-1` when unsatisfiable,\n * and `-2` when syntactically invalid.\n *\n * When ranges are returned, the array has a \"type\" property which is the type of\n * range that is required (most commonly, \"bytes\"). Each array element is an object\n * with a \"start\" and \"end\" property for the portion of the range.\n *\n * The \"combine\" option can be set to `true` and overlapping & adjacent ranges\n * will be combined into a single range.\n *\n * NOTE: remember that ranges are inclusive, so for example \"Range: users=0-3\"\n * should respond with 4 users when available, not 3.\n *\n * @param {number} size\n * @param {object} [options]\n * @param {boolean} [options.combine=false]\n * @return {number|array}\n * @public\n */\n\n# lib/request.js:292-414#part1of2  (lib.request)\n/**\n * Return the protocol string \"http\" or \"https\"\n * when requested with TLS. When the \"trust proxy\"\n * setting trusts the socket address, the\n * \"X-Forwarded-Proto\" header field will be trusted\n * and used if present.\n *\n * If you're running behind a reverse proxy that\n * supplies https for you this may be enabled.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'protocol', function protocol(){\n  var proto = this.connection.encrypted\n    ? 'https'\n    : 'http';\n  var trust = this.app.get('trust proxy fn');\n\n  if (!trust(this.connection.remoteAddress, 0)) {\n    return proto;\n  }\n\n  // Note: X-Forwarded-Proto is normally only ever a\n  //       single value, but this is to be safe.\n  var header = this.get('X-Forwarded-Proto') || proto\n  var index = header.indexOf(',')\n\n  return index !== -1\n    ? header.substring(0, index).trim()\n    : header.trim()\n});\n\n/**\n * Short-hand for:\n *\n *    req.protocol === 'https'\n *\n * @return {Boolean}\n * @public\n */\n\ndefineGetter(req, 'secure', function secure(){\n  return this.protocol === 'https';\n});\n\n/**\n * Return the remote address from the trusted proxy.\n *\n * The is the remote address on the socket unless\n * \"trust proxy\" is set.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'ip', function ip(){\n  var trust = this.app.get('trust proxy fn');\n  return proxyaddr(this, trust);\n});\n\n/**\n * When \"trust proxy\" is set, trusted proxy addresses + client.\n *\n * For example if the value were \"client, proxy1, proxy2\"\n * you would receive the array `[\"client\", \"proxy1\", \"proxy2\"]`\n * where \"proxy2\" is the furthest down-stream and \"proxy1\" and\n * \"proxy2\" were trusted.\n *\n * @return {Array}\n * @public\n */\n\ndefineGetter(req, 'ips', function ips() {\n  var trust = this.app.get('trust proxy fn');\n  var addrs = proxyaddr.all(this, trust);\n\n  // reverse the order (to farthest -> closest)\n  // and remove socket address\n  addrs.reverse().pop()\n\n  return addrs\n});\n\n/**\n * Return subdomains as an array.\n *\n * Subdomains are the dot-separated parts of the host before the main domain of\n * the app. By default, the domain of the app is assumed to be the last two\n * parts of the host. This can be changed by setting \"subdomain offset\".\n *\n * For example, if the domain is \"tobi.ferrets.example.com\":\n * If \"subdomain offset\" is not set, req.subdomains is `[\"ferrets\", \"tobi\"]`.\n * If \"subdomain offset\" is 3, req.subdomains is `[\"tobi\"]`.\n *\n * @return {Array}\n * @public\n */\n\ndefineGetter(req, 'subdomains', function subdomains() {\n  var hostname = this.hostname;\n\n  if (!hostname) return [];\n\n  var offset = this.app.get('subdomain offset');\n  var subdomains = !isIP(hostname)\n    ? hostname.split('.').reverse()\n    : [hostname];\n\n  return subdomains.slice(offset);\n});\n\n/**\n * Short-hand for `url.parse(req.url).pathname`.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'path', function path() {\n  return parse(this).pathname;\n});\n\n## Task\n\nYou are investigating how Express compiles a route path into a matchable regular expression, starting from the `Layer` constructor in lib/router/layer.js. Identify the real third-party npm package function it delegates path-to-regexp compilation to, and that function's own real signature - note that the local variable name used to call it may not match the function's own real internal name.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.layer.Layer\", \"path-to-regexp.index.pathToRegexp\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

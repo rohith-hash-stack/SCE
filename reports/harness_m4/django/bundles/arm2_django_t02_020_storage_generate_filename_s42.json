@@ -1,0 +1,1385 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_020_storage_generate_filename",
+  "items": [
+   {
+    "source_id": "django/core/files/storage/base.py:112-124",
+    "content": "# django/core/files/storage/base.py:112-124  (django.core.files.storage.base.Storage.generate_filename)\nclass Storage:\n    def generate_filename(self, filename):\n        \"\"\"\n        Validate the filename by calling get_valid_name() and return a filename\n        to be passed to the save() method.\n        \"\"\"\n        filename = str(filename).replace(\"\\\\\", \"/\")\n        # `filename` may include a path as returned by FileField.upload_to.\n        dirname, filename = os.path.split(filename)\n        if \"..\" in pathlib.PurePath(dirname).parts:\n            raise SuspiciousFileOperation(\n                \"Detected path traversal attempt in '%s'\" % dirname\n            )\n        return os.path.normpath(os.path.join(dirname, self.get_valid_name(filename)))",
+    "token_count": 157,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.generate_filename"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 157
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:71-110",
+    "content": "# django/core/files/storage/base.py:71-110  (django.core.files.storage.base.Storage.get_available_name)\nclass Storage:\n    def get_available_name(self, name, max_length=None):\n        \"\"\"\n        Return a filename that's free on the target storage system and\n        available for new content to be written to.\n        \"\"\"\n        name = str(name).replace(\"\\\\\", \"/\")\n        dir_name, file_name = os.path.split(name)\n        if \"..\" in pathlib.PurePath(dir_name).parts:\n            raise SuspiciousFileOperation(\n                \"Detected path traversal attempt in '%s'\" % dir_name\n            )\n        validate_file_name(file_name)\n        file_root, file_ext = os.path.splitext(file_name)\n        # If the filename already exists, generate an alternative filename\n        # until it doesn't exist.\n        # Truncate original name if required, so the new filename does not\n        # exceed the max_length.\n        while self.exists(name) or (max_length and len(name) > max_length):\n            # file_ext includes the dot.\n            name = os.path.join(\n                dir_name, self.get_alternative_name(file_root, file_ext)\n            )\n            if max_length is None:\n                continue\n            # Truncate file_root if max_length exceeded.\n            truncation = len(name) - max_length\n            if truncation > 0:\n                file_root = file_root[:-truncation]\n                # Entire file_root was truncated in attempt to find an\n                # available filename.\n                if not file_root:\n                    raise SuspiciousFileOperation(\n                        'Storage can not find an available filename for \"%s\". '\n                        \"Please make sure that the corresponding file field \"\n                        'allows sufficient \"max_length\".' % name\n                    )\n                name = os.path.join(\n                    dir_name, self.get_alternative_name(file_root, file_ext)\n                )\n        return name",
+    "token_count": 393,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.get_available_name"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 393
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:126-132",
+    "content": "# django/core/files/storage/base.py:126-132  (django.core.files.storage.base.Storage.path)\nclass Storage:\n    def path(self, name):\n        \"\"\"\n        Return a local filesystem path where the file can be retrieved using\n        Python's built-in open() function. Storage systems that can't be\n        accessed using open() should *not* implement this method.\n        \"\"\"\n        raise NotImplementedError(\"This backend doesn't support absolute paths.\")",
+    "token_count": 94,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:63-69",
+    "content": "# django/core/files/storage/base.py:63-69  (django.core.files.storage.base.Storage.get_alternative_name)\nclass Storage:\n    def get_alternative_name(self, file_root, file_ext):\n        \"\"\"\n        Return an alternative filename, by adding an underscore and a random 7\n        character alphanumeric string (before the file extension, if one\n        exists) to the filename.\n        \"\"\"\n        return \"%s_%s%s\" % (file_root, get_random_string(7), file_ext)",
+    "token_count": 105,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.get_alternative_name"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 105
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:137-143",
+    "content": "# django/core/files/storage/base.py:137-143  (django.core.files.storage.base.Storage.delete)\nclass Storage:\n    def delete(self, name):\n        \"\"\"\n        Delete the specified file from the storage system.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a delete() method\"\n        )",
+    "token_count": 68,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.delete"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:56-61",
+    "content": "# django/core/files/storage/base.py:56-61  (django.core.files.storage.base.Storage.get_valid_name)\nclass Storage:\n    def get_valid_name(self, name):\n        \"\"\"\n        Return a filename, based on the provided filename, that's suitable for\n        use in the target storage system.\n        \"\"\"\n        return get_valid_filename(name)",
+    "token_count": 72,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.get_valid_name"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:145-152",
+    "content": "# django/core/files/storage/base.py:145-152  (django.core.files.storage.base.Storage.exists)\nclass Storage:\n    def exists(self, name):\n        \"\"\"\n        Return True if a file referenced by the given name already exists in the\n        storage system, or False if the name is available for a new file.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide an exists() method\"\n        )",
+    "token_count": 90,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.exists"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 90
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:24-52",
+    "content": "# django/core/files/storage/base.py:24-52  (django.core.files.storage.base.Storage.save)\nclass Storage:\n    def save(self, name, content, max_length=None):\n        \"\"\"\n        Save new content to the file specified by name. The content should be\n        a proper File object or any Python file-like object, ready to be read\n        from the beginning.\n        \"\"\"\n        # Get the proper name for the file, as it will actually be saved.\n        if name is None:\n            name = content.name\n\n        if not hasattr(content, \"chunks\"):\n            content = File(content, name)\n\n        # Ensure that the name is valid, before and after having the storage\n        # system potentially modifying the name. This duplicates the check made\n        # inside `get_available_name` but it's necessary for those cases where\n        # `get_available_name` is overriden and validation is lost.\n        validate_file_name(name, allow_relative_path=True)\n\n        # Potentially find a different name depending on storage constraints.\n        name = self.get_available_name(name, max_length=max_length)\n        # Validate the (potentially) new name.\n        validate_file_name(name, allow_relative_path=True)\n\n        # The save operation should return the actual name of the file saved.\n        name = self._save(name, content)\n        # Ensure that the name returned from the storage system is still valid.\n        validate_file_name(name, allow_relative_path=True)\n        return name",
+    "token_count": 304,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.save"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 304
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:154-161",
+    "content": "# django/core/files/storage/base.py:154-161  (django.core.files.storage.base.Storage.listdir)\nclass Storage:\n    def listdir(self, path):\n        \"\"\"\n        List the contents of the specified path. Return a 2-tuple of lists:\n        the first item being directories, the second item being files.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a listdir() method\"\n        )",
+    "token_count": 91,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.listdir"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 91
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:20-22",
+    "content": "# django/core/files/storage/base.py:20-22  (django.core.files.storage.base.Storage.open)\nclass Storage:\n    def open(self, name, mode=\"rb\"):\n        \"\"\"Retrieve the specified file from storage.\"\"\"\n        return self._open(name, mode)",
+    "token_count": 55,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.open"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:163-167",
+    "content": "# django/core/files/storage/base.py:163-167  (django.core.files.storage.base.Storage.size)\nclass Storage:\n    def size(self, name):\n        \"\"\"\n        Return the total size, in bytes, of the file specified by name.\n        \"\"\"\n        raise NotImplementedError(\"subclasses of Storage must provide a size() method\")",
+    "token_count": 70,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.size"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:12-135",
+    "content": "# django/core/files/storage/base.py:12-135  (django.core.files.storage.base.Storage)\nclass Storage:\n    \"\"\"\n    A base storage class, providing some default behaviors that all other\n    storage systems can inherit or override, as necessary.\n    \"\"\"\n\n    # The following methods represent a public interface to private methods.\n    # These shouldn't be overridden by subclasses unless absolutely necessary.\n\n    def open(self, name, mode=\"rb\"):\n        \"\"\"Retrieve the specified file from storage.\"\"\"\n        return self._open(name, mode)\n\n    def save(self, name, content, max_length=None):\n        \"\"\"\n        Save new content to the file specified by name. The content should be\n        a proper File object or any Python file-like object, ready to be read\n        from the beginning.\n        \"\"\"\n        # Get the proper name for the file, as it will actually be saved.\n        if name is None:\n            name = content.name\n\n        if not hasattr(content, \"chunks\"):\n            content = File(content, name)\n\n        # Ensure that the name is valid, before and after having the storage\n        # system potentially modifying the name. This duplicates the check made\n        # inside `get_available_name` but it's necessary for those cases where\n        # `get_available_name` is overriden and validation is lost.\n        validate_file_name(name, allow_relative_path=True)\n\n        # Potentially find a different name depending on storage constraints.\n        name = self.get_available_name(name, max_length=max_length)\n        # Validate the (potentially) new name.\n        validate_file_name(name, allow_relative_path=True)\n\n        # The save operation should return the actual name of the file saved.\n        name = self._save(name, content)\n        # Ensure that the name returned from the storage system is still valid.\n        validate_file_name(name, allow_relative_path=True)\n        return name\n\n    # These methods are part of the public API, with default implementations.\n\n    def get_valid_name(self, name):\n        \"\"\"\n        Return a filename, based on the provided filename, that's suitable for\n        use in the target storage system.\n        \"\"\"\n        return get_valid_filename(name)\n\n    def get_alternative_name(self, file_root, file_ext):\n        \"\"\"\n        Return an alternative filename, by adding an underscore and a random 7\n        character alphanumeric string (before the file extension, if one\n        exists) to the filename.\n        \"\"\"\n        return \"%s_%s%s\" % (file_root, get_random_string(7), file_ext)\n\n    def get_available_name(self, name, max_length=None):\n        \"\"\"\n        Return a filename that's free on the target storage system and\n        available for new content to be written to.\n        \"\"\"\n        name = str(name).replace(\"\\\\\", \"/\")\n        dir_name, file_name = os.path.split(name)\n        if \"..\" in pathlib.PurePath(dir_name).parts:\n            raise SuspiciousFileOperation(\n                \"Detected path traversal attempt in '%s'\" % dir_name\n            )\n        validate_file_name(file_name)\n        file_root, file_ext = os.path.splitext(file_name)\n        # If the filename already exists, generate an alternative filename\n        # until it doesn't exist.\n        # Truncate original name if required, so the new filename does not\n        # exceed the max_length.\n        while self.exists(name) or (max_length and len(name) > max_length):\n            # file_ext includes the dot.\n            name = os.path.join(\n                dir_name, self.get_alternative_name(file_root, file_ext)\n            )\n            if max_length is None:\n                continue\n            # Truncate file_root if max_length exceeded.\n            truncation = len(name) - max_length\n            if truncation > 0:\n                file_root = file_root[:-truncation]\n                # Entire file_root was truncated in attempt to find an\n                # available filename.\n                if not file_root:\n                    raise SuspiciousFileOperation(\n                        'Storage can not find an available filename for \"%s\". '\n                        \"Please make sure that the corresponding file field \"\n                        'allows sufficient \"max_length\".' % name\n                    )\n                name = os.path.join(\n                    dir_name, self.get_alternative_name(file_root, file_ext)\n                )\n        return name\n\n    def generate_filename(self, filename):\n        \"\"\"\n        Validate the filename by calling get_valid_name() and return a filename\n        to be passed to the save() method.\n        \"\"\"\n        filename = str(filename).replace(\"\\\\\", \"/\")\n        # `filename` may include a path as returned by FileField.upload_to.\n        dirname, filename = os.path.split(filename)\n        if \"..\" in pathlib.PurePath(dirname).parts:\n            raise SuspiciousFileOperation(\n                \"Detected path traversal attempt in '%s'\" % dirname\n            )\n        return os.path.normpath(os.path.join(dirname, self.get_valid_name(filename)))\n\n    def path(self, name):\n        \"\"\"\n        Return a local filesystem path where the file can be retrieved using\n        Python's built-in open() function. Storage systems that can't be\n        accessed using open() should *not* implement this method.\n        \"\"\"\n        raise NotImplementedError(\"This backend doesn't support absolute paths.\")\n\n    # The following methods form the public API for storage systems, but with\n    # no default implementations. Subclasses must implement *all* of these.",
+    "token_count": 1115,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 1115
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:169-174",
+    "content": "# django/core/files/storage/base.py:169-174  (django.core.files.storage.base.Storage.url)\nclass Storage:\n    def url(self, name):\n        \"\"\"\n        Return an absolute URL where the file's contents can be accessed\n        directly by a web browser.\n        \"\"\"\n        raise NotImplementedError(\"subclasses of Storage must provide a url() method\")",
+    "token_count": 75,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.url"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:1-8",
+    "content": "# django/core/files/storage/base.py:1-8  (django.core.files.storage.base)\nimport os\nimport pathlib\n\nfrom django.core.exceptions import SuspiciousFileOperation\nfrom django.core.files import File\nfrom django.core.files.utils import validate_file_name\nfrom django.utils.crypto import get_random_string\nfrom django.utils.text import get_valid_filename",
+    "token_count": 69,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:176-183",
+    "content": "# django/core/files/storage/base.py:176-183  (django.core.files.storage.base.Storage.get_accessed_time)\nclass Storage:\n    def get_accessed_time(self, name):\n        \"\"\"\n        Return the last accessed time (as a datetime) of the file specified by\n        name. The datetime will be timezone-aware if USE_TZ=True.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a get_accessed_time() method\"\n        )",
+    "token_count": 99,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.get_accessed_time"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 99
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:185-192",
+    "content": "# django/core/files/storage/base.py:185-192  (django.core.files.storage.base.Storage.get_created_time)\nclass Storage:\n    def get_created_time(self, name):\n        \"\"\"\n        Return the creation time (as a datetime) of the file specified by name.\n        The datetime will be timezone-aware if USE_TZ=True.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a get_created_time() method\"\n        )",
+    "token_count": 94,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.get_created_time"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/base.py:194-201",
+    "content": "# django/core/files/storage/base.py:194-201  (django.core.files.storage.base.Storage.get_modified_time)\nclass Storage:\n    def get_modified_time(self, name):\n        \"\"\"\n        Return the last modified time (as a datetime) of the file specified by\n        name. The datetime will be timezone-aware if USE_TZ=True.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a get_modified_time() method\"\n        )",
+    "token_count": 96,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.base.Storage.get_modified_time"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:32-37",
+    "content": "# tests/file_storage/test_generate_filename.py:32-37  (tests.file_storage.test_generate_filename.AWSS3Storage.generate_filename)\nclass AWSS3Storage(Storage):\n    def generate_filename(self, filename):\n        \"\"\"\n        This is the method that's important to override when using S3 so that\n        os.path() isn't called, which would break S3 keys.\n        \"\"\"\n        return self.prefix + self.get_valid_name(filename)",
+    "token_count": 93,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.AWSS3Storage.generate_filename"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "method",
+     "engine_token_count": 93
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/files.py:324-337",
+    "content": "# django/db/models/fields/files.py:324-337  (django.db.models.fields.files.FileField.generate_filename)\nclass FileField(Field):\n    # The class to wrap instance attributes in. Accessing the file object off\n    # the instance will always return an instance of attr_class.\n    def generate_filename(self, instance, filename):\n        \"\"\"\n        Apply (if callable) or prepend (if a string) upload_to to the filename,\n        then delegate further processing of the name to the storage backend.\n        Until the storage layer, all file paths are expected to be Unix style\n        (with forward slashes).\n        \"\"\"\n        if callable(self.upload_to):\n            filename = self.upload_to(instance, filename)\n        else:\n            dirname = datetime.datetime.now().strftime(str(self.upload_to))\n            filename = posixpath.join(dirname, filename)\n        filename = validate_file_name(filename, allow_relative_path=True)\n        return self.storage.generate_filename(filename)",
+    "token_count": 195,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.fields.files.FileField.generate_filename"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 195
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:173-206",
+    "content": "# tests/file_storage/test_generate_filename.py:173-206  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_awss3_storage)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_awss3_storage(self):\n        \"\"\"\n        Simulate a FileField with an S3 storage which uses keys rather than\n        folders and names. FileField and Storage shouldn't have any os.path()\n        calls that break the key.\n        \"\"\"\n        storage = AWSS3Storage()\n        folder = \"not/a/folder/\"\n\n        f = FileField(upload_to=folder, storage=storage)\n        key = \"my-file-key\\\\with odd characters\"\n        data = ContentFile(\"test\")\n        expected_key = AWSS3Storage.prefix + folder + key\n\n        # Simulate call to f.save()\n        result_key = f.generate_filename(None, key)\n        self.assertEqual(result_key, expected_key)\n\n        result_key = storage.save(result_key, data)\n        self.assertEqual(result_key, expected_key)\n\n        # Repeat test with a callable.\n        def upload_to(instance, filename):\n            # Return a non-normalized path on purpose.\n            return folder + filename\n\n        f = FileField(upload_to=upload_to, storage=storage)\n\n        # Simulate call to f.save()\n        result_key = f.generate_filename(None, key)\n        self.assertEqual(result_key, expected_key)\n\n        result_key = storage.save(result_key, data)\n        self.assertEqual(result_key, expected_key)",
+    "token_count": 311,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_awss3_storage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "method",
+     "engine_token_count": 311
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/tests.py:839-865",
+    "content": "# tests/file_storage/tests.py:839-865  (tests.file_storage.tests.FileFieldStorageTests.test_file_truncation)\nclass FileFieldStorageTests(TestCase):\n    def test_file_truncation(self):\n        # Given the max_length is limited, when multiple files get uploaded\n        # under the same name, then the filename get truncated in order to fit\n        # in _(7 random chars). When most of the max_length is taken by\n        # dirname + extension and there are not enough  characters in the\n        # filename to truncate, an exception should be raised.\n        objs = [Storage() for i in range(2)]\n        filename = \"filename.ext\"\n\n        for o in objs:\n            o.limited_length.save(filename, ContentFile(\"Same Content\"))\n        try:\n            # Testing truncation.\n            names = [o.limited_length.name for o in objs]\n            self.assertEqual(names[0], \"tests/%s\" % filename)\n            self.assertRegex(names[1], \"tests/fi_%s.ext\" % FILE_SUFFIX_REGEX)\n\n            # Testing exception is raised when filename is too short to truncate.\n            filename = \"short.longext\"\n            objs[0].limited_length.save(filename, ContentFile(\"Same Content\"))\n            with self.assertRaisesMessage(\n                SuspiciousFileOperation, \"Storage can not find an available filename\"\n            ):\n                objs[1].limited_length.save(*(filename, ContentFile(\"Same Content\")))\n        finally:\n            for o in objs:\n                o.delete()",
+    "token_count": 313,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.tests.FileFieldStorageTests.test_file_truncation"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "method",
+     "engine_token_count": 313
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:56-70",
+    "content": "# tests/file_storage/test_generate_filename.py:56-70  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_storage_dangerous_paths_dir_name)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_storage_dangerous_paths_dir_name(self):\n        candidates = [\n            (\"tmp/../path\", \"tmp/..\"),\n            (\"tmp\\\\..\\\\path\", \"tmp/..\"),\n            (\"/tmp/../path\", \"/tmp/..\"),\n            (\"\\\\tmp\\\\..\\\\path\", \"/tmp/..\"),\n        ]\n        s = FileSystemStorage()\n        for file_name, path in candidates:\n            msg = \"Detected path traversal attempt in '%s'\" % path\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    s.get_available_name(file_name)\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    s.generate_filename(file_name)",
+    "token_count": 193,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_storage_dangerous_paths_dir_name"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "method",
+     "engine_token_count": 193
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:87-91",
+    "content": "# tests/file_storage/test_generate_filename.py:87-91  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_dangerous_filename_dot_segments)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_dangerous_filename_dot_segments(self):\n        f = FileField(upload_to=\"some/folder/\")\n        msg = \"Detected path traversal attempt in 'some/folder/../path'\"\n        with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n            f.generate_filename(None, \"../path\")",
+    "token_count": 109,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_dangerous_filename_dot_segments"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "method",
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:41-54",
+    "content": "# tests/file_storage/test_generate_filename.py:41-54  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_storage_dangerous_paths)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_storage_dangerous_paths(self):\n        candidates = [\n            (\"/tmp/..\", \"..\"),\n            (\"/tmp/.\", \".\"),\n            (\"\", \"\"),\n        ]\n        s = FileSystemStorage()\n        msg = \"Could not derive file name from '%s'\"\n        for file_name, base_name in candidates:\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg % base_name):\n                    s.get_available_name(file_name)\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg % base_name):\n                    s.generate_filename(file_name)",
+    "token_count": 163,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_storage_dangerous_paths"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 163
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:144-159",
+    "content": "# tests/file_storage/test_generate_filename.py:144-159  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_absolute_path)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_upload_to_absolute_path(self):\n        def upload_to(instance, filename):\n            return \"/tmp/\" + filename\n\n        f = FileField(upload_to=upload_to)\n        candidates = [\n            \"path\",\n            \"../path\",\n            \"???\",\n            \"$.$.$\",\n        ]\n        for file_name in candidates:\n            msg = f\"Detected path traversal attempt in '/tmp/{file_name}'\"\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    f.generate_filename(None, file_name)",
+    "token_count": 167,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_absolute_path"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "method",
+     "engine_token_count": 167
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:93-103",
+    "content": "# tests/file_storage/test_generate_filename.py:93-103  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_absolute_path)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_absolute_path(self):\n        f = FileField(upload_to=\"some/folder/\")\n        candidates = [\n            \"/tmp/path\",\n            \"/tmp/../path\",\n        ]\n        for file_name in candidates:\n            msg = f\"Detected path traversal attempt in '{file_name}'\"\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    f.generate_filename(None, file_name)",
+    "token_count": 139,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_absolute_path"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 139
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/tests.py:463-477",
+    "content": "# tests/file_storage/tests.py:463-477  (tests.file_storage.tests.FileStorageTests.test_file_storage_preserves_filename_case)\nclass FileStorageTests(SimpleTestCase):\n    def test_file_storage_preserves_filename_case(self):\n        \"\"\"The storage backend should preserve case of filenames.\"\"\"\n        # Create a storage backend associated with the mixed case name\n        # directory.\n        other_temp_storage = self.storage_class(location=self.temp_dir2)\n        # Ask that storage backend to store a file with a mixed case filename.\n        mixed_case = \"CaSe_SeNsItIvE\"\n        file = other_temp_storage.open(mixed_case, \"w\")\n        file.write(\"storage contents\")\n        file.close()\n        self.assertEqual(\n            os.path.join(self.temp_dir2, mixed_case),\n            other_temp_storage.path(mixed_case),\n        )\n        other_temp_storage.delete(mixed_case)",
+    "token_count": 183,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.tests.FileStorageTests.test_file_storage_preserves_filename_case"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "method",
+     "engine_token_count": 183
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:105-110",
+    "content": "# tests/file_storage/test_generate_filename.py:105-110  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename(self):\n        f = FileField(upload_to=\"some/folder/\")\n        self.assertEqual(\n            f.generate_filename(None, \"test with space.txt\"),\n            os.path.normpath(\"some/folder/test_with_space.txt\"),\n        )",
+    "token_count": 96,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "method",
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:112-120",
+    "content": "# tests/file_storage/test_generate_filename.py:112-120  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_with_upload_to)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_with_upload_to(self):\n        def upload_to(instance, filename):\n            return \"some/folder/\" + filename\n\n        f = FileField(upload_to=upload_to)\n        self.assertEqual(\n            f.generate_filename(None, \"test with space.txt\"),\n            os.path.normpath(\"some/folder/test_with_space.txt\"),\n        )",
+    "token_count": 119,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_with_upload_to"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "method",
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:161-171",
+    "content": "# tests/file_storage/test_generate_filename.py:161-171  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_dangerous_filename)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_upload_to_dangerous_filename(self):\n        def upload_to(instance, filename):\n            return \"/tmp/\" + filename\n\n        f = FileField(upload_to=upload_to)\n        candidates = [\"..\", \".\", \"\"]\n        for file_name in candidates:\n            msg = f\"Could not derive file name from '/tmp/{file_name}'\"\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    f.generate_filename(None, file_name)",
+    "token_count": 157,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_dangerous_filename"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 157
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/management/commands/collectstatic.py:107-168",
+    "content": "# django/contrib/staticfiles/management/commands/collectstatic.py:107-168  (django.contrib.staticfiles.management.commands.collectstatic.Command.collect)\nclass Command(BaseCommand):\n    def collect(self):\n        \"\"\"\n        Perform the bulk of the work of collectstatic.\n\n        Split off from handle() to facilitate testing.\n        \"\"\"\n        if self.symlink and not self.local:\n            raise CommandError(\"Can't symlink to a remote destination.\")\n\n        if self.clear:\n            self.clear_dir(\"\")\n\n        if self.symlink:\n            handler = self.link_file\n        else:\n            handler = self.copy_file\n\n        found_files = {}\n        for finder in get_finders():\n            for path, storage in finder.list(self.ignore_patterns):\n                # Prefix the relative path if the source storage contains it\n                if getattr(storage, \"prefix\", None):\n                    prefixed_path = os.path.join(storage.prefix, path)\n                else:\n                    prefixed_path = path\n\n                if prefixed_path not in found_files:\n                    found_files[prefixed_path] = (storage, path)\n                    handler(path, prefixed_path, storage)\n                else:\n                    self.log(\n                        \"Found another file with the destination path '%s'. It \"\n                        \"will be ignored since only the first encountered file \"\n                        \"is collected. If this is not what you want, make sure \"\n                        \"every static file has a unique path.\" % prefixed_path,\n                        level=1,\n                    )\n\n        # Storage backends may define a post_process() method.\n        if self.post_process and hasattr(self.storage, \"post_process\"):\n            processor = self.storage.post_process(found_files, dry_run=self.dry_run)\n            for original_path, processed_path, processed in processor:\n                if isinstance(processed, Exception):\n                    self.stderr.write(\"Post-processing '%s' failed!\" % original_path)\n                    # Add a blank line before the traceback, otherwise it's\n                    # too easy to miss the relevant part of the error message.\n                    self.stderr.write()\n                    raise processed\n                if processed:\n                    self.log(\n                        \"Post-processed '%s' as '%s'\" % (original_path, processed_path),\n                        level=2,\n                    )\n                    self.post_processed_files.append(original_path)\n                else:\n                    self.log(\"Skipped post-processing '%s'\" % original_path)\n\n        return {\n            \"modified\": self.copied_files + self.symlinked_files,\n            \"unmodified\": self.unmodified_files,\n            \"post_processed\": self.post_processed_files,\n        }",
+    "token_count": 518,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.management.commands.collectstatic.Command.collect"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "method",
+     "engine_token_count": 518
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:1-7",
+    "content": "# tests/file_storage/test_generate_filename.py:1-7  (tests.file_storage.test_generate_filename)\nimport os\n\nfrom django.core.exceptions import SuspiciousFileOperation\nfrom django.core.files.base import ContentFile\nfrom django.core.files.storage import FileSystemStorage, Storage\nfrom django.db.models import FileField\nfrom django.test import SimpleTestCase",
+    "token_count": 68,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "module_block",
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:122-142",
+    "content": "# tests/file_storage/test_generate_filename.py:122-142  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_overrides_dangerous_filename)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_upload_to_overrides_dangerous_filename(self):\n        def upload_to(instance, filename):\n            return \"test.txt\"\n\n        f = FileField(upload_to=upload_to)\n        candidates = [\n            \"/tmp/.\",\n            \"/tmp/..\",\n            \"/tmp/../path\",\n            \"/tmp/path\",\n            \"some/folder/\",\n            \"some/folder/.\",\n            \"some/folder/..\",\n            \"some/folder/???\",\n            \"some/folder/$.$.$\",\n            \"some/../test.txt\",\n            \"\",\n        ]\n        for file_name in candidates:\n            with self.subTest(file_name=file_name):\n                self.assertEqual(f.generate_filename(None, file_name), \"test.txt\")",
+    "token_count": 200,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_overrides_dangerous_filename"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "method",
+     "engine_token_count": 200
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/staticfiles_tests/test_storage.py:824-858",
+    "content": "# tests/staticfiles_tests/test_storage.py:824-858  (tests.staticfiles_tests.test_storage.TestCollectionHashedFilesCache.test_file_change_after_collectstatic)\nclass TestCollectionHashedFilesCache(CollectionTestCase):\n    def test_file_change_after_collectstatic(self):\n        # Create initial static files.\n        file_contents = (\n            (\"foo.png\", \"foo\"),\n            (\"bar.css\", 'url(\"foo.png\")\\nurl(\"xyz.png\")'),\n            (\"xyz.png\", \"xyz\"),\n        )\n        for filename, content in file_contents:\n            with open(self._get_filename_path(filename), \"w\") as f:\n                f.write(content)\n\n        with self.modify_settings(STATICFILES_DIRS={\"append\": self._temp_dir}):\n            finders.get_finder.cache_clear()\n            err = StringIO()\n            # First collectstatic run.\n            call_command(\"collectstatic\", interactive=False, verbosity=0, stderr=err)\n            relpath = self.hashed_file_path(\"test/bar.css\")\n            with storage.staticfiles_storage.open(relpath) as relfile:\n                content = relfile.read()\n                self.assertIn(b\"foo.acbd18db4cc2.png\", content)\n                self.assertIn(b\"xyz.d16fb36f0911.png\", content)\n\n            # Change the contents of the png files.\n            for filename in (\"foo.png\", \"xyz.png\"):\n                with open(self._get_filename_path(filename), \"w+b\") as f:\n                    f.write(b\"new content of file to change its hash\")\n\n            # The hashes of the png files in the CSS file are updated after\n            # a second collectstatic.\n            call_command(\"collectstatic\", interactive=False, verbosity=0, stderr=err)\n            relpath = self.hashed_file_path(\"test/bar.css\")\n            with storage.staticfiles_storage.open(relpath) as relfile:\n                content = relfile.read()\n                self.assertIn(b\"foo.57a5cb9ba68d.png\", content)\n                self.assertIn(b\"xyz.57a5cb9ba68d.png\", content)",
+    "token_count": 437,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.staticfiles_tests.test_storage.TestCollectionHashedFilesCache.test_file_change_after_collectstatic"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "method",
+     "engine_token_count": 437
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/tests.py:824-837",
+    "content": "# tests/file_storage/tests.py:824-837  (tests.file_storage.tests.FileFieldStorageTests.test_duplicate_filename)\nclass FileFieldStorageTests(TestCase):\n    def test_duplicate_filename(self):\n        # Multiple files with the same name get _(7 random chars) appended to them.\n        objs = [Storage() for i in range(2)]\n        for o in objs:\n            o.normal.save(\"multiple_files.txt\", ContentFile(\"Same Content\"))\n        try:\n            names = [o.normal.name for o in objs]\n            self.assertEqual(names[0], \"tests/multiple_files.txt\")\n            self.assertRegex(\n                names[1], \"tests/multiple_files_%s.txt\" % FILE_SUFFIX_REGEX\n            )\n        finally:\n            for o in objs:\n                o.delete()",
+    "token_count": 162,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.tests.FileFieldStorageTests.test_duplicate_filename"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "method",
+     "engine_token_count": 162
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/memory.py:255-260",
+    "content": "# django/core/files/storage/memory.py:255-260  (django.core.files.storage.memory.InMemoryStorage.delete)\nclass InMemoryStorage(Storage, StorageSettingsMixin):\n    def delete(self, name):\n        path, filename = os.path.split(name)\n        dir_node = self._resolve(path, check_exists=False)\n        if dir_node is None:\n            return None\n        dir_node.remove_child(filename)",
+    "token_count": 86,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.memory.InMemoryStorage.delete"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "method",
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/messages/storage/base.py:86-101",
+    "content": "# django/contrib/messages/storage/base.py:86-101  (django.contrib.messages.storage.base.BaseStorage._get)\nclass BaseStorage:\n    def _get(self, *args, **kwargs):\n        \"\"\"\n        Retrieve a list of stored messages. Return a tuple of the messages\n        and a flag indicating whether or not all the messages originally\n        intended to be stored in this storage were, in fact, stored and\n        retrieved; e.g., ``(messages, all_retrieved)``.\n\n        **This method must be implemented by a subclass.**\n\n        If it is possible to tell if the backend was not used (as opposed to\n        just containing no messages) then ``None`` should be returned in\n        place of ``messages``.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseStorage must provide a _get() method\"\n        )",
+    "token_count": 180,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.messages.storage.base.BaseStorage._get"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 180
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:72-85",
+    "content": "# tests/file_storage/test_generate_filename.py:72-85  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_dangerous_filename)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_dangerous_filename(self):\n        candidates = [\n            (\"..\", \"some/folder/..\"),\n            (\".\", \"some/folder/.\"),\n            (\"\", \"some/folder/\"),\n            (\"???\", \"???\"),\n            (\"$.$.$\", \"$.$.$\"),\n        ]\n        f = FileField(upload_to=\"some/folder/\")\n        for file_name, msg_file_name in candidates:\n            msg = f\"Could not derive file name from '{msg_file_name}'\"\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    f.generate_filename(None, file_name)",
+    "token_count": 179,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_dangerous_filename"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "method",
+     "engine_token_count": 179
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:19-24",
+    "content": "# tests/file_storage/test_generate_filename.py:19-24  (tests.file_storage.test_generate_filename.AWSS3Storage._save)\nclass AWSS3Storage(Storage):\n    def _save(self, name, content):\n        \"\"\"\n        This method is important to test that Storage.save() doesn't replace\n        '\\' with '/' (rather FileSystemStorage.save() does).\n        \"\"\"\n        return name",
+    "token_count": 82,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.AWSS3Storage._save"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "method",
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:26-27",
+    "content": "# tests/file_storage/test_generate_filename.py:26-27  (tests.file_storage.test_generate_filename.AWSS3Storage.get_valid_name)\nclass AWSS3Storage(Storage):\n    def get_valid_name(self, name):\n        return name",
+    "token_count": 51,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.AWSS3Storage.get_valid_name"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "method",
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/storage.py:134-166",
+    "content": "# django/contrib/staticfiles/storage.py:134-166  (django.contrib.staticfiles.storage.HashedFilesMixin.hashed_name)\nclass HashedFilesMixin:\n    def hashed_name(self, name, content=None, filename=None):\n        # `filename` is the name of file to hash if `content` isn't given.\n        # `name` is the base name to construct the new hashed filename from.\n        parsed_name = urlsplit(unquote(name))\n        clean_name = parsed_name.path.strip()\n        filename = (filename and urlsplit(unquote(filename)).path.strip()) or clean_name\n        opened = content is None\n        if opened:\n            if not self.exists(filename):\n                raise ValueError(\n                    \"The file '%s' could not be found with %r.\" % (filename, self)\n                )\n            try:\n                content = self.open(filename)\n            except OSError:\n                # Handle directory paths and fragments\n                return name\n        try:\n            file_hash = self.file_hash(clean_name, content)\n        finally:\n            if opened:\n                content.close()\n        path, filename = os.path.split(clean_name)\n        root, ext = os.path.splitext(filename)\n        file_hash = (\".%s\" % file_hash) if file_hash else \"\"\n        hashed_name = os.path.join(path, \"%s%s%s\" % (root, file_hash, ext))\n        unparsed_name = list(parsed_name)\n        unparsed_name[2] = hashed_name\n        # Special casing for a @font-face hack, like url(myfont.eot?#iefix\")\n        # http://www.fontspring.com/blog/the-new-bulletproof-font-face-syntax\n        if \"?#\" in name and not unparsed_name[3]:\n            unparsed_name[2] += \"?\"\n        return urlunsplit(unparsed_name)",
+    "token_count": 378,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.storage.HashedFilesMixin.hashed_name"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "full",
+     "bm25_rank": 24,
+     "chunk_kind": "method",
+     "engine_token_count": 378
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/filesystem.py:20-26",
+    "content": "# django/core/files/storage/filesystem.py:20-26  (django.core.files.storage.filesystem.FileSystemStorage)\n@deconstructible(path=\"django.core.files.storage.FileSystemStorage\")\nclass FileSystemStorage(Storage, StorageSettingsMixin):\n    \"\"\"\n    Standard filesystem storage\n    \"\"\"\n\n    # The combination of O_CREAT and O_EXCL makes os.open() raise OSError if\n    # the file already exists before it's opened.\n    OS_OPEN_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, \"O_BINARY\", 0)",
+    "token_count": 115,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.filesystem.FileSystemStorage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "full",
+     "bm25_rank": 25,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 115
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/files.py:35-121",
+    "content": "# django/db/models/fields/files.py:35-121  (django.db.models.fields.files.FieldFile)\nclass FieldFile(File, AltersData):\n    # The standard File contains most of the necessary properties, but\n    # FieldFiles can be instantiated without a name, so that needs to\n    # be checked for here.\n\n    def _require_file(self):\n        if not self:\n            raise ValueError(\n                \"The '%s' attribute has no file associated with it.\" % self.field.name\n            )\n\n    def _get_file(self):\n        self._require_file()\n        if getattr(self, \"_file\", None) is None:\n            self._file = self.storage.open(self.name, \"rb\")\n        return self._file\n\n    def _set_file(self, file):\n        self._file = file\n\n    def _del_file(self):\n        del self._file\n\n    file = property(_get_file, _set_file, _del_file)\n\n    @property\n    def path(self):\n        self._require_file()\n        return self.storage.path(self.name)\n\n    @property\n    def url(self):\n        self._require_file()\n        return self.storage.url(self.name)\n\n    @property\n    def size(self):\n        self._require_file()\n        if not self._committed:\n            return self.file.size\n        return self.storage.size(self.name)\n\n    def open(self, mode=\"rb\"):\n        self._require_file()\n        if getattr(self, \"_file\", None) is None:\n            self.file = self.storage.open(self.name, mode)\n        else:\n            self.file.open(mode)\n        return self\n\n    # open() doesn't alter the file's contents, but it does reset the pointer\n    open.alters_data = True\n\n    # In addition to the standard File API, FieldFiles have extra methods\n    # to further manipulate the underlying file, as well as update the\n    # associated model instance.\n\n    def save(self, name, content, save=True):\n        name = self.field.generate_filename(self.instance, name)\n        self.name = self.storage.save(name, content, max_length=self.field.max_length)\n        setattr(self.instance, self.field.attname, self.name)\n        self._committed = True\n\n        # Save the object because it has changed, unless save is False\n        if save:\n            self.instance.save()\n\n    save.alters_data = True\n\n    def delete(self, save=True):\n        if not self:\n            return\n        # Only close the file if it's already open, which we know by the\n        # presence of self._file\n        if hasattr(self, \"_file\"):\n            self.close()\n            del self.file\n\n        self.storage.delete(self.name)\n\n        self.name = None\n        setattr(self.instance, self.field.attname, self.name)\n        self._committed = False\n\n        if save:\n            self.instance.save()\n\n    delete.alters_data = True",
+    "token_count": 600,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.fields.files.FieldFile"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "full",
+     "bm25_rank": 26,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 600
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/tests.py:867-881",
+    "content": "# tests/file_storage/tests.py:867-881  (tests.file_storage.tests.FileFieldStorageTests.test_extended_length_storage)\nclass FileFieldStorageTests(TestCase):\n    @unittest.skipIf(\n        sys.platform == \"win32\",\n        \"Windows supports at most 260 characters in a path.\",\n    )\n    def test_extended_length_storage(self):\n        # Testing FileField with max_length > 255. Most systems have filename\n        # length limitation of 255. Path takes extra chars.\n        filename = (\n            self._storage_max_filename_length(temp_storage) - 4\n        ) * \"a\"  # 4 chars for extension.\n        obj = Storage()\n        obj.extended_length.save(\"%s.txt\" % filename, ContentFile(\"Same Content\"))\n        self.assertEqual(obj.extended_length.name, \"tests/%s.txt\" % filename)\n        self.assertEqual(obj.extended_length.read(), b\"Same Content\")\n        obj.extended_length.close()",
+    "token_count": 205,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.tests.FileFieldStorageTests.test_extended_length_storage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "full",
+     "bm25_rank": 27,
+     "chunk_kind": "method",
+     "engine_token_count": 205
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/module_loading.py:92-107",
+    "content": "# django/utils/module_loading.py:92-107  (django.utils.module_loading.module_dir)\ndef module_dir(module):\n    \"\"\"\n    Find the name of the directory that contains a module, if possible.\n\n    Raise ValueError otherwise, e.g. for namespace packages that are split\n    over several directories.\n    \"\"\"\n    # Convert to list because __path__ may not support indexing.\n    paths = list(getattr(module, \"__path__\", []))\n    if len(paths) == 1:\n        return paths[0]\n    else:\n        filename = getattr(module, \"__file__\", None)\n        if filename is not None:\n            return os.path.dirname(filename)\n    raise ValueError(\"Cannot determine directory containing %s\" % module)",
+    "token_count": 152,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.module_loading.module_dir"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "full",
+     "bm25_rank": 28,
+     "chunk_kind": "function",
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/models.py:44-47",
+    "content": "# tests/file_storage/models.py:44-47  (tests.file_storage.models.Storage.random_upload_to)\nclass Storage(models.Model):\n    def random_upload_to(self, filename):\n        # This returns a different result each time,\n        # to make sure it only gets called once.\n        return \"%s/%s\" % (random.randint(100, 999), filename)",
+    "token_count": 81,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.models.Storage.random_upload_to"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "full",
+     "bm25_rank": 29,
+     "chunk_kind": "method",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/tests.py:1132-1143",
+    "content": "# tests/file_storage/tests.py:1132-1143  (tests.file_storage.tests.FileStoragePathParsing.test_first_character_dot)\nclass FileStoragePathParsing(SimpleTestCase):\n    def test_first_character_dot(self):\n        \"\"\"\n        File names with a dot as their first character don't have an extension,\n        and the underscore should get added to the end.\n        \"\"\"\n        self.storage.save(\"dotted.path/.test\", ContentFile(\"1\"))\n        self.storage.save(\"dotted.path/.test\", ContentFile(\"2\"))\n\n        files = sorted(os.listdir(os.path.join(self.storage_dir, \"dotted.path\")))\n        self.assertFalse(os.path.exists(os.path.join(self.storage_dir, \"dotted_.path\")))\n        self.assertEqual(files[0], \".test\")\n        self.assertRegex(files[1], \".test_%s\" % FILE_SUFFIX_REGEX)",
+    "token_count": 176,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.tests.FileStoragePathParsing.test_first_character_dot"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "full",
+     "bm25_rank": 30,
+     "chunk_kind": "method",
+     "engine_token_count": 176
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/messages_tests/base.py:67-78",
+    "content": "# tests/messages_tests/base.py:67-78  (tests.messages_tests.base.BaseTests.get_storage)\nclass BaseTests:\n    def get_storage(self, data=None):\n        \"\"\"\n        Return the storage backend, setting its loaded data to the ``data``\n        argument.\n\n        This method avoids the storage ``_get`` method from getting called so\n        that other parts of the storage backend can be tested independent of\n        the message retrieval logic.\n        \"\"\"\n        storage = self.storage_class(self.get_request())\n        storage._loaded_data = data or []\n        return storage",
+    "token_count": 116,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.messages_tests.base.BaseTests.get_storage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "full",
+     "bm25_rank": 31,
+     "chunk_kind": "method",
+     "engine_token_count": 116
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/memory.py:215-226",
+    "content": "# django/core/files/storage/memory.py:215-226  (django.core.files.storage.memory.InMemoryStorage._resolve)\nclass InMemoryStorage(Storage, StorageSettingsMixin):\n    def _resolve(self, name, create_if_missing=False, leaf_cls=None, check_exists=True):\n        try:\n            relative_path = self._relative_path(name)\n            return self._root.resolve(\n                relative_path,\n                create_if_missing=create_if_missing,\n                leaf_cls=leaf_cls,\n                check_exists=check_exists,\n            )\n        except NotADirectoryError as exc:\n            absolute_path = self.path(exc.filename)\n            raise FileExistsError(f\"{absolute_path} exists and is not a directory.\")",
+    "token_count": 143,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.memory.InMemoryStorage._resolve"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "full",
+     "bm25_rank": 32,
+     "chunk_kind": "method",
+     "engine_token_count": 143
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/finders.py:158-164",
+    "content": "# django/contrib/staticfiles/finders.py:158-164  (django.contrib.staticfiles.finders.AppDirectoriesFinder)\nclass AppDirectoriesFinder(BaseFinder):\n    \"\"\"\n    A static files finder that looks in the directory of each app as\n    specified in the source_dir attribute.\n    \"\"\"\n\n    storage_class = FileSystemStorage\n    source_dir = \"static\"",
+    "token_count": 77,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.finders.AppDirectoriesFinder"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "full",
+     "bm25_rank": 33,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 77
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/tests.py:1117-1130",
+    "content": "# tests/file_storage/tests.py:1117-1130  (tests.file_storage.tests.FileStoragePathParsing.test_directory_with_dot)\nclass FileStoragePathParsing(SimpleTestCase):\n    def test_directory_with_dot(self):\n        \"\"\"Regression test for #9610.\n\n        If the directory name contains a dot and the file name doesn't, make\n        sure we still mangle the file name instead of the directory name.\n        \"\"\"\n\n        self.storage.save(\"dotted.path/test\", ContentFile(\"1\"))\n        self.storage.save(\"dotted.path/test\", ContentFile(\"2\"))\n\n        files = sorted(os.listdir(os.path.join(self.storage_dir, \"dotted.path\")))\n        self.assertFalse(os.path.exists(os.path.join(self.storage_dir, \"dotted_.path\")))\n        self.assertEqual(files[0], \"test\")\n        self.assertRegex(files[1], \"test_%s\" % FILE_SUFFIX_REGEX)",
+    "token_count": 188,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.tests.FileStoragePathParsing.test_directory_with_dot"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "full",
+     "bm25_rank": 34,
+     "chunk_kind": "method",
+     "engine_token_count": 188
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/staticfiles_tests/test_storage.py:808-813",
+    "content": "# tests/staticfiles_tests/test_storage.py:808-813  (tests.staticfiles_tests.test_storage.TestCollectionHashedFilesCache)\n@override_settings(\n    STORAGES={\n        STATICFILES_STORAGE_ALIAS: {\n            \"BACKEND\": \"django.contrib.staticfiles.storage.ManifestStaticFilesStorage\",\n        },\n    }\n)\nclass TestCollectionHashedFilesCache(CollectionTestCase):\n    \"\"\"\n    Files referenced from CSS use the correct final hashed name regardless of\n    the order in which the files are post-processed.\n    \"\"\"\n\n    hashed_file_path = hashed_file_path",
+    "token_count": 116,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.staticfiles_tests.test_storage.TestCollectionHashedFilesCache"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "full",
+     "bm25_rank": 35,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 116
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/test_generate_filename.py:11-17",
+    "content": "# tests/file_storage/test_generate_filename.py:11-17  (tests.file_storage.test_generate_filename.AWSS3Storage)\nclass AWSS3Storage(Storage):\n    \"\"\"\n    Simulate an AWS S3 storage which uses Unix-like paths and allows any\n    characters in file names but where there aren't actual folders but just\n    keys.\n    \"\"\"\n\n    prefix = \"mys3folder/\"",
+    "token_count": 83,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_storage.test_generate_filename.AWSS3Storage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "full",
+     "bm25_rank": 36,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/files.py:91-99",
+    "content": "# django/db/models/fields/files.py:91-99  (django.db.models.fields.files.FieldFile.save)\nclass FieldFile(File, AltersData):\n    def save(self, name, content, save=True):\n        name = self.field.generate_filename(self.instance, name)\n        self.name = self.storage.save(name, content, max_length=self.field.max_length)\n        setattr(self.instance, self.field.attname, self.name)\n        self._committed = True\n\n        # Save the object because it has changed, unless save is False\n        if save:\n            self.instance.save()",
+    "token_count": 120,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.fields.files.FieldFile.save"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "full",
+     "bm25_rank": 37,
+     "chunk_kind": "method",
+     "engine_token_count": 120
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/management/commands/collectstatic.py:274-323",
+    "content": "# django/contrib/staticfiles/management/commands/collectstatic.py:274-323  (django.contrib.staticfiles.management.commands.collectstatic.Command.delete_file)\nclass Command(BaseCommand):\n    def delete_file(self, path, prefixed_path, source_storage):\n        \"\"\"\n        Check if the target file should be deleted if it already exists.\n        \"\"\"\n        if self.storage.exists(prefixed_path):\n            try:\n                # When was the target file modified last time?\n                target_last_modified = self.storage.get_modified_time(prefixed_path)\n            except (OSError, NotImplementedError, AttributeError):\n                # The storage doesn't support get_modified_time() or failed\n                pass\n            else:\n                try:\n                    # When was the source file modified last time?\n                    source_last_modified = source_storage.get_modified_time(path)\n                except (OSError, NotImplementedError, AttributeError):\n                    pass\n                else:\n                    # The full path of the target file\n                    if self.local:\n                        full_path = self.storage.path(prefixed_path)\n                        # If it's --link mode and the path isn't a link (i.e.\n                        # the previous collectstatic wasn't with --link) or if\n                        # it's non-link mode and the path is a link (i.e. the\n                        # previous collectstatic was with --link), the old\n                        # links/files must be deleted so it's not safe to skip\n                        # unmodified files.\n                        can_skip_unmodified_files = not (\n                            self.symlink ^ os.path.islink(full_path)\n                        )\n                    else:\n                        # In remote storages, skipping is only based on the\n                        # modified times since symlinks aren't relevant.\n                        can_skip_unmodified_files = True\n                    # Avoid sub-second precision (see #14665, #19540)\n                    file_is_unmodified = target_last_modified.replace(\n                        microsecond=0\n                    ) >= source_last_modified.replace(microsecond=0)\n                    if file_is_unmodified and can_skip_unmodified_files:\n                        if prefixed_path not in self.unmodified_files:\n                            self.unmodified_files.append(prefixed_path)\n                        self.log(\"Skipping '%s' (not modified)\" % path)\n                        return False\n            # Then delete the existing file if really needed\n            if self.dry_run:\n                self.log(\"Pretending to delete '%s'\" % path)\n            else:\n                self.log(\"Deleting '%s'\" % path)\n                self.storage.delete(prefixed_path)\n        return True",
+    "token_count": 519,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.management.commands.collectstatic.Command.delete_file"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "full",
+     "bm25_rank": 38,
+     "chunk_kind": "method",
+     "engine_token_count": 519
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/files.py:234-256",
+    "content": "# django/db/models/fields/files.py:234-256  (django.db.models.fields.files.FileField.__init__)\nclass FileField(Field):\n    # The class to wrap instance attributes in. Accessing the file object off\n    # the instance will always return an instance of attr_class.\n    def __init__(\n        self, verbose_name=None, name=None, upload_to=\"\", storage=None, **kwargs\n    ):\n        self._primary_key_set_explicitly = \"primary_key\" in kwargs\n\n        self.storage = storage or default_storage\n        if callable(self.storage):\n            # Hold a reference to the callable for deconstruct().\n            self._storage_callable = self.storage\n            self.storage = self.storage()\n            if not isinstance(self.storage, Storage):\n                raise TypeError(\n                    \"%s.storage must be a subclass/instance of %s.%s\"\n                    % (\n                        self.__class__.__qualname__,\n                        Storage.__module__,\n                        Storage.__qualname__,\n                    )\n                )\n        self.upload_to = upload_to\n\n        kwargs.setdefault(\"max_length\", 100)\n        super().__init__(verbose_name, name, **kwargs)",
+    "token_count": 237,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.fields.files.FileField.__init__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "full",
+     "bm25_rank": 39,
+     "chunk_kind": "method",
+     "engine_token_count": 237
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/finders.py:271-275",
+    "content": "# django/contrib/staticfiles/finders.py:271-275  (django.contrib.staticfiles.finders.DefaultStorageFinder)\nclass DefaultStorageFinder(BaseStorageFinder):\n    \"\"\"\n    A static files finder that uses the default storage backend.\n    \"\"\"\n\n    storage = default_storage",
+    "token_count": 58,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.finders.DefaultStorageFinder"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "full",
+     "bm25_rank": 40,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_uploads/tests.py:717-745",
+    "content": "# tests/file_uploads/tests.py:717-745  (tests.file_uploads.tests.FileUploadTests.test_filename_case_preservation)\nclass FileUploadTests(TestCase):\n    def test_filename_case_preservation(self):\n        \"\"\"\n        The storage backend shouldn't mess with the case of the filenames\n        uploaded.\n        \"\"\"\n        # Synthesize the contents of a file upload with a mixed case filename\n        # so we don't have to carry such a file in the Django tests source code\n        # tree.\n        vars = {\"boundary\": \"oUrBoUnDaRyStRiNg\"}\n        post_data = [\n            \"--%(boundary)s\",\n            'Content-Disposition: form-data; name=\"file_field\"; '\n            'filename=\"MiXeD_cAsE.txt\"',\n            \"Content-Type: application/octet-stream\",\n            \"\",\n            \"file contents\\n\",\n            \"--%(boundary)s--\\r\\n\",\n        ]\n        response = self.client.post(\n            \"/filename_case/\",\n            \"\\r\\n\".join(post_data) % vars,\n            \"multipart/form-data; boundary=%(boundary)s\" % vars,\n        )\n        self.assertEqual(response.status_code, 200)\n        id = int(response.content)\n        obj = FileModel.objects.get(pk=id)\n        # The name of the file uploaded and the file stored in the server-side\n        # shouldn't differ.\n        self.assertEqual(os.path.basename(obj.testfile.path), \"MiXeD_cAsE.txt\")",
+    "token_count": 306,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_uploads.tests.FileUploadTests.test_filename_case_preservation"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "full",
+     "bm25_rank": 41,
+     "chunk_kind": "method",
+     "engine_token_count": 306
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/staticfiles_tests/test_management.py:572-590",
+    "content": "# tests/staticfiles_tests/test_management.py:572-590  (tests.staticfiles_tests.test_management.TestCollectionNeverCopyStorage.test_skips_newer_files_in_remote_storage)\nclass TestCollectionNeverCopyStorage(CollectionTestCase):\n    @override_settings(\n        STORAGES={\n            STATICFILES_STORAGE_ALIAS: {\n                \"BACKEND\": \"staticfiles_tests.storage.NeverCopyRemoteStorage\"\n            },\n        }\n    )\n    def test_skips_newer_files_in_remote_storage(self):\n        \"\"\"\n        collectstatic skips newer files in a remote storage.\n        run_collectstatic() in setUp() copies the static files, then files are\n        always skipped after NeverCopyRemoteStorage is activated since\n        NeverCopyRemoteStorage.get_modified_time() returns a datetime in the\n        future to simulate an unmodified file.\n        \"\"\"\n        stdout = StringIO()\n        self.run_collectstatic(stdout=stdout, verbosity=2)\n        output = stdout.getvalue()\n        self.assertIn(\"Skipping 'test.txt' (not modified)\", output)",
+    "token_count": 206,
+    "rank": 59,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.staticfiles_tests.test_management.TestCollectionNeverCopyStorage.test_skips_newer_files_in_remote_storage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "full",
+     "bm25_rank": 42,
+     "chunk_kind": "method",
+     "engine_token_count": 206
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_storage/models.py:1-13",
+    "content": "# tests/file_storage/models.py:1-13  (tests.file_storage.models)\n\"\"\"\nStoring files according to a custom storage system\n\n``FileField`` and its variations can take a ``storage`` argument to specify how\nand where files should be stored.\n\"\"\"\n\nimport random\nimport tempfile\nfrom pathlib import Path\n\nfrom django.core.files.storage import FileSystemStorage, default_storage\nfrom django.db import models",
+    "token_count": 83,
+    "rank": 60,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "full",
+     "bm25_rank": 43,
+     "chunk_kind": "module_block",
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/filesystem.py:144-157",
+    "content": "# django/core/files/storage/filesystem.py:144-157  (django.core.files.storage.filesystem.FileSystemStorage.delete)\nclass FileSystemStorage(Storage, StorageSettingsMixin):\n    def delete(self, name):\n        if not name:\n            raise ValueError(\"The name must be given to delete().\")\n        name = self.path(name)\n        # If the file or directory exists, delete it from the filesystem.\n        try:\n            if os.path.isdir(name):\n                os.rmdir(name)\n            else:\n                os.remove(name)\n        except FileNotFoundError:\n            # FileNotFoundError is raised if the file or directory was removed\n            # concurrently.\n            pass",
+    "token_count": 132,
+    "rank": 61,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.filesystem.FileSystemStorage.delete"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "full",
+     "bm25_rank": 44,
+     "chunk_kind": "method",
+     "engine_token_count": 132
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/staticfiles_tests/test_storage.py:433-459",
+    "content": "# tests/staticfiles_tests/test_storage.py:433-459  (tests.staticfiles_tests.test_storage.TestCollectionManifestStorage.test_clear_empties_manifest)\nclass TestCollectionManifestStorage(TestHashedFiles, CollectionTestCase):\n    def test_clear_empties_manifest(self):\n        cleared_file_name = storage.staticfiles_storage.clean_name(\n            os.path.join(\"test\", \"cleared.txt\")\n        )\n        # collect the additional file\n        self.run_collectstatic()\n\n        hashed_files = storage.staticfiles_storage.hashed_files\n        self.assertIn(cleared_file_name, hashed_files)\n\n        manifest_content, _ = storage.staticfiles_storage.load_manifest()\n        self.assertIn(cleared_file_name, manifest_content)\n\n        original_path = storage.staticfiles_storage.path(cleared_file_name)\n        self.assertTrue(os.path.exists(original_path))\n\n        # delete the original file form the app, collect with clear\n        os.unlink(self._clear_filename)\n        self.run_collectstatic(clear=True)\n\n        self.assertFileNotFound(original_path)\n\n        hashed_files = storage.staticfiles_storage.hashed_files\n        self.assertNotIn(cleared_file_name, hashed_files)\n\n        manifest_content, _ = storage.staticfiles_storage.load_manifest()\n        self.assertNotIn(cleared_file_name, manifest_content)",
+    "token_count": 255,
+    "rank": 62,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.staticfiles_tests.test_storage.TestCollectionManifestStorage.test_clear_empties_manifest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "full",
+     "bm25_rank": 45,
+     "chunk_kind": "method",
+     "engine_token_count": 255
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/messages/storage/cookie.py:63-73",
+    "content": "# django/contrib/messages/storage/cookie.py:63-73  (django.contrib.messages.storage.cookie.CookieStorage)\nclass CookieStorage(BaseStorage):\n    \"\"\"\n    Store messages in a cookie.\n    \"\"\"\n\n    cookie_name = \"messages\"\n    # uwsgi's default configuration enforces a maximum size of 4kb for all the\n    # HTTP headers. In order to leave some room for other cookies and headers,\n    # restrict the session cookie to 1/2 of 4kb. See #18781.\n    max_cookie_size = 2048\n    not_finished = \"__messagesnotfinished__\"\n    key_salt = \"django.contrib.messages\"",
+    "token_count": 140,
+    "rank": 63,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.messages.storage.cookie.CookieStorage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "full",
+     "bm25_rank": 46,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/filesystem.py:70-132",
+    "content": "# django/core/files/storage/filesystem.py:70-132  (django.core.files.storage.filesystem.FileSystemStorage._save)\nclass FileSystemStorage(Storage, StorageSettingsMixin):\n    def _save(self, name, content):\n        full_path = self.path(name)\n\n        # Create any intermediate directories that do not exist.\n        directory = os.path.dirname(full_path)\n        try:\n            if self.directory_permissions_mode is not None:\n                # Workaround because os.makedirs() doesn't apply the \"mode\"\n                # argument to intermediate-level directories.\n                # https://github.com/python/cpython/issues/86533\n                safe_makedirs(directory, self.directory_permissions_mode, exist_ok=True)\n            else:\n                os.makedirs(directory, exist_ok=True)\n        except FileExistsError:\n            raise FileExistsError(\"%s exists and is not a directory.\" % directory)\n\n        # There's a potential race condition between get_available_name and\n        # saving the file; it's possible that two threads might return the\n        # same name, at which point all sorts of fun happens. So we need to\n        # try to create the file, but if it already exists we have to go back\n        # to get_available_name() and try again.\n\n        while True:\n            try:\n                # This file has a file path that we can move.\n                if hasattr(content, \"temporary_file_path\"):\n                    file_move_safe(content.temporary_file_path(), full_path)\n\n                # This is a normal uploadedfile that we can stream.\n                else:\n                    # The current umask value is masked out by os.open!\n                    fd = os.open(full_path, self.OS_OPEN_FLAGS, 0o666)\n                    _file = None\n                    try:\n                        locks.lock(fd, locks.LOCK_EX)\n                        for chunk in content.chunks():\n                            if _file is None:\n                                mode = \"wb\" if isinstance(chunk, bytes) else \"wt\"\n                                _file = os.fdopen(fd, mode)\n                            _file.write(chunk)\n                    finally:\n                        locks.unlock(fd)\n                        if _file is not None:\n                            _file.close()\n                        else:\n                            os.close(fd)\n            except FileExistsError:\n                # A new name is needed if the file exists.\n                name = self.get_available_name(name)\n                full_path = self.path(name)\n            else:\n                # OK, the file save worked. Break out of the loop.\n                break\n\n        if self.file_permissions_mode is not None:\n            os.chmod(full_path, self.file_permissions_mode)\n\n        # Ensure the saved path is always relative to the storage root.\n        name = os.path.relpath(full_path, self.location)\n        # Ensure the moved file has the same gid as the storage root.\n        self._ensure_location_group_id(full_path)\n        # Store filenames with forward slashes, even on Windows.\n        return str(name).replace(\"\\\\\", \"/\")",
+    "token_count": 599,
+    "rank": 64,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.filesystem.FileSystemStorage._save"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "full",
+     "bm25_rank": 47,
+     "chunk_kind": "method",
+     "engine_token_count": 599
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/files/storage/memory.py:166-166",
+    "content": "# django/core/files/storage/memory.py:166-166  (django.core.files.storage.memory.InMemoryStorage)\n@deconstructible(path=\"django.core.files.storage.InMemoryStorage\")\nclass InMemoryStorage(Storage, StorageSettingsMixin):\n    \"\"\"A storage saving files in memory.\"\"\"",
+    "token_count": 60,
+    "rank": 65,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.files.storage.memory.InMemoryStorage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "full",
+     "bm25_rank": 48,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/finders.py:210-219",
+    "content": "# django/contrib/staticfiles/finders.py:210-219  (django.contrib.staticfiles.finders.AppDirectoriesFinder.find_in_app)\nclass AppDirectoriesFinder(BaseFinder):\n    def find_in_app(self, app, path):\n        \"\"\"\n        Find a requested static file in an app's static locations.\n        \"\"\"\n        storage = self.storages.get(app)\n        # Only try to find a file if the source dir actually exists.\n        if storage and storage.exists(path):\n            matched_path = storage.path(path)\n            if matched_path:\n                return matched_path",
+    "token_count": 117,
+    "rank": 66,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.finders.AppDirectoriesFinder.find_in_app"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "full",
+     "bm25_rank": 49,
+     "chunk_kind": "method",
+     "engine_token_count": 117
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:301-339",
+    "content": "# django/core/mail/message.py:301-339  (django.core.mail.message.EmailMessage.attach)\nclass EmailMessage:\n    def attach(self, filename=None, content=None, mimetype=None):\n        \"\"\"\n        Attach a file with the given filename and content. The filename can\n        be omitted and the mimetype is guessed, if not provided.\n\n        If the first parameter is a MIMEBase subclass, insert it directly\n        into the resulting message attachments.\n\n        For a text/* mimetype (guessed or specified), when a bytes object is\n        specified as content, decode it as UTF-8. If that fails, set the\n        mimetype to DEFAULT_ATTACHMENT_MIME_TYPE and don't decode the content.\n        \"\"\"\n        if isinstance(filename, MIMEBase):\n            if content is not None or mimetype is not None:\n                raise ValueError(\n                    \"content and mimetype must not be given when a MIMEBase \"\n                    \"instance is provided.\"\n                )\n            self.attachments.append(filename)\n        elif content is None:\n            raise ValueError(\"content must be provided.\")\n        else:\n            mimetype = (\n                mimetype\n                or mimetypes.guess_type(filename)[0]\n                or DEFAULT_ATTACHMENT_MIME_TYPE\n            )\n            basetype, subtype = mimetype.split(\"/\", 1)\n\n            if basetype == \"text\":\n                if isinstance(content, bytes):\n                    try:\n                        content = content.decode()\n                    except UnicodeDecodeError:\n                        # If mimetype suggests the file is text but it's\n                        # actually binary, read() raises a UnicodeDecodeError.\n                        mimetype = DEFAULT_ATTACHMENT_MIME_TYPE\n\n            self.attachments.append((filename, content, mimetype))",
+    "token_count": 336,
+    "rank": 67,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMessage.attach"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "full",
+     "bm25_rank": 50,
+     "chunk_kind": "method",
+     "engine_token_count": 336
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12846,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging how Django validates a filename before it's passed\nto a storage backend's save() method, in\ndjango/core/files/storage/base.py. Starting from\n`Storage.generate_filename`, trace the real causal pipeline that\nvalidates the filename, in the order each stage is actually reached,\nup to and including the call that performs the real character-level\nvalidation. Assume the filename's directory component contains no\npath-traversal sequence (`..`), so the guard clause does not raise.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.files.storage.base.Storage.generate_filename\", \"django.core.files.storage.base.Storage.get_valid_name\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/core/files/storage/base.py",
+   "cutoff": 0,
+   "n_components": 67,
+   "n_full": 67,
+   "n_stub": 0,
+   "n_dropped": 0,
+   "packed_tokens": 12846,
+   "latency_ms": {
+    "L_priority_sort": [
+     1350.02626
+    ],
+    "L_binary_search_tokenize": [
+     63.092419
+    ],
+    "L_retrieve": [
+     1413.505503
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12846,
+   "prompt_tokens": 13183,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13196,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/core/files/storage/base.py:112-124  (django.core.files.storage.base.Storage.generate_filename)\nclass Storage:\n    def generate_filename(self, filename):\n        \"\"\"\n        Validate the filename by calling get_valid_name() and return a filename\n        to be passed to the save() method.\n        \"\"\"\n        filename = str(filename).replace(\"\\\\\", \"/\")\n        # `filename` may include a path as returned by FileField.upload_to.\n        dirname, filename = os.path.split(filename)\n        if \"..\" in pathlib.PurePath(dirname).parts:\n            raise SuspiciousFileOperation(\n                \"Detected path traversal attempt in '%s'\" % dirname\n            )\n        return os.path.normpath(os.path.join(dirname, self.get_valid_name(filename)))\n\n# django/core/files/storage/base.py:71-110  (django.core.files.storage.base.Storage.get_available_name)\nclass Storage:\n    def get_available_name(self, name, max_length=None):\n        \"\"\"\n        Return a filename that's free on the target storage system and\n        available for new content to be written to.\n        \"\"\"\n        name = str(name).replace(\"\\\\\", \"/\")\n        dir_name, file_name = os.path.split(name)\n        if \"..\" in pathlib.PurePath(dir_name).parts:\n            raise SuspiciousFileOperation(\n                \"Detected path traversal attempt in '%s'\" % dir_name\n            )\n        validate_file_name(file_name)\n        file_root, file_ext = os.path.splitext(file_name)\n        # If the filename already exists, generate an alternative filename\n        # until it doesn't exist.\n        # Truncate original name if required, so the new filename does not\n        # exceed the max_length.\n        while self.exists(name) or (max_length and len(name) > max_length):\n            # file_ext includes the dot.\n            name = os.path.join(\n                dir_name, self.get_alternative_name(file_root, file_ext)\n            )\n            if max_length is None:\n                continue\n            # Truncate file_root if max_length exceeded.\n            truncation = len(name) - max_length\n            if truncation > 0:\n                file_root = file_root[:-truncation]\n                # Entire file_root was truncated in attempt to find an\n                # available filename.\n                if not file_root:\n                    raise SuspiciousFileOperation(\n                        'Storage can not find an available filename for \"%s\". '\n                        \"Please make sure that the corresponding file field \"\n                        'allows sufficient \"max_length\".' % name\n                    )\n                name = os.path.join(\n                    dir_name, self.get_alternative_name(file_root, file_ext)\n                )\n        return name\n\n# django/core/files/storage/base.py:126-132  (django.core.files.storage.base.Storage.path)\nclass Storage:\n    def path(self, name):\n        \"\"\"\n        Return a local filesystem path where the file can be retrieved using\n        Python's built-in open() function. Storage systems that can't be\n        accessed using open() should *not* implement this method.\n        \"\"\"\n        raise NotImplementedError(\"This backend doesn't support absolute paths.\")\n\n# django/core/files/storage/base.py:63-69  (django.core.files.storage.base.Storage.get_alternative_name)\nclass Storage:\n    def get_alternative_name(self, file_root, file_ext):\n        \"\"\"\n        Return an alternative filename, by adding an underscore and a random 7\n        character alphanumeric string (before the file extension, if one\n        exists) to the filename.\n        \"\"\"\n        return \"%s_%s%s\" % (file_root, get_random_string(7), file_ext)\n\n# django/core/files/storage/base.py:137-143  (django.core.files.storage.base.Storage.delete)\nclass Storage:\n    def delete(self, name):\n        \"\"\"\n        Delete the specified file from the storage system.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a delete() method\"\n        )\n\n# django/core/files/storage/base.py:56-61  (django.core.files.storage.base.Storage.get_valid_name)\nclass Storage:\n    def get_valid_name(self, name):\n        \"\"\"\n        Return a filename, based on the provided filename, that's suitable for\n        use in the target storage system.\n        \"\"\"\n        return get_valid_filename(name)\n\n# django/core/files/storage/base.py:145-152  (django.core.files.storage.base.Storage.exists)\nclass Storage:\n    def exists(self, name):\n        \"\"\"\n        Return True if a file referenced by the given name already exists in the\n        storage system, or False if the name is available for a new file.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide an exists() method\"\n        )\n\n# django/core/files/storage/base.py:24-52  (django.core.files.storage.base.Storage.save)\nclass Storage:\n    def save(self, name, content, max_length=None):\n        \"\"\"\n        Save new content to the file specified by name. The content should be\n        a proper File object or any Python file-like object, ready to be read\n        from the beginning.\n        \"\"\"\n        # Get the proper name for the file, as it will actually be saved.\n        if name is None:\n            name = content.name\n\n        if not hasattr(content, \"chunks\"):\n            content = File(content, name)\n\n        # Ensure that the name is valid, before and after having the storage\n        # system potentially modifying the name. This duplicates the check made\n        # inside `get_available_name` but it's necessary for those cases where\n        # `get_available_name` is overriden and validation is lost.\n        validate_file_name(name, allow_relative_path=True)\n\n        # Potentially find a different name depending on storage constraints.\n        name = self.get_available_name(name, max_length=max_length)\n        # Validate the (potentially) new name.\n        validate_file_name(name, allow_relative_path=True)\n\n        # The save operation should return the actual name of the file saved.\n        name = self._save(name, content)\n        # Ensure that the name returned from the storage system is still valid.\n        validate_file_name(name, allow_relative_path=True)\n        return name\n\n# django/core/files/storage/base.py:154-161  (django.core.files.storage.base.Storage.listdir)\nclass Storage:\n    def listdir(self, path):\n        \"\"\"\n        List the contents of the specified path. Return a 2-tuple of lists:\n        the first item being directories, the second item being files.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a listdir() method\"\n        )\n\n# django/core/files/storage/base.py:20-22  (django.core.files.storage.base.Storage.open)\nclass Storage:\n    def open(self, name, mode=\"rb\"):\n        \"\"\"Retrieve the specified file from storage.\"\"\"\n        return self._open(name, mode)\n\n# django/core/files/storage/base.py:163-167  (django.core.files.storage.base.Storage.size)\nclass Storage:\n    def size(self, name):\n        \"\"\"\n        Return the total size, in bytes, of the file specified by name.\n        \"\"\"\n        raise NotImplementedError(\"subclasses of Storage must provide a size() method\")\n\n# django/core/files/storage/base.py:12-135  (django.core.files.storage.base.Storage)\nclass Storage:\n    \"\"\"\n    A base storage class, providing some default behaviors that all other\n    storage systems can inherit or override, as necessary.\n    \"\"\"\n\n    # The following methods represent a public interface to private methods.\n    # These shouldn't be overridden by subclasses unless absolutely necessary.\n\n    def open(self, name, mode=\"rb\"):\n        \"\"\"Retrieve the specified file from storage.\"\"\"\n        return self._open(name, mode)\n\n    def save(self, name, content, max_length=None):\n        \"\"\"\n        Save new content to the file specified by name. The content should be\n        a proper File object or any Python file-like object, ready to be read\n        from the beginning.\n        \"\"\"\n        # Get the proper name for the file, as it will actually be saved.\n        if name is None:\n            name = content.name\n\n        if not hasattr(content, \"chunks\"):\n            content = File(content, name)\n\n        # Ensure that the name is valid, before and after having the storage\n        # system potentially modifying the name. This duplicates the check made\n        # inside `get_available_name` but it's necessary for those cases where\n        # `get_available_name` is overriden and validation is lost.\n        validate_file_name(name, allow_relative_path=True)\n\n        # Potentially find a different name depending on storage constraints.\n        name = self.get_available_name(name, max_length=max_length)\n        # Validate the (potentially) new name.\n        validate_file_name(name, allow_relative_path=True)\n\n        # The save operation should return the actual name of the file saved.\n        name = self._save(name, content)\n        # Ensure that the name returned from the storage system is still valid.\n        validate_file_name(name, allow_relative_path=True)\n        return name\n\n    # These methods are part of the public API, with default implementations.\n\n    def get_valid_name(self, name):\n        \"\"\"\n        Return a filename, based on the provided filename, that's suitable for\n        use in the target storage system.\n        \"\"\"\n        return get_valid_filename(name)\n\n    def get_alternative_name(self, file_root, file_ext):\n        \"\"\"\n        Return an alternative filename, by adding an underscore and a random 7\n        character alphanumeric string (before the file extension, if one\n        exists) to the filename.\n        \"\"\"\n        return \"%s_%s%s\" % (file_root, get_random_string(7), file_ext)\n\n    def get_available_name(self, name, max_length=None):\n        \"\"\"\n        Return a filename that's free on the target storage system and\n        available for new content to be written to.\n        \"\"\"\n        name = str(name).replace(\"\\\\\", \"/\")\n        dir_name, file_name = os.path.split(name)\n        if \"..\" in pathlib.PurePath(dir_name).parts:\n            raise SuspiciousFileOperation(\n                \"Detected path traversal attempt in '%s'\" % dir_name\n            )\n        validate_file_name(file_name)\n        file_root, file_ext = os.path.splitext(file_name)\n        # If the filename already exists, generate an alternative filename\n        # until it doesn't exist.\n        # Truncate original name if required, so the new filename does not\n        # exceed the max_length.\n        while self.exists(name) or (max_length and len(name) > max_length):\n            # file_ext includes the dot.\n            name = os.path.join(\n                dir_name, self.get_alternative_name(file_root, file_ext)\n            )\n            if max_length is None:\n                continue\n            # Truncate file_root if max_length exceeded.\n            truncation = len(name) - max_length\n            if truncation > 0:\n                file_root = file_root[:-truncation]\n                # Entire file_root was truncated in attempt to find an\n                # available filename.\n                if not file_root:\n                    raise SuspiciousFileOperation(\n                        'Storage can not find an available filename for \"%s\". '\n                        \"Please make sure that the corresponding file field \"\n                        'allows sufficient \"max_length\".' % name\n                    )\n                name = os.path.join(\n                    dir_name, self.get_alternative_name(file_root, file_ext)\n                )\n        return name\n\n    def generate_filename(self, filename):\n        \"\"\"\n        Validate the filename by calling get_valid_name() and return a filename\n        to be passed to the save() method.\n        \"\"\"\n        filename = str(filename).replace(\"\\\\\", \"/\")\n        # `filename` may include a path as returned by FileField.upload_to.\n        dirname, filename = os.path.split(filename)\n        if \"..\" in pathlib.PurePath(dirname).parts:\n            raise SuspiciousFileOperation(\n                \"Detected path traversal attempt in '%s'\" % dirname\n            )\n        return os.path.normpath(os.path.join(dirname, self.get_valid_name(filename)))\n\n    def path(self, name):\n        \"\"\"\n        Return a local filesystem path where the file can be retrieved using\n        Python's built-in open() function. Storage systems that can't be\n        accessed using open() should *not* implement this method.\n        \"\"\"\n        raise NotImplementedError(\"This backend doesn't support absolute paths.\")\n\n    # The following methods form the public API for storage systems, but with\n    # no default implementations. Subclasses must implement *all* of these.\n\n# django/core/files/storage/base.py:169-174  (django.core.files.storage.base.Storage.url)\nclass Storage:\n    def url(self, name):\n        \"\"\"\n        Return an absolute URL where the file's contents can be accessed\n        directly by a web browser.\n        \"\"\"\n        raise NotImplementedError(\"subclasses of Storage must provide a url() method\")\n\n# django/core/files/storage/base.py:1-8  (django.core.files.storage.base)\nimport os\nimport pathlib\n\nfrom django.core.exceptions import SuspiciousFileOperation\nfrom django.core.files import File\nfrom django.core.files.utils import validate_file_name\nfrom django.utils.crypto import get_random_string\nfrom django.utils.text import get_valid_filename\n\n# django/core/files/storage/base.py:176-183  (django.core.files.storage.base.Storage.get_accessed_time)\nclass Storage:\n    def get_accessed_time(self, name):\n        \"\"\"\n        Return the last accessed time (as a datetime) of the file specified by\n        name. The datetime will be timezone-aware if USE_TZ=True.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a get_accessed_time() method\"\n        )\n\n# django/core/files/storage/base.py:185-192  (django.core.files.storage.base.Storage.get_created_time)\nclass Storage:\n    def get_created_time(self, name):\n        \"\"\"\n        Return the creation time (as a datetime) of the file specified by name.\n        The datetime will be timezone-aware if USE_TZ=True.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a get_created_time() method\"\n        )\n\n# django/core/files/storage/base.py:194-201  (django.core.files.storage.base.Storage.get_modified_time)\nclass Storage:\n    def get_modified_time(self, name):\n        \"\"\"\n        Return the last modified time (as a datetime) of the file specified by\n        name. The datetime will be timezone-aware if USE_TZ=True.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of Storage must provide a get_modified_time() method\"\n        )\n\n# tests/file_storage/test_generate_filename.py:32-37  (tests.file_storage.test_generate_filename.AWSS3Storage.generate_filename)\nclass AWSS3Storage(Storage):\n    def generate_filename(self, filename):\n        \"\"\"\n        This is the method that's important to override when using S3 so that\n        os.path() isn't called, which would break S3 keys.\n        \"\"\"\n        return self.prefix + self.get_valid_name(filename)\n\n# django/db/models/fields/files.py:324-337  (django.db.models.fields.files.FileField.generate_filename)\nclass FileField(Field):\n    # The class to wrap instance attributes in. Accessing the file object off\n    # the instance will always return an instance of attr_class.\n    def generate_filename(self, instance, filename):\n        \"\"\"\n        Apply (if callable) or prepend (if a string) upload_to to the filename,\n        then delegate further processing of the name to the storage backend.\n        Until the storage layer, all file paths are expected to be Unix style\n        (with forward slashes).\n        \"\"\"\n        if callable(self.upload_to):\n            filename = self.upload_to(instance, filename)\n        else:\n            dirname = datetime.datetime.now().strftime(str(self.upload_to))\n            filename = posixpath.join(dirname, filename)\n        filename = validate_file_name(filename, allow_relative_path=True)\n        return self.storage.generate_filename(filename)\n\n# tests/file_storage/test_generate_filename.py:173-206  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_awss3_storage)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_awss3_storage(self):\n        \"\"\"\n        Simulate a FileField with an S3 storage which uses keys rather than\n        folders and names. FileField and Storage shouldn't have any os.path()\n        calls that break the key.\n        \"\"\"\n        storage = AWSS3Storage()\n        folder = \"not/a/folder/\"\n\n        f = FileField(upload_to=folder, storage=storage)\n        key = \"my-file-key\\\\with odd characters\"\n        data = ContentFile(\"test\")\n        expected_key = AWSS3Storage.prefix + folder + key\n\n        # Simulate call to f.save()\n        result_key = f.generate_filename(None, key)\n        self.assertEqual(result_key, expected_key)\n\n        result_key = storage.save(result_key, data)\n        self.assertEqual(result_key, expected_key)\n\n        # Repeat test with a callable.\n        def upload_to(instance, filename):\n            # Return a non-normalized path on purpose.\n            return folder + filename\n\n        f = FileField(upload_to=upload_to, storage=storage)\n\n        # Simulate call to f.save()\n        result_key = f.generate_filename(None, key)\n        self.assertEqual(result_key, expected_key)\n\n        result_key = storage.save(result_key, data)\n        self.assertEqual(result_key, expected_key)\n\n# tests/file_storage/tests.py:839-865  (tests.file_storage.tests.FileFieldStorageTests.test_file_truncation)\nclass FileFieldStorageTests(TestCase):\n    def test_file_truncation(self):\n        # Given the max_length is limited, when multiple files get uploaded\n        # under the same name, then the filename get truncated in order to fit\n        # in _(7 random chars). When most of the max_length is taken by\n        # dirname + extension and there are not enough  characters in the\n        # filename to truncate, an exception should be raised.\n        objs = [Storage() for i in range(2)]\n        filename = \"filename.ext\"\n\n        for o in objs:\n            o.limited_length.save(filename, ContentFile(\"Same Content\"))\n        try:\n            # Testing truncation.\n            names = [o.limited_length.name for o in objs]\n            self.assertEqual(names[0], \"tests/%s\" % filename)\n            self.assertRegex(names[1], \"tests/fi_%s.ext\" % FILE_SUFFIX_REGEX)\n\n            # Testing exception is raised when filename is too short to truncate.\n            filename = \"short.longext\"\n            objs[0].limited_length.save(filename, ContentFile(\"Same Content\"))\n            with self.assertRaisesMessage(\n                SuspiciousFileOperation, \"Storage can not find an available filename\"\n            ):\n                objs[1].limited_length.save(*(filename, ContentFile(\"Same Content\")))\n        finally:\n            for o in objs:\n                o.delete()\n\n# tests/file_storage/test_generate_filename.py:56-70  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_storage_dangerous_paths_dir_name)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_storage_dangerous_paths_dir_name(self):\n        candidates = [\n            (\"tmp/../path\", \"tmp/..\"),\n            (\"tmp\\\\..\\\\path\", \"tmp/..\"),\n            (\"/tmp/../path\", \"/tmp/..\"),\n            (\"\\\\tmp\\\\..\\\\path\", \"/tmp/..\"),\n        ]\n        s = FileSystemStorage()\n        for file_name, path in candidates:\n            msg = \"Detected path traversal attempt in '%s'\" % path\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    s.get_available_name(file_name)\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    s.generate_filename(file_name)\n\n# tests/file_storage/test_generate_filename.py:87-91  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_dangerous_filename_dot_segments)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_dangerous_filename_dot_segments(self):\n        f = FileField(upload_to=\"some/folder/\")\n        msg = \"Detected path traversal attempt in 'some/folder/../path'\"\n        with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n            f.generate_filename(None, \"../path\")\n\n# tests/file_storage/test_generate_filename.py:41-54  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_storage_dangerous_paths)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_storage_dangerous_paths(self):\n        candidates = [\n            (\"/tmp/..\", \"..\"),\n            (\"/tmp/.\", \".\"),\n            (\"\", \"\"),\n        ]\n        s = FileSystemStorage()\n        msg = \"Could not derive file name from '%s'\"\n        for file_name, base_name in candidates:\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg % base_name):\n                    s.get_available_name(file_name)\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg % base_name):\n                    s.generate_filename(file_name)\n\n# tests/file_storage/test_generate_filename.py:144-159  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_absolute_path)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_upload_to_absolute_path(self):\n        def upload_to(instance, filename):\n            return \"/tmp/\" + filename\n\n        f = FileField(upload_to=upload_to)\n        candidates = [\n            \"path\",\n            \"../path\",\n            \"???\",\n            \"$.$.$\",\n        ]\n        for file_name in candidates:\n            msg = f\"Detected path traversal attempt in '/tmp/{file_name}'\"\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    f.generate_filename(None, file_name)\n\n# tests/file_storage/test_generate_filename.py:93-103  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_absolute_path)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_absolute_path(self):\n        f = FileField(upload_to=\"some/folder/\")\n        candidates = [\n            \"/tmp/path\",\n            \"/tmp/../path\",\n        ]\n        for file_name in candidates:\n            msg = f\"Detected path traversal attempt in '{file_name}'\"\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    f.generate_filename(None, file_name)\n\n# tests/file_storage/tests.py:463-477  (tests.file_storage.tests.FileStorageTests.test_file_storage_preserves_filename_case)\nclass FileStorageTests(SimpleTestCase):\n    def test_file_storage_preserves_filename_case(self):\n        \"\"\"The storage backend should preserve case of filenames.\"\"\"\n        # Create a storage backend associated with the mixed case name\n        # directory.\n        other_temp_storage = self.storage_class(location=self.temp_dir2)\n        # Ask that storage backend to store a file with a mixed case filename.\n        mixed_case = \"CaSe_SeNsItIvE\"\n        file = other_temp_storage.open(mixed_case, \"w\")\n        file.write(\"storage contents\")\n        file.close()\n        self.assertEqual(\n            os.path.join(self.temp_dir2, mixed_case),\n            other_temp_storage.path(mixed_case),\n        )\n        other_temp_storage.delete(mixed_case)\n\n# tests/file_storage/test_generate_filename.py:105-110  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename(self):\n        f = FileField(upload_to=\"some/folder/\")\n        self.assertEqual(\n            f.generate_filename(None, \"test with space.txt\"),\n            os.path.normpath(\"some/folder/test_with_space.txt\"),\n        )\n\n# tests/file_storage/test_generate_filename.py:112-120  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_with_upload_to)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_with_upload_to(self):\n        def upload_to(instance, filename):\n            return \"some/folder/\" + filename\n\n        f = FileField(upload_to=upload_to)\n        self.assertEqual(\n            f.generate_filename(None, \"test with space.txt\"),\n            os.path.normpath(\"some/folder/test_with_space.txt\"),\n        )\n\n# tests/file_storage/test_generate_filename.py:161-171  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_dangerous_filename)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_upload_to_dangerous_filename(self):\n        def upload_to(instance, filename):\n            return \"/tmp/\" + filename\n\n        f = FileField(upload_to=upload_to)\n        candidates = [\"..\", \".\", \"\"]\n        for file_name in candidates:\n            msg = f\"Could not derive file name from '/tmp/{file_name}'\"\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    f.generate_filename(None, file_name)\n\n# django/contrib/staticfiles/management/commands/collectstatic.py:107-168  (django.contrib.staticfiles.management.commands.collectstatic.Command.collect)\nclass Command(BaseCommand):\n    def collect(self):\n        \"\"\"\n        Perform the bulk of the work of collectstatic.\n\n        Split off from handle() to facilitate testing.\n        \"\"\"\n        if self.symlink and not self.local:\n            raise CommandError(\"Can't symlink to a remote destination.\")\n\n        if self.clear:\n            self.clear_dir(\"\")\n\n        if self.symlink:\n            handler = self.link_file\n        else:\n            handler = self.copy_file\n\n        found_files = {}\n        for finder in get_finders():\n            for path, storage in finder.list(self.ignore_patterns):\n                # Prefix the relative path if the source storage contains it\n                if getattr(storage, \"prefix\", None):\n                    prefixed_path = os.path.join(storage.prefix, path)\n                else:\n                    prefixed_path = path\n\n                if prefixed_path not in found_files:\n                    found_files[prefixed_path] = (storage, path)\n                    handler(path, prefixed_path, storage)\n                else:\n                    self.log(\n                        \"Found another file with the destination path '%s'. It \"\n                        \"will be ignored since only the first encountered file \"\n                        \"is collected. If this is not what you want, make sure \"\n                        \"every static file has a unique path.\" % prefixed_path,\n                        level=1,\n                    )\n\n        # Storage backends may define a post_process() method.\n        if self.post_process and hasattr(self.storage, \"post_process\"):\n            processor = self.storage.post_process(found_files, dry_run=self.dry_run)\n            for original_path, processed_path, processed in processor:\n                if isinstance(processed, Exception):\n                    self.stderr.write(\"Post-processing '%s' failed!\" % original_path)\n                    # Add a blank line before the traceback, otherwise it's\n                    # too easy to miss the relevant part of the error message.\n                    self.stderr.write()\n                    raise processed\n                if processed:\n                    self.log(\n                        \"Post-processed '%s' as '%s'\" % (original_path, processed_path),\n                        level=2,\n                    )\n                    self.post_processed_files.append(original_path)\n                else:\n                    self.log(\"Skipped post-processing '%s'\" % original_path)\n\n        return {\n            \"modified\": self.copied_files + self.symlinked_files,\n            \"unmodified\": self.unmodified_files,\n            \"post_processed\": self.post_processed_files,\n        }\n\n# tests/file_storage/test_generate_filename.py:1-7  (tests.file_storage.test_generate_filename)\nimport os\n\nfrom django.core.exceptions import SuspiciousFileOperation\nfrom django.core.files.base import ContentFile\nfrom django.core.files.storage import FileSystemStorage, Storage\nfrom django.db.models import FileField\nfrom django.test import SimpleTestCase\n\n# tests/file_storage/test_generate_filename.py:122-142  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_generate_filename_upload_to_overrides_dangerous_filename)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_generate_filename_upload_to_overrides_dangerous_filename(self):\n        def upload_to(instance, filename):\n            return \"test.txt\"\n\n        f = FileField(upload_to=upload_to)\n        candidates = [\n            \"/tmp/.\",\n            \"/tmp/..\",\n            \"/tmp/../path\",\n            \"/tmp/path\",\n            \"some/folder/\",\n            \"some/folder/.\",\n            \"some/folder/..\",\n            \"some/folder/???\",\n            \"some/folder/$.$.$\",\n            \"some/../test.txt\",\n            \"\",\n        ]\n        for file_name in candidates:\n            with self.subTest(file_name=file_name):\n                self.assertEqual(f.generate_filename(None, file_name), \"test.txt\")\n\n# tests/staticfiles_tests/test_storage.py:824-858  (tests.staticfiles_tests.test_storage.TestCollectionHashedFilesCache.test_file_change_after_collectstatic)\nclass TestCollectionHashedFilesCache(CollectionTestCase):\n    def test_file_change_after_collectstatic(self):\n        # Create initial static files.\n        file_contents = (\n            (\"foo.png\", \"foo\"),\n            (\"bar.css\", 'url(\"foo.png\")\\nurl(\"xyz.png\")'),\n            (\"xyz.png\", \"xyz\"),\n        )\n        for filename, content in file_contents:\n            with open(self._get_filename_path(filename), \"w\") as f:\n                f.write(content)\n\n        with self.modify_settings(STATICFILES_DIRS={\"append\": self._temp_dir}):\n            finders.get_finder.cache_clear()\n            err = StringIO()\n            # First collectstatic run.\n            call_command(\"collectstatic\", interactive=False, verbosity=0, stderr=err)\n            relpath = self.hashed_file_path(\"test/bar.css\")\n            with storage.staticfiles_storage.open(relpath) as relfile:\n                content = relfile.read()\n                self.assertIn(b\"foo.acbd18db4cc2.png\", content)\n                self.assertIn(b\"xyz.d16fb36f0911.png\", content)\n\n            # Change the contents of the png files.\n            for filename in (\"foo.png\", \"xyz.png\"):\n                with open(self._get_filename_path(filename), \"w+b\") as f:\n                    f.write(b\"new content of file to change its hash\")\n\n            # The hashes of the png files in the CSS file are updated after\n            # a second collectstatic.\n            call_command(\"collectstatic\", interactive=False, verbosity=0, stderr=err)\n            relpath = self.hashed_file_path(\"test/bar.css\")\n            with storage.staticfiles_storage.open(relpath) as relfile:\n                content = relfile.read()\n                self.assertIn(b\"foo.57a5cb9ba68d.png\", content)\n                self.assertIn(b\"xyz.57a5cb9ba68d.png\", content)\n\n# tests/file_storage/tests.py:824-837  (tests.file_storage.tests.FileFieldStorageTests.test_duplicate_filename)\nclass FileFieldStorageTests(TestCase):\n    def test_duplicate_filename(self):\n        # Multiple files with the same name get _(7 random chars) appended to them.\n        objs = [Storage() for i in range(2)]\n        for o in objs:\n            o.normal.save(\"multiple_files.txt\", ContentFile(\"Same Content\"))\n        try:\n            names = [o.normal.name for o in objs]\n            self.assertEqual(names[0], \"tests/multiple_files.txt\")\n            self.assertRegex(\n                names[1], \"tests/multiple_files_%s.txt\" % FILE_SUFFIX_REGEX\n            )\n        finally:\n            for o in objs:\n                o.delete()\n\n# django/core/files/storage/memory.py:255-260  (django.core.files.storage.memory.InMemoryStorage.delete)\nclass InMemoryStorage(Storage, StorageSettingsMixin):\n    def delete(self, name):\n        path, filename = os.path.split(name)\n        dir_node = self._resolve(path, check_exists=False)\n        if dir_node is None:\n            return None\n        dir_node.remove_child(filename)\n\n# django/contrib/messages/storage/base.py:86-101  (django.contrib.messages.storage.base.BaseStorage._get)\nclass BaseStorage:\n    def _get(self, *args, **kwargs):\n        \"\"\"\n        Retrieve a list of stored messages. Return a tuple of the messages\n        and a flag indicating whether or not all the messages originally\n        intended to be stored in this storage were, in fact, stored and\n        retrieved; e.g., ``(messages, all_retrieved)``.\n\n        **This method must be implemented by a subclass.**\n\n        If it is possible to tell if the backend was not used (as opposed to\n        just containing no messages) then ``None`` should be returned in\n        place of ``messages``.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseStorage must provide a _get() method\"\n        )\n\n# tests/file_storage/test_generate_filename.py:72-85  (tests.file_storage.test_generate_filename.GenerateFilenameStorageTests.test_filefield_dangerous_filename)\nclass GenerateFilenameStorageTests(SimpleTestCase):\n    def test_filefield_dangerous_filename(self):\n        candidates = [\n            (\"..\", \"some/folder/..\"),\n            (\".\", \"some/folder/.\"),\n            (\"\", \"some/folder/\"),\n            (\"???\", \"???\"),\n            (\"$.$.$\", \"$.$.$\"),\n        ]\n        f = FileField(upload_to=\"some/folder/\")\n        for file_name, msg_file_name in candidates:\n            msg = f\"Could not derive file name from '{msg_file_name}'\"\n            with self.subTest(file_name=file_name):\n                with self.assertRaisesMessage(SuspiciousFileOperation, msg):\n                    f.generate_filename(None, file_name)\n\n# tests/file_storage/test_generate_filename.py:19-24  (tests.file_storage.test_generate_filename.AWSS3Storage._save)\nclass AWSS3Storage(Storage):\n    def _save(self, name, content):\n        \"\"\"\n        This method is important to test that Storage.save() doesn't replace\n        '\\' with '/' (rather FileSystemStorage.save() does).\n        \"\"\"\n        return name\n\n# tests/file_storage/test_generate_filename.py:26-27  (tests.file_storage.test_generate_filename.AWSS3Storage.get_valid_name)\nclass AWSS3Storage(Storage):\n    def get_valid_name(self, name):\n        return name\n\n# django/contrib/staticfiles/storage.py:134-166  (django.contrib.staticfiles.storage.HashedFilesMixin.hashed_name)\nclass HashedFilesMixin:\n    def hashed_name(self, name, content=None, filename=None):\n        # `filename` is the name of file to hash if `content` isn't given.\n        # `name` is the base name to construct the new hashed filename from.\n        parsed_name = urlsplit(unquote(name))\n        clean_name = parsed_name.path.strip()\n        filename = (filename and urlsplit(unquote(filename)).path.strip()) or clean_name\n        opened = content is None\n        if opened:\n            if not self.exists(filename):\n                raise ValueError(\n                    \"The file '%s' could not be found with %r.\" % (filename, self)\n                )\n            try:\n                content = self.open(filename)\n            except OSError:\n                # Handle directory paths and fragments\n                return name\n        try:\n            file_hash = self.file_hash(clean_name, content)\n        finally:\n            if opened:\n                content.close()\n        path, filename = os.path.split(clean_name)\n        root, ext = os.path.splitext(filename)\n        file_hash = (\".%s\" % file_hash) if file_hash else \"\"\n        hashed_name = os.path.join(path, \"%s%s%s\" % (root, file_hash, ext))\n        unparsed_name = list(parsed_name)\n        unparsed_name[2] = hashed_name\n        # Special casing for a @font-face hack, like url(myfont.eot?#iefix\")\n        # http://www.fontspring.com/blog/the-new-bulletproof-font-face-syntax\n        if \"?#\" in name and not unparsed_name[3]:\n            unparsed_name[2] += \"?\"\n        return urlunsplit(unparsed_name)\n\n# django/core/files/storage/filesystem.py:20-26  (django.core.files.storage.filesystem.FileSystemStorage)\n@deconstructible(path=\"django.core.files.storage.FileSystemStorage\")\nclass FileSystemStorage(Storage, StorageSettingsMixin):\n    \"\"\"\n    Standard filesystem storage\n    \"\"\"\n\n    # The combination of O_CREAT and O_EXCL makes os.open() raise OSError if\n    # the file already exists before it's opened.\n    OS_OPEN_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, \"O_BINARY\", 0)\n\n# django/db/models/fields/files.py:35-121  (django.db.models.fields.files.FieldFile)\nclass FieldFile(File, AltersData):\n    # The standard File contains most of the necessary properties, but\n    # FieldFiles can be instantiated without a name, so that needs to\n    # be checked for here.\n\n    def _require_file(self):\n        if not self:\n            raise ValueError(\n                \"The '%s' attribute has no file associated with it.\" % self.field.name\n            )\n\n    def _get_file(self):\n        self._require_file()\n        if getattr(self, \"_file\", None) is None:\n            self._file = self.storage.open(self.name, \"rb\")\n        return self._file\n\n    def _set_file(self, file):\n        self._file = file\n\n    def _del_file(self):\n        del self._file\n\n    file = property(_get_file, _set_file, _del_file)\n\n    @property\n    def path(self):\n        self._require_file()\n        return self.storage.path(self.name)\n\n    @property\n    def url(self):\n        self._require_file()\n        return self.storage.url(self.name)\n\n    @property\n    def size(self):\n        self._require_file()\n        if not self._committed:\n            return self.file.size\n        return self.storage.size(self.name)\n\n    def open(self, mode=\"rb\"):\n        self._require_file()\n        if getattr(self, \"_file\", None) is None:\n            self.file = self.storage.open(self.name, mode)\n        else:\n            self.file.open(mode)\n        return self\n\n    # open() doesn't alter the file's contents, but it does reset the pointer\n    open.alters_data = True\n\n    # In addition to the standard File API, FieldFiles have extra methods\n    # to further manipulate the underlying file, as well as update the\n    # associated model instance.\n\n    def save(self, name, content, save=True):\n        name = self.field.generate_filename(self.instance, name)\n        self.name = self.storage.save(name, content, max_length=self.field.max_length)\n        setattr(self.instance, self.field.attname, self.name)\n        self._committed = True\n\n        # Save the object because it has changed, unless save is False\n        if save:\n            self.instance.save()\n\n    save.alters_data = True\n\n    def delete(self, save=True):\n        if not self:\n            return\n        # Only close the file if it's already open, which we know by the\n        # presence of self._file\n        if hasattr(self, \"_file\"):\n            self.close()\n            del self.file\n\n        self.storage.delete(self.name)\n\n        self.name = None\n        setattr(self.instance, self.field.attname, self.name)\n        self._committed = False\n\n        if save:\n            self.instance.save()\n\n    delete.alters_data = True\n\n# tests/file_storage/tests.py:867-881  (tests.file_storage.tests.FileFieldStorageTests.test_extended_length_storage)\nclass FileFieldStorageTests(TestCase):\n    @unittest.skipIf(\n        sys.platform == \"win32\",\n        \"Windows supports at most 260 characters in a path.\",\n    )\n    def test_extended_length_storage(self):\n        # Testing FileField with max_length > 255. Most systems have filename\n        # length limitation of 255. Path takes extra chars.\n        filename = (\n            self._storage_max_filename_length(temp_storage) - 4\n        ) * \"a\"  # 4 chars for extension.\n        obj = Storage()\n        obj.extended_length.save(\"%s.txt\" % filename, ContentFile(\"Same Content\"))\n        self.assertEqual(obj.extended_length.name, \"tests/%s.txt\" % filename)\n        self.assertEqual(obj.extended_length.read(), b\"Same Content\")\n        obj.extended_length.close()\n\n# django/utils/module_loading.py:92-107  (django.utils.module_loading.module_dir)\ndef module_dir(module):\n    \"\"\"\n    Find the name of the directory that contains a module, if possible.\n\n    Raise ValueError otherwise, e.g. for namespace packages that are split\n    over several directories.\n    \"\"\"\n    # Convert to list because __path__ may not support indexing.\n    paths = list(getattr(module, \"__path__\", []))\n    if len(paths) == 1:\n        return paths[0]\n    else:\n        filename = getattr(module, \"__file__\", None)\n        if filename is not None:\n            return os.path.dirname(filename)\n    raise ValueError(\"Cannot determine directory containing %s\" % module)\n\n# tests/file_storage/models.py:44-47  (tests.file_storage.models.Storage.random_upload_to)\nclass Storage(models.Model):\n    def random_upload_to(self, filename):\n        # This returns a different result each time,\n        # to make sure it only gets called once.\n        return \"%s/%s\" % (random.randint(100, 999), filename)\n\n# tests/file_storage/tests.py:1132-1143  (tests.file_storage.tests.FileStoragePathParsing.test_first_character_dot)\nclass FileStoragePathParsing(SimpleTestCase):\n    def test_first_character_dot(self):\n        \"\"\"\n        File names with a dot as their first character don't have an extension,\n        and the underscore should get added to the end.\n        \"\"\"\n        self.storage.save(\"dotted.path/.test\", ContentFile(\"1\"))\n        self.storage.save(\"dotted.path/.test\", ContentFile(\"2\"))\n\n        files = sorted(os.listdir(os.path.join(self.storage_dir, \"dotted.path\")))\n        self.assertFalse(os.path.exists(os.path.join(self.storage_dir, \"dotted_.path\")))\n        self.assertEqual(files[0], \".test\")\n        self.assertRegex(files[1], \".test_%s\" % FILE_SUFFIX_REGEX)\n\n# tests/messages_tests/base.py:67-78  (tests.messages_tests.base.BaseTests.get_storage)\nclass BaseTests:\n    def get_storage(self, data=None):\n        \"\"\"\n        Return the storage backend, setting its loaded data to the ``data``\n        argument.\n\n        This method avoids the storage ``_get`` method from getting called so\n        that other parts of the storage backend can be tested independent of\n        the message retrieval logic.\n        \"\"\"\n        storage = self.storage_class(self.get_request())\n        storage._loaded_data = data or []\n        return storage\n\n# django/core/files/storage/memory.py:215-226  (django.core.files.storage.memory.InMemoryStorage._resolve)\nclass InMemoryStorage(Storage, StorageSettingsMixin):\n    def _resolve(self, name, create_if_missing=False, leaf_cls=None, check_exists=True):\n        try:\n            relative_path = self._relative_path(name)\n            return self._root.resolve(\n                relative_path,\n                create_if_missing=create_if_missing,\n                leaf_cls=leaf_cls,\n                check_exists=check_exists,\n            )\n        except NotADirectoryError as exc:\n            absolute_path = self.path(exc.filename)\n            raise FileExistsError(f\"{absolute_path} exists and is not a directory.\")\n\n# django/contrib/staticfiles/finders.py:158-164  (django.contrib.staticfiles.finders.AppDirectoriesFinder)\nclass AppDirectoriesFinder(BaseFinder):\n    \"\"\"\n    A static files finder that looks in the directory of each app as\n    specified in the source_dir attribute.\n    \"\"\"\n\n    storage_class = FileSystemStorage\n    source_dir = \"static\"\n\n# tests/file_storage/tests.py:1117-1130  (tests.file_storage.tests.FileStoragePathParsing.test_directory_with_dot)\nclass FileStoragePathParsing(SimpleTestCase):\n    def test_directory_with_dot(self):\n        \"\"\"Regression test for #9610.\n\n        If the directory name contains a dot and the file name doesn't, make\n        sure we still mangle the file name instead of the directory name.\n        \"\"\"\n\n        self.storage.save(\"dotted.path/test\", ContentFile(\"1\"))\n        self.storage.save(\"dotted.path/test\", ContentFile(\"2\"))\n\n        files = sorted(os.listdir(os.path.join(self.storage_dir, \"dotted.path\")))\n        self.assertFalse(os.path.exists(os.path.join(self.storage_dir, \"dotted_.path\")))\n        self.assertEqual(files[0], \"test\")\n        self.assertRegex(files[1], \"test_%s\" % FILE_SUFFIX_REGEX)\n\n# tests/staticfiles_tests/test_storage.py:808-813  (tests.staticfiles_tests.test_storage.TestCollectionHashedFilesCache)\n@override_settings(\n    STORAGES={\n        STATICFILES_STORAGE_ALIAS: {\n            \"BACKEND\": \"django.contrib.staticfiles.storage.ManifestStaticFilesStorage\",\n        },\n    }\n)\nclass TestCollectionHashedFilesCache(CollectionTestCase):\n    \"\"\"\n    Files referenced from CSS use the correct final hashed name regardless of\n    the order in which the files are post-processed.\n    \"\"\"\n\n    hashed_file_path = hashed_file_path\n\n# tests/file_storage/test_generate_filename.py:11-17  (tests.file_storage.test_generate_filename.AWSS3Storage)\nclass AWSS3Storage(Storage):\n    \"\"\"\n    Simulate an AWS S3 storage which uses Unix-like paths and allows any\n    characters in file names but where there aren't actual folders but just\n    keys.\n    \"\"\"\n\n    prefix = \"mys3folder/\"\n\n# django/db/models/fields/files.py:91-99  (django.db.models.fields.files.FieldFile.save)\nclass FieldFile(File, AltersData):\n    def save(self, name, content, save=True):\n        name = self.field.generate_filename(self.instance, name)\n        self.name = self.storage.save(name, content, max_length=self.field.max_length)\n        setattr(self.instance, self.field.attname, self.name)\n        self._committed = True\n\n        # Save the object because it has changed, unless save is False\n        if save:\n            self.instance.save()\n\n# django/contrib/staticfiles/management/commands/collectstatic.py:274-323  (django.contrib.staticfiles.management.commands.collectstatic.Command.delete_file)\nclass Command(BaseCommand):\n    def delete_file(self, path, prefixed_path, source_storage):\n        \"\"\"\n        Check if the target file should be deleted if it already exists.\n        \"\"\"\n        if self.storage.exists(prefixed_path):\n            try:\n                # When was the target file modified last time?\n                target_last_modified = self.storage.get_modified_time(prefixed_path)\n            except (OSError, NotImplementedError, AttributeError):\n                # The storage doesn't support get_modified_time() or failed\n                pass\n            else:\n                try:\n                    # When was the source file modified last time?\n                    source_last_modified = source_storage.get_modified_time(path)\n                except (OSError, NotImplementedError, AttributeError):\n                    pass\n                else:\n                    # The full path of the target file\n                    if self.local:\n                        full_path = self.storage.path(prefixed_path)\n                        # If it's --link mode and the path isn't a link (i.e.\n                        # the previous collectstatic wasn't with --link) or if\n                        # it's non-link mode and the path is a link (i.e. the\n                        # previous collectstatic was with --link), the old\n                        # links/files must be deleted so it's not safe to skip\n                        # unmodified files.\n                        can_skip_unmodified_files = not (\n                            self.symlink ^ os.path.islink(full_path)\n                        )\n                    else:\n                        # In remote storages, skipping is only based on the\n                        # modified times since symlinks aren't relevant.\n                        can_skip_unmodified_files = True\n                    # Avoid sub-second precision (see #14665, #19540)\n                    file_is_unmodified = target_last_modified.replace(\n                        microsecond=0\n                    ) >= source_last_modified.replace(microsecond=0)\n                    if file_is_unmodified and can_skip_unmodified_files:\n                        if prefixed_path not in self.unmodified_files:\n                            self.unmodified_files.append(prefixed_path)\n                        self.log(\"Skipping '%s' (not modified)\" % path)\n                        return False\n            # Then delete the existing file if really needed\n            if self.dry_run:\n                self.log(\"Pretending to delete '%s'\" % path)\n            else:\n                self.log(\"Deleting '%s'\" % path)\n                self.storage.delete(prefixed_path)\n        return True\n\n# django/db/models/fields/files.py:234-256  (django.db.models.fields.files.FileField.__init__)\nclass FileField(Field):\n    # The class to wrap instance attributes in. Accessing the file object off\n    # the instance will always return an instance of attr_class.\n    def __init__(\n        self, verbose_name=None, name=None, upload_to=\"\", storage=None, **kwargs\n    ):\n        self._primary_key_set_explicitly = \"primary_key\" in kwargs\n\n        self.storage = storage or default_storage\n        if callable(self.storage):\n            # Hold a reference to the callable for deconstruct().\n            self._storage_callable = self.storage\n            self.storage = self.storage()\n            if not isinstance(self.storage, Storage):\n                raise TypeError(\n                    \"%s.storage must be a subclass/instance of %s.%s\"\n                    % (\n                        self.__class__.__qualname__,\n                        Storage.__module__,\n                        Storage.__qualname__,\n                    )\n                )\n        self.upload_to = upload_to\n\n        kwargs.setdefault(\"max_length\", 100)\n        super().__init__(verbose_name, name, **kwargs)\n\n# django/contrib/staticfiles/finders.py:271-275  (django.contrib.staticfiles.finders.DefaultStorageFinder)\nclass DefaultStorageFinder(BaseStorageFinder):\n    \"\"\"\n    A static files finder that uses the default storage backend.\n    \"\"\"\n\n    storage = default_storage\n\n# tests/file_uploads/tests.py:717-745  (tests.file_uploads.tests.FileUploadTests.test_filename_case_preservation)\nclass FileUploadTests(TestCase):\n    def test_filename_case_preservation(self):\n        \"\"\"\n        The storage backend shouldn't mess with the case of the filenames\n        uploaded.\n        \"\"\"\n        # Synthesize the contents of a file upload with a mixed case filename\n        # so we don't have to carry such a file in the Django tests source code\n        # tree.\n        vars = {\"boundary\": \"oUrBoUnDaRyStRiNg\"}\n        post_data = [\n            \"--%(boundary)s\",\n            'Content-Disposition: form-data; name=\"file_field\"; '\n            'filename=\"MiXeD_cAsE.txt\"',\n            \"Content-Type: application/octet-stream\",\n            \"\",\n            \"file contents\\n\",\n            \"--%(boundary)s--\\r\\n\",\n        ]\n        response = self.client.post(\n            \"/filename_case/\",\n            \"\\r\\n\".join(post_data) % vars,\n            \"multipart/form-data; boundary=%(boundary)s\" % vars,\n        )\n        self.assertEqual(response.status_code, 200)\n        id = int(response.content)\n        obj = FileModel.objects.get(pk=id)\n        # The name of the file uploaded and the file stored in the server-side\n        # shouldn't differ.\n        self.assertEqual(os.path.basename(obj.testfile.path), \"MiXeD_cAsE.txt\")\n\n# tests/staticfiles_tests/test_management.py:572-590  (tests.staticfiles_tests.test_management.TestCollectionNeverCopyStorage.test_skips_newer_files_in_remote_storage)\nclass TestCollectionNeverCopyStorage(CollectionTestCase):\n    @override_settings(\n        STORAGES={\n            STATICFILES_STORAGE_ALIAS: {\n                \"BACKEND\": \"staticfiles_tests.storage.NeverCopyRemoteStorage\"\n            },\n        }\n    )\n    def test_skips_newer_files_in_remote_storage(self):\n        \"\"\"\n        collectstatic skips newer files in a remote storage.\n        run_collectstatic() in setUp() copies the static files, then files are\n        always skipped after NeverCopyRemoteStorage is activated since\n        NeverCopyRemoteStorage.get_modified_time() returns a datetime in the\n        future to simulate an unmodified file.\n        \"\"\"\n        stdout = StringIO()\n        self.run_collectstatic(stdout=stdout, verbosity=2)\n        output = stdout.getvalue()\n        self.assertIn(\"Skipping 'test.txt' (not modified)\", output)\n\n# tests/file_storage/models.py:1-13  (tests.file_storage.models)\n\"\"\"\nStoring files according to a custom storage system\n\n``FileField`` and its variations can take a ``storage`` argument to specify how\nand where files should be stored.\n\"\"\"\n\nimport random\nimport tempfile\nfrom pathlib import Path\n\nfrom django.core.files.storage import FileSystemStorage, default_storage\nfrom django.db import models\n\n# django/core/files/storage/filesystem.py:144-157  (django.core.files.storage.filesystem.FileSystemStorage.delete)\nclass FileSystemStorage(Storage, StorageSettingsMixin):\n    def delete(self, name):\n        if not name:\n            raise ValueError(\"The name must be given to delete().\")\n        name = self.path(name)\n        # If the file or directory exists, delete it from the filesystem.\n        try:\n            if os.path.isdir(name):\n                os.rmdir(name)\n            else:\n                os.remove(name)\n        except FileNotFoundError:\n            # FileNotFoundError is raised if the file or directory was removed\n            # concurrently.\n            pass\n\n# tests/staticfiles_tests/test_storage.py:433-459  (tests.staticfiles_tests.test_storage.TestCollectionManifestStorage.test_clear_empties_manifest)\nclass TestCollectionManifestStorage(TestHashedFiles, CollectionTestCase):\n    def test_clear_empties_manifest(self):\n        cleared_file_name = storage.staticfiles_storage.clean_name(\n            os.path.join(\"test\", \"cleared.txt\")\n        )\n        # collect the additional file\n        self.run_collectstatic()\n\n        hashed_files = storage.staticfiles_storage.hashed_files\n        self.assertIn(cleared_file_name, hashed_files)\n\n        manifest_content, _ = storage.staticfiles_storage.load_manifest()\n        self.assertIn(cleared_file_name, manifest_content)\n\n        original_path = storage.staticfiles_storage.path(cleared_file_name)\n        self.assertTrue(os.path.exists(original_path))\n\n        # delete the original file form the app, collect with clear\n        os.unlink(self._clear_filename)\n        self.run_collectstatic(clear=True)\n\n        self.assertFileNotFound(original_path)\n\n        hashed_files = storage.staticfiles_storage.hashed_files\n        self.assertNotIn(cleared_file_name, hashed_files)\n\n        manifest_content, _ = storage.staticfiles_storage.load_manifest()\n        self.assertNotIn(cleared_file_name, manifest_content)\n\n# django/contrib/messages/storage/cookie.py:63-73  (django.contrib.messages.storage.cookie.CookieStorage)\nclass CookieStorage(BaseStorage):\n    \"\"\"\n    Store messages in a cookie.\n    \"\"\"\n\n    cookie_name = \"messages\"\n    # uwsgi's default configuration enforces a maximum size of 4kb for all the\n    # HTTP headers. In order to leave some room for other cookies and headers,\n    # restrict the session cookie to 1/2 of 4kb. See #18781.\n    max_cookie_size = 2048\n    not_finished = \"__messagesnotfinished__\"\n    key_salt = \"django.contrib.messages\"\n\n# django/core/files/storage/filesystem.py:70-132  (django.core.files.storage.filesystem.FileSystemStorage._save)\nclass FileSystemStorage(Storage, StorageSettingsMixin):\n    def _save(self, name, content):\n        full_path = self.path(name)\n\n        # Create any intermediate directories that do not exist.\n        directory = os.path.dirname(full_path)\n        try:\n            if self.directory_permissions_mode is not None:\n                # Workaround because os.makedirs() doesn't apply the \"mode\"\n                # argument to intermediate-level directories.\n                # https://github.com/python/cpython/issues/86533\n                safe_makedirs(directory, self.directory_permissions_mode, exist_ok=True)\n            else:\n                os.makedirs(directory, exist_ok=True)\n        except FileExistsError:\n            raise FileExistsError(\"%s exists and is not a directory.\" % directory)\n\n        # There's a potential race condition between get_available_name and\n        # saving the file; it's possible that two threads might return the\n        # same name, at which point all sorts of fun happens. So we need to\n        # try to create the file, but if it already exists we have to go back\n        # to get_available_name() and try again.\n\n        while True:\n            try:\n                # This file has a file path that we can move.\n                if hasattr(content, \"temporary_file_path\"):\n                    file_move_safe(content.temporary_file_path(), full_path)\n\n                # This is a normal uploadedfile that we can stream.\n                else:\n                    # The current umask value is masked out by os.open!\n                    fd = os.open(full_path, self.OS_OPEN_FLAGS, 0o666)\n                    _file = None\n                    try:\n                        locks.lock(fd, locks.LOCK_EX)\n                        for chunk in content.chunks():\n                            if _file is None:\n                                mode = \"wb\" if isinstance(chunk, bytes) else \"wt\"\n                                _file = os.fdopen(fd, mode)\n                            _file.write(chunk)\n                    finally:\n                        locks.unlock(fd)\n                        if _file is not None:\n                            _file.close()\n                        else:\n                            os.close(fd)\n            except FileExistsError:\n                # A new name is needed if the file exists.\n                name = self.get_available_name(name)\n                full_path = self.path(name)\n            else:\n                # OK, the file save worked. Break out of the loop.\n                break\n\n        if self.file_permissions_mode is not None:\n            os.chmod(full_path, self.file_permissions_mode)\n\n        # Ensure the saved path is always relative to the storage root.\n        name = os.path.relpath(full_path, self.location)\n        # Ensure the moved file has the same gid as the storage root.\n        self._ensure_location_group_id(full_path)\n        # Store filenames with forward slashes, even on Windows.\n        return str(name).replace(\"\\\\\", \"/\")\n\n# django/core/files/storage/memory.py:166-166  (django.core.files.storage.memory.InMemoryStorage)\n@deconstructible(path=\"django.core.files.storage.InMemoryStorage\")\nclass InMemoryStorage(Storage, StorageSettingsMixin):\n    \"\"\"A storage saving files in memory.\"\"\"\n\n# django/contrib/staticfiles/finders.py:210-219  (django.contrib.staticfiles.finders.AppDirectoriesFinder.find_in_app)\nclass AppDirectoriesFinder(BaseFinder):\n    def find_in_app(self, app, path):\n        \"\"\"\n        Find a requested static file in an app's static locations.\n        \"\"\"\n        storage = self.storages.get(app)\n        # Only try to find a file if the source dir actually exists.\n        if storage and storage.exists(path):\n            matched_path = storage.path(path)\n            if matched_path:\n                return matched_path\n\n# django/core/mail/message.py:301-339  (django.core.mail.message.EmailMessage.attach)\nclass EmailMessage:\n    def attach(self, filename=None, content=None, mimetype=None):\n        \"\"\"\n        Attach a file with the given filename and content. The filename can\n        be omitted and the mimetype is guessed, if not provided.\n\n        If the first parameter is a MIMEBase subclass, insert it directly\n        into the resulting message attachments.\n\n        For a text/* mimetype (guessed or specified), when a bytes object is\n        specified as content, decode it as UTF-8. If that fails, set the\n        mimetype to DEFAULT_ATTACHMENT_MIME_TYPE and don't decode the content.\n        \"\"\"\n        if isinstance(filename, MIMEBase):\n            if content is not None or mimetype is not None:\n                raise ValueError(\n                    \"content and mimetype must not be given when a MIMEBase \"\n                    \"instance is provided.\"\n                )\n            self.attachments.append(filename)\n        elif content is None:\n            raise ValueError(\"content must be provided.\")\n        else:\n            mimetype = (\n                mimetype\n                or mimetypes.guess_type(filename)[0]\n                or DEFAULT_ATTACHMENT_MIME_TYPE\n            )\n            basetype, subtype = mimetype.split(\"/\", 1)\n\n            if basetype == \"text\":\n                if isinstance(content, bytes):\n                    try:\n                        content = content.decode()\n                    except UnicodeDecodeError:\n                        # If mimetype suggests the file is text but it's\n                        # actually binary, read() raises a UnicodeDecodeError.\n                        mimetype = DEFAULT_ATTACHMENT_MIME_TYPE\n\n            self.attachments.append((filename, content, mimetype))\n\n## Task\n\nYou are debugging how Django validates a filename before it's passed\nto a storage backend's save() method, in\ndjango/core/files/storage/base.py. Starting from\n`Storage.generate_filename`, trace the real causal pipeline that\nvalidates the filename, in the order each stage is actually reached,\nup to and including the call that performs the real character-level\nvalidation. Assume the filename's directory component contains no\npath-traversal sequence (`..`), so the guard clause does not raise.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.files.storage.base.Storage.generate_filename\", \"django.core.files.storage.base.Storage.get_valid_name\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

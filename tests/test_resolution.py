@@ -321,6 +321,24 @@ def test_builtin_receiver_exclusion_zero_false_positive_on_real_class(tmp_path):
     pruning)."""
     source = (
         "class Manager:\n"
+        "    def register(self, x):\n"
+        "        return x\n"
+        "\n\n"
+        "def process_with_real_manager(m):\n"
+        "    m.register(5)\n"
+        "    return m\n"
+    )
+    succ = _successors(tmp_path, source, "mod.process_with_real_manager")
+    assert "mod.Manager.register" in succ
+
+
+def test_untyped_builtin_named_call_gets_sentinel_even_with_one_candidate(tmp_path):
+    """Spec 3 scoping guard: `m.add(5)` on an untyped receiver may be
+    `set.add` as easily as the one repo `add`, so the G44 unique-name
+    link no longer fires for a builtin method name; the call gets an
+    UnresolvedPolymorphic sentinel listing the repo candidate instead."""
+    source = (
+        "class Manager:\n"
         "    def add(self, x):\n"
         "        return x\n"
         "\n\n"
@@ -329,7 +347,8 @@ def test_builtin_receiver_exclusion_zero_false_positive_on_real_class(tmp_path):
         "    return m\n"
     )
     succ = _successors(tmp_path, source, "mod.process_with_real_manager")
-    assert "mod.Manager.add" in succ
+    assert "mod.Manager.add" not in succ
+    assert any(s.startswith("<ambiguous:add@") for s in succ)
 
 
 def test_builtin_receiver_exclusion_reassignment_to_real_class_wins(tmp_path):

@@ -111,9 +111,50 @@ def validate_token_budget(token_budget: int) -> int:
         ) from exc
 
 
+#: The accepted form, stated in every rejection (Phase 1, item 4): a model
+#: that sent a file path learns the expected format from the error itself.
+SYMBOL_NAME_HINT = (
+    "Symbols are dotted names, not file paths: the file's path with `.` instead of `/` and without its extension, "
+    "then the class and function, e.g. `pkg.module.Class.method`; a bare function or class name also works."
+)
+
+#: Source-file extensions dropped from a path-like name when suggesting the
+#: dotted form. Only used to build the suggestion text, never to accept input.
+_SOURCE_EXTENSIONS = (".py", ".pyi", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
+
+
+def _dotted_suggestion(name: str) -> str | None:
+    """The dotted form of a path-like name (`a/b/file.ts::fn` or `a/b/file.fn` -> `a.b.file.fn`), or None.
+
+    Text for the error message only: the validator itself is unchanged, and the
+    suggestion is offered only when it would pass that validator. Anything with
+    an empty, `.` or `..` segment, or an absolute path, gets no suggestion.
+    """
+    if "/" not in name and "\\" not in name and "::" not in name:
+        return None
+    path, _, symbol = name.replace("\\", "/").partition("::")
+    if path.startswith("./"):
+        path = path[2:]
+    segments = path.split("/")
+    if any(s in ("", ".", "..") for s in segments):
+        return None
+    for ext in _SOURCE_EXTENSIONS:
+        if segments[-1].endswith(ext) and len(segments[-1]) > len(ext):
+            segments[-1] = segments[-1][: -len(ext)]
+            break
+    dotted = ".".join(segments + ([symbol] if symbol else []))
+    if len(dotted) > _SYMBOL_NAME_MAX_LENGTH or not _SYMBOL_NAME_PATTERN.match(dotted):
+        return None
+    return dotted
+
+
 def validate_symbol_name(name: str) -> str:
     if not isinstance(name, str) or not name or len(name) > _SYMBOL_NAME_MAX_LENGTH or not _SYMBOL_NAME_PATTERN.match(name):
-        raise SecurityError(f"invalid symbol name: {name!r}")
+        suggestion = _dotted_suggestion(name) if isinstance(name, str) and len(name) <= _SYMBOL_NAME_MAX_LENGTH else None
+        raise SecurityError(
+            f"invalid symbol name: {name!r}. {SYMBOL_NAME_HINT}"
+            + (f" Did you mean `{suggestion}`?" if suggestion else "")
+        )
     return name
 
 

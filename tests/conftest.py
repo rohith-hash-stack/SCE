@@ -5,8 +5,43 @@ import pytest
 
 from prism.cli import build_pipeline
 
+#: Breadcrumb invariant violations raise in tests instead of being dropped
+#: (`prism.graph.render_breadcrumbs`).
+os.environ.setdefault("PRISM_BREADCRUMB_STRICT", "1")
+
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+
+#: The golden fixture repositories carry their own test suites (PRISM reads them as test code); they are fixture
+#: data for SCE's suite, never SCE's tests.
+collect_ignore_glob = ["fixtures/golden/*"]
 PYTHON_REPO = os.path.join(FIXTURES_DIR, "python_repo")
+
+
+def pytest_addoption(parser):
+    parser.addoption("--update-golden", action="store_true", default=False,
+                     help="rewrite tests/golden's saved tool outputs instead of comparing with them")
+
+
+def _clear_fixture_caches() -> None:
+    """Remove the `.prism/` state PRISM writes into the shared fixture repositories (index and feature caches)."""
+    import shutil
+
+    for state in Path(FIXTURES_DIR).glob("*/.prism"):
+        shutil.rmtree(state, ignore_errors=True)
+
+
+def pytest_sessionstart(session):
+    """Suite hygiene (harness/experiments/GOLDEN_TESTS_PLAN.md §5): every session starts with no PRISM caches in
+    `tests/fixtures/*/.prism`, so a result never depends on an earlier run's cache, and none is left behind (below).
+    Tests within one session still share the fixtures; new tests (the golden tests) index a temporary copy instead.
+    Under pytest-xdist only the controller clears, never a worker, so one worker cannot delete another's cache."""
+    if not hasattr(session.config, "workerinput"):
+        _clear_fixture_caches()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if not hasattr(session.config, "workerinput"):
+        _clear_fixture_caches()
 
 
 @pytest.fixture(scope="session")

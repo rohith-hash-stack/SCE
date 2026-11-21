@@ -36,25 +36,35 @@ before running the caller-supplied selection.
 """
 from __future__ import annotations
 
+import re
 from collections import deque
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.packer.blast_radius import compute_upstream_callers
+from prism.graph.symbol_table import SymbolRole
 from prism.packer.submodular_knapsack import (
     DEFAULT_UPSTREAM_MAX_HOPS,
     UPSTREAM_FRONTIER_CAP,
     SeedNotFoundError,
     _classify_role,
+    _default_costs,
     _module_prefix3,
     _signature_stub,
     suggest_similar_seeds,
 )
+from prism.slicer.tokenizer import count_tokens
 from prism.traversal.continuous_dijkstra import build_causal_graph, compute_topological_distances
 
 #: The validated floor (see this module's own docstring) - hop=2 was
 #: measured and rejected (drops a real pipeline symbol, `django_t02_009`'s
 #: `QuerySet._clone`); 3 is not a guess.
 CANDIDATE_INDEX_MAX_HOPS = 3.0
+
+#: Blast-radius mode (`direction="both"`): the furthest number of caller
+#: hops the upstream walk follows. A safety cap only - the shared token
+#: budget is what normally stops the walk (same value as the packer's own
+#: `DEFAULT_MAX_HOPS`).
+UPSTREAM_WALK_MAX_HOPS = 6
 
 #: The relations `ConcreteGraphBuilder.graph` (the real, directly
 #: AST-derived structural graph - not `build_causal_graph`'s own
@@ -65,6 +75,12 @@ CANDIDATE_INDEX_MAX_HOPS = 3.0
 #: literally invokes, language-agnostically, never a synthetic/inferred
 #: coupling.
 _CALL_RELATIONS = ("CALLS", "INSTANTIATES")
+#: The upstream (blast-radius) walk also climbs from a closure to the
+#: function that defines it (`ENCLOSES`, Fix C).
+_UPSTREAM_RELATIONS = (*_CALL_RELATIONS, "ENCLOSES")
+#: Constructor method names: `C(...)` is linked to the class `C`
+#: (`INSTANTIATES`), and runs `C.__init__` (Fix D).
+_CONSTRUCTOR_NAMES = frozenset({"__init__", "__new__", "constructor"})
 
 #: Caps one symbol's own `calls=[...]` list - a real hub symbol (e.g.
 #: `HttpRequest`) can have dozens of real outgoing calls; capping keeps
@@ -82,6 +98,60 @@ def _declaration_line(builder: ConcreteGraphBuilder, qname: str) -> str | None:
     if stub is None:
         return None
     return stub.rsplit("\n", 1)[0]
+
+
+#: A manifest signature longer than this many tokens (after long string
+#: literals are collapsed) is cut and marked with `SIGNATURE_TRUNCATED_MARK`.
+MANIFEST_SIGNATURE_MAX_TOKENS = 128
+SIGNATURE_TRUNCATED_MARK = " …[signature truncated]"
+
+#: String literals inside a declaration header (default values, or
+#: documentation embedded in type annotations) longer than this many
+#: characters are collapsed to `"…"` - they describe, they don't declare.
+_LONG_STRING_LITERAL = re.compile(
+    r'"""[\s\S]*?"""' r"|'''[\s\S]*?'''"
+    r'|"(?:[^"\\\n]|\\.){25,}"' r"|'(?:[^'\\\n]|\\.){25,}'" r"|`(?:[^`\\]|\\.){25,}`"
+)
+
+
+def _full_declaration(builder: ConcreteGraphBuilder, qname: str, max_tokens: int = MANIFEST_SIGNATURE_MAX_TOKENS) -> str | None:
+    """`qname`'s complete declaration header on one line: the source from
+    the symbol's first line (decorators included) up to where its body
+    starts, so a parameter list or return annotation spanning several lines
+    is kept whole in every language. Long string literals are collapsed,
+    whitespace is normalized, and `|` (the manifest's field separator) is
+    replaced by `¦`. A header still longer than `max_tokens` is cut there
+    and marked with `SIGNATURE_TRUNCATED_MARK`. Falls back to
+    `_declaration_line` for a symbol without a body node."""
+    info = builder.symbol_table.get(qname)
+    node = builder.def_node(qname)
+    parsed = builder.parsed_file(info.file) if info is not None else None
+    body = node.child_by_field_name("body") if node is not None else None
+    if info is None or parsed is None or body is None:
+        raw = _declaration_line(builder, qname)
+        return None if raw is None else " ".join(raw.split()).replace("|", "¦")
+    source = parsed.source
+    line_start = 0
+    for _ in range(info.line_range[0] - 1):
+        nl = source.find(b"\n", line_start)
+        if nl < 0:
+            break
+        line_start = nl + 1
+    start = min(line_start, node.start_byte)
+    header = source[start:body.start_byte].decode("utf-8", errors="replace")
+    header = _LONG_STRING_LITERAL.sub('"…"', header)
+    header = " ".join(header.split()).replace("|", "¦")
+    if count_tokens(header) <= max_tokens:
+        return header
+    words = header.split(" ")
+    lo, hi = 0, len(words)
+    while lo < hi:  # longest word prefix within the cap
+        mid = (lo + hi + 1) // 2
+        if count_tokens(" ".join(words[:mid])) <= max_tokens:
+            lo = mid
+        else:
+            hi = mid - 1
+    return " ".join(words[:lo]) + SIGNATURE_TRUNCATED_MARK
 
 
 def _outgoing_call_names(builder: ConcreteGraphBuilder, qname: str) -> list[str]:
@@ -158,20 +228,124 @@ def _combined_hop_scope_filtered(
     return kept
 
 
+def _upstream_walk(
+    builder: ConcreteGraphBuilder, seed_id: str, max_hops: int = UPSTREAM_WALK_MAX_HOPS, include_tests: bool = False
+) -> dict[str, int]:
+    """`{caller: hop}` for every transitive caller of `seed_id` within
+    `max_hops`, breadth-first over `CALLS`/`INSTANTIATES` in-edges of the
+    structural graph (tentative dispatch edges included). Callers that are
+    test code are excluded and not walked through, unless the seed itself is
+    test code or `include_tests`. Test code is a `SymbolRole.VERIFICATION`
+    symbol or any symbol defined in a test file (`_in_test_file`): a helper
+    in `test/drivers/*.test.ts` keeps an implementation role but is still
+    test code."""
+    seed_info = builder.symbol_table.get(seed_id)
+    allow_tests = include_tests or (seed_info is not None and _is_test_code(builder, seed_info))
+    # 0-1 breadth-first: a closure's enclosing function (`ENCLOSES`) sits
+    # at the closure's own hop - at run time the closure's frame is the
+    # enclosing function's behaviour, one call deep, not two (Fix C).
+    hops = {seed_id: 0}
+    queue = deque([seed_id])
+    while queue:
+        node = queue.popleft()
+        depth = hops[node]
+        if node not in builder.graph:
+            continue
+        for pred, via in sorted(_upstream_predecessors(builder, node)):
+            edge = builder.graph.get_edge_data(pred, via) or {}
+            relation = edge.get("relation")
+            if relation not in _UPSTREAM_RELATIONS:
+                continue
+            step = 0 if relation == "ENCLOSES" else 1
+            if depth + step > max_hops or hops.get(pred, max_hops + 1) <= depth + step:
+                continue
+            info = builder.symbol_table.get(pred)
+            if info is None or info.kind not in ("function", "method"):
+                continue
+            if not allow_tests and _is_test_code(builder, info):
+                continue
+            hops[pred] = depth + step
+            (queue.appendleft if step == 0 else queue.append)(pred)
+    hops.pop(seed_id, None)
+    return hops
+
+
+def _upstream_predecessors(builder: ConcreteGraphBuilder, node: str) -> list[tuple[str, str]]:
+    """`(predecessor, via)` pairs one upstream hop from `node`: its own
+    graph predecessors, and for a constructor (`C.__init__`) also the
+    predecessors of its class `C` - `C(...)` is an `INSTANTIATES` edge to
+    the class node, while what runs is the constructor (Fix D)."""
+    pairs = [(pred, node) for pred in builder.graph.predecessors(node)]
+    info = builder.symbol_table.get(node)
+    if info is not None and info.enclosing_class and node.rsplit(".", 1)[-1] in _CONSTRUCTOR_NAMES:
+        cls = info.enclosing_class
+        if cls in builder.graph:
+            pairs += [(pred, cls) for pred in builder.graph.predecessors(cls)
+                      if (builder.graph.get_edge_data(pred, cls) or {}).get("relation") == "INSTANTIATES"]
+    return pairs
+
+
+def _is_test_code(builder: ConcreteGraphBuilder, info) -> bool:
+    """A verification-role symbol, or any symbol defined in a test file."""
+    return info.role == SymbolRole.VERIFICATION or bool(builder._in_test_file(info.file))
+
+
+def upstream_callers_by_hop(
+    builder: ConcreteGraphBuilder, seed_id: str, max_hops: int = UPSTREAM_WALK_MAX_HOPS, include_tests: bool = True
+) -> dict[str, int]:
+    """Every transitive caller of `seed_id` within `max_hops` with its hop
+    count - the walk blast-radius mode builds its caller rows from, with no
+    token budget applied. Test code is included by default here: for "which
+    tests does this change affect?" the tests are the answer."""
+    return _upstream_walk(builder, seed_id, max_hops=max_hops, include_tests=include_tests)
+
+
+def _interleave_within_budget(
+    builder: ConcreteGraphBuilder, seed_id: str, upstream: list[str], downstream: list[str], budget_tokens: int | None
+) -> set[str]:
+    """Admit candidates alternately from the two ordered lists (upstream
+    first) until the shared `budget_tokens` - priced with the packer's own
+    per-symbol costs, the same costs Turn 2 renders with - is spent. A
+    candidate that does not fit is skipped and the next one tried. `None`
+    admits everything."""
+    if budget_tokens is None:
+        return set(upstream) | set(downstream)
+    costs = _default_costs(builder, [seed_id, *upstream, *downstream])
+    spent = costs.get(seed_id, 0)
+    admitted: set[str] = set()
+    queues = [deque(upstream), deque(downstream)]
+    turn = 0
+    while queues[0] or queues[1]:
+        q = queues[turn % 2] if queues[turn % 2] else queues[(turn + 1) % 2]
+        turn += 1
+        symbol = q.popleft()
+        cost = costs.get(symbol, 0)
+        if spent + cost <= budget_tokens:
+            admitted.add(symbol)
+            spent += cost
+    return admitted
+
+
 def build_candidate_manifest(
     builder: ConcreteGraphBuilder,
     seed_id: str,
     max_hops: float = CANDIDATE_INDEX_MAX_HOPS,
     upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
+    direction: str = "downstream",
+    budget_tokens: int | None = None,
+    include_tests: bool = False,
 ) -> tuple[str, set[str]]:
     """`(manifest_text, candidate_universe)`: one compact
-    `qualified_name|role|kind|signature|calls=[...]` line per real
+    `qualified_name|role|kind|signature|calls=[...]|lines=N` line per real
     (symbol-table-resolved) downstream candidate reachable from `seed_id`
     within `max_hops` (default `CANDIDATE_INDEX_MAX_HOPS=3.0`), plus up
     to `UPSTREAM_FRONTIER_CAP` upstream callers - a `role == "caller"`
     line additionally carries two contract-protection flags:
     `|binds_return=true/false|nontrivial_args=true/false` (`prism.packer.
-    blast_radius.UpstreamCaller.unpacks_return`/`.supplies_nontrivial_args`).
+    blast_radius.UpstreamCaller.unpacks_return`/`.supplies_nontrivial_args`)
+    before the final `|lines=N` (the symbol's body length in lines). The
+    signature is the full declaration header on one line
+    (`_full_declaration`, capped at `MANIFEST_SIGNATURE_MAX_TOKENS`).
 
     Upstream admission (pilot-4 finding): `compute_upstream_callers`
     returns every direct caller, unranked and uncapped - on a hub seed
@@ -195,6 +369,15 @@ def build_candidate_manifest(
     own `dist_w_map` - what a downstream budget affects is Turn 2's own
     render cap, not which symbols are reachable in the first place.
 
+    `direction="both"` (blast-radius mode, Design C): upstream admission
+    is replaced by a hop-ordered walk over the seed's transitive callers
+    (`_upstream_walk`, test code excluded), interleaved with the
+    downstream candidates under a shared `budget_tokens` (no cap when
+    `None`). The default `"downstream"` leaves every existing caller's
+    manifest unchanged. `include_tests` keeps test code among the walked
+    callers (the MCP `prism.blast_radius` tool sets it; the benchmark
+    harness, whose gold is production callers, does not).
+
     Raises `SeedNotFoundError` if `seed_id` isn't in `builder.
     symbol_table`, carrying up to 5 fuzzy-matched suggestions - the same
     contract `pack_symbol_context` itself already gives every other
@@ -210,12 +393,37 @@ def build_candidate_manifest(
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
 
     downstream_candidates = {seed_id} | {n for n in dist_w_map if dist_w_map[n] <= max_hops}
+    # Hop-count admission: a symbol within `max_hops` structural CALLS/
+    # INSTANTIATES hops is a candidate even when its weighted distance is
+    # larger (a chain of best-effort `TENTATIVE_CALL` links is priced above
+    # one hop each); the weighted distance still orders candidates.
+    downstream_candidates |= set(_real_call_chain_reachable(builder, seed_id, max_hops=int(max_hops)))
     downstream_candidates = _combined_hop_scope_filtered(builder, seed_id, downstream_candidates, max_hops=int(max_hops))
 
     ranked_upstream = sorted(upstream_callers.values(), key=lambda c: -c.weight)
     upstream_candidates = {
         c.symbol for c in ranked_upstream[:UPSTREAM_FRONTIER_CAP] if dist_w_upstream_map[c.symbol] <= upstream_max_hops
     }
+
+    if direction == "both":
+        # Blast-radius mode (Design C): the seed's transitive callers, not
+        # only its strongest direct ones, walked upstream in hop order
+        # (direct callers ranked by W_upstream, then name) and interleaved
+        # with the downstream candidates in distance order until the shared
+        # token budget is spent. Every upstream candidate is labelled
+        # `caller` (hop distance recorded for _classify_role).
+        walked = _upstream_walk(builder, seed_id, include_tests=include_tests)
+        upstream_order = sorted(
+            walked,
+            key=lambda q: (walked[q], -(upstream_callers[q].weight if q in upstream_callers else 0.0), q),
+        )
+        downstream_order = sorted(downstream_candidates - {seed_id}, key=lambda q: (dist_w_map.get(q, float("inf")), q))
+        admitted = _interleave_within_budget(builder, seed_id, upstream_order, downstream_order, budget_tokens)
+        upstream_candidates = {q for q in walked if q in admitted}
+        downstream_candidates = {seed_id} | {q for q in downstream_candidates if q in admitted}
+        dist_w_upstream_map = {**{q: float(h) for q, h in walked.items()}, **dist_w_upstream_map}
+    elif direction != "downstream":
+        raise ValueError(f"direction must be 'downstream' or 'both', got {direction!r}")
 
     candidates = downstream_candidates | upstream_candidates
 
@@ -232,14 +440,14 @@ def build_candidate_manifest(
         # own "one candidate per line" contract - the spike found this
         # directly via a real num_lines/candidate_universe count mismatch
         # during validation, not assumed away.
-        raw_signature = _declaration_line(builder, qname) or ""
-        signature = " ".join(raw_signature.split())
+        signature = _full_declaration(builder, qname) or ""
         calls = _outgoing_call_names(builder, qname)
         line = f"{qname}|{role}|{info.kind}|{signature}|calls=[{','.join(calls)}]"
         if role == "caller" and qname in upstream_callers:
             caller = upstream_callers[qname]
             line += f"|binds_return={'true' if caller.unpacks_return else 'false'}"
             line += f"|nontrivial_args={'true' if caller.supplies_nontrivial_args else 'false'}"
+        line += f"|lines={info.line_range[1] - info.line_range[0] + 1}"
         lines.append(line)
         resolved.add(qname)
     manifest = "<candidate_index>\n" + "\n".join(lines) + "\n</candidate_index>"

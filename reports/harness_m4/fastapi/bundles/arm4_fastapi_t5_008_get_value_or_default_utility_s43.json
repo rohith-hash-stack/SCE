@@ -1,0 +1,237 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "fastapi_t5_008_get_value_or_default_utility",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"glob\": \"*.py\", \"pattern\": \"fastapi\\\\.utils\\\\.get_value_or_default\"})\nno matches",
+    "token_count": 30,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "fastapi\\.utils\\.get_value_or_default",
+      "glob": "*.py"
+     },
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (glob {\"pattern\": \"**/fastapi/utils.py\"})\nfastapi/utils.py",
+    "token_count": 22,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "glob",
+     "args": {
+      "pattern": "**/fastapi/utils.py"
+     },
+     "engine_token_count": 22
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 150, \"path\": \"fastapi/utils.py\", \"start_line\": 1})\n1: import re\n2: import warnings\n3: from dataclasses import is_dataclass\n4: from typing import (\n5:     TYPE_CHECKING,\n6:     Any,\n7:     Dict,\n8:     MutableMapping,\n9:     Optional,\n10:     Set,\n11:     Type,\n12:     Union,\n13:     cast,\n14: )\n15: from weakref import WeakKeyDictionary\n16: \n17: import fastapi\n18: from fastapi._compat import (\n19:     PYDANTIC_V2,\n20:     BaseConfig,\n21:     ModelField,\n22:     PydanticSchemaGenerationError,\n23:     Undefined,\n24:     UndefinedType,\n25:     Validator,\n26:     lenient_issubclass,\n27: )\n28: from fastapi.datastructures import DefaultPlaceholder, DefaultType\n29: from pydantic import BaseModel, create_model\n30: from pydantic.fields import FieldInfo\n31: from typing_extensions import Literal\n32: \n33: if TYPE_CHECKING:  # pragma: nocover\n34:     from .routing import APIRoute\n35: \n36: # Cache for `create_cloned_field`\n37: _CLONED_TYPES_CACHE: MutableMapping[Type[BaseModel], Type[BaseModel]] = (\n38:     WeakKeyDictionary()\n39: )\n40: \n41: \n42: def is_body_allowed_for_status_code(status_code: Union[int, str, None]) -> bool:\n43:     if status_code is None:\n44:         return True\n45:     # Ref: https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#patterned-fields-1\n46:     if status_code in {\n47:         \"default\",\n48:         \"1XX\",\n49:         \"2XX\",\n50:         \"3XX\",\n51:         \"4XX\",\n52:         \"5XX\",\n53:     }:\n54:         return True\n55:     current_status_code = int(status_code)\n56:     return not (current_status_code < 200 or current_status_code in {204, 205, 304})\n57: \n58: \n59: def get_path_param_names(path: str) -> Set[str]:\n60:     return set(re.findall(\"{(.*?)}\", path))\n61: \n62: \n63: def create_model_field(\n64:     name: str,\n65:     type_: Any,\n66:     class_validators: Optional[Dict[str, Validator]] = None,\n67:     default: Optional[Any] = Undefined,\n68:     required: Union[bool, UndefinedType] = Undefined,\n69:     model_config: Type[BaseConfig] = BaseConfig,\n70:     field_info: Optional[FieldInfo] = None,\n71:     alias: Optional[str] = None,\n72:     mode: Literal[\"validation\", \"serialization\"] = \"validation\",\n73: ) -> ModelField:\n74:     class_validators = class_validators or {}\n75:     if PYDANTIC_V2:\n76:         field_info = field_info or FieldInfo(\n77:             annotation=type_, default=default, alias=alias\n78:         )\n79:     else:\n80:         field_info = field_info or FieldInfo()\n81:     kwargs = {\"name\": name, \"field_info\": field_info}\n82:     if PYDANTIC_V2:\n83:         kwargs.update({\"mode\": mode})\n84:     else:\n85:         kwargs.update(\n86:             {\n87:                 \"type_\": type_,\n88:                 \"class_validators\": class_validators,\n89:                 \"default\": default,\n90:                 \"required\": required,\n91:                 \"model_config\": model_config,\n92:                 \"alias\": alias,\n93:             }\n94:         )\n95:     try:\n96:         return ModelField(**kwargs)  # type: ignore[arg-type]\n97:     except (RuntimeError, PydanticSchemaGenerationError):\n98:         raise fastapi.exceptions.FastAPIError(\n99:             \"Invalid args for response field! Hint: \"\n100:             f\"check that {type_} is a valid Pydantic field type. \"\n101:             \"If you are using a return type annotation that is not a valid Pydantic \"\n102:             \"field (e.g. Union[Response, dict, None]) you can disable generating the \"\n103:             \"response model from the type annotation with the path operation decorator \"\n104:             \"parameter response_model=None. Read more: \"\n105:             \"https://fastapi.tiangolo.com/tutorial/response-model/\"\n106:         ) from None\n107: \n108: \n109: def create_cloned_field(\n110:     field: ModelField,\n111:     *,\n112:     cloned_types: Optional[MutableMapping[Type[BaseModel], Type[BaseModel]]] = None,\n113: ) -> ModelField:\n114:     if PYDANTIC_V2:\n115:         return field\n116:     # cloned_types caches already cloned types to support recursive models and improve\n117:     # performance by avoiding unnecessary cloning\n118:     if cloned_types is None:\n119:         cloned_types = _CLONED_TYPES_CACHE\n120: \n121:     original_type = field.type_\n122:     if is_dataclass(original_type) and hasattr(original_type, \"__pydantic_model__\"):\n123:         original_type = original_type.__pydantic_model__\n124:     use_type = original_type\n125:     if lenient_issubclass(original_type, BaseModel):\n126:         original_type = cast(Type[BaseModel], original_type)\n127:         use_type = cloned_types.get(original_type)\n128:         if use_type is None:\n129:             use_type = create_model(original_type.__name__, __base__=original_type)\n130:             cloned_types[original_type] = use_type\n131:             for f in original_type.__fields__.values():\n132:                 use_type.__fields__[f.name] = create_cloned_field(\n133:                     f, cloned_types=cloned_types\n134:                 )\n135:     new_field = create_model_field(name=field.name, type_=use_type)\n136:     new_field.has_alias = field.has_alias  # type: ignore[attr-defined]\n137:     new_field.alias = field.alias  # type: ignore[misc]\n138:     new_field.class_validators = field.class_validators  # type: ignore[attr-defined]\n139:     new_field.default = field.default  # type: ignore[misc]\n140:     new_field.required = field.required  # type: ignore[misc]\n141:     new_field.model_config = field.model_config  # type: ignore[attr-defined]\n142:     new_field.field_info = field.field_info\n143:     new_field.allow_none = field.allow_none  # type: ignore[attr-defined]\n144:     new_field.validate_always = field.validate_always  # type: ignore[attr-defined]\n145:     if field.sub_fields:  # type: ignore[attr-defined]\n146:         new_field.sub_fields = [  # type: ignore[attr-defined]\n147:             create_cloned_field(sub_field, cloned_types=cloned_types)\n148:             for sub_field in field.sub_fields  # type: ignore[attr-defined]\n149:         ]\n150:     if field.key_field:  # type: ignore[attr-defined]\n[lines 1-150 of 221]",
+    "token_count": 1822,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.utils.is_body_allowed_for_status_code",
+     "fastapi.utils.get_path_param_names",
+     "fastapi.utils.create_model_field",
+     "fastapi.utils.create_cloned_field"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/utils.py",
+      "start_line": 1,
+      "end_line": 150
+     },
+     "engine_token_count": 1822
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1874,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "What breaks if `fastapi.utils.get_value_or_default` changes?",
+   "task_type": "T5_blast_radius",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 1,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"fastapi\\\\.utils\\\\.get_value_or_default\", \"glob\": \"*.py\"}}</tools>\n<tools>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/fastapi/utils.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "fastapi\\.utils\\.get_value_or_default",
+        "glob": "*.py"
+       }
+      },
+      {
+       "name": "glob",
+       "arguments": {
+        "pattern": "**/fastapi/utils.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "fastapi\\.utils\\.get_value_or_default",
+        "glob": "*.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "grep_empty"
+      },
+      {
+       "tool": "glob",
+       "args": {
+        "pattern": "**/fastapi/utils.py"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 59,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/utils.py\", \"start_line\": 1, \"end_line\": 150}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/utils.py",
+        "start_line": 1,
+        "end_line": 150
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/utils.py",
+        "start_line": 1,
+        "end_line": 150
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 39,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The function fastapi.utils.get_value_or_default is not found in the repository. There are no references to it in the codebase.\\\", \\\"symbols\\\": []}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The function fastapi.utils.get_value_or_default is not found in the repository. There are no references to it in the codebase.\", \"symbols\": []}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 63,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     3973.832841,
+     2579.188647,
+     6500.309273
+    ],
+    "L_tool_exec": [
+     22.823548,
+     11.554689,
+     0.336882
+    ],
+    "L_retrieve": [
+     13128.845362
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 2592,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The function fastapi.utils.get_value_or_default is not found in the repository. There are no references to it in the codebase.\", \"symbols\": []}\n```",
+    "generation_tokens": 63,
+    "latency_seconds": 6.500093581000328,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2625,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1874,
+   "prompt_tokens": 2592,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2625,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

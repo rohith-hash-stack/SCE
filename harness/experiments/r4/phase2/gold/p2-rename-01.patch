@@ -1,0 +1,145 @@
+diff --git a/src/werkzeug/formparser.py b/src/werkzeug/formparser.py
+index 3a953021..e374abdd 100644
+--- a/src/werkzeug/formparser.py
++++ b/src/werkzeug/formparser.py
+@@ -17,7 +17,7 @@ from .http import parse_options_header
+ from .sansio.multipart import Data
+ from .sansio.multipart import Epilogue
+ from .sansio.multipart import Field
+-from .sansio.multipart import File
++from .sansio.multipart import FileImpl
+ from .sansio.multipart import MultipartDecoder
+ from .sansio.multipart import NeedData
+ 
+@@ -394,7 +394,7 @@ class MultiPartParser:
+         return "utf-8"
+ 
+     def start_file_streaming(
+-        self, event: File, total_content_length: int | None
++        self, event: FileImpl, total_content_length: int | None
+     ) -> t.IO[bytes]:
+         content_type = event.headers.get("Content-Type")
+ 
+@@ -415,7 +415,7 @@ class MultiPartParser:
+     def parse(
+         self, stream: t.IO[bytes], boundary: bytes, content_length: int | None
+     ) -> tuple[MultiDict[str, str], MultiDict[str, FileStorage]]:
+-        current_part: Field | File
++        current_part: Field | FileImpl
+         field_size: int | None = None
+         container: t.IO[bytes] | list[bytes]
+         _write: t.Callable[[bytes], t.Any]
+@@ -438,7 +438,7 @@ class MultiPartParser:
+                     field_size = 0
+                     container = []
+                     _write = container.append
+-                elif isinstance(event, File):
++                elif isinstance(event, FileImpl):
+                     current_part = event
+                     field_size = None
+                     container = self.start_file_streaming(event, content_length)
+diff --git a/src/werkzeug/sansio/multipart.py b/src/werkzeug/sansio/multipart.py
+index b3fe0248..11cabf90 100644
+--- a/src/werkzeug/sansio/multipart.py
++++ b/src/werkzeug/sansio/multipart.py
+@@ -27,7 +27,7 @@ class Field(Event):
+ 
+ 
+ @dataclass(frozen=True)
+-class File(Event):
++class FileImpl(Event):
+     name: str
+     filename: str
+     headers: Headers
+@@ -177,7 +177,7 @@ class MultipartDecoder:
+                 name = t.cast(str, extra.get("name"))
+                 filename = extra.get("filename")
+                 if filename is not None:
+-                    event = File(
++                    event = FileImpl(
+                         filename=filename,
+                         headers=headers,
+                         name=name,
+@@ -307,14 +307,14 @@ class MultipartEncoder:
+         if isinstance(event, Preamble) and self.state == State.PREAMBLE:
+             self.state = State.PART
+             return event.data
+-        elif isinstance(event, (Field, File)) and self.state in {
++        elif isinstance(event, (Field, FileImpl)) and self.state in {
+             State.PREAMBLE,
+             State.PART,
+             State.DATA,
+         }:
+             data = b"\r\n--" + self.boundary + b"\r\n"
+             data += b'Content-Disposition: form-data; name="%s"' % event.name.encode()
+-            if isinstance(event, File):
++            if isinstance(event, FileImpl):
+                 data += b'; filename="%s"' % event.filename.encode()
+             data += b"\r\n"
+             for name, value in t.cast(Field, event).headers:
+diff --git a/src/werkzeug/test.py b/src/werkzeug/test.py
+index d9d003ef..268fb33d 100644
+--- a/src/werkzeug/test.py
++++ b/src/werkzeug/test.py
+@@ -36,7 +36,7 @@ from .http import parse_options_header
+ from .sansio.multipart import Data
+ from .sansio.multipart import Epilogue
+ from .sansio.multipart import Field
+-from .sansio.multipart import File
++from .sansio.multipart import FileImpl
+ from .sansio.multipart import MultipartEncoder
+ from .sansio.multipart import Preamble
+ from .urls import _urlencode
+@@ -116,7 +116,7 @@ def stream_encode_multipart(
+             else:
+                 write_binary(
+                     encoder.send_event(
+-                        File(name=key, filename=filename, headers=headers)
++                        FileImpl(name=key, filename=filename, headers=headers)
+                     )
+                 )
+             while True:
+diff --git a/tests/sansio/test_multipart.py b/tests/sansio/test_multipart.py
+index 42690c0d..9f99d2b7 100644
+--- a/tests/sansio/test_multipart.py
++++ b/tests/sansio/test_multipart.py
+@@ -4,7 +4,7 @@ from werkzeug.datastructures import Headers
+ from werkzeug.sansio.multipart import Data
+ from werkzeug.sansio.multipart import Epilogue
+ from werkzeug.sansio.multipart import Field
+-from werkzeug.sansio.multipart import File
++from werkzeug.sansio.multipart import FileImpl
+ from werkzeug.sansio.multipart import MultipartDecoder
+ from werkzeug.sansio.multipart import MultipartEncoder
+ from werkzeug.sansio.multipart import NeedData
+@@ -37,7 +37,7 @@ asdasd
+             headers=Headers([("Content-Disposition", 'form-data; name="fname"')]),
+         ),
+         Data(data="ß∑œß∂ƒå∂".encode(), more_data=False),
+-        File(
++        FileImpl(
+             name="lname",
+             filename="bob",
+             headers=Headers(
+@@ -90,7 +90,7 @@ def test_decoder_data_start_with_different_newline_positions(
+ 
+     assert events == [
+         Preamble(data=b""),
+-        File(
++        FileImpl(
+             name="test",
+             filename="testfile",
+             headers=Headers(
+diff --git a/tests/sansio/test_phase2_rename_File.py b/tests/sansio/test_phase2_rename_File.py
+new file mode 100644
+index 00000000..512891df
+--- /dev/null
++++ b/tests/sansio/test_phase2_rename_File.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase2_rename_FileImpl():
++    owner = importlib.import_module('werkzeug.sansio.multipart')
++    assert hasattr(owner, 'FileImpl')
++    assert not hasattr(owner, 'File')

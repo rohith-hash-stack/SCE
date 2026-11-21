@@ -34,11 +34,13 @@ from tree_sitter import Node
 from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
     ATTRIBUTE_NODE_TYPE,
+    ATTR_OBJECT_FIELD,
     ATTR_PROPERTY_FIELD,
     CALL_NODE_TYPE,
     CLASS_NODE_TYPES,
     DECORATED_WRAPPER_TYPES,
     ENCLOSING_FUNCTION_EXPRESSION_TYPES,
+    FUNCTION_NODE_TYPES,
     OBJECT_LITERAL_NODE_TYPES,
     RETURN_STATEMENT_NODE_TYPE,
     SELF_TOKEN_TEXT,
@@ -52,13 +54,15 @@ from prism.parser.lang_config import (
 )
 from prism.parser.cache import parse_file_cached
 from prism.parser.queries import run_query
-from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, get_parser, node_text
 from prism.graph.call_site import (
     DynamicEdgeSentinel,
     compute_call_site_context,
     detect_call_site_hazard,
     dynamic_edge_sentinel_id,
 )
+from prism.graph.js_test_blocks import find_fixture_types, find_test_blocks
+from prism.graph.robot_framework import ROBOT_EXTENSIONS
 from prism.graph.weights import MAX_INHERITANCE_DEPTH
 from prism.graph.symbol_table import (
     ExportRegistry,
@@ -182,6 +186,10 @@ class ConcreteGraphBuilder:
 
     def __init__(self, repo_root: str, symbol_table: GlobalSymbolTable | None = None) -> None:
         self.repo_root = repo_root
+        #: Extra source roots whose files are named relative to themselves,
+        #: not to `repo_root` - dependency header packages materialized
+        #: outside the repository (`prism.deps.host`).
+        self.module_roots: list[str] = []
         #: Item 4: `[{"file": path, "category": "RecursionError" | ...,
         #: "message": str, "stage": "pass1" | "pass2"}, ...]` - one entry
         #: per file an error boundary caught and skipped, in the order
@@ -192,9 +200,23 @@ class ConcreteGraphBuilder:
         self.index_errors: list[dict[str, str]] = []
         self.symbol_table = symbol_table if symbol_table is not None else GlobalSymbolTable()
         self.graph = nx.DiGraph()
+        #: Phase 2, Phase B (`prism.graph.references`): uses beyond calls and inheritance (imports, `__all__`,
+        #: annotations, decorators, values, attribute reads, module-level code), in a graph of their own so the main
+        #: graph and everything that walks it as a call graph are unchanged.
+        from prism.graph.references import new_reference_graph
+        self.reference_graph = new_reference_graph()
         self._parsed_files: dict[str, ParsedFile] = {}
         self._def_nodes: dict[str, Node] = {}
+        #: `(file, start_byte, end_byte)` of a registered definition node ->
+        #: its key: the enclosing function of a nested definition (Fix C).
+        self._def_key_by_span: dict[tuple[str, int, int], str] = {}
         self._methods_by_class: dict[str, list[str]] = {}
+        #: JS/TS test-runner blocks (`prism.graph.js_test_blocks`): each
+        #: test/hook/fixture symbol's destructured fixture parameters
+        #: (`"name"` or `"name=alias"`), and the repo-wide fixture-name ->
+        #: class map `<x>.extend<T>({...})` declares (built in Pass 2a).
+        self._js_test_fixture_params: dict[str, tuple[str, ...]] = {}
+        self._js_fixture_types: dict[str, set[str]] = {}
         #: Import-Alias Resolution (Phase C prerequisite, `docs/
         #: roadmap_public_release.md` Section 4): every file's own
         #: `LocalImportMap`, computed once in `pass2_resolve_calls`'s own
@@ -263,6 +285,55 @@ class ConcreteGraphBuilder:
         #: None but flag why" convention `_last_resolution_was_tentative`/
         #: `_last_resolution_was_ambiguous` above already establish.
         self._last_resolution_was_builtin_receiver = False
+        self._last_resolution_was_unbound_local = False
+        #: Virtual-dispatch expansion: set by `_resolve_segments` when the
+        #: target it returns was reached through a receiver that can hold
+        #: a subclass at run time (`self.<method>`, or an instance-typed
+        #: local/attribute) - same single-flag convention as the flags
+        #: above. `_dispatch_sites` collects those `(caller, target)`
+        #: pairs; `_expand_virtual_dispatch` links each caller to every
+        #: override of its target once the whole repo is resolved.
+        self._last_resolution_was_dispatch = False
+        self._dispatch_sites: list[tuple[str, str]] = []
+        #: When set (offline dependency summarization, a "may reach"
+        #: analysis), a call through a receiver typed as a union or bound
+        #: to different classes on different branches also links, as
+        #: TENTATIVE_CALL, every other member's method
+        #: (`_last_resolution_alternatives`). Host builds keep one target.
+        self.dispatch_all_members = False
+        #: `{Layer 3 stub entry: summarized symbol}` - stub entries whose
+        #: offline dependency summary takes precedence (`prism.deps.shadow`);
+        #: set by host builds given dependencies, empty otherwise.
+        self.stub_shadow: dict[str, str] = {}
+        #: Names whose definitions exist only in compiled native code
+        #: (`psycopg2.extensions.connection`, re-exported from `_psycopg`):
+        #: an annotation naming one types its variable, so method calls on it
+        #: link to `<type>.<method>` - OPAQUE boundaries in host builds
+        #: (`prism.deps.host`). `opaque_prefixes`: compiled modules and fully
+        #: native packages, every name under which is such a type.
+        self.opaque_types: frozenset[str] = frozenset()
+        self.opaque_prefixes: tuple[str, ...] = ()
+        #: Module-level runtime proxies of the host's dependencies
+        #: (`django.db.connection`, `flask.request`; `PackageSummary.proxies`):
+        #: values returned through one are runtime-decided too.
+        self.proxy_names: frozenset[str] = frozenset()
+        self._last_resolution_alternatives: tuple[str, ...] = ()
+        #: `_resolve_by_receiver_name`'s lazily built
+        #: {normalized class simple name: [qualified class names]} index.
+        self._class_name_index: dict[str, list[str]] | None = None
+        #: `_resolve_by_attribute`'s lazily built {attribute name: {classes
+        #: ever assigned to it anywhere in the repo}}.
+        self._attr_type_index: dict[str, set[tuple[str, str]]] | None = None
+        #: `(file, language)` of the function whose calls are being
+        #: resolved; `None` outside Pass 2 (no fallback filtering then).
+        self._fallback_caller: tuple[str, str] | None = None
+        self._path_partitions: dict[str, str] = {}
+        #: `_infer_return_class` memo: {function qname: class qname | None}.
+        self._return_class_cache: dict[str, str | None] = {}
+        self._class_map_cache: dict[str, InstanceTypeMap] = {}
+        #: `_module_instance_map`'s per-module cache (Python): module-scope
+        #: `client = httpx.Client()` / `app = Celery(...)` bindings.
+        self._module_map_cache: dict[str, InstanceTypeMap] = {}
         #: Item 3: `go_call_resolution_ratio` diagnostic numerator/
         #: denominator - see that property's own docstring.
         self._go_receiver_call_sites_total = 0
@@ -287,6 +358,24 @@ class ConcreteGraphBuilder:
         #: importing file.
         self._tsconfig_lookup_cache: dict[str, str | None] = {}
         self._tsconfig_parse_cache: dict[str, _TsPathAliasConfig | None] = {}
+        self._grammarless_sources: dict[str, str | None] = {}
+
+    def source_text(self, path: str) -> str | None:
+        """The text of an indexed file: the parsed source, or for a file
+        indexed without a grammar (Robot Framework, `prism.graph.
+        robot_framework`) the file read from disk. `None` for anything else."""
+        parsed = self._parsed_files.get(path)
+        if parsed is not None:
+            return parsed.source.decode("utf-8", errors="replace")
+        if not path.endswith(ROBOT_EXTENSIONS):
+            return None
+        if path not in self._grammarless_sources:
+            try:
+                with open(path, encoding="utf-8", errors="replace") as handle:
+                    self._grammarless_sources[path] = handle.read()
+            except OSError:
+                self._grammarless_sources[path] = None
+        return self._grammarless_sources[path]
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
@@ -475,6 +564,9 @@ class ConcreteGraphBuilder:
             declared = _parse_package_or_namespace(parsed)
             if declared is not None:
                 return declared
+        for root in self.module_roots:
+            if parsed.path.startswith(root.rstrip(os.sep) + os.sep):
+                return path_to_module(parsed.path, root)
         return path_to_module(parsed.path, self.repo_root)
 
     def _collect_definitions_in_file(self, parsed: ParsedFile, module: str) -> None:
@@ -510,11 +602,56 @@ class ConcreteGraphBuilder:
             self._collect_attribute_definitions(parsed, module)
         elif lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
             self._collect_js_module_constants(parsed, module)
+            self._collect_js_test_blocks(parsed, module)
+
+    def _collect_js_test_blocks(self, parsed: ParsedFile, module: str) -> None:
+        """Registers every Playwright/Jest/Vitest/Mocha test, hook and
+        fixture callback in this file as a `function` symbol with role
+        `VERIFICATION` (`prism.graph.js_test_blocks`). The callback is its
+        def node, so Pass 2b resolves its calls like any other function's."""
+        for block in find_test_blocks(parsed.root_node, parsed.source, module):
+            line_range = (block.outer.start_point[0] + 1, block.outer.end_point[0] + 1)
+            symbol = SymbolInfo(
+                qualified_name=block.qualified_name,
+                kind="function",
+                file=parsed.path,
+                line_range=line_range,
+                language_id=parsed.language_id,
+                module=module,
+                enclosing_class=None,
+                role=SymbolRole.VERIFICATION,
+            )
+            key = self.symbol_table.add(symbol, index_by_name=False)
+            self._def_nodes[key] = block.callback
+            self.graph.add_node(
+                key, kind="function", file=parsed.path, line_range=line_range, language_id=parsed.language_id,
+                module=module, enclosing_class=None, role=SymbolRole.VERIFICATION, test_block=block.kind,
+            )
+            if block.fixture_params:
+                self._js_test_fixture_params[key] = block.fixture_params
+
+    def _build_js_fixture_registry(self, import_maps: dict[str, "LocalImportMap"]) -> None:
+        """Fixture name -> class qualified names, from every JS/TS file's
+        `<x>.extend<T>({...})` declarations, each class name resolved
+        through its own file's import map. A name two files map to
+        different classes keeps both (the binding is then ambiguous and
+        its calls are linked as tentative)."""
+        registry: dict[str, set[str]] = {}
+        for path, import_map in sorted(import_maps.items()):
+            parsed = self._parsed_files.get(path)
+            if parsed is None or parsed.language_id not in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+                continue
+            module = self._module_for_file(parsed)
+            for fixture, class_name in find_fixture_types(parsed.root_node, parsed.source).items():
+                resolved = self._resolve_reference_chain([class_name], module, import_map)
+                if self._is_known_class(resolved):
+                    registry.setdefault(fixture, set()).add(resolved)
+        self._js_fixture_types = registry
 
     def _register_definition(
         self, node: Node, is_class: bool, parsed: ParsedFile, module: str, force_kind: str | None = None
     ) -> None:
-        name_node = node.child_by_field_name("name")
+        name_node = _declarator_bound_function_name(node, parsed) or node.child_by_field_name("name")
         if name_node is None:
             name_node = _property_assigned_function_name(node, parsed)
             if name_node is None:
@@ -524,6 +661,8 @@ class ConcreteGraphBuilder:
         class_types = CLASS_NODE_TYPES[lang]
 
         enclosing_class: str | None = None
+        nested_in_function = False
+        enclosing_function: str | None = None  # the nearest registered function this one is defined in
         if lang == LanguageID.GO and node.type == "method_declaration":
             # Issue B1: a Go method has no enclosing class *node* to walk
             # up to at all - `func (c *Context) JSON(...)` is a top-level
@@ -539,9 +678,14 @@ class ConcreteGraphBuilder:
         else:
             object_literal_types = OBJECT_LITERAL_NODE_TYPES.get(lang, set())
             enclosing_function_types = ENCLOSING_FUNCTION_EXPRESSION_TYPES.get(lang, set())
+            function_types = FUNCTION_NODE_TYPES.get(lang, set())
             cursor = node.parent
             passed_object_literal = False
             while cursor is not None:
+                if enclosing_function is None and lang in _CLOSURE_SCOPED_LANGUAGES:
+                    enclosing_function = self._def_key_by_span.get((parsed.path, cursor.start_byte, cursor.end_byte))
+                if cursor.type in function_types:
+                    nested_in_function = True
                 if cursor.type in class_types:
                     cls_name_node = cursor.child_by_field_name("name")
                     if cls_name_node is not None:
@@ -580,7 +724,9 @@ class ConcreteGraphBuilder:
         line_range = (outer.start_point[0] + 1, outer.end_point[0] + 1)
         enclosing_class_info = self.symbol_table.get(enclosing_class) if enclosing_class is not None else None
         enclosing_class_role = enclosing_class_info.role if enclosing_class_info is not None else None
-        role = _classify_symbol_role(node, is_class, parsed, name, enclosing_class_role)
+        role = _classify_symbol_role(
+            node, is_class, parsed, name, enclosing_class_role, in_test_file=self._in_test_file(parsed.path)
+        )
         symbol = SymbolInfo(
             qualified_name=qualified_name,
             kind=kind,
@@ -590,6 +736,8 @@ class ConcreteGraphBuilder:
             module=module,
             enclosing_class=enclosing_class,
             role=role,
+            nested_in_function=nested_in_function,
+            aliases=tuple(n for n in _assigned_property_names(node, parsed) if n != name),
         )
         # `key` is `qualified_name` unchanged unless `add()` just detected
         # a genuine in-module collision (Option C, `reports/symbol_table_
@@ -601,6 +749,7 @@ class ConcreteGraphBuilder:
         # overwriting the primary's own `_def_nodes`/graph-node entry.
         key = self.symbol_table.add(symbol)
         self._def_nodes[key] = node
+        self._def_key_by_span[(parsed.path, node.start_byte, node.end_byte)] = key
         self.graph.add_node(
             key,
             kind=kind,
@@ -613,6 +762,17 @@ class ConcreteGraphBuilder:
         )
         if enclosing_class is not None and kind == "method":
             self._methods_by_class.setdefault(enclosing_class, []).append(key)
+        if enclosing_class is None and enclosing_function is not None:
+            # Fix C: a closure belongs to the function that defines it
+            # (`app` inside `fastapi.routing.get_request_handler`): whoever
+            # calls that function gets - and runs - the closure, and a
+            # runtime trace attributes the closure's frames to it. Not a
+            # call, so a relation of its own, which only the blast-radius
+            # caller walk follows (at no extra hop). The closure keeps its
+            # flat name (`fastapi.routing.app`, `app#2` on a collision):
+            # renaming it would change the identity of symbols that frozen
+            # ground truth and recorded fixtures already name.
+            self.graph.add_edge(enclosing_function, key, relation="ENCLOSES")
 
     # -- Attribute definitions (module/class/instance-level assignments) - #
     def _collect_attribute_definitions(self, parsed: ParsedFile, module: str) -> None:
@@ -701,6 +861,9 @@ class ConcreteGraphBuilder:
                 name_node = declarator.child_by_field_name("name")
                 if name_node is None or name_node.type != "identifier":
                     continue
+                value = declarator.child_by_field_name("value")
+                if value is not None and value.type in JS_BOUND_FUNCTION_TYPES:
+                    continue  # `const f = () => {}`: registered as a function by the definitions query
                 name = node_text(name_node, parsed.source)
                 self._register_attribute(f"{module}.{name}", declarator, parsed, module, enclosing_class=None)
 
@@ -820,7 +983,20 @@ class ConcreteGraphBuilder:
                 import_maps[path] = import_map
                 self._import_maps[path] = import_map
                 self._register_exports(parsed, module, import_map)
-                self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass2a")
+
+        # Sub-pass 2a-bis: class relations, once every file's exports are
+        # registered - a base imported through a barrel (`from redis.commands
+        # import CoreCommands`, re-exported by a `commands/__init__.py` that
+        # sorts after `client.py`) only resolves to its real class then.
+        for path in sorted(import_maps):
+            parsed = self._parsed_files.get(path)
+            if parsed is None:
+                continue
+            try:
+                module = self._module_for_file(parsed)
+                self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_maps[path])
                 self._link_go_embeds(classes_by_file.get(path, []), parsed, module)
             except (RecursionError, UnicodeDecodeError) as exc:
                 self._record_index_error(path, exc, stage="pass2a")
@@ -832,6 +1008,7 @@ class ConcreteGraphBuilder:
         # relations` call above has finished, exactly the same ordering
         # requirement `_register_exports` has for barrel files.
         self._link_overrides()
+        self._build_js_fixture_registry(import_maps)
 
         # Sub-pass 2b: resolve every call site, now that the whole repo's
         # export registry and class-relation graph (EXTENDS/IMPLEMENTS/
@@ -860,6 +1037,82 @@ class ConcreteGraphBuilder:
                 self._resolve_calls_for_file_symbols(file_symbols, parsed, module, import_map)
             except (RecursionError, UnicodeDecodeError) as exc:
                 self._record_index_error(path, exc, stage="pass2b")
+
+        # Sub-pass 2c: virtual dispatch needs the whole repo's OVERRIDES
+        # edges and every call site resolved, so it runs last.
+        self._expand_virtual_dispatch()
+
+        # Sub-pass 2d (Phase 2, Phase B): references beyond calls and inheritance, into `self.reference_graph`, once
+        # every import map, export and class relation is complete. Python first.
+        from prism.graph.references import collect_python_aliases, link_python_references
+        self.reference_aliases = {}
+        for path in sorted(files):                         # aliases first: a use may sort before its alias's file
+            parsed = self._parsed_files.get(path)
+            if parsed is None or path not in import_maps or parsed.language_id != LanguageID.PYTHON:
+                continue
+            try:
+                collect_python_aliases(self, parsed, self._module_for_file(parsed), import_maps[path])
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass2d")
+        for path in sorted(files):
+            parsed = self._parsed_files.get(path)
+            if parsed is None or path not in import_maps or parsed.language_id != LanguageID.PYTHON:
+                continue
+            try:
+                link_python_references(self, parsed, self._module_for_file(parsed), import_maps[path])
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass2d")
+
+    def _expand_virtual_dispatch(self) -> None:
+        """Class-hierarchy analysis for dynamically dispatched calls: a
+        call resolved to `Base.m` through a receiver that can hold a
+        subclass at run time (`self.m()`, or an instance-typed variable or
+        attribute) may execute any override of `m` in a subclass of
+        `Base`. Each recorded `(caller, Base.m)` site is linked to every
+        transitive overrider (`OVERRIDES` edges, built in sub-pass 2a-ter)
+        as `kind="TENTATIVE_CALL"`, the existing reduced-confidence
+        marker: the call is possible, not certain. Language-agnostic; a
+        no-op where no `OVERRIDES` edges exist (e.g. Go).
+        """
+        overriders: dict[str, list[str]] = {}
+        for source, target, data in self.graph.edges(data=True):
+            if data.get("relation") == "OVERRIDES":
+                overriders.setdefault(target, []).append(source)
+        if not overriders:
+            self._dispatch_sites.clear()
+            return
+        closure: dict[str, list[str]] = {}
+
+        def all_overriders(method: str) -> list[str]:
+            if method not in closure:
+                found: list[str] = []
+                seen = {method}
+                stack = sorted(overriders.get(method, ()))
+                while stack:
+                    m = stack.pop()
+                    if m in seen:
+                        continue
+                    seen.add(m)
+                    found.append(m)
+                    stack.extend(sorted(overriders.get(m, ())))
+                closure[method] = sorted(found)
+            return closure[method]
+
+        for caller, target in self._dispatch_sites:
+            for override in all_overriders(target):
+                if override != caller and not self.graph.has_edge(caller, override):
+                    # `dispatch_of` names the statically resolved target this
+                    # edge widens: the call site's own target stays that one
+                    # (see `prism.traversal._data_flow_common._resolve_call_sites`).
+                    self.graph.add_edge(caller, override, relation="CALLS", kind="TENTATIVE_CALL", dispatch_of=target)
+        self._dispatch_sites.clear()
+
+    def _in_test_file(self, path: str) -> bool:
+        """Whether `path` is a test file (repo-relative, segment-anchored)."""
+        cache = self.__dict__.setdefault("_test_file_cache", {})
+        if path not in cache:
+            cache[path] = _repo_relative_is_test_file(path, self.repo_root)
+        return cache[path]
 
     def _resolve_calls_for_file_symbols(
         self, file_symbols: list[str], parsed: ParsedFile, module: str, import_map: LocalImportMap
@@ -891,6 +1144,10 @@ class ConcreteGraphBuilder:
         for qualified_name in file_symbols:
             symbol = self.symbol_table.get(qualified_name)
             def_node = self._def_nodes[qualified_name]
+            # Who is calling, for the fallback scoping guards
+            # (`_fallback_candidate_allowed`) reached from deep inside
+            # `_resolve_segments`/return-type inference.
+            self._fallback_caller = (parsed.path, parsed.language_id)
             class_instance_map = InstanceTypeMap()
             if symbol.enclosing_class and parsed.language_id in instance_binding_langs:
                 class_instance_map = self._build_class_instance_map(
@@ -898,7 +1155,17 @@ class ConcreteGraphBuilder:
                 )
             func_instance_map = InstanceTypeMap()
             if parsed.language_id in instance_binding_langs:
-                func_instance_map = self._build_function_instance_map(def_node, parsed, module, import_map)
+                func_instance_map = self._build_function_instance_map(
+                    def_node, parsed, module, import_map, symbol.enclosing_class, class_instance_map
+                )
+                if parsed.language_id == LanguageID.PYTHON:
+                    self._seed_module_bindings(func_instance_map, parsed, module, import_map)
+            for param in self._js_test_fixture_params.get(qualified_name, ()):
+                fixture, _, local_name = param.partition("=")
+                if local_name in func_instance_map.bindings:
+                    continue                   # rebound locally in the body
+                for fixture_class in sorted(self._js_fixture_types.get(fixture, ())):
+                    func_instance_map.bind(local_name or fixture, fixture_class)
             self._resolve_calls_in_function(
                 qualified_name, def_node, parsed, module, symbol.enclosing_class,
                 import_map, class_instance_map, func_instance_map,
@@ -953,13 +1220,17 @@ class ConcreteGraphBuilder:
             alias_node = name_node.child_by_field_name("alias")
             target_text = node_text(target_node, src)
             alias_text = node_text(alias_node, src)
-            qualified = f"{from_module}.{target_text}" if from_module else target_text
+            qualified = f"{from_module}.{target_text}" if from_module else self._absolute_python_module(target_text)
             import_map.add(alias_text, qualified)
         else:  # dotted_name
             text = node_text(name_node, src)
             if from_module is None:
                 root = text.split(".")[0]
-                import_map.add(root, root)
+                # `import shelf.core` binds `shelf`; rebind it to the repository's module only when the whole dotted
+                # name resolves there (a namespace shared with a third-party package, such as poetry's `src/poetry`
+                # and the external `poetry.core`, must not pull the external part inside)
+                full = self._absolute_python_module(text)
+                import_map.add(root, full[: len(full) - len(text)] + root if full != text else root)
             else:
                 import_map.add(text, f"{from_module}.{text}")
 
@@ -973,7 +1244,18 @@ class ConcreteGraphBuilder:
                 elif child.type == "dotted_name":
                     suffix = node_text(child, src)
             return self._resolve_relative_module(current_module, dots, suffix, is_package_init)
-        return node_text(node, src)
+        return self._absolute_python_module(node_text(node, src))
+
+    def _absolute_python_module(self, text: str) -> str:
+        """An absolute import of the repository's own package, when the package is not at the repository root
+        (`src/shelf` imported as `shelf`), mapped onto PRISM's module name (`src.shelf`); anything else unchanged.
+        K4 (`harness/experiments/r4/K4_DIAGNOSIS.md`); the safeguards are `ImportRoots`'s."""
+        from prism.graph.import_roots import ImportRoots
+        files = [f for f in self._parsed_files if f.endswith((".py", ".pyi"))]
+        if getattr(self, "_import_roots_key", None) != len(files):
+            self._import_roots = ImportRoots(self.repo_root, files)
+            self._import_roots_key = len(files)
+        return self._import_roots.resolve(text)
 
     @staticmethod
     def _resolve_relative_module(current_module: str, dots: int, suffix: str | None, is_package_init: bool = False) -> str:
@@ -1567,6 +1849,15 @@ class ConcreteGraphBuilder:
             resolved_attr = resolve_export(resolved_root, rest[0], self.export_registry, self.symbol_table)
             if resolved_attr is not None:
                 return ".".join([resolved_attr, *rest[1:]]) if len(rest) > 1 else resolved_attr
+            # `import sqlalchemy.orm` + `sqlalchemy.orm.Session()`: the
+            # re-exporting package is a deeper prefix of the chain - try
+            # each (longest first) as the module re-exporting the next name.
+            for k in range(len(rest) - 1, 0, -1):
+                resolved_attr = resolve_export(
+                    ".".join([resolved_root, *rest[:k]]), rest[k], self.export_registry, self.symbol_table
+                )
+                if resolved_attr is not None:
+                    return ".".join([resolved_attr, *rest[k + 1:]])
 
         return target
 
@@ -1578,6 +1869,8 @@ class ConcreteGraphBuilder:
         if assign_type is None:
             return instance_map
         self_tokens = SELF_TOKEN_TEXT[parsed.language_id]
+        if parsed.language_id == LanguageID.PYTHON:
+            self._bind_python_class_level_annotations(enclosing_class, parsed, module, import_map, instance_map)
         for method_qname in self._methods_by_class.get(enclosing_class, []):
             method_node = self._def_nodes.get(method_qname)
             if method_node is None:
@@ -1590,6 +1883,17 @@ class ConcreteGraphBuilder:
                 if not target_segments or len(target_segments) != 2 or target_segments[0] not in self_tokens:
                     continue
                 value = assign.child_by_field_name("right")
+                annotation = assign.child_by_field_name("type") if parsed.language_id == LanguageID.PYTHON else None
+                if annotation is not None:
+                    # `self.attr: T` / `self.attr: Optional[T] = None`: the
+                    # annotation types the attribute (see the shared helper
+                    # for the unwrapped forms).
+                    ann = self._python_annotation_type(annotation, module, import_map, parsed.source)
+                    if self._bind_annotated_value(
+                        instance_map, ".".join(target_segments), ann, value, parsed.source, module, import_map
+                    ):
+                        continue
+                inferred_attr = False
                 if value is not None:
                     ctor_segments = _constructor_call_segments(value, parsed.language_id, parsed.source)
                     if ctor_segments is None:
@@ -1597,38 +1901,109 @@ class ConcreteGraphBuilder:
                             instance_map.bind_builtin(".".join(target_segments))
                         continue
                     resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+                    if not self._is_known_class(resolved_class) and not _is_builtin_container_expr(
+                        value, parsed.language_id, parsed.source
+                    ):
+                        # `self.queryset = self.get_queryset()`: a call whose
+                        # return class is inferable.
+                        inferred_attr = True
+                        resolved_class = self._expr_class(value, _ExprContext(
+                            module, import_map, enclosing_class, parsed.language_id, parsed.source, method_node
+                        ))
                     if not self._is_known_class(resolved_class) and _is_builtin_container_expr(
                         value, parsed.language_id, parsed.source
                     ):
                         instance_map.bind_builtin(".".join(target_segments))
                         continue
                 else:
-                    # Phase B (G41): a bare type-annotated attribute with
-                    # no constructor call at all (`self.attr:
-                    # ServiceClient`, tree-sitter-python's "assignment"
-                    # node with a "type" field but no "right" child) -
-                    # the annotation alone is enough to bind the
-                    # receiver's type when it names a single, simple
-                    # class directly. A subscripted/generic annotation
-                    # (`Optional[ServiceClient]`, `list[ServiceClient]`)
-                    # is not attempted - its own "type" child is not a
-                    # bare `identifier`, so it falls through and is left
-                    # unresolved rather than guessed.
-                    # tree-sitter-python wraps the annotation in its own
-                    # "type" grammar node (`type_node.type == "type"`),
-                    # one level above the actual `identifier` - confirmed
-                    # directly against the parse tree, not assumed.
-                    type_node = assign.child_by_field_name("type")
-                    if type_node is not None and len(type_node.named_children) == 1:
-                        type_node = type_node.named_children[0]
-                    if type_node is None or type_node.type != "identifier":
-                        continue
-                    resolved_class = self._resolve_reference_chain(
-                        [node_text(type_node, parsed.source)], module, import_map
-                    )
+                    # A bare annotated attribute (`self.attr: T`) is handled
+                    # above; one whose annotation names nothing indexed has
+                    # nothing to bind.
+                    continue
                 if self._is_known_class(resolved_class):
-                    instance_map.bind(".".join(target_segments), resolved_class)
+                    instance_map.bind(".".join(target_segments), resolved_class, inferred=inferred_attr)
         return instance_map
+
+    def _bind_python_class_level_annotations(
+        self, enclosing_class: str, parsed: ParsedFile, module: str, import_map: LocalImportMap,
+        instance_map: InstanceTypeMap,
+    ) -> None:
+        """Class-body annotations (`client: Optional[HttpClient] = None`,
+        dataclass fields) type `self.<name>` in every method."""
+        class_node = self._def_nodes.get(enclosing_class)
+        body = class_node.child_by_field_name("body") if class_node is not None else None
+        for statement in body.named_children if body is not None else ():
+            if statement.type != "expression_statement" or not statement.named_children:
+                continue
+            assign = statement.named_children[0]
+            target = assign.child_by_field_name("left") if assign.type == "assignment" else None
+            annotation = assign.child_by_field_name("type") if target is not None else None
+            if annotation is None or target.type != "identifier":
+                continue
+            ann = self._python_annotation_type(annotation, module, import_map, parsed.source)
+            self._bind_annotated_value(
+                instance_map, f"self.{node_text(target, parsed.source)}", ann,
+                assign.child_by_field_name("right"), parsed.source, module, import_map,
+            )
+
+    def _is_opaque_type(self, qualified_name: str | None) -> bool:
+        """A type or value defined only in compiled native code: one of
+        `opaque_types`, a member of one, or anything under `opaque_prefixes`."""
+        if not qualified_name or not (self.opaque_types or self.opaque_prefixes):
+            return False
+        return qualified_name in self.opaque_types or any(
+            qualified_name.startswith(t + ".") for t in self.opaque_types
+        ) or any(qualified_name == p or qualified_name.startswith(p + ".") for p in self.opaque_prefixes)
+
+    def _opaque_call_result(
+        self, segments: list[str], instance_map: InstanceTypeMap, module: str, import_map: LocalImportMap
+    ) -> str | None:
+        """The unknown value a call returns - `<type>.<method>()` for a method
+        on an opaque-typed or proxy-derived receiver (`conn.cursor()`),
+        `<name>()` for a native function or a call through a runtime proxy
+        (`django.db.connection.cursor()`) - or `None`. Its own methods then
+        link under it, and host builds turn those into OPAQUE / PROXY
+        boundary nodes by the name's origin."""
+        if not segments or not (self.opaque_types or self.opaque_prefixes or self.proxy_names):
+            return None
+        if len(segments) >= 2:
+            receiver = instance_map.resolve(".".join(segments[:-1]))
+            if receiver is not None:
+                return f"{receiver}.{segments[-1]}()" if self._is_unknown_value(receiver) else None
+        if instance_map.is_local(segments[0]):
+            return None
+        resolved = self._resolve_reference_chain(segments, module, import_map)
+        return f"{resolved}()" if self._is_unknown_value(resolved) else None
+
+    def _is_unknown_value(self, name: str | None) -> bool:
+        """Native (`_is_opaque_type`) or reached through a runtime proxy
+        (`proxy_names`): what calls on it do is decided outside Python
+        source or at run time."""
+        if not name:
+            return False
+        return self._is_opaque_type(name) or any(name == p or name.startswith(p + ".") for p in self.proxy_names)
+
+    def _unknown_chain_target(
+        self, call_node: Node, lang: str, source: bytes, module: str, import_map: LocalImportMap,
+        instance_map: InstanceTypeMap, _depth: int = 0,
+    ) -> str | None:
+        """`<call>(...).<method>(...)` whose inner call returns an unknown
+        value (`django.db.connection.cursor().execute(...)`):
+        `<value>.<method>`. Nested chains are followed a few levels."""
+        func = call_node.child_by_field_name("function")
+        if _depth > 3 or func is None or func.type != ATTRIBUTE_NODE_TYPE.get(lang):
+            return None
+        obj = func.child_by_field_name(ATTR_OBJECT_FIELD[lang])
+        prop = func.child_by_field_name(ATTR_PROPERTY_FIELD[lang])
+        if obj is None or prop is None or obj.type != CALL_NODE_TYPE.get(lang):
+            return None
+        inner = call_callee_segments(obj, source, lang)
+        if inner:
+            value = self._opaque_call_result(inner, instance_map, module, import_map)
+        else:
+            receiver = self._unknown_chain_target(obj, lang, source, module, import_map, instance_map, _depth + 1)
+            value = f"{receiver}()" if receiver is not None else None
+        return f"{value}.{node_text(prop, source)}" if value is not None else None
 
     def _is_known_class(self, qualified_name: str | None) -> bool:
         if not qualified_name:
@@ -1844,6 +2219,25 @@ class ConcreteGraphBuilder:
         self.graph.add_edge(source, target, relation=relation)
 
     # -- OVERRIDES + Python C3-ish MRO (Issue #9) ------------------------- #
+    def _subclass_definitions(self, class_qname: str, method: str) -> list[str]:
+        """`Sub.<method>` for every transitive subclass of `class_qname`
+        (over `EXTENDS` edges) that defines `method` itself."""
+        found: list[str] = []
+        seen = {class_qname}
+        stack = [class_qname]
+        while stack:
+            cls = stack.pop()
+            if cls not in self.graph:
+                continue
+            for sub_cls in self.graph.predecessors(cls):
+                if sub_cls in seen or (self.graph.get_edge_data(sub_cls, cls) or {}).get("relation") != "EXTENDS":
+                    continue
+                seen.add(sub_cls)
+                stack.append(sub_cls)
+                if f"{sub_cls}.{method}" in self.symbol_table:
+                    found.append(f"{sub_cls}.{method}")
+        return sorted(found)
+
     def _mro_ancestors(self, class_qname: str) -> list[str]:
         """`class_qname`'s own ancestor chain via its `EXTENDS` edges,
         nearest-first, depth-first, each visited at most once - a
@@ -1970,28 +2364,141 @@ class ConcreteGraphBuilder:
                         self._add_relation_edge(method_qname, base_method, "OVERRIDES")
                         break
 
+    def _module_instance_map(self, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> InstanceTypeMap:
+        """Module-scope bindings of a Python file (`client = httpx.Client()`,
+        `app = Celery("tasks")`, `CACHE = {}`), inferred exactly as a
+        function's own locals are; cached per module."""
+        cached = self._module_map_cache.get(module)
+        if cached is None:
+            self._module_map_cache[module] = InstanceTypeMap()  # cycle guard while building
+            cached = self._build_function_instance_map(parsed.root_node, parsed, module, import_map)
+            self._module_map_cache[module] = cached
+        return cached
+
+    def _seed_module_bindings(
+        self, func_map: InstanceTypeMap, parsed: ParsedFile, module: str, import_map: LocalImportMap
+    ) -> None:
+        """A function reads a module-level name it does not bind itself -
+        its own module's (`client.get()` after `client = httpx.Client()`)
+        or one imported from another indexed module (`from .clients
+        import client`) - with that module's binding for it."""
+        own = self._module_instance_map(parsed, module, import_map)
+        candidates: list[tuple[str, InstanceTypeMap, str]] = [(name, own, name) for name in own.local_names]
+        for local, target in import_map.aliases.items():
+            symbol = self.symbol_table.get(target)
+            if symbol is None or symbol.kind != "attribute" or symbol.language_id != LanguageID.PYTHON:
+                continue
+            owner = self._parsed_files.get(symbol.file)
+            if owner is None:
+                continue
+            if symbol.module not in self._module_map_cache:
+                self._module_instance_map(owner, symbol.module, self._build_import_map(owner, symbol.module))
+            candidates.append((local, self._module_map_cache[symbol.module], target.rsplit(".", 1)[-1]))
+        for local, source_map, name in candidates:
+            if local in func_map.local_names or local in func_map.bindings or local in func_map.builtin_bindings:
+                continue
+            if name in source_map.builtin_bindings:
+                func_map.bind_builtin(local)
+                continue
+            bound = source_map.bindings.get(name)
+            if bound is None:
+                continue
+            func_map.bind(local, bound, inferred=name in source_map.inferred)
+            if name in source_map.union_members:
+                func_map.union_members[local] = source_map.union_members[name]
+            if name in source_map.branch_members:
+                func_map.branch_members[local] = source_map.branch_members[name]
+                func_map.ambiguous.add(local)
+            if name in source_map.element_types:
+                func_map.element_types[local] = source_map.element_types[name]
+
     def _build_function_instance_map(
-        self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap
+        self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap,
+        enclosing_class: str | None = None, class_instance_map: InstanceTypeMap | None = None,
     ) -> InstanceTypeMap:
         instance_map = InstanceTypeMap()
         lang = parsed.language_id
+        if lang == LanguageID.PYTHON:
+            # `*args` is always a tuple and `**kwargs` always a dict - the
+            # language guarantees it - so `kwargs.get(...)` is a builtin
+            # call, never a repo method.
+            params = def_node.child_by_field_name("parameters")
+            for param in params.named_children if params is not None else ():
+                if param.type in ("list_splat_pattern", "dictionary_splat_pattern") and param.named_children:
+                    instance_map.bind_builtin(node_text(param.named_children[0], parsed.source))
+                elif param.type in ("typed_parameter", "typed_default_parameter"):
+                    # `def f(client: HttpClient)`: an annotation naming an
+                    # indexed class types the parameter.
+                    name_node = param.child_by_field_name("name") or next(
+                        (c for c in param.named_children if c.type == "identifier"), None
+                    )
+                    if name_node is not None and name_node.type == "identifier":
+                        ann = self._python_annotation_type(param.child_by_field_name("type"), module, import_map, parsed.source)
+                        self._bind_annotation(instance_map, node_text(name_node, parsed.source), ann)
+            instance_map.local_names = _python_local_names(def_node, parsed.source)
+        elif lang in (LanguageID.TYPESCRIPT, LanguageID.TSX):
+            # `async function f(lp: LoginPage)`: a parameter annotated with
+            # an indexed class is an instance of it.
+            params = def_node.child_by_field_name("parameters")
+            for param in params.named_children if params is not None else ():
+                if param.type not in ("required_parameter", "optional_parameter"):
+                    continue
+                pattern = param.child_by_field_name("pattern")
+                annotation = param.child_by_field_name("type")
+                type_node = next(iter(annotation.named_children), None) if annotation is not None else None
+                if pattern is None or pattern.type != "identifier" or type_node is None or type_node.type != "type_identifier":
+                    continue
+                resolved = self._resolve_reference_chain([node_text(type_node, parsed.source)], module, import_map)
+                if self._is_known_class(resolved):
+                    instance_map.bind(node_text(pattern, parsed.source), resolved)
+        ctx = _ExprContext(module, import_map, enclosing_class, lang, parsed.source, def_node)
         assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
         if assign_type is not None:
             for assign in iter_scoped_nodes(def_node, {assign_type}, lang):
                 target = assign.child_by_field_name("left")
                 value = assign.child_by_field_name("right")
-                if target is None or value is None or target.type != "identifier":
+                if target is None or target.type != "identifier":
                     continue
+                annotation = assign.child_by_field_name("type") if lang == LanguageID.PYTHON else None
+                if annotation is not None:
+                    # `x: T = ...` / `x: T`: the annotation types the local.
+                    ann = self._python_annotation_type(annotation, module, import_map, parsed.source)
+                    if self._bind_annotated_value(
+                        instance_map, node_text(target, parsed.source), ann, value, parsed.source, module, import_map
+                    ):
+                        continue
+                if value is None:
+                    continue
+                if value.type == ATTRIBUTE_NODE_TYPE.get(lang):
+                    prop = value.child_by_field_name(ATTR_PROPERTY_FIELD[lang])
+                    if prop is not None:
+                        instance_map.attr_aliases[node_text(target, parsed.source)] = node_text(prop, parsed.source)
                 ctor_segments = _constructor_call_segments(value, lang, parsed.source)
                 if ctor_segments is None:
                     if _is_builtin_container_expr(value, lang, parsed.source):
                         instance_map.bind_builtin(node_text(target, parsed.source))
+                    elif (inferred := self._expr_class(value, ctx)) is not None:
+                        instance_map.bind(node_text(target, parsed.source), inferred, inferred=True)
                     continue
                 resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
                 if self._is_known_class(resolved_class):
                     instance_map.bind(node_text(target, parsed.source), resolved_class)
                 elif _is_builtin_container_expr(value, lang, parsed.source):
                     instance_map.bind_builtin(node_text(target, parsed.source))
+                elif (opaque := self._opaque_call_result(ctor_segments, instance_map, module, import_map)) is not None:
+                    # `cursor = conn.cursor()` on a compiled-only type, or a
+                    # native function's result: the value is native too.
+                    instance_map.bind(node_text(target, parsed.source), opaque, inferred=True)
+                elif self.dispatch_all_members and (
+                    returned := self._bound_receiver_return(ctor_segments, instance_map)
+                ) is not None:
+                    # Summary mode: `conn = manager.connection_from_url(url)`
+                    # with `manager` already typed in this function.
+                    instance_map.bind(node_text(target, parsed.source), returned, inferred=True)
+                elif (inferred := self._expr_class(value, ctx)) is not None:
+                    # `qs = self.get_queryset()` / `form = self.get_form()`:
+                    # a call whose return class is inferable.
+                    instance_map.bind(node_text(target, parsed.source), inferred, inferred=True)
 
         # Java/C# construct almost exclusively through a *typed local
         # variable declaration* (`OrderValidator v = new OrderValidator();`),
@@ -2012,10 +2519,102 @@ class ConcreteGraphBuilder:
                 if self._is_known_class(resolved_class):
                     instance_map.bind(node_text(name_node, parsed.source), resolved_class)
 
+        if lang == LanguageID.PYTHON:
+            self._bind_python_loop_elements(def_node, parsed, instance_map, class_instance_map)
+            self._bind_python_with_targets(def_node, parsed, module, import_map, instance_map, ctx)
+
         if lang == LanguageID.GO:
             self._bind_go_typed_parameters(def_node, parsed, module, instance_map)
             self._bind_go_short_var_declarations(def_node, parsed, module, instance_map)
         return instance_map
+
+    def _bind_python_with_targets(
+        self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap,
+        instance_map: InstanceTypeMap, ctx: "_ExprContext",
+    ) -> None:
+        """`with X(...) as name` / `async with expr as name`: `name` is what
+        the context manager's `__enter__`/`__aenter__` returns - by the
+        near-universal convention the manager itself (`return self`, `->
+        Self`, `-> T` bound to self, or a signature-only header with no
+        body), unless that method names another known class (aiohttp's
+        `_RequestContextManager.__aenter__ -> ClientResponse`)."""
+        for item in iter_scoped_nodes(def_node, {"with_item"}, LanguageID.PYTHON):
+            pattern = item.child_by_field_name("value")
+            if pattern is None or pattern.type != "as_pattern" or not pattern.named_children:
+                continue
+            alias = pattern.child_by_field_name("alias")
+            target = alias.named_children[0] if alias is not None and alias.named_children else None
+            if target is None or target.type != "identifier":
+                continue
+            value = pattern.named_children[0]
+            manager = None
+            ctor_segments = _constructor_call_segments(value, LanguageID.PYTHON, parsed.source)
+            if ctor_segments is not None:
+                resolved = self._resolve_reference_chain(ctor_segments, module, import_map)
+                if self._is_known_class(resolved):
+                    manager = resolved
+            if manager is None:
+                manager = self._expr_class(value, ctx)
+            if manager is None:
+                continue
+            statement = item.parent.parent if item.parent is not None else None
+            is_async = statement is not None and any(c.type == "async" for c in statement.children)
+            entered = self._entered_class(manager, "__aenter__" if is_async else "__enter__")
+            instance_map.bind(node_text(target, parsed.source), entered, inferred=ctor_segments is None or entered != manager)
+
+    def _entered_class(self, manager: str, dunder: str) -> str:
+        lineage = [manager, *self._mro_ancestors(manager)]
+        for cls in lineage:
+            if f"{cls}.{dunder}" in self.symbol_table:
+                returned = self._infer_return_class(f"{cls}.{dunder}")
+                return returned if returned is not None and returned not in lineage else manager
+        return manager
+
+    def _bind_annotated_value(
+        self, instance_map: InstanceTypeMap, name: str, ann: "_AnnotationType | None",
+        value: Node | None, source: bytes, module: str, import_map: LocalImportMap,
+    ) -> bool:
+        """Bind an annotated Python assignment target (`x: T = value`).
+
+        The annotation wins over anything inferred from `value`, except
+        that a constructor of a subclass of the annotated class (`x: Base =
+        Sub()`) binds the more specific class. Returns `False` when the
+        annotation names nothing indexed, leaving `value` to the ordinary
+        inference."""
+        if ann is None or not (ann.container or ann.classes):
+            return False
+        ctor_segments = (
+            _constructor_call_segments(value, LanguageID.PYTHON, source)
+            if value is not None and not ann.container else None
+        )
+        if ctor_segments:
+            ctor_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+            if self._is_known_class(ctor_class) and any(
+                ctor_class == c or c in self._mro_ancestors(ctor_class) for c in ann.classes
+            ):
+                instance_map.bind(name, ctor_class)
+                return True
+        return self._bind_annotation(instance_map, name, ann)
+
+    def _bind_python_loop_elements(
+        self, def_node: Node, parsed: ParsedFile, instance_map: InstanceTypeMap,
+        class_instance_map: InstanceTypeMap | None,
+    ) -> None:
+        """`for c in xs:` where `xs` is annotated as a container of `T`
+        (`xs: list[T]`, or a `self.xs: list[T]` attribute) binds `c` to `T`."""
+        for loop in iter_scoped_nodes(def_node, {"for_statement", "for_in_clause"}, LanguageID.PYTHON):
+            left, right = loop.child_by_field_name("left"), loop.child_by_field_name("right")
+            if left is None or right is None or left.type != "identifier":
+                continue
+            segments = flatten_reference_chain(right, parsed.source, LanguageID.PYTHON)
+            if not segments:
+                continue
+            key = ".".join(segments)
+            element = instance_map.element_types.get(key)
+            if element is None and class_instance_map is not None:
+                element = class_instance_map.element_types.get(key)
+            if element is not None:
+                instance_map.bind(node_text(left, parsed.source), element)
 
     def _bind_go_short_var_declarations(
         self, def_node: Node, parsed: ParsedFile, module: str, instance_map: InstanceTypeMap
@@ -2148,6 +2747,18 @@ class ConcreteGraphBuilder:
                 continue
             segments = call_callee_segments(call_node, parsed.source, lang)
             if not segments:
+                # `<call>(...).<method>(...)`: the receiver is itself a call
+                # (a dynamic root `call_callee_segments` cannot name), so
+                # its class comes from return-type inference.
+                chained = self._resolve_chained_call_target(
+                    call_node, _ExprContext(module, import_map, enclosing_class, lang, parsed.source, def_node)
+                ) or self._unknown_chain_target(call_node, lang, parsed.source, module, import_map, func_instance_map)
+                if chained is not None:
+                    edge_kwargs = {"relation": "CALLS", "kind": "TENTATIVE_CALL"}
+                    edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
+                    edge_kwargs["kind"] = "TENTATIVE_CALL"
+                    self.graph.add_edge(caller_qname, chained, **edge_kwargs)
+                    self._dispatch_sites.append((caller_qname, chained))
                 continue
             # Item 3: go_call_resolution_ratio's denominator - a Go call
             # is "receiver-shaped" (as opposed to a bare function call or
@@ -2160,6 +2771,16 @@ class ConcreteGraphBuilder:
             target = self._resolve_segments(
                 segments, module, enclosing_class, import_map, class_instance_map, func_instance_map, self_tokens, lang
             )
+            if lang == LanguageID.PYTHON and (target is None or getattr(self.symbol_table.get(target), "kind", None) == "attribute"):
+                # Fix D: `route_class(...)` / `self.route_class(...)` on a value
+                # holding a class (a `Type[C]` parameter, a class default, a
+                # local or attribute assigned from one) constructs `C`.
+                constructed = self._python_class_value(segments, def_node, parsed.source, module, import_map, enclosing_class)
+                if constructed is not None:
+                    if constructed not in self.graph:
+                        self.graph.add_node(constructed, external=False)
+                    self.graph.add_edge(caller_qname, constructed, relation="INSTANTIATES", via="class_value")
+                    continue
             if target is None:
                 # Builtin-Receiver Exclusion fix: a receiver definitively
                 # known to be a Python builtin container/primitive is not
@@ -2170,7 +2791,10 @@ class ConcreteGraphBuilder:
                 # named method elsewhere in the repo). Suppressed the
                 # same way the `super()` call-site is suppressed just
                 # above, for the same "never let this reach G44" reason.
-                if not self._last_resolution_was_builtin_receiver:
+                # Same for a bare call on an unbound local (`callback()` on a
+                # parameter): the name says nothing about which repo
+                # function, if any, the value is.
+                if not (self._last_resolution_was_builtin_receiver or self._last_resolution_was_unbound_local):
                     self._resolve_ambiguous_call(caller_qname, call_node, parsed, module, import_map, segments)
                 continue
             if lang == LanguageID.GO and len(segments) >= 2 and import_map.resolve(segments[0]) is None:
@@ -2208,10 +2832,66 @@ class ConcreteGraphBuilder:
                 elif self._last_resolution_was_ambiguous:
                     edge_kwargs["kind"] = "TENTATIVE_CALL"
             self.graph.add_edge(caller_qname, target, **edge_kwargs)
+            if relation == "CALLS" and target_symbol is None and len(segments) == 2 and segments[0] in self_tokens \
+                    and enclosing_class is not None:
+                # Fix E: `self.m()` where no class up the hierarchy defines
+                # `m` (a hook the base checks with `hasattr`, as Django's
+                # `MiddlewareMixin.__call__` does with `process_response`):
+                # whatever runs is a subclass's `m`. Each subclass definition
+                # is a possible target - tentative, as for virtual dispatch.
+                for hook in self._subclass_definitions(enclosing_class, segments[1]):
+                    if hook != caller_qname and not self.graph.has_edge(caller_qname, hook):
+                        self.graph.add_edge(caller_qname, hook, relation="CALLS", kind="TENTATIVE_CALL", dispatch_of=target)
+            if relation == "CALLS" and self._last_resolution_was_dispatch:
+                self._dispatch_sites.append((caller_qname, target))
+            if relation == "CALLS":
+                for alternative in self._last_resolution_alternatives:
+                    if not self.graph.has_edge(caller_qname, alternative):
+                        self.graph.add_edge(caller_qname, alternative, **{**edge_kwargs, "kind": "TENTATIVE_CALL"})
+                        self._dispatch_sites.append((caller_qname, alternative))
 
         self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
         if lang == LanguageID.PYTHON:
             self._link_state_reads(caller_qname, def_node, parsed, module, enclosing_class, self_tokens)
+            if self.dispatch_all_members:
+                self._link_callback_arguments(
+                    caller_qname, def_node, parsed, module, enclosing_class, import_map,
+                    class_instance_map, func_instance_map, self_tokens,
+                )
+
+    def _link_callback_arguments(
+        self, caller_qname: str, def_node: Node, parsed: ParsedFile, module: str, enclosing_class: str | None,
+        import_map: LocalImportMap, class_instance_map: InstanceTypeMap, func_instance_map: InstanceTypeMap,
+        self_tokens: set[str],
+    ) -> None:
+        """Summary mode ("may reach"): a function handed to another call by
+        reference - `loop.run_in_executor(None, self._connect)`,
+        `Thread(target=worker)`, `executor.submit(fn)`, `create_task(...)`'s
+        callbacks - may be run by it. Linked as TENTATIVE_CALL, positional
+        or keyword, when the reference resolves to an indexed function."""
+        lang = parsed.language_id
+        for call_node in iter_scoped_nodes(def_node, {CALL_NODE_TYPE[lang]}, lang):
+            args = call_node.child_by_field_name("arguments")
+            for arg in args.named_children if args is not None else ():
+                if arg.type == "keyword_argument":
+                    arg = arg.child_by_field_name("value")
+                if arg is None or arg.type not in ("identifier", ATTRIBUTE_NODE_TYPE.get(lang)):
+                    continue
+                segments = flatten_reference_chain(arg, parsed.source, lang)
+                if not segments:
+                    continue
+                target = self._resolve_segments(
+                    segments, module, enclosing_class, import_map, class_instance_map, func_instance_map, self_tokens, lang
+                )
+                symbol = self.symbol_table.get(target) if target else None
+                if symbol is None or symbol.kind not in ("function", "method") or target == caller_qname:
+                    continue
+                existing = self.graph.get_edge_data(caller_qname, target)
+                if existing is not None and existing.get("relation") == "CALLS":
+                    continue
+                # Replaces a `READS_STATE` edge `_link_state_reads` drew for
+                # `self._connect`: a method handed on is run, not read.
+                self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL", via="callback_argument")
 
     # -- Go generic instantiation vs. real subscript dispatch (Task 2) ---- #
     def _resolve_go_generic_call(
@@ -2289,6 +2969,697 @@ class ConcreteGraphBuilder:
             count -= 1
         return count
 
+    # -- Return-type inference ------------------------------------------ #
+    _RESOLUTION_FLAGS = (
+        "_last_resolution_was_tentative", "_last_resolution_was_ambiguous",
+        "_last_resolution_was_builtin_receiver", "_last_resolution_was_dispatch",
+        "_last_resolution_was_unbound_local",
+    )
+    _NULL_LITERAL_TYPES = frozenset({"none", "null", "undefined", "nil", "null_literal"})
+
+    def _infer_return_class(self, qname: str, _depth: int = 0) -> str | None:
+        """The class `qname` returns, when its declared return annotation
+        names one known class, or when every value-returning `return`
+        statement yields an instance of the same class: `self`/`this`, a
+        constructor call (`Foo(...)`, `new Foo()`, `cls(...)`,
+        `self.__class__(...)`), a call to a function whose own return class
+        is inferable, or a local assigned from one of those (the fluent
+        `clone = self._chain(); return clone` shape). `None` when any
+        returned value's class is unknown or two returns disagree.
+        Memoized and depth-limited; resolution flags of an in-progress call
+        site are saved and restored around the work."""
+        if qname in self._return_class_cache:
+            return self._return_class_cache[qname]
+        if _depth > _RETURN_INFERENCE_MAX_DEPTH:
+            return None
+        self._return_class_cache[qname] = None          # cycle guard
+        info = self.symbol_table.get(qname)
+        node = self._def_nodes.get(qname)
+        if info is None or node is None or info.kind not in ("function", "method"):
+            return None
+        parsed = self._parsed_files.get(info.file)
+        import_map = self._import_maps.get(info.file)
+        if parsed is None or import_map is None:
+            return None
+        saved = [getattr(self, f) for f in self._RESOLUTION_FLAGS]
+        try:
+            ctx = _ExprContext(info.module, import_map, info.enclosing_class, parsed.language_id, parsed.source, node)
+            result = self._annotation_class(node.child_by_field_name("return_type"), ctx)
+            if result is None:
+                classes, unknown = set(), False
+                for ret in iter_scoped_nodes(node, {RETURN_STATEMENT_NODE_TYPE}, parsed.language_id):
+                    expr = ret.named_children[0] if ret.named_children else None
+                    if expr is None or expr.type in self._NULL_LITERAL_TYPES:
+                        continue
+                    cls = self._expr_class(expr, ctx, _depth + 1)
+                    if cls is None:
+                        if self.dispatch_all_members:
+                            continue  # summary mode: the known returns still say what it may be
+                        unknown = True
+                        break
+                    classes.add(cls)
+                result = classes.pop() if len(classes) == 1 and not unknown else None
+        finally:
+            for f, v in zip(self._RESOLUTION_FLAGS, saved):
+                setattr(self, f, v)
+        self._return_class_cache[qname] = result
+        return result
+
+    def _python_annotation_class(
+        self, type_node: Node | None, module: str, import_map: LocalImportMap, source: bytes
+    ) -> str | None:
+        """The one indexed class a Python annotation names after unwrapping
+        (`T`, `mod.T`, `"T"`, `Optional[T]`, `T | None`, `Annotated[T, ...]`),
+        or `None` - including for unions of several classes and containers."""
+        ann = self._python_annotation_type(type_node, module, import_map, source)
+        return ann.classes[0] if ann is not None and len(ann.classes) == 1 else None
+
+    def _python_annotation_type(
+        self, node: Node | None, module: str, import_map: LocalImportMap, source: bytes, _depth: int = 0
+    ) -> "_AnnotationType | None":
+        """What a Python annotation says about a value, or `None` when it
+        names nothing indexed (an external class, `Callable`, a `TypeVar`) -
+        never a guess. A union with any such member is `None` as a whole."""
+        if node is None or _depth > _ANNOTATION_MAX_DEPTH:
+            return None
+        if node.type in ("type", "parenthesized_expression") and len(node.named_children) == 1:
+            return self._python_annotation_type(node.named_children[0], module, import_map, source, _depth + 1)
+        if node.type == "none":
+            return _NONE_ANNOTATION
+        if node.type == "string":
+            inner = _parse_python_annotation_string(node, source)
+            if inner is None:
+                return None
+            inner_node, inner_source = inner
+            return self._python_annotation_type(inner_node, module, import_map, inner_source, _depth + 1)
+        if node.type == "binary_operator":
+            operator = node.child_by_field_name("operator")
+            if operator is None or node_text(operator, source) != "|":
+                return None
+            members = [node.child_by_field_name("left"), node.child_by_field_name("right")]
+            return self._python_annotation_union(members, module, import_map, source, _depth)
+        if node.type in ("identifier", "attribute"):
+            segments = flatten_reference_chain(node, source, LanguageID.PYTHON)
+            if not segments:
+                return None
+            if segments[-1] in _PY_SEQUENCE_ANNOTATIONS or segments[-1] in _PY_MAPPING_ANNOTATIONS:
+                return _AnnotationType(container=True)
+            resolved = self._resolve_reference_chain(segments, module, import_map)
+            return _AnnotationType(classes=(resolved,)) if self._is_known_class(resolved) or self._is_opaque_type(resolved) else None
+        if node.type == "generic_type":
+            head = node.named_children[0] if node.named_children else None
+            params = next((c for c in node.named_children if c.type == "type_parameter"), None)
+            args = list(params.named_children) if params is not None else []
+        elif node.type == "subscript":
+            head = node.child_by_field_name("value")
+            args = node.children_by_field_name("subscript")
+        else:
+            return None
+        head_segments = flatten_reference_chain(head, source, LanguageID.PYTHON) if head is not None else None
+        if not head_segments:
+            return None
+        head_name = head_segments[-1]
+        if head_name == "Optional":
+            return self._python_annotation_union([*args, None], module, import_map, source, _depth)
+        if head_name == "Union":
+            return self._python_annotation_union(args, module, import_map, source, _depth)
+        if head_name in _PY_TRANSPARENT_ANNOTATIONS:
+            return self._python_annotation_type(args[0], module, import_map, source, _depth + 1) if args else None
+        if head_name in _PY_SEQUENCE_ANNOTATIONS or head_name in _PY_MAPPING_ANNOTATIONS:
+            # Iterating a sequence yields its item type, a mapping its key
+            # type - both the first argument (`tuple[T, ...]` included).
+            element = self._python_annotation_type(args[0], module, import_map, source, _depth + 1) if args else None
+            return _AnnotationType(container=True, element=element.classes[0] if element and len(element.classes) == 1 else None)
+        # A user generic (`Repo[Model]`) is still an instance of its own class.
+        resolved = self._resolve_reference_chain(head_segments, module, import_map)
+        return _AnnotationType(classes=(resolved,)) if self._is_known_class(resolved) else None
+
+    # -- Fix D: values that hold a class ------------------------------- #
+    def _python_class_value(
+        self, segments: list[str], func_node: Node, source: bytes, module: str, import_map: LocalImportMap,
+        enclosing_class: str | None,
+    ) -> str | None:
+        """The one class a called value holds, when its call is a
+        construction: a bare local/parameter (`route_class(...)`) or a
+        `self`/`cls` attribute (`self.route_class(...)`). Sources: a
+        `Type[C]` / `type[C]` annotation (through `Optional`/`Union`/`|`),
+        a default or assigned value that names a class, `a or b` and
+        `x if c else y` over those, and `self.attr` assigned in the class's
+        own methods. `None` unless every source names the same class."""
+        ctx = (source, module, import_map, enclosing_class)
+        if len(segments) == 1:
+            found = self._class_values_of_local(segments[0], func_node, ctx, 0)
+        elif len(segments) == 2 and segments[0] in ("self", "cls") and enclosing_class is not None:
+            found = self._class_values_of_attr(enclosing_class, segments[1], ctx, 0)
+        else:
+            return None
+        return next(iter(found)) if found is not None and len(found) == 1 else None
+
+    def _class_values_of_local(self, name: str, func_node: Node, ctx, depth: int) -> set[str] | None:
+        """Classes `name` can hold inside `func_node`: its parameter's
+        annotation/default and every assignment to it. `None` = unknown
+        (some source says nothing), which vetoes the whole value."""
+        if depth > _CLASS_VALUE_MAX_DEPTH:
+            return None
+        source = ctx[0]
+        found: set[str] = set()
+        sources = 0
+        params = func_node.child_by_field_name("parameters")
+        for param in params.named_children if params is not None else ():
+            pname = param.child_by_field_name("name") if param.type != "typed_parameter" else next(
+                (c for c in param.named_children if c.type == "identifier"), None)
+            if param.type == "identifier":
+                pname = param
+            if pname is None or node_text(pname, source) != name:
+                continue
+            ann, default = param.child_by_field_name("type"), param.child_by_field_name("value")
+            if ann is None and default is None:
+                return None
+            if ann is not None:
+                classes = self._class_values_of_annotation(ann, ctx, source, 0)
+                if classes is None:
+                    return None
+                found |= classes
+                sources += 1
+            if default is not None and default.type != "none":
+                classes = self._class_values_of_expr(default, func_node, ctx, depth + 1)
+                if classes is None:
+                    return None
+                found |= classes
+                sources += 1
+        for assign in _own_assignments(func_node):
+            left = assign.child_by_field_name("left")
+            if left is None or left.type != "identifier" or node_text(left, source) != name:
+                continue
+            right = assign.child_by_field_name("right")
+            classes = self._class_values_of_expr(right, func_node, ctx, depth + 1) if right is not None else None
+            if classes is None:
+                return None
+            found |= classes
+            sources += 1
+        return found if sources else None
+
+    def _class_values_of_attr(self, cls: str, attr: str, ctx, depth: int) -> set[str] | None:
+        """Classes `self.<attr>` can hold: every `self.<attr> = ...` in the
+        class's own methods (and a class-body annotation/default)."""
+        if depth > _CLASS_VALUE_MAX_DEPTH:
+            return None
+        found: set[str] = set()
+        sources = 0
+        for method in self._methods_by_class.get(cls, ()):
+            node = self._def_nodes.get(method)
+            info = self.symbol_table.get(method)
+            if node is None or info is None:
+                continue
+            parsed_method = self.parsed_file(info.file)
+            mctx = (parsed_method.source if parsed_method is not None else None, info.module,
+                    ctx[2] if info.module == ctx[1] else self.import_map(info.file), cls)
+            if mctx[0] is None or mctx[2] is None:
+                continue
+            for assign in _own_assignments(node):
+                left = assign.child_by_field_name("left")
+                if left is None or left.type != "attribute":
+                    continue
+                obj, prop = left.child_by_field_name("object"), left.child_by_field_name("attribute")
+                if obj is None or prop is None or node_text(obj, mctx[0]) not in ("self", "cls") or node_text(prop, mctx[0]) != attr:
+                    continue
+                right = assign.child_by_field_name("right")
+                classes = self._class_values_of_expr(right, node, mctx, depth + 1) if right is not None else None
+                if classes is None:
+                    return None
+                found |= classes
+                sources += 1
+        return found if sources else None
+
+    def _class_values_of_expr(self, expr: Node, func_node: Node, ctx, depth: int) -> set[str] | None:
+        source, module, import_map, cls = ctx
+        if expr.type == "parenthesized_expression" and expr.named_children:
+            return self._class_values_of_expr(expr.named_children[0], func_node, ctx, depth)
+        if expr.type == "none":
+            return set()
+        if expr.type in ("identifier", "attribute"):
+            segments = flatten_reference_chain(expr, source, LanguageID.PYTHON) or []
+            if len(segments) == 2 and segments[0] in ("self", "cls") and cls is not None:
+                return self._class_values_of_attr(cls, segments[1], ctx, depth + 1)
+            resolved = self._resolve_reference_chain(segments, module, import_map) if segments else None
+            if resolved is not None and self._is_known_class(resolved):
+                return {resolved}
+            if len(segments) == 1:
+                return self._class_values_of_local(segments[0], func_node, ctx, depth + 1)
+            return None
+        if expr.type == "boolean_operator":
+            parts = [expr.child_by_field_name("left"), expr.child_by_field_name("right")]
+        elif expr.type == "conditional_expression":
+            parts = [c for i, c in enumerate(expr.named_children) if i != 1]  # `a if cond else b`
+        else:
+            return None
+        found: set[str] = set()
+        for part in parts:
+            classes = self._class_values_of_expr(part, func_node, ctx, depth + 1) if part is not None else None
+            if classes is None:
+                return None
+            found |= classes
+        return found
+
+    def _class_values_of_annotation(self, node: Node, ctx, source: bytes, depth: int) -> set[str] | None:
+        """`Type[C]` / `type[C]` -> {C}, through `Optional`, `Union`, `|`
+        and string forward references; `None` for anything else."""
+        _source, module, import_map, _cls = ctx
+        if node is None or depth > _ANNOTATION_MAX_DEPTH:
+            return None
+        if node.type in ("type", "parenthesized_expression") and len(node.named_children) == 1:
+            return self._class_values_of_annotation(node.named_children[0], ctx, source, depth + 1)
+        if node.type == "none":
+            return set()
+        if node.type == "string":
+            inner = _parse_python_annotation_string(node, source)
+            return self._class_values_of_annotation(inner[0], ctx, inner[1], depth + 1) if inner else None
+        if node.type == "binary_operator":
+            parts = [node.child_by_field_name("left"), node.child_by_field_name("right")]
+        else:
+            if node.type == "generic_type":
+                head = node.named_children[0] if node.named_children else None
+                params = next((c for c in node.named_children if c.type == "type_parameter"), None)
+                parts = list(params.named_children) if params is not None else []
+            elif node.type == "subscript":
+                head = node.child_by_field_name("value")
+                parts = node.children_by_field_name("subscript")
+            else:
+                return None
+            head_name = (flatten_reference_chain(head, source, LanguageID.PYTHON) or [""])[-1] if head is not None else ""
+            if head_name in ("Type", "type"):
+                ann = self._python_annotation_type(parts[0], module, import_map, source, depth + 1) if parts else None
+                return set(ann.classes) if ann is not None and ann.classes and not ann.container else None
+            if head_name == "Optional":
+                parts = [*parts, None]
+            elif head_name != "Union":
+                return None
+        found: set[str] = set()
+        for part in parts:
+            if part is None:
+                continue
+            classes = self._class_values_of_annotation(part, ctx, source, depth + 1)
+            if classes is None:
+                return None
+            found |= classes
+        return found
+
+    def _python_annotation_union(
+        self, members: list, module: str, import_map: LocalImportMap, source: bytes, depth: int
+    ) -> "_AnnotationType | None":
+        """`None` members drop out (`Optional`); a lone container survives
+        as itself; otherwise every remaining member must be a known class."""
+        classes: list[str] = []
+        containers: list[_AnnotationType] = []
+        for member in members:
+            ann = _NONE_ANNOTATION if member is None else self._python_annotation_type(member, module, import_map, source, depth + 1)
+            if ann is None:
+                return None
+            if ann is _NONE_ANNOTATION:
+                continue
+            if ann.container:
+                containers.append(ann)
+            else:
+                classes.extend(c for c in ann.classes if c not in classes)
+        if containers:
+            return containers[0] if len(containers) == 1 and not classes else None
+        return _AnnotationType(classes=tuple(classes)) if classes else None
+
+    def _bind_annotation(self, instance_map: InstanceTypeMap, name: str, ann: "_AnnotationType | None") -> bool:
+        """Bind `name` from an annotation; `False` when it says nothing."""
+        if ann is None:
+            return False
+        if ann.container:
+            instance_map.bind_container(name, ann.element)
+        elif len(ann.classes) == 1:
+            instance_map.bind(name, ann.classes[0])
+        elif ann.classes:
+            instance_map.bind_union(name, ann.classes)
+        else:
+            return False
+        return True
+
+    def _annotation_class(self, type_node: Node | None, ctx: "_ExprContext") -> str | None:
+        """A return/variable annotation naming exactly one known class
+        (`-> QuerySet`, `: Promise<Foo>` is not attempted). Python
+        annotations are unwrapped by the shared helper (`-> Optional[T]`,
+        `-> "T"`)."""
+        if ctx.lang == LanguageID.PYTHON:
+            return self._python_annotation_class(type_node, ctx.module, ctx.import_map, ctx.source)
+        while type_node is not None and type_node.type not in ("identifier", "type_identifier", ATTRIBUTE_NODE_TYPE.get(ctx.lang)):
+            if len(type_node.named_children) != 1:
+                return None
+            type_node = type_node.named_children[0]
+        if type_node is None:
+            return None
+        segments = flatten_reference_chain(type_node, ctx.source, ctx.lang)
+        resolved = self._resolve_reference_chain(segments, ctx.module, ctx.import_map) if segments else None
+        return resolved if self._is_known_class(resolved) else None
+
+    def _expr_class(self, expr: Node, ctx: "_ExprContext", _depth: int = 0, _names: frozenset = frozenset()) -> str | None:
+        """The known class an expression evaluates to, or `None`."""
+        if _depth > _RETURN_INFERENCE_MAX_DEPTH:
+            return None
+        lang, src = ctx.lang, ctx.source
+        self_tokens = SELF_TOKEN_TEXT[lang]
+        if expr.type in ("parenthesized_expression", "await_expression", "as_expression", "non_null_expression") and expr.named_children:
+            return self._expr_class(expr.named_children[0], ctx, _depth + 1, _names)
+        text = node_text(expr, src) if expr.child_count == 0 or expr.type in ("identifier", "this") else None
+        if text is not None:
+            if text in self_tokens:
+                return ctx.enclosing_class
+            if expr.type != "identifier" or text in _names:
+                return None
+            values = ctx.assignments().get(text, [])
+            classes = {self._expr_class(v, ctx, _depth + 1, _names | {text}) for v in values}
+            if self.dispatch_all_members and len(classes - {None}) == 1:
+                # Summary mode ("may reach"): an unknown assignment beside a
+                # known one (`manager = self._manager` / `= proxies[url]`).
+                return (classes - {None}).pop()
+            return classes.pop() if len(classes) == 1 else None
+        if self.dispatch_all_members and ctx.enclosing_class and expr.type == ATTRIBUTE_NODE_TYPE.get(lang):
+            # Summary mode: `self.<attr>` typed by the class's own instance map.
+            segments = flatten_reference_chain(expr, src, lang)
+            if segments and len(segments) == 2 and segments[0] in self_tokens:
+                return self._self_attribute_class(ctx.enclosing_class, ".".join(segments))
+        call_type = CALL_NODE_TYPE.get(lang)
+        if expr.type not in (call_type, "new_expression"):
+            return None
+        ctor = _constructor_call_segments(expr, lang, src)
+        if ctor:
+            if ctx.enclosing_class and (ctor == ["cls"] or (len(ctor) == 2 and ctor[0] in self_tokens and ctor[1] == "__class__")):
+                return ctx.enclosing_class
+            resolved = self._resolve_reference_chain(ctor, ctx.module, ctx.import_map)
+            if self._is_known_class(resolved):
+                return resolved
+            if expr.type == "new_expression":
+                return None
+            target = self._resolve_segments(
+                ctor, ctx.module, ctx.enclosing_class, ctx.import_map, InstanceTypeMap(), InstanceTypeMap(), self_tokens, lang
+            )
+        else:
+            target = self._resolve_chained_call_target(expr, ctx, _depth + 1)
+        if target is not None and (sym := self.symbol_table.get(target)) is not None and sym.kind in ("function", "method"):
+            overloaded = self._overload_return_class(target, expr, src)
+            return overloaded if overloaded is not None else self._infer_return_class(target, _depth + 1)
+        return None
+
+    def _overload_return_class(self, target: str, call_node: Node, source: bytes) -> str | None:
+        """For a target declared by `@overload` variants (a `.pyi` stub's
+        `def client(service_name: Literal["s3"], ...) -> S3Client`), the return
+        class of the variant whose `Literal[...]` parameter matches the call's
+        string argument - positional or by keyword - else `None`."""
+        variants, i = [target], 2
+        while f"{target}#{i}" in self.symbol_table:
+            variants.append(f"{target}#{i}")
+            i += 1
+        if len(variants) < 2:
+            return None
+        positional, keywords = _string_arguments(call_node, source)
+        for key in variants:
+            node = self._def_nodes.get(key)
+            symbol = self.symbol_table.get(key)
+            parsed = self._parsed_files.get(symbol.file) if symbol is not None else None
+            if node is None or parsed is None:
+                continue
+            literal = _first_literal_parameter(node, parsed.source)
+            if literal is None:
+                continue
+            name, value = literal
+            if keywords.get(name, positional) != value:
+                continue
+            ctx = _ExprContext(symbol.module, self._import_maps.get(symbol.file), symbol.enclosing_class,
+                               parsed.language_id, parsed.source, node)
+            return self._annotation_class(node.child_by_field_name("return_type"), ctx)
+        return None
+
+    def _bound_receiver_return(self, segments: list[str], instance_map: InstanceTypeMap) -> str | None:
+        """The return class of `<receiver>.<method>(...)` when `<receiver>` is
+        typed in `instance_map` (a local or parameter)."""
+        if len(segments) < 2:
+            return None
+        receiver = instance_map.resolve(".".join(segments[:-1]))
+        if not self._is_known_class(receiver):
+            return None
+        method = self._inherited_method(receiver, segments[-1])
+        return self._infer_return_class(method) if method in self.symbol_table else None
+
+    def _self_attribute_class(self, cls: str, key: str) -> str | None:
+        """The known class `self.<attr>` (`key`) is bound to in `cls`'s
+        instance map, or the nearest ancestor's."""
+        for owner in (cls, *self._mro_ancestors(cls)):
+            if owner not in self._class_map_cache:
+                self._class_map_cache[owner] = InstanceTypeMap()  # cycle guard while building
+                symbol = self.symbol_table.get(owner)
+                parsed = self._parsed_files.get(symbol.file) if symbol is not None else None
+                import_map = self._import_maps.get(symbol.file) if symbol is not None else None
+                if parsed is not None and import_map is not None:
+                    self._class_map_cache[owner] = self._build_class_instance_map(owner, parsed, symbol.module, import_map)
+            found = self._class_map_cache[owner].resolve(key)
+            if self._is_known_class(found):
+                return found
+        return None
+
+    def _resolve_chained_call_target(self, call_node: Node, ctx: "_ExprContext", _depth: int = 0) -> str | None:
+        """`<expr>(...).<method>(...)`'s method, when `<expr>`'s class is
+        inferable (`self.get_queryset().filter(...)`,
+        `Foo.objects.all().order_by(...)` once `all` returns a known class):
+        the method on that class or its nearest MRO ancestor."""
+        func = call_node.child_by_field_name("function")
+        if func is None or func.type != ATTRIBUTE_NODE_TYPE.get(ctx.lang):
+            return None
+        obj = func.child_by_field_name(ATTR_OBJECT_FIELD[ctx.lang])
+        prop = func.child_by_field_name(ATTR_PROPERTY_FIELD[ctx.lang])
+        if obj is None or prop is None or obj.type not in (CALL_NODE_TYPE.get(ctx.lang), "new_expression"):
+            return None
+        receiver_class = self._expr_class(obj, ctx, _depth + 1)
+        if receiver_class is None:
+            return None
+        method = node_text(prop, ctx.source)
+        for owner in [receiver_class, *self._mro_ancestors(receiver_class)]:
+            if f"{owner}.{method}" in self.symbol_table:
+                return f"{owner}.{method}"
+        return None
+
+    def _build_attr_type_index(self) -> dict[str, set[tuple[str, str]]]:
+        """{attribute name: (class, assigning file) pairs}, from every assignment
+        in the repo whose target is an attribute (`obj.attr = Foo(...)`,
+        `cls._meta = self`) or a class-body name (`attr = Foo(...)`), and
+        whose value is a constructor of a known class or the enclosing
+        method's own `self`/`this`."""
+        index: dict[str, set[str]] = {}
+        # Keyed by (file, start byte): tree-sitter returns a fresh wrapper
+        # object per access, so node identity is not stable.
+        class_of_def = {}
+        for q, node in self._def_nodes.items():
+            info = self.symbol_table.get(q)
+            if info is not None and info.kind in ("function", "method"):
+                class_of_def[(info.file, node.start_byte)] = info
+        for path, parsed in self._parsed_files.items():
+            lang = parsed.language_id
+            assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+            import_map = self._import_maps.get(path)
+            if assign_type is None or import_map is None:
+                continue
+            module = self._module_for_file(parsed)
+            attr_type = ATTRIBUTE_NODE_TYPE.get(lang)
+            for assign in find_all(parsed.root_node, {assign_type}):
+                left, right = assign.child_by_field_name("left"), assign.child_by_field_name("right")
+                if left is None or right is None:
+                    continue
+                if left.type == attr_type:
+                    prop = left.child_by_field_name(ATTR_PROPERTY_FIELD[lang])
+                    attr = node_text(prop, parsed.source) if prop is not None else None
+                elif left.type == "identifier" and _in_class_body(assign):
+                    attr = node_text(left, parsed.source)
+                else:
+                    attr = None
+                if not attr:
+                    continue
+                cls = None
+                if node_text(right, parsed.source) in SELF_TOKEN_TEXT[lang]:
+                    holder = assign.parent
+                    while holder is not None and (path, holder.start_byte) not in class_of_def:
+                        holder = holder.parent
+                    info = class_of_def.get((path, holder.start_byte)) if holder is not None else None
+                    cls = info.enclosing_class if info is not None else None
+                else:
+                    ctor = _constructor_call_segments(right, lang, parsed.source)
+                    resolved = self._resolve_reference_chain(ctor, module, import_map) if ctor else None
+                    cls = resolved if self._is_known_class(resolved) else None
+                if cls:
+                    index.setdefault(attr, set()).add((cls, path))
+        return index
+
+    def _resolve_by_attribute(self, attr: str, method: str) -> str | None:
+        """A receiver ending in attribute `attr` (`model._meta`,
+        `self.remote_field.model._meta`), typed through the repo-wide
+        attribute index: among the classes ever assigned to `attr`, those
+        that define or inherit `method`; linked (tentatively, with dynamic
+        dispatch) only if exactly one remains."""
+        if self._attr_type_index is None:
+            self._attr_type_index = self._build_attr_type_index()
+        targets = set()
+        for cls, site in self._attr_type_index.get(attr, ()):
+            # Both where the attribute was assigned and where the class
+            # lives must be visible to the caller (a test-only fixture
+            # assignment never types production code).
+            if not (self._fallback_file_allowed(site) and self._fallback_symbol_allowed(cls)):
+                continue
+            for owner in [cls, *self._mro_ancestors(cls)]:
+                if f"{owner}.{method}" in self.symbol_table:
+                    targets.add(f"{owner}.{method}")
+                    break
+        if len(targets) != 1:
+            return None
+        self._last_resolution_was_tentative = True
+        self._last_resolution_was_dispatch = True
+        return targets.pop()
+
+    def _resolve_by_receiver_name(self, receiver_name: str, method: str) -> str | None:
+        """Naming-convention typing for a receiver whose type is otherwise
+        unknown: a variable or attribute named after a class
+        (`app_config`, `queryset`, `formSet`, `_meta_options`) is taken to
+        hold an instance of it when exactly one repo class has that name
+        (case- and underscore-insensitive) and that class defines or
+        inherits `method`. Linked as a tentative, dynamically dispatched
+        call; never used when the name maps to zero or several classes or
+        the class lacks the method."""
+        key = receiver_name.replace("_", "").lower()
+        if len(key) < 3:
+            return None
+        if self._class_name_index is None:
+            index: dict[str, list[str]] = {}
+            for symbol in self.symbol_table:
+                if symbol.kind == "class":
+                    simple = symbol.qualified_name.rsplit(".", 1)[-1]
+                    index.setdefault(simple.replace("_", "").lower(), []).append(symbol.qualified_name)
+            self._class_name_index = index
+        classes = [c for c in self._class_name_index.get(key, []) if self._fallback_symbol_allowed(c)]
+        if len(classes) != 1:
+            return None
+        cls = classes[0]
+        mro = [cls, *self._mro_ancestors(cls)]
+        for owner in mro:
+            target = f"{owner}.{method}"
+            if target in self.symbol_table:
+                if owner != cls and self._defined_outside(method, mro):
+                    # Fix F: the name only says "a `Session`", and `Session`
+                    # merely inherits `save` (from `Model`) while other class
+                    # families define their own: `request.session.save()` is
+                    # as likely a session store's - left to the ambiguity
+                    # handling (scored, or an UnresolvedPolymorphic sentinel).
+                    return None
+                self._last_resolution_was_tentative = True
+                self._last_resolution_was_dispatch = True
+                return target
+        return None
+
+    def _defined_outside(self, method: str, mro: list[str]) -> bool:
+        """Some function/method named `method` lives outside the classes of `mro`."""
+        owners = set(mro)
+        return any(c.enclosing_class not in owners for c in self.symbol_table.candidates_for_simple_name(method))
+
+    def _path_partition(self, path: str) -> str:
+        """`"vendor"`, `"test"` or `"first_party"` for a repo file, judged
+        on its repo-relative path (cached) - or `"dependency"` for a
+        dependency header under one of `module_roots`: header symbols exist
+        mainly for typed resolution (constructors, annotations, re-exports)
+        and are bare-name fallback candidates only when nothing in the
+        caller's own code is."""
+        partition = self._path_partitions.get(path)
+        if partition is None and any(path.startswith(r.rstrip(os.sep) + os.sep) for r in self.module_roots):
+            partition = self._path_partitions[path] = "dependency"
+        if partition is None:
+            try:
+                relative = os.path.relpath(path, self.repo_root)
+            except ValueError:
+                relative = path
+            partition = _path_partition_of(relative)
+            self._path_partitions[path] = partition
+        return partition
+
+    def _fallback_file_allowed(self, path: str) -> bool:
+        if self._fallback_caller is None:
+            return True
+        caller_file, caller_lang = self._fallback_caller
+        parsed = self._parsed_files.get(path)
+        lang = parsed.language_id if parsed is not None else caller_lang
+        return _fallback_candidate_allowed(self._path_partition(caller_file), caller_lang, self._path_partition(path), lang)
+
+    def _fallback_symbol_allowed(self, qualified_name: str) -> bool:
+        if self._fallback_caller is None:
+            return True
+        symbol = self.symbol_table.get(qualified_name)
+        if symbol is None:
+            return True
+        caller_file, caller_lang = self._fallback_caller
+        return _fallback_candidate_allowed(
+            self._path_partition(caller_file), caller_lang, self._path_partition(symbol.file), symbol.language_id
+        )
+
+    def _single_family_root(self, candidates: list[SymbolInfo], simple_name: str) -> str | None:
+        """The one root definition of `simple_name` when every candidate is
+        a method and all of them belong to a single class family: exactly
+        one candidate overrides nothing (its class has no ancestor defining
+        the name) and every other candidate's class descends from that
+        root's class. `None` otherwise (a free function among them, two
+        unrelated families, or several roots)."""
+        if any(c.kind != "method" or not c.enclosing_class for c in candidates):
+            return None
+        roots = []
+        for c in candidates:
+            if not any(f"{a}.{simple_name}" in self.symbol_table for a in self._mro_ancestors(c.enclosing_class)):
+                roots.append(c)
+        if len(roots) != 1:
+            return None
+        root = roots[0]
+        for c in candidates:
+            if c is not root and root.enclosing_class not in self._mro_ancestors(c.enclosing_class):
+                return None
+        return root.qualified_name
+
+    def _same_object_method(
+        self, caller_qname: str, segments: list[str], parsed: ParsedFile, module: str, lang: str | None
+    ) -> str | None:
+        """`this.m()` inside a JS/TS function assigned to `obj.f`: `this` is
+        `obj` when it runs as `obj.f()`, so the target is what the same
+        module assigns to `obj.m` (`res.json = function` calling
+        `this.set(...)`, with `res.set = res.header = function header`,
+        is `lib.response.header`). The object expression and the property
+        must both match - it is chosen over a same-named method elsewhere
+        by that, not by a name score - but linked as a tentative call. None
+        when the caller is not property-assigned or the module assigns no
+        `obj.m`."""
+        if lang not in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX) or len(segments) != 2:
+            return None
+        if segments[0] not in SELF_TOKEN_TEXT.get(lang, ()):
+            return None
+        caller_node = self._def_nodes.get(caller_qname)
+        if caller_node is None:
+            return None
+        index = self._object_method_index(parsed, module)
+        for obj, _prop in _assigned_properties(caller_node, parsed):
+            target = index.get((obj, segments[1]))
+            if target is not None:
+                return target
+        return None
+
+    def _object_method_index(self, parsed: ParsedFile, module: str) -> dict[tuple[str, str], str]:
+        """`{(object, property): qualified_name}` for the property-assigned
+        functions of one module (aliases included), built once per module."""
+        cache = self.__dict__.setdefault("_object_methods_by_module", {})
+        if module not in cache:
+            index: dict[tuple[str, str], str] = {}
+            for qname, node in self._def_nodes.items():
+                info = self.symbol_table.get(qname)
+                if info is None or info.module != module or info.file != parsed.path:
+                    continue
+                for obj, prop in _assigned_properties(node, parsed):
+                    index.setdefault((obj, prop), qname)
+            cache[module] = index
+        return cache[module]
+
     def _resolve_ambiguous_call(
         self,
         caller_qname: str,
@@ -2323,7 +3694,58 @@ class ConcreteGraphBuilder:
         have discarded that existing, more informative sentinel).
         """
         simple_name = segments[-1]
-        candidates = self.symbol_table.candidates_for_simple_name(simple_name)
+        caller_info = self.symbol_table.get(caller_qname)
+        lang = getattr(parsed, "language_id", None) or (caller_info.language_id if caller_info else None)
+        # Scoping guards (Spec 3): another language, test code or vendored
+        # code is never a candidate unless the caller is in that same
+        # partition (`_fallback_candidate_allowed`).
+        # A call on another object (`adapter.send()` inside `Session.send`)
+        # is never the caller itself - the recursion guard the unique-name
+        # link below already applied, now for every fallback: the caller
+        # stays out of the candidate set, so a family root or a score can
+        # still pick the real target instead.
+        bare_or_self = len(segments) == 1 or (len(segments) == 2 and segments[0] in SELF_TOKEN_TEXT.get(lang, ()))
+        candidates = [
+            c for c in self.symbol_table.candidates_for_simple_name(simple_name)
+            if _fallback_candidate_allowed(self._path_partition(parsed.path), lang, self._path_partition(c.file), c.language_id)
+            and (bare_or_self or c.qualified_name != caller_qname)
+        ]
+        # A dependency header is a candidate only when the caller's own code
+        # offers none: `adapter.send()` in requests stays inside requests'
+        # own `send` family, while `conn.urlopen()` - defined only in the
+        # urllib3 header - still crosses the package boundary.
+        own_code = [c for c in candidates if self._path_partition(c.file) != "dependency"]
+        if own_code:
+            candidates = own_code
+        builtin_named = len(segments) >= 2 and simple_name in _BUILTIN_METHOD_NAMES.get(lang, ())
+        own_receiver = len(segments) == 2 and segments[0] in SELF_TOKEN_TEXT.get(lang, ())
+        if builtin_named and (len(candidates) >= 2 or (candidates and not own_receiver)):
+            # Receiver type unknown and the method name is one the
+            # language's own builtin types define (`options.get(...)`,
+            # `w.capitalize()`): the receiver may well be the builtin, so
+            # no repo method is guessed - not even a unique one - only the
+            # honest UnresolvedPolymorphic sentinel. `this.set(...)` on an
+            # untyped prototype object is the object's own method, not a
+            # possible builtin, so a unique candidate still links there.
+            # Typed receivers (builtins included) are resolved before this
+            # fallback and are unaffected.
+            self._same_object_or_sentinel(caller_qname, call_node, parsed, module, lang, segments, candidates)
+            return
+        if len(segments) >= 2 and len(candidates) >= 2:
+            family_root = self._single_family_root(candidates, simple_name)
+            if family_root is not None:
+                # Every repo definition of this method name lives in one
+                # class family (a root class and the subclasses that
+                # override it), so any receiver that has this method is a
+                # member of that family: link the root as a best-effort
+                # call and let virtual-dispatch expansion add the
+                # overrides. Same scope guard as the unique-name fallback.
+                if caller_info is None or _shares_package_scope(caller_info.module, self.symbol_table.get(family_root).module):
+                    if family_root not in self.graph:
+                        self.graph.add_node(family_root, external=False)
+                    self.graph.add_edge(caller_qname, family_root, relation="CALLS", kind="TENTATIVE_CALL")
+                    self._dispatch_sites.append((caller_qname, family_root))
+                return
         if len(candidates) == 1:
             # G44 Conservative Candidate Fallback: a repo-wide receiver-
             # type-unknown call whose method name is unique - link it,
@@ -2347,10 +3769,21 @@ class ConcreteGraphBuilder:
             # builds that same graph. A known, documented gap, not a
             # silently-skipped check.
             candidate = candidates[0]
-            caller_info = self.symbol_table.get(caller_qname)
             if caller_info is not None and not _shares_package_scope(caller_info.module, candidate.module):
                 return
             target = candidate.qualified_name
+            # A recursive call is `m()` or `this.m()`. `this.page.goto()`
+            # inside `goto` itself, linked only because `goto` is the one
+            # repo method with that name, is usually a call on some other
+            # object (Playwright's `Page.goto`, `JSON.stringify` inside a
+            # `stringify`). Recursion through a linked structure
+            # (`this.parent.path()`) is dropped too; a self-edge adds no
+            # caller or callee to any slice either way.
+            own_receiver = len(segments) == 1 or (
+                len(segments) == 2 and segments[0] in SELF_TOKEN_TEXT.get(lang, ())
+            )
+            if target == caller_qname and not own_receiver:
+                return
             if target not in self.graph:
                 self.graph.add_node(target, external=False)
             self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL")
@@ -2380,9 +3813,17 @@ class ConcreteGraphBuilder:
         # candidates canonically first makes the winner of a genuine tie
         # deterministic (the alphabetically-first qualified name),
         # without changing which candidate wins a real, non-tied score.
+        # A scored (confident) link needs the candidate in the caller's own
+        # top-level package or its module imported directly - importing a
+        # parent package (`import tornado`) no longer makes every internal
+        # module's same-named method a full-score candidate.
+        scorable = [
+            c for c in candidates
+            if caller_info is None or _shares_package_scope(caller_info.module, c.module) or _imports_module_directly(c, import_map)
+        ]
         best_candidate: SymbolInfo | None = None
         best_score = -1.0
-        for candidate in sorted(candidates, key=lambda c: c.qualified_name):
+        for candidate in sorted(scorable, key=lambda c: c.qualified_name):
             ns = namespace_match(candidate, module, import_map)
             loc = locality_distance(candidate, caller_file, module)
             param_count = self._param_count(candidate.qualified_name, candidate.language_id, candidate.kind == "method")
@@ -2392,7 +3833,6 @@ class ConcreteGraphBuilder:
                 best_score = score
                 best_candidate = candidate
 
-        line = call_node.start_point[0] + 1
         if best_candidate is not None and best_score >= POLYSEMY_THRESHOLD:
             target = best_candidate.qualified_name
             if target not in self.graph:
@@ -2400,6 +3840,33 @@ class ConcreteGraphBuilder:
             self.graph.add_edge(caller_qname, target, relation="CALLS")
             return
 
+        self._same_object_or_sentinel(caller_qname, call_node, parsed, module, lang, segments, candidates)
+
+    def _same_object_or_sentinel(
+        self, caller_qname: str, call_node: Node, parsed: ParsedFile, module: str, lang: str | None,
+        segments: list[str], candidates: list[SymbolInfo],
+    ) -> None:
+        """Where the name rules give up on `this.m()`, the JS/TS same-object
+        rule (`_same_object_method`) can still name the target; else the
+        UnresolvedPolymorphic sentinel. Only here, so every call the name
+        rules already resolve keeps its link and its confidence. Tentative:
+        `this` is `obj` only when the function runs as `obj.f()`, and an
+        object made from it (`Object.create(res)`) may override `m`."""
+        target = self._same_object_method(caller_qname, segments, parsed, module, lang)
+        if target is None:
+            self._emit_polymorphic_sentinel(caller_qname, call_node, parsed, segments[-1], candidates)
+            return
+        if target not in self.graph:
+            self.graph.add_node(target, external=False)
+        self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL")
+
+    def _emit_polymorphic_sentinel(
+        self, caller_qname: str, call_node: Node, parsed: ParsedFile, simple_name: str, candidates: list[SymbolInfo]
+    ) -> None:
+        """Link a genuinely ambiguous call site to an UnresolvedPolymorphic
+        sentinel listing every repo candidate, rather than to any one guess."""
+        caller_file = parsed.path
+        line = call_node.start_point[0] + 1
         sentinel_id = unresolved_polymorphic_node_id(simple_name, caller_file, line)
         if sentinel_id not in self.graph:
             self.graph.add_node(
@@ -2492,7 +3959,21 @@ class ConcreteGraphBuilder:
         self._last_resolution_was_tentative = False
         self._last_resolution_was_ambiguous = False
         self._last_resolution_was_builtin_receiver = False
+        self._last_resolution_was_dispatch = False
+        self._last_resolution_was_unbound_local = False
+        self._last_resolution_alternatives = ()
+        # A function-local name (parameter, assignment/loop/`with` target)
+        # shadows every same-named module-level symbol and import, so with
+        # no type binding of its own it must never be looked up through
+        # Rule D - that is how `client.post()` used to land on an unrelated
+        # `<Class>.client.post`.
+        local_root = func_instance_map.is_local(segments[0])
         if len(segments) == 1:
+            if local_root:
+                # `callback()` on a parameter/local: the callee is whatever
+                # value the name holds, not the module function of that name.
+                self._last_resolution_was_unbound_local = True
+                return None
             return self._resolve_reference_chain(segments, module, import_map)
 
         method = segments[-1]
@@ -2505,13 +3986,15 @@ class ConcreteGraphBuilder:
             # against whichever map actually supplied the candidate, not
             # both unconditionally (a name ambiguous in one scope but not
             # the one that actually resolved it should not be flagged).
-            if func_instance_map.resolve(receiver_key) is not None:
-                candidate = func_instance_map.resolve(receiver_key)
-                ambiguous = func_instance_map.is_ambiguous(receiver_key)
-            else:
-                candidate = class_instance_map.resolve(receiver_key)
-                ambiguous = class_instance_map.is_ambiguous(receiver_key)
+            source_map = func_instance_map if func_instance_map.resolve(receiver_key) is not None else class_instance_map
+            candidate = source_map.resolve(receiver_key)
+            ambiguous = source_map.is_ambiguous(receiver_key)
+            union = source_map.union_members.get(receiver_key)
+            if candidate and union:
+                candidate = self._union_member_for(union, method)
+                ambiguous = False
             if candidate:
+                self._record_member_alternatives(source_map, receiver_key, candidate, method)
                 if ambiguous:
                     # G41 Invariant 3: branching initialization bound
                     # `self.<attr>` to more than one concrete class -
@@ -2524,7 +4007,10 @@ class ConcreteGraphBuilder:
                     # discount wired into that module, and adding one is
                     # out of Phase B's scope).
                     self._last_resolution_was_ambiguous = True
-                return f"{candidate}.{method}"
+                if func_instance_map.is_inferred(receiver_key) or class_instance_map.is_inferred(receiver_key):
+                    self._last_resolution_was_tentative = True
+                self._last_resolution_was_dispatch = True
+                return self._inherited_method(candidate, method)
             if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
                 # Builtin-Receiver Exclusion fix: `self.<attr>` is known
                 # to hold a Python builtin container/primitive
@@ -2537,6 +4023,9 @@ class ConcreteGraphBuilder:
                 self._last_resolution_was_builtin_receiver = True
                 return None
             if len(receiver_segments) == 1 and enclosing_class:
+                # `self.<method>()` dispatches on the run-time class, which
+                # may be any subclass of `enclosing_class`.
+                self._last_resolution_was_dispatch = True
                 direct = f"{enclosing_class}.{method}"
                 if direct in self.symbol_table:
                     return direct
@@ -2553,9 +4042,17 @@ class ConcreteGraphBuilder:
                     if inherited in self.symbol_table:
                         return inherited
                 return direct
-            return None
+            return self._resolve_by_attribute(receiver_segments[-1], method) or self._resolve_by_receiver_name(
+                receiver_segments[-1], method
+            )
 
         candidate = func_instance_map.resolve(receiver_key) or class_instance_map.resolve(receiver_key)
+        source_map = func_instance_map if func_instance_map.resolve(receiver_key) is not None else class_instance_map
+        union = source_map.union_members.get(receiver_key)
+        if candidate and union:
+            candidate = self._union_member_for(union, method)
+        if candidate:
+            self._record_member_alternatives(source_map, receiver_key, candidate, method)
         if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
             # Builtin-Receiver Exclusion fix: a local variable known to
             # hold a Python builtin container/primitive
@@ -2572,6 +4069,9 @@ class ConcreteGraphBuilder:
             self._last_resolution_was_builtin_receiver = True
             return None
         if candidate:
+            self._last_resolution_was_dispatch = True
+            if func_instance_map.is_inferred(receiver_key) or class_instance_map.is_inferred(receiver_key):
+                self._last_resolution_was_tentative = True
             direct_candidate = f"{candidate}.{method}"
             # Item 5/7 (second post-implementation audit): a Go struct's
             # own type is known here (Item 3 Stage 1's parameter/short-
@@ -2612,9 +4112,32 @@ class ConcreteGraphBuilder:
                         return inherited
             return direct_candidate
 
-        resolved_receiver = self._resolve_reference_chain(receiver_segments, module, import_map)
+        resolved_receiver = None if local_root else self._resolve_reference_chain(receiver_segments, module, import_map)
         if resolved_receiver:
-            return f"{resolved_receiver}.{method}"
+            target = f"{resolved_receiver}.{method}"
+            if target not in self.symbol_table:
+                # `requests.post(...)`: the receiver is a package whose
+                # `__init__` only re-exports `post` (`from .api import
+                # post`). Follow the facade to the real definition, the
+                # same barrel lookup `_resolve_reference_chain` applies to
+                # a full dotted reference.
+                origin = resolve_export(resolved_receiver, method, self.export_registry, self.symbol_table)
+                if origin is not None:
+                    return origin
+            return target
+        if len(receiver_segments) >= 2:
+            by_attr = self._resolve_by_attribute(receiver_segments[-1], method)
+            if by_attr is not None:
+                return by_attr
+        else:
+            alias = func_instance_map.attr_aliases.get(receiver_key)
+            if alias is not None:
+                by_attr = self._resolve_by_attribute(alias, method)
+                if by_attr is not None:
+                    return by_attr
+        named = self._resolve_by_receiver_name(receiver_segments[-1], method)
+        if named is not None:
+            return named
 
         # Item 3 (second post-implementation audit) Stage 2: Go-only
         # Codebase-Unique Receiver Fallback. Reached only when Stage 1
@@ -2636,6 +4159,44 @@ class ConcreteGraphBuilder:
                 self._last_resolution_was_tentative = True
                 return unique
         return None
+
+    def _record_member_alternatives(self, instance_map: InstanceTypeMap, receiver_key: str, chosen: str, method: str) -> None:
+        """With `dispatch_all_members`, every other class `receiver_key` may
+        hold (union annotation or branch bindings) contributes its own
+        `method`, where defined."""
+        if not self.dispatch_all_members:
+            return
+        members = instance_map.union_members.get(receiver_key) or instance_map.branch_members.get(receiver_key) or ()
+        alternatives = []
+        for member in members:
+            if member == chosen:
+                continue
+            target = self._inherited_method(member, method)
+            if target in self.symbol_table and target not in alternatives:
+                alternatives.append(target)
+        self._last_resolution_alternatives = tuple(alternatives)
+
+    def _inherited_method(self, cls: str, method: str) -> str:
+        """`cls.method` where it is defined - on `cls` itself or the nearest
+        MRO ancestor (a mixin's `get` for `redis.Redis().get`) - else the
+        direct name, as before."""
+        direct = f"{cls}.{method}"
+        if direct not in self.symbol_table:
+            for ancestor in self._mro_ancestors(cls):
+                if f"{ancestor}.{method}" in self.symbol_table:
+                    return f"{ancestor}.{method}"
+        return direct
+
+    def _union_member_for(self, members: tuple[str, ...], method: str) -> str:
+        """The first member of a `Union[...]` binding that defines `method`
+        (directly or inherited), else the first member. Union-bound names
+        are `inferred`, so the call links as `TENTATIVE_CALL` either way."""
+        for member in members:
+            if f"{member}.{method}" in self.symbol_table or any(
+                f"{ancestor}.{method}" in self.symbol_table for ancestor in self._mro_ancestors(member)
+            ):
+                return member
+        return members[0]
 
     def _go_promoted_method(self, struct_qname: str, method: str) -> str | None:
         """Item 7 (second post-implementation audit): Go's real method-
@@ -2739,6 +4300,50 @@ _LOCAL_VAR_DECLARATOR_TYPE: dict[str, str] = {
 }
 
 
+_LITERAL_ANNOTATION = re.compile(r"""^(?:\w+\.)*Literal\[\s*(['"])(.*?)\1\s*\]$""")
+
+
+def _string_arguments(call_node: Node, source: bytes) -> tuple[str | None, dict[str, str]]:
+    """A Python call's first positional argument when it is a plain string
+    literal, and its keyword arguments that are."""
+    args = call_node.child_by_field_name("arguments")
+    positional, keywords = None, {}
+    for i, arg in enumerate(args.named_children if args is not None else ()):
+        if arg.type == "keyword_argument":
+            name, value = arg.child_by_field_name("name"), arg.child_by_field_name("value")
+            text = _plain_string(value, source)
+            if name is not None and text is not None:
+                keywords[node_text(name, source)] = text
+        elif i == 0:
+            positional = _plain_string(arg, source)
+    return positional, keywords
+
+
+def _plain_string(node: Node | None, source: bytes) -> str | None:
+    if node is None or node.type != "string":
+        return None
+    parts = [c for c in node.named_children if c.type == "string_content"]
+    if len(parts) > 1 or any(c.type == "interpolation" for c in node.named_children):
+        return None
+    return node_text(parts[0], source) if parts else ""
+
+
+def _first_literal_parameter(def_node: Node, source: bytes) -> tuple[str, str] | None:
+    """`(name, value)` of a function's first parameter annotated
+    `Literal["value"]` (after `self`/`cls`), else `None`."""
+    params = def_node.child_by_field_name("parameters")
+    for param in params.named_children if params is not None else ():
+        if param.type not in ("typed_parameter", "typed_default_parameter"):
+            continue
+        ann = param.child_by_field_name("type")
+        name_node = param.child_by_field_name("name") or (param.named_children[0] if param.named_children else None)
+        match = _LITERAL_ANNOTATION.match(node_text(ann, source).strip()) if ann is not None else None
+        if match is not None and name_node is not None:
+            return node_text(name_node, source), match.group(2)
+        return None  # the first annotated parameter is not a Literal
+    return None
+
+
 def _declarator_value_node(declarator: Node) -> Node | None:
     """The initializer expression of a `variable_declarator`
     (`Type name = <value>;`), if any. Java's grammar exposes it as a
@@ -2813,7 +4418,41 @@ def outer_definition_node(node: Node, lang: str) -> Node:
         and parent.child_by_field_name("right") == node
     ):
         return parent
+    if lang in _JS_LANGUAGES and parent is not None and parent.type == "variable_declarator" \
+            and parent.child_by_field_name("value") == node:
+        # `export const f = () => {}`: the statement, export included, so the
+        # line range (and every slice and card made from it) starts where the
+        # declaration does and the JSDoc above it is adjacent. A statement
+        # declaring several names (`const a = 1, f = () => {}`) reports the
+        # declarator alone - the statement is not this function's.
+        stmt = parent.parent
+        if stmt is None or stmt.type not in ("lexical_declaration", "variable_declaration") \
+                or sum(1 for c in stmt.named_children if c.type == "variable_declarator") != 1:
+            return parent
+        if stmt.parent is not None and stmt.parent.type == "export_statement":
+            return stmt.parent
+        return stmt
     return node
+
+
+#: Function node types a JS/TS `const`/`let`/`var` declarator can bind
+#: (`_JS_CONST_BOUND_FUNCTION_DEFINITION` in `prism.parser.queries`).
+JS_BOUND_FUNCTION_TYPES = frozenset({"arrow_function", "function_expression", "generator_function"})
+_JS_LANGUAGES = frozenset({LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX})
+
+
+def _declarator_bound_function_name(node: Node, parsed: ParsedFile) -> Node | None:
+    """The binding name of a function bound by declaration (`const f = () =>
+    {}`, `export const f = function g() {}` -> `f`), or `None`. It wins over a
+    function expression's own internal name: callers and importers use the
+    binding; `g` is only visible inside its own body."""
+    if parsed.language_id not in _JS_LANGUAGES or node.type not in JS_BOUND_FUNCTION_TYPES:
+        return None
+    parent = node.parent
+    if parent is None or parent.type != "variable_declarator" or parent.child_by_field_name("value") != node:
+        return None
+    name = parent.child_by_field_name("name")
+    return name if name is not None and name.type == "identifier" else None
 
 
 def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | None:
@@ -2850,6 +4489,63 @@ def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | N
     if left is None or left.type != ATTRIBUTE_NODE_TYPE.get(lang):
         return None
     return left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
+
+
+#: Languages whose nested function definitions are qualified under their
+#: enclosing function (Fix C).
+_CLOSURE_SCOPED_LANGUAGES = frozenset({LanguageID.PYTHON, LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX})
+
+
+#: Bound on name/attribute hops when tracing which class a value holds (Fix D).
+_CLASS_VALUE_MAX_DEPTH = 10
+
+
+def _own_assignments(func_node: Node):
+    """Assignment nodes in a function's own body (not in nested functions,
+    classes or lambdas)."""
+    body = func_node.child_by_field_name("body")
+    stack = list(body.named_children) if body is not None else []
+    while stack:
+        node = stack.pop()
+        if node.type in ("function_definition", "class_definition", "lambda", "decorated_definition"):
+            continue
+        if node.type == "assignment":
+            yield node
+        stack.extend(node.named_children)
+
+
+def _assigned_property_names(node: Node, parsed: ParsedFile) -> list[str]:
+    """Every dotted property a function node is bound to by assignment,
+    innermost first: `res.set = res.header = function header() {}` parses
+    as `assignment(res.set, assignment(res.header, function))`, and both
+    `header` and `set` name the same function at runtime. Empty unless the
+    node is the `right:` side of a dotted-property assignment (a computed
+    `app[method] = ...` property is a runtime value - excluded, as in
+    `_property_assigned_function_name`)."""
+    return [prop for _obj, prop in _assigned_properties(node, parsed)]
+
+
+def _assigned_properties(node: Node, parsed: ParsedFile) -> list[tuple[str, str]]:
+    """`(object, property)` for each assignment in that chain:
+    `[("res", "header"), ("res", "set")]` for the example above."""
+    lang = parsed.language_id
+    assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+    attr_type = ATTRIBUTE_NODE_TYPE.get(lang)
+    names: list[tuple[str, str]] = []
+    child, parent = node, node.parent
+    while assign_type is not None and parent is not None and parent.type == assign_type:
+        if parent.child_by_field_name("right") != child:
+            break
+        left = parent.child_by_field_name("left")
+        if left is None or left.type != attr_type:
+            break
+        prop = left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
+        obj = left.child_by_field_name("object")
+        if prop is None or obj is None:
+            break
+        names.append((node_text(obj, parsed.source), node_text(prop, parsed.source)))
+        child, parent = parent, parent.parent
+    return names
 
 
 def _enclosing_function_own_name(func_node: Node, parsed: ParsedFile) -> str | None:
@@ -3074,6 +4770,146 @@ _PYTHON_BUILTIN_LITERAL_NODE_TYPES = frozenset({
 #: one of these names is never misclassified as the builtin.
 _BUILTIN_FACTORY_NAMES = frozenset({"set", "list", "dict", "tuple", "frozenset", "bytearray", "bytes", "str"})
 
+def _in_class_body(assign: Node) -> bool:
+    """Whether `assign` sits directly in a class body (a class
+    attribute), not inside a method."""
+    node = assign.parent
+    while node is not None:
+        if node.type in _CLASS_BODY_OWNER_TYPES:
+            return True
+        if node.type in _FUNCTION_SCOPE_TYPES:
+            return False
+        node = node.parent
+    return False
+
+
+_CLASS_BODY_OWNER_TYPES = frozenset({"class_definition", "class_declaration", "class", "class_body"})
+_FUNCTION_SCOPE_TYPES = frozenset({
+    "function_definition", "function_declaration", "method_definition", "arrow_function", "function_expression",
+    "lambda", "method_declaration",
+})
+
+
+#: How many nested calls/assignments `_infer_return_class`/`_expr_class`
+#: follow before giving up (each level is memoized per function).
+_RETURN_INFERENCE_MAX_DEPTH = 6
+
+
+@dataclass(frozen=True)
+class _AnnotationType:
+    """What a Python annotation says about a value: one known class
+    (confident), several (a union - best-effort), or a builtin container
+    with the known class its iteration yields."""
+
+    classes: tuple[str, ...] = ()
+    container: bool = False
+    element: str | None = None
+
+
+#: The `None` member of `Optional[T]` / `T | None` (dropped from unions).
+_NONE_ANNOTATION = _AnnotationType()
+#: Nesting bound for annotation unwrapping (`Optional["Annotated[T, x]"]`).
+_ANNOTATION_MAX_DEPTH = 8
+#: Wrappers whose first argument is the value's real type.
+_PY_TRANSPARENT_ANNOTATIONS = frozenset({
+    "Annotated", "Final", "ClassVar", "Required", "NotRequired", "ReadOnly", "InitVar",
+})
+#: Builtin/typing sequence and set types: iteration yields the first argument.
+_PY_SEQUENCE_ANNOTATIONS = frozenset({
+    "list", "List", "tuple", "Tuple", "set", "Set", "frozenset", "FrozenSet", "deque", "Deque",
+    "Sequence", "MutableSequence", "Collection", "Iterable", "Iterator", "AbstractSet", "MutableSet",
+    "Generator", "AsyncIterable", "AsyncIterator", "AsyncGenerator", "Reversible",
+})
+#: Builtin/typing mappings: iteration yields the key type (first argument).
+_PY_MAPPING_ANNOTATIONS = frozenset({
+    "dict", "Dict", "Mapping", "MutableMapping", "DefaultDict", "defaultdict", "OrderedDict", "Counter",
+    "ChainMap",
+})
+
+
+def _parse_python_annotation_string(node: Node, source: bytes) -> tuple[Node, bytes] | None:
+    """The annotation a string forward reference (`"T"`, `"Optional[T]"`)
+    spells, parsed on its own: `(type node, its source)`."""
+    content = next((c for c in node.named_children if c.type == "string_content"), None)
+    if content is None:
+        return None
+    text = node_text(content, source).strip()
+    if not text or "\n" in text or len(text) > 200:
+        return None
+    inner_source = f"_: {text}\n".encode()
+    tree = get_parser(LanguageID.PYTHON).parse(inner_source)
+    statement = tree.root_node.named_children[0] if tree.root_node.named_children else None
+    assignment = statement.named_children[0] if statement is not None and statement.named_children else None
+    if tree.root_node.has_error or assignment is None or assignment.type != "assignment":
+        return None
+    type_node = assignment.child_by_field_name("type")
+    return (type_node, inner_source) if type_node is not None else None
+
+
+class _ExprContext:
+    """The enclosing function's resolution context for `_expr_class`."""
+
+    __slots__ = ("module", "import_map", "enclosing_class", "lang", "source", "fn_node", "_assignments")
+
+    def __init__(self, module, import_map, enclosing_class, lang, source, fn_node):
+        self.module, self.import_map, self.enclosing_class = module, import_map, enclosing_class
+        self.lang, self.source, self.fn_node = lang, source, fn_node
+        self._assignments = None
+
+    def assignments(self) -> dict:
+        """{local name: [assigned value nodes]} for plain `name = value`
+        assignments and `const/let name = value` declarations in this
+        function."""
+        if self._assignments is None:
+            out: dict = {}
+            assign_type = ASSIGNMENT_NODE_TYPE.get(self.lang)
+            if assign_type is not None:
+                for assign in iter_scoped_nodes(self.fn_node, {assign_type}, self.lang):
+                    left, right = assign.child_by_field_name("left"), assign.child_by_field_name("right")
+                    if left is not None and right is not None and left.type == "identifier":
+                        out.setdefault(node_text(left, self.source), []).append(right)
+            declarator = _LOCAL_VAR_DECLARATOR_TYPE.get(self.lang)
+            if declarator is not None:
+                for decl in iter_scoped_nodes(self.fn_node, {declarator}, self.lang):
+                    name, value = decl.child_by_field_name("name"), _declarator_value_node(decl)
+                    if name is not None and value is not None and name.type == "identifier":
+                        out.setdefault(node_text(name, self.source), []).append(value)
+            self._assignments = out
+        return self._assignments
+
+
+#: Public method names of each language's own builtin container/string
+#: types. An attribute call on a receiver of unknown type whose method name
+#: is in this set is never guessed onto a same-named repo method (see
+#: `ConcreteGraphBuilder._resolve_ambiguous_call`).
+_PYTHON_BUILTIN_METHOD_NAMES = frozenset(
+    name
+    for builtin_type in (dict, list, set, frozenset, str, bytes, bytearray, tuple)
+    for name in dir(builtin_type)
+    if not name.startswith("_")
+)
+_JS_BUILTIN_METHOD_NAMES = frozenset({
+    # Array
+    "at", "concat", "copyWithin", "entries", "every", "fill", "filter", "find", "findIndex", "findLast",
+    "findLastIndex", "flat", "flatMap", "forEach", "includes", "indexOf", "join", "keys", "lastIndexOf", "map",
+    "pop", "push", "reduce", "reduceRight", "reverse", "shift", "slice", "some", "sort", "splice", "toReversed",
+    "toSorted", "toSpliced", "unshift", "values", "with",
+    # Map / Set / WeakMap / WeakSet
+    "add", "clear", "delete", "get", "has", "set",
+    # String
+    "charAt", "charCodeAt", "codePointAt", "endsWith", "localeCompare", "match", "matchAll", "normalize",
+    "padEnd", "padStart", "repeat", "replace", "replaceAll", "search", "split", "startsWith", "substring",
+    "toLowerCase", "toUpperCase", "trim", "trimEnd", "trimStart",
+    # Object.prototype / Promise
+    "hasOwnProperty", "toString", "valueOf", "then", "catch", "finally",
+})
+_BUILTIN_METHOD_NAMES: dict[str, frozenset[str]] = {
+    "python": _PYTHON_BUILTIN_METHOD_NAMES,
+    "javascript": _JS_BUILTIN_METHOD_NAMES,
+    "typescript": _JS_BUILTIN_METHOD_NAMES,
+    "tsx": _JS_BUILTIN_METHOD_NAMES,
+}
+
 #: `collections.<name>(...)`-qualified factories - restricted to this
 #: exact, literal module prefix (not resolved through import aliasing)
 #: to avoid ever misclassifying an unrelated same-named local class.
@@ -3228,25 +5064,40 @@ def _is_interface_shaped_body(body: Node | None, lang: str, source: bytes) -> bo
     return False
 
 
+def _repo_relative_is_test_file(path: str, repo_root: str) -> bool:
+    from prism.scanner.entrypoint_gate import is_test_file
+    rel = os.path.relpath(path, repo_root) if os.path.isabs(path) else path
+    return is_test_file(rel.replace(os.sep, "/"), repo_root)
+
+
 def _classify_symbol_role(
     node: Node,
     is_class: bool,
     parsed: ParsedFile,
     name: str,
     enclosing_class_role: SymbolRole | None,
+    in_test_file: bool = True,
 ) -> SymbolRole:
     """Deterministic, AST/naming-convention-based role classification -
     see the module-level comment above `_TEST_BASE_CLASS_PATTERN` for
     why this exists and what it deliberately does and doesn't claim.
     Called once per symbol from `_register_definition`, in the same
     Pass-1 pass every other `SymbolInfo` field is already computed in.
+
+    Explicit signals (test decorators, test-shaped base classes, Go's
+    `TestXxx(t *testing.T)`) apply everywhere. The two weak conventions -
+    a `test_`/`Test` name and an assertion-shaped body - apply only
+    `in_test_file` (`prism.scanner.entrypoint_gate.is_test_file`): pytest
+    collects `test_*` functions only from test files, and outside them a
+    `test_email` endpoint or a body calling an `assert_settings(...)`
+    helper is application code.
     """
     lang = parsed.language_id
 
     if is_class:
         if _is_test_shaped_base_classes(node, parsed):
             return SymbolRole.VERIFICATION
-        if _TEST_NAME_PATTERN.search(name):
+        if in_test_file and _TEST_NAME_PATTERN.search(name):
             return SymbolRole.VERIFICATION
         return SymbolRole.IMPLEMENTATION
 
@@ -3263,16 +5114,101 @@ def _classify_symbol_role(
         return SymbolRole.VERIFICATION
 
     body = node.child_by_field_name("body")
-    if _is_assertion_shaped_body(body, lang, parsed.source):
+    if in_test_file and _is_assertion_shaped_body(body, lang, parsed.source):
         return SymbolRole.VERIFICATION
 
-    if _TEST_NAME_PATTERN.search(name):
+    if in_test_file and _TEST_NAME_PATTERN.search(name):
         return SymbolRole.VERIFICATION
 
     if _is_interface_shaped_body(body, lang, parsed.source):
         return SymbolRole.INTERFACE
 
     return SymbolRole.IMPLEMENTATION
+
+
+_PY_BINDING_PATTERN_TYPES = frozenset({
+    "pattern_list", "tuple_pattern", "list_pattern", "list_splat_pattern", "dictionary_splat_pattern",
+    "as_pattern_target", "parenthesized_expression", "expression_list", "tuple", "list",
+})
+_PY_PARAMETER_TYPES = frozenset({"typed_parameter", "default_parameter", "typed_default_parameter"})
+
+
+def _python_bound_identifiers(node: Node | None, source: bytes) -> set[str]:
+    """Identifiers a Python binding target introduces (`x`, `a, (b, c)`,
+    `*rest`); attribute and subscript targets bind nothing local."""
+    if node is None:
+        return set()
+    if node.type == "identifier":
+        return {node_text(node, source)}
+    if node.type in _PY_BINDING_PATTERN_TYPES:
+        names: set[str] = set()
+        for child in node.named_children:
+            names |= _python_bound_identifiers(child, source)
+        return names
+    return set()
+
+
+def _python_parameter_names(params: Node | None, source: bytes) -> set[str]:
+    names: set[str] = set()
+    for param in params.named_children if params is not None else ():
+        if param.type in _PY_PARAMETER_TYPES:
+            name = param.child_by_field_name("name")
+            if name is None:
+                name = next((c for c in param.named_children if c.type in ("identifier", "list_splat_pattern", "dictionary_splat_pattern")), None)
+            names |= _python_bound_identifiers(name, source)
+        else:
+            names |= _python_bound_identifiers(param, source)
+    return names
+
+
+def _python_local_names(def_node: Node, source: bytes) -> set[str]:
+    """Every name a Python function binds in its own scope - parameters,
+    assignment/augmented-assignment, `for`/comprehension, `with`/`except
+    ... as`, walrus and lambda-parameter targets - minus names declared
+    `global`/`nonlocal`. Nested function/class bodies are their own scopes
+    and are not entered."""
+    names = _python_parameter_names(def_node.child_by_field_name("parameters"), source)
+    declared_outer = _python_nested_definition_names(def_node, source)
+    scoped_types = {
+        "assignment", "augmented_assignment", "for_statement", "for_in_clause", "as_pattern",
+        "named_expression", "lambda", "global_statement", "nonlocal_statement",
+    }
+    for node in iter_scoped_nodes(def_node, scoped_types, LanguageID.PYTHON):
+        if node.type in ("assignment", "augmented_assignment", "for_statement", "for_in_clause"):
+            names |= _python_bound_identifiers(node.child_by_field_name("left"), source)
+        elif node.type == "as_pattern":
+            names |= _python_bound_identifiers(node.child_by_field_name("alias"), source)
+        elif node.type == "named_expression":
+            names |= _python_bound_identifiers(node.child_by_field_name("name"), source)
+        elif node.type == "lambda":
+            names |= _python_parameter_names(node.child_by_field_name("parameters"), source)
+        else:
+            declared_outer |= {node_text(c, source) for c in node.named_children if c.type == "identifier"}
+    return names - declared_outer
+
+
+def _python_nested_definition_names(def_node: Node, source: bytes) -> set[str]:
+    """Names of the functions/classes a Python function defines directly
+    in its own body. They are real symbols (Rule D resolves them), so they
+    are never treated as unbound locals - even when the same name is also
+    assigned (`match = parse(...)` on one branch, `def match(_)` on the
+    other)."""
+    names: set[str] = set()
+    body = def_node.child_by_field_name("body")
+    stack = list(body.children) if body is not None else []
+    while stack:
+        node = stack.pop()
+        if node.type == "decorated_definition":
+            node = node.child_by_field_name("definition") or node
+        if node.type in ("function_definition", "class_definition"):
+            name = node.child_by_field_name("name")
+            if name is not None:
+                names.add(node_text(name, source))
+            continue
+        if node.type == "lambda":
+            continue
+        stack.extend(node.children)
+    return names
 
 
 def _is_builtin_container_expr(value: Node, lang: str, source: bytes) -> bool:
@@ -3379,6 +5315,60 @@ def _parse_package_or_namespace(parsed: ParsedFile) -> str | None:
                 if child.type in ("qualified_name", "identifier"):
                     return node_text(child, parsed.source)
     return None
+
+
+#: Language families a bare-name fallback may cross within (never between).
+_LANGUAGE_FAMILY = {
+    LanguageID.JAVASCRIPT: "js", LanguageID.TYPESCRIPT: "js", LanguageID.TSX: "js",
+}
+#: Directory names marking test code / vendored or bundled third-party code.
+_TEST_DIR_NAMES = frozenset({"test", "tests", "testing", "__tests__", "spec", "specs"})
+_VENDOR_DIR_NAMES = frozenset({
+    "vendor", "vendored", "_vendor", "third_party", "thirdparty", "node_modules", "bower_components",
+})
+
+
+def _path_partition_of(relative_path: str) -> str:
+    """`"vendor"`, `"test"` or `"first_party"` for a repo-relative path.
+    Vendored wins (a vendored library's own tests are still vendored)."""
+    parts = relative_path.replace("\\", "/").split("/")
+    directories, name = [p.lower() for p in parts[:-1]], parts[-1].lower()
+    if any(d in _VENDOR_DIR_NAMES for d in directories) or name.endswith((".min.js", ".bundle.js")) or (
+        name.startswith("vendor") and name.endswith(".js")
+    ):
+        return "vendor"
+    stem = name.rsplit(".", 1)[0]
+    if (
+        any(d in _TEST_DIR_NAMES for d in directories)
+        or name.startswith("test_")
+        or stem.endswith(("_test", "_tests"))
+        or ".test." in name
+        or ".spec." in name
+        or name == "conftest.py"
+    ):
+        return "test"
+    return "first_party"
+
+
+def _fallback_candidate_allowed(caller_partition: str, caller_lang: str | None, candidate_partition: str, candidate_lang: str | None) -> bool:
+    """Whether a receiver-type-unknown fallback (G44 unique name, family
+    root, scored polysemy, attribute index, receiver naming convention) may
+    bind a caller to a candidate: same language family, a test or vendored
+    candidate only for a caller in that same partition. A dependency header
+    is allowed here; `_resolve_ambiguous_call` only falls back to one when
+    the caller's own code has no candidate at all."""
+    if _LANGUAGE_FAMILY.get(caller_lang, caller_lang) != _LANGUAGE_FAMILY.get(candidate_lang, candidate_lang):
+        return False
+    return candidate_partition in ("first_party", "dependency") or candidate_partition == caller_partition
+
+
+def _imports_module_directly(candidate: SymbolInfo, import_map: LocalImportMap) -> bool:
+    """The caller's file imports `candidate`'s own module, or a name from
+    it - not merely a parent package of it."""
+    for target in import_map.aliases.values():
+        if target == candidate.module or target.startswith(f"{candidate.module}."):
+            return True
+    return candidate.module in import_map.wildcard_targets
 
 
 def _shares_package_scope(caller_module: str, candidate_module: str) -> bool:

@@ -1,0 +1,61 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "fastapi_t02_024_get_value_or_default_utility",
+  "items": [
+   {
+    "source_id": "fastapi/utils.py:205-220",
+    "content": "# fastapi/utils.py:205-220  (fastapi.utils.get_value_or_default)\ndef get_value_or_default(\n    first_item: Union[DefaultPlaceholder, DefaultType],\n    *extra_items: Union[DefaultPlaceholder, DefaultType],\n) -> Union[DefaultPlaceholder, DefaultType]:\n    \"\"\"\n    Pass items or `DefaultPlaceholder`s by descending priority.\n\n    The first one to _not_ be a `DefaultPlaceholder` will be returned.\n\n    Otherwise, the first item (a `DefaultPlaceholder`) will be returned.\n    \"\"\"\n    items = (first_item,) + extra_items\n    for item in items:\n        if not isinstance(item, DefaultPlaceholder):\n            return item\n    return first_item",
+    "token_count": 148,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.utils.get_value_or_default"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 148
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/datastructures.py:197-204",
+    "content": "# fastapi/datastructures.py:197-204  (fastapi.datastructures.Default)\ndef Default(value: DefaultType) -> DefaultType:\n    \"\"\"\n    You shouldn't use this function directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n    return DefaultPlaceholder(value)  # type: ignore",
+    "token_count": 84,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.datastructures.Default"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 232,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating fastapi/utils.py's default-value-resolution helper. Starting from `get_value_or_default`, identify what it does - a single, self-contained real function with no further FastAPI-internal call, used by add_api_route() (task fastapi_t02_007) to resolve per-route config defaults.",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 2,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 232,
+   "prompt_tokens": 435,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 448,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/utils.py:205-220  (fastapi.utils.get_value_or_default)\ndef get_value_or_default(\n    first_item: Union[DefaultPlaceholder, DefaultType],\n    *extra_items: Union[DefaultPlaceholder, DefaultType],\n) -> Union[DefaultPlaceholder, DefaultType]:\n    \"\"\"\n    Pass items or `DefaultPlaceholder`s by descending priority.\n\n    The first one to _not_ be a `DefaultPlaceholder` will be returned.\n\n    Otherwise, the first item (a `DefaultPlaceholder`) will be returned.\n    \"\"\"\n    items = (first_item,) + extra_items\n    for item in items:\n        if not isinstance(item, DefaultPlaceholder):\n            return item\n    return first_item\n\n# fastapi/datastructures.py:197-204  (fastapi.datastructures.Default)\ndef Default(value: DefaultType) -> DefaultType:\n    \"\"\"\n    You shouldn't use this function directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n    return DefaultPlaceholder(value)  # type: ignore\n\n## Task\n\nYou are investigating fastapi/utils.py's default-value-resolution helper. Starting from `get_value_or_default`, identify what it does - a single, self-contained real function with no further FastAPI-internal call, used by add_api_route() (task fastapi_t02_007) to resolve per-route config defaults.\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

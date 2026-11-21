@@ -29,6 +29,7 @@ the causal engine rather than re-deriving it a second way:
 """
 from __future__ import annotations
 
+import math
 import os
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
@@ -46,7 +47,7 @@ from prism.packer.submodular_knapsack import (
 )
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.semantics.bitmask import (
-    ALL_KNOWN_BITS,
+    AXIS_BITS,
     FORM_BITS,
     OUTPUT_BITS,
     ROLE_BITS,
@@ -149,10 +150,9 @@ def _node_body(builder: ConcreteGraphBuilder, qname: str) -> str:
     info = builder.symbol_table.get(qname)
     if info is None:
         return ""
-    parsed = builder.parsed_file(info.file)
-    if parsed is None:
+    source = builder.source_text(info.file)
+    if source is None:
         return ""
-    source = parsed.source.decode("utf-8", errors="replace")
     lines = source.splitlines()
     start, end = info.line_range
     return "\n".join(lines[max(start - 1, 0):end])
@@ -223,6 +223,10 @@ def _derive_contract(node_qname: str, builder: ConcreteGraphBuilder, packed_ids:
     return None
 
 
+#: Features a pack can cover: every axis bit, not modifier/primitive bits.
+_COVERAGE_BITS = AXIS_BITS
+
+
 def _coverage_summary(feature_masks: dict[str, int], reachable_ids: set[str], packed_ids: set[str]) -> CoverageSummary:
     reachable_mask = 0
     for qname in reachable_ids:
@@ -232,11 +236,11 @@ def _coverage_summary(feature_masks: dict[str, int], reachable_ids: set[str], pa
     for qname in packed_ids:
         mask = feature_masks.get(qname, 0)
         covered_mask |= mask
-        for bit in ALL_KNOWN_BITS:
+        for bit in _COVERAGE_BITS:
             if mask & int(bit):
                 per_bit_count[bit] = per_bit_count.get(bit, 0) + 1
 
-    present_bits = [b for b in sorted(ALL_KNOWN_BITS, key=int) if reachable_mask & int(b)]
+    present_bits = [b for b in sorted(_COVERAGE_BITS, key=int) if reachable_mask & int(b)]
     features = [
         FeatureCoverage(id=b.name, present=bool(covered_mask & int(b)), count=per_bit_count.get(b, 0)) for b in present_bits
     ]
@@ -348,6 +352,84 @@ def _downgrade_to_stub(pkg: ContextPackage, builder: ConcreteGraphBuilder, node_
     return pkg.model_copy(update={"nodes": updated_nodes, "manifest": manifest})
 
 
+def _is_packed_container(node: NodeEntry, packed_ids: set[str]) -> bool:
+    """`node` is a class whose own methods (or other members) are also
+    packed nodes - its full body duplicates their source."""
+    prefix = node.id + "."
+    return node.symbol_kind == "class" and any(other.startswith(prefix) for other in packed_ids)
+
+
+def _class_only_tokens(builder: ConcreteGraphBuilder, pkg: ContextPackage, cls: NodeEntry) -> int:
+    """Tokens of `cls`'s own source that no packed member repeats: the
+    non-blank class lines outside every packed member's line range (class
+    attributes, docstring, unpacked methods). What stubbing the class
+    actually removes from the package."""
+    info = builder.symbol_table.get(cls.id)
+    source = builder.source_text(info.file) if info is not None else None
+    if source is None:
+        return 0
+    members = [(m.line, m.end_line) for m in pkg.nodes if m.id.startswith(cls.id + ".")]
+    lines = source.splitlines()[cls.line - 1:cls.end_line]
+    own = [ln for i, ln in enumerate(lines, start=cls.line)
+           if ln.strip() and not any(a <= i <= b for a, b in members)]
+    return count_tokens("\n".join(own))
+
+
+#: At most this many trial renders per `_enforce_render_budget` call are
+#: spent looking for a cheaper non-container stub
+#: (`_cheaper_sufficient_alternative`); once spent, every remaining
+#: decision in that call is plain container-first. On the 244-cell one-pass
+#: evaluation (61 Django/FastAPI tasks x budgets 2k/4k/8k/13k) no call
+#: needed more than 2 with `_STUB_SAVING_SLACK` below, and both
+#: substitutions that fire needed 1; 8 leaves 4x headroom.
+_CONTAINER_ALTERNATIVE_TRIAL_CAP = 8
+
+#: A candidate is trial-rendered only if `cost + slack` covers the current
+#: overrun. A stub's rendered saving was at most 59 tokens above the node's
+#: priced `cost` on the same evaluation (rendered metadata); 128 is about
+#: twice that. A sufficient candidate this filters out only means the
+#: container-first choice stands.
+_STUB_SAVING_SLACK = 128
+
+
+def _trial_render_tokens(pkg: ContextPackage) -> int:
+    return count_tokens(render(pkg, RenderOptions(include_timestamp=False, include_run_id=False)))
+
+
+def _cheaper_sufficient_alternative(
+    pkg: ContextPackage, builder: ConcreteGraphBuilder, candidates: list[NodeEntry], container: NodeEntry,
+    packed_ids: set[str], limit: float, overrun: int, trials_left: list[int],
+) -> NodeEntry | None:
+    """The cheapest non-container candidate whose stub alone brings the
+    render within `limit` and whose own body costs fewer tokens than
+    `container`'s class-only content, or `None`. Lets a small overrun be
+    closed without discarding class-level code (an unpacked `__init__`, a
+    property, class attributes) the packed methods depend on. Never swaps
+    one container for another.
+
+    Candidates are tried cheapest first (ties: larger distance, then id),
+    so the first one that fits is the answer. Only candidates whose cost
+    could cover `overrun` are tried, and each trial render spends one of
+    `trials_left` (shared across the whole enforcement call); when it runs
+    out the search stops and the caller keeps its container-first choice."""
+    unique = _class_only_tokens(builder, pkg, container)
+    eligible = sorted(
+        (n for n in candidates
+         if not _is_packed_container(n, packed_ids) and n.cost < unique and n.cost + _STUB_SAVING_SLACK >= overrun),
+        key=lambda n: (n.cost, -n.distance, n.id),
+    )
+    for node in eligible:
+        if trials_left[0] <= 0:
+            return None
+        trial = _downgrade_to_stub(pkg, builder, node.id)
+        if trial is None:
+            continue
+        trials_left[0] -= 1
+        if _trial_render_tokens(trial) <= limit:
+            return node
+    return None
+
+
 def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: ConcreteGraphBuilder) -> ContextPackage:
     """Fix #2's best-effort guarantee - not an absolute one; see below.
     `_default_costs`'s metadata-aware pricing (`prism.packer.
@@ -416,9 +498,10 @@ def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: Con
     """
     limit = target_budget * (1 + _RENDER_BUDGET_TOLERANCE)
     exhausted: set[str] = set()
+    trials_left = [_CONTAINER_ALTERNATIVE_TRIAL_CAP]
     while True:
-        rendered = render(pkg, RenderOptions(include_timestamp=False, include_run_id=False))
-        if count_tokens(rendered) <= limit:
+        rendered_tokens = count_tokens(render(pkg, RenderOptions(include_timestamp=False, include_run_id=False)))
+        if rendered_tokens <= limit:
             return pkg
         candidates = [
             n for n in pkg.nodes
@@ -433,7 +516,22 @@ def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: Con
         # `pkg.seed.symbol`'s own role is always exactly `ROLE_SEED` for
         # every possible caller of this function (only `_classify_role`
         # itself guarantees that), and this costs nothing if it is.
-        worst = max(candidates, key=lambda n: (n.id != pkg.seed.symbol, n.distance))
+        #
+        # A container class packed alongside any of its own methods is
+        # stubbed before every other candidate: its L0 body repeats those
+        # methods' source verbatim, and a promoted class usually carries no
+        # measured distance (it defaults to 0.0), so distance order alone would stub the
+        # methods first and the class last (django_t02_009: `QuerySet`,
+        # 13k tokens, was stubbed only after `_clone`/`_chain`).
+        packed_ids = {n.id for n in pkg.nodes}
+        worst = max(candidates, key=lambda n: (n.id != pkg.seed.symbol, _is_packed_container(n, packed_ids), n.distance))
+        # ...unless one cheaper non-container stub alone closes the gap:
+        # then the class keeps its class-level code.
+        if _is_packed_container(worst, packed_ids):
+            overrun = math.ceil(rendered_tokens - limit)
+            worst = _cheaper_sufficient_alternative(
+                pkg, builder, candidates, worst, packed_ids, limit, overrun, trials_left,
+            ) or worst
         downgraded = _downgrade_to_stub(pkg, builder, worst.id)
         if downgraded is None:
             exhausted.add(worst.id)

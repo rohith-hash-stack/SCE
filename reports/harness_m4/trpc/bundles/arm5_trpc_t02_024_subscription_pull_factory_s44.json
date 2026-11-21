@@ -1,0 +1,155 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t02_024_subscription_pull_factory",
+  "items": [
+   {
+    "source_id": "subscription.ts:9-44",
+    "content": "# subscription.ts:9-44  (subscription.subscriptionPullFactory)\nexport function subscriptionPullFactory<TOutput>(opts: {\n  /**\n   * The interval of how often the function should run\n   */\n  intervalMs: number;\n  pull(emit: Observer<TOutput, unknown>): Promise<void> | void;\n}): Observable<TOutput, unknown> {\n  let timer: any;\n  let stopped = false;\n  async function _pull(emit: Observer<TOutput, unknown>) {\n    /* istanbul ignore next -- @preserve */\n    if (stopped) {\n      return;\n    }\n    try {\n      await opts.pull(emit);\n    } catch (err /* istanbul ignore next -- @preserve */) {\n      emit.error(getTRPCErrorFromUnknown(err));\n    }\n\n    /* istanbul ignore else -- @preserve */\n    if (!stopped) {\n      timer = setTimeout(() => _pull(emit), opts.intervalMs);\n    }\n  }\n\n  return observable<TOutput>((emit) => {\n    _pull(emit).catch((err) => {\n      emit.error(getTRPCErrorFromUnknown(err));\n    });\n    return () => {\n      clearTimeout(timer);\n      stopped = true;\n    };\n  });\n}",
+    "token_count": 251,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "subscription.subscriptionPullFactory"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 236,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "observable/observable.ts:20-83",
+    "content": "# observable/observable.ts:20-83  (observable.observable.observable)\nexport function observable<TValue, TError = unknown>(\n  subscribe: (observer: Observer<TValue, TError>) => TeardownLogic,\n): Observable<TValue, TError> {\n  const self: Observable<TValue, TError> = {\n    subscribe(observer) {\n      let teardownRef: TeardownLogic | null = null;\n      let isDone = false;\n      let unsubscribed = false;\n      let teardownImmediately = false;\n      function unsubscribe() {\n        if (teardownRef === null) {\n          teardownImmediately = true;\n          return;\n        }\n        if (unsubscribed) {\n          return;\n        }\n        unsubscribed = true;\n\n        if (typeof teardownRef === 'function') {\n          teardownRef();\n        } else if (teardownRef) {\n          teardownRef.unsubscribe();\n        }\n      }\n      teardownRef = subscribe({\n        next(value) {\n          if (isDone) {\n            return;\n          }\n          observer.next?.(value);\n        },\n        error(err) {\n          if (isDone) {\n            return;\n          }\n          isDone = true;\n          observer.error?.(err);\n          unsubscribe();\n        },\n        complete() {\n          if (isDone) {\n            return;\n          }\n          isDone = true;\n          observer.complete?.();\n          unsubscribe();\n        },\n      });\n      if (teardownImmediately) {\n        unsubscribe();\n      }\n      return {\n        unsubscribe,\n      };\n    },\n    pipe(\n      ...operations: OperatorFunction<any, any, any, any>[]\n    ): Observable<any, any> {\n      return pipeFromArray(operations)(self) as any;\n    },\n  };\n  return self;\n}",
+    "token_count": 357,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "observable.observable.observable"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 340,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:4-24",
+    "content": "# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}",
+    "token_count": 162,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "error.TRPCError.getTRPCErrorFromUnknown"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 136,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "observable/observable.ts:52-59",
+    "content": "# observable/observable.ts:52-59  (observable.observable.observable.error)\n        error(err) {\n          if (isDone) {\n            return;\n          }\n          isDone = true;\n          observer.error?.(err);\n          unsubscribe();\n        },",
+    "token_count": 53,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "observable.observable.observable.error"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 35,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "subscription.ts:18-33",
+    "content": "# subscription.ts:18-33  (subscription._pull)\n  async function _pull(emit: Observer<TOutput, unknown>) {\n    /* istanbul ignore next -- @preserve */\n    if (stopped) {\n      return;\n    }\n    try {\n      await opts.pull(emit);\n    } catch (err /* istanbul ignore next -- @preserve */) {\n      emit.error(getTRPCErrorFromUnknown(err));\n    }\n\n    /* istanbul ignore else -- @preserve */\n    if (!stopped) {\n      timer = setTimeout(() => _pull(emit), opts.intervalMs);\n    }\n  }",
+    "token_count": 127,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "subscription._pull"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 112,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 950,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating tRPC's legacy interval-polling subscription factory, starting from `subscriptionPullFactory` in subscription.ts. Trace the real causal pipeline it runs through to build the returned Observable and normalize a real polling error.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"subscription.subscriptionPullFactory\", \"observable.observable.observable\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "anchor": "subscription.subscriptionPullFactory",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 7,
+   "manifest_candidates_unfiltered": 7,
+   "requested_symbols": [
+    "subscription.subscriptionPullFactory",
+    "observable.observable.observable",
+    "error.TRPCError.getTRPCErrorFromUnknown",
+    "observable.observable.observable.error"
+   ],
+   "turn1_requested_count": 4,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `subscriptionPullFactory` function initializes an Observable and sets up a polling mechanism. It handles errors by converting unknown errors into TRPCError instances using `getTRPCErrorFromUnknown` and emits these errors through the Observable's error handling mechanism.\",\n  \"requested_symbols\": [\n    \"subscription.subscriptionPullFactory\",\n    \"observable.observable.observable\",\n    \"error.TRPCError.getTRPCErrorFromUnknown\",\n    \"observable.observable.observable.error\"\n  ]\n}\n```",
+     "prompt_tokens": 596,
+     "completion_tokens": 104,
+     "latency_seconds": 7.755267988999549,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     4.253558
+    ],
+    "L_turn2_hydrate": [
+     21.462906
+    ],
+    "L_retrieve": [
+     7784.572749
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 950,
+   "prompt_tokens": 1205,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1218,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# subscription.ts:9-44  (subscription.subscriptionPullFactory)\nexport function subscriptionPullFactory<TOutput>(opts: {\n  /**\n   * The interval of how often the function should run\n   */\n  intervalMs: number;\n  pull(emit: Observer<TOutput, unknown>): Promise<void> | void;\n}): Observable<TOutput, unknown> {\n  let timer: any;\n  let stopped = false;\n  async function _pull(emit: Observer<TOutput, unknown>) {\n    /* istanbul ignore next -- @preserve */\n    if (stopped) {\n      return;\n    }\n    try {\n      await opts.pull(emit);\n    } catch (err /* istanbul ignore next -- @preserve */) {\n      emit.error(getTRPCErrorFromUnknown(err));\n    }\n\n    /* istanbul ignore else -- @preserve */\n    if (!stopped) {\n      timer = setTimeout(() => _pull(emit), opts.intervalMs);\n    }\n  }\n\n  return observable<TOutput>((emit) => {\n    _pull(emit).catch((err) => {\n      emit.error(getTRPCErrorFromUnknown(err));\n    });\n    return () => {\n      clearTimeout(timer);\n      stopped = true;\n    };\n  });\n}\n\n# observable/observable.ts:20-83  (observable.observable.observable)\nexport function observable<TValue, TError = unknown>(\n  subscribe: (observer: Observer<TValue, TError>) => TeardownLogic,\n): Observable<TValue, TError> {\n  const self: Observable<TValue, TError> = {\n    subscribe(observer) {\n      let teardownRef: TeardownLogic | null = null;\n      let isDone = false;\n      let unsubscribed = false;\n      let teardownImmediately = false;\n      function unsubscribe() {\n        if (teardownRef === null) {\n          teardownImmediately = true;\n          return;\n        }\n        if (unsubscribed) {\n          return;\n        }\n        unsubscribed = true;\n\n        if (typeof teardownRef === 'function') {\n          teardownRef();\n        } else if (teardownRef) {\n          teardownRef.unsubscribe();\n        }\n      }\n      teardownRef = subscribe({\n        next(value) {\n          if (isDone) {\n            return;\n          }\n          observer.next?.(value);\n        },\n        error(err) {\n          if (isDone) {\n            return;\n          }\n          isDone = true;\n          observer.error?.(err);\n          unsubscribe();\n        },\n        complete() {\n          if (isDone) {\n            return;\n          }\n          isDone = true;\n          observer.complete?.();\n          unsubscribe();\n        },\n      });\n      if (teardownImmediately) {\n        unsubscribe();\n      }\n      return {\n        unsubscribe,\n      };\n    },\n    pipe(\n      ...operations: OperatorFunction<any, any, any, any>[]\n    ): Observable<any, any> {\n      return pipeFromArray(operations)(self) as any;\n    },\n  };\n  return self;\n}\n\n# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}\n\n# observable/observable.ts:52-59  (observable.observable.observable.error)\n        error(err) {\n          if (isDone) {\n            return;\n          }\n          isDone = true;\n          observer.error?.(err);\n          unsubscribe();\n        },\n\n# subscription.ts:18-33  (subscription._pull)\n  async function _pull(emit: Observer<TOutput, unknown>) {\n    /* istanbul ignore next -- @preserve */\n    if (stopped) {\n      return;\n    }\n    try {\n      await opts.pull(emit);\n    } catch (err /* istanbul ignore next -- @preserve */) {\n      emit.error(getTRPCErrorFromUnknown(err));\n    }\n\n    /* istanbul ignore else -- @preserve */\n    if (!stopped) {\n      timer = setTimeout(() => _pull(emit), opts.intervalMs);\n    }\n  }\n\n## Task\n\nYou are investigating tRPC's legacy interval-polling subscription factory, starting from `subscriptionPullFactory` in subscription.ts. Trace the real causal pipeline it runs through to build the returned Observable and normalize a real polling error.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"subscription.subscriptionPullFactory\", \"observable.observable.observable\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

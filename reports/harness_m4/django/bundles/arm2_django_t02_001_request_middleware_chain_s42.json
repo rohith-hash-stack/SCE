@@ -1,0 +1,1203 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_001_request_middleware_chain",
+  "items": [
+   {
+    "source_id": "django/core/handlers/base.py:174-226",
+    "content": "# django/core/handlers/base.py:174-226  (django.core.handlers.base.BaseHandler._get_response)\nclass BaseHandler:\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response",
+    "token_count": 412,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler._get_response"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 412
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:152-172",
+    "content": "# django/core/handlers/base.py:152-172  (django.core.handlers.base.BaseHandler.get_response_async)\nclass BaseHandler:\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response",
+    "token_count": 185,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.get_response_async"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 185
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:228-298",
+    "content": "# django/core/handlers/base.py:228-298  (django.core.handlers.base.BaseHandler._get_response_async)\nclass BaseHandler:\n    async def _get_response_async(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware.\n        for middleware_method in self._view_middleware:\n            response = await middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is a synchronous view, run it in a subthread\n            if not iscoroutinefunction(wrapped_callback):\n                wrapped_callback = sync_to_async(\n                    wrapped_callback, thread_sensitive=True\n                )\n            try:\n                response = await wrapped_callback(\n                    request, *callback_args, **callback_kwargs\n                )\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None or an uncalled coroutine.\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = await middleware_method(request, response)\n                # Complain if the template response middleware returned None or\n                # an uncalled coroutine.\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                if iscoroutinefunction(response.render):\n                    response = await response.render()\n                else:\n                    response = await sync_to_async(\n                        response.render, thread_sensitive=True\n                    )()\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Make sure the response is not a coroutine\n        if asyncio.iscoroutine(response):\n            raise RuntimeError(\"Response is still a coroutine.\")\n        return response",
+    "token_count": 521,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler._get_response_async"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 521
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:136-150",
+    "content": "# django/core/handlers/base.py:136-150  (django.core.handlers.base.BaseHandler.get_response)\nclass BaseHandler:\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response",
+    "token_count": 134,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.get_response"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:300-315",
+    "content": "# django/core/handlers/base.py:300-315  (django.core.handlers.base.BaseHandler.resolve_request)\nclass BaseHandler:\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match",
+    "token_count": 152,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.resolve_request"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:104-134",
+    "content": "# django/core/handlers/base.py:104-134  (django.core.handlers.base.BaseHandler.adapt_method_mode)\nclass BaseHandler:\n    def adapt_method_mode(\n        self,\n        is_async,\n        method,\n        method_is_async=None,\n        debug=False,\n        name=None,\n    ):\n        \"\"\"\n        Adapt a method to be in the correct \"mode\":\n        - If is_async is False:\n          - Synchronous methods are left alone\n          - Asynchronous methods are wrapped with async_to_sync\n        - If is_async is True:\n          - Synchronous methods are wrapped with sync_to_async()\n          - Asynchronous methods are left alone\n        \"\"\"\n        if method_is_async is None:\n            method_is_async = iscoroutinefunction(method)\n        if debug and not name:\n            name = name or \"method %s()\" % method.__qualname__\n        if is_async:\n            if not method_is_async:\n                if debug:\n                    logger.debug(\"Synchronous handler adapted for %s.\", name)\n                return sync_to_async(method, thread_sensitive=True)\n        elif method_is_async:\n            if debug:\n                logger.debug(\"Asynchronous handler adapted for %s.\", name)\n            return async_to_sync(method)\n        return method",
+    "token_count": 256,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.adapt_method_mode"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 256
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:317-341",
+    "content": "# django/core/handlers/base.py:317-341  (django.core.handlers.base.BaseHandler.check_response)\nclass BaseHandler:\n    def check_response(self, response, callback, name=None):\n        \"\"\"\n        Raise an error if the view returned None or an uncalled coroutine.\n        \"\"\"\n        if not (response is None or asyncio.iscoroutine(response)):\n            return\n        if not name:\n            if isinstance(callback, types.FunctionType):  # FBV\n                name = \"The view %s.%s\" % (callback.__module__, callback.__name__)\n            else:  # CBV\n                name = \"The view %s.%s.__call__\" % (\n                    callback.__module__,\n                    callback.__class__.__name__,\n                )\n        if response is None:\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned None \"\n                \"instead.\" % name\n            )\n        elif asyncio.iscoroutine(response):\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned an \"\n                \"unawaited coroutine instead. You may need to add an 'await' \"\n                \"into your view.\" % name\n            )",
+    "token_count": 246,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.check_response"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 246
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:26-102",
+    "content": "# django/core/handlers/base.py:26-102  (django.core.handlers.base.BaseHandler.load_middleware)\nclass BaseHandler:\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler",
+    "token_count": 639,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.load_middleware"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 639
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:345-354",
+    "content": "# django/core/handlers/base.py:345-354  (django.core.handlers.base.BaseHandler.make_view_atomic)\nclass BaseHandler:\n    def make_view_atomic(self, view):\n        non_atomic_requests = getattr(view, \"_non_atomic_requests\", set())\n        for alias, settings_dict in connections.settings.items():\n            if settings_dict[\"ATOMIC_REQUESTS\"] and alias not in non_atomic_requests:\n                if iscoroutinefunction(view):\n                    raise RuntimeError(\n                        \"You cannot use ATOMIC_REQUESTS with async views.\"\n                    )\n                view = transaction.atomic(using=alias)(view)\n        return view",
+    "token_count": 126,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.make_view_atomic"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 126
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:21-343",
+    "content": "# django/core/handlers/base.py:21-343  (django.core.handlers.base.BaseHandler)\nclass BaseHandler:\n    _view_middleware = None\n    _template_response_middleware = None\n    _exception_middleware = None\n    _middleware_chain = None\n\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler\n\n    def adapt_method_mode(\n        self,\n        is_async,\n        method,\n        method_is_async=None,\n        debug=False,\n        name=None,\n    ):\n        \"\"\"\n        Adapt a method to be in the correct \"mode\":\n        - If is_async is False:\n          - Synchronous methods are left alone\n          - Asynchronous methods are wrapped with async_to_sync\n        - If is_async is True:\n          - Synchronous methods are wrapped with sync_to_async()\n          - Asynchronous methods are left alone\n        \"\"\"\n        if method_is_async is None:\n            method_is_async = iscoroutinefunction(method)\n        if debug and not name:\n            name = name or \"method %s()\" % method.__qualname__\n        if is_async:\n            if not method_is_async:\n                if debug:\n                    logger.debug(\"Synchronous handler adapted for %s.\", name)\n                return sync_to_async(method, thread_sensitive=True)\n        elif method_is_async:\n            if debug:\n                logger.debug(\"Asynchronous handler adapted for %s.\", name)\n            return async_to_sync(method)\n        return method\n\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response\n\n    async def _get_response_async(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware.\n        for middleware_method in self._view_middleware:\n            response = await middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is a synchronous view, run it in a subthread\n            if not iscoroutinefunction(wrapped_callback):\n                wrapped_callback = sync_to_async(\n                    wrapped_callback, thread_sensitive=True\n                )\n            try:\n                response = await wrapped_callback(\n                    request, *callback_args, **callback_kwargs\n                )\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None or an uncalled coroutine.\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = await middleware_method(request, response)\n                # Complain if the template response middleware returned None or\n                # an uncalled coroutine.\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                if iscoroutinefunction(response.render):\n                    response = await response.render()\n                else:\n                    response = await sync_to_async(\n                        response.render, thread_sensitive=True\n                    )()\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Make sure the response is not a coroutine\n        if asyncio.iscoroutine(response):\n            raise RuntimeError(\"Response is still a coroutine.\")\n        return response\n\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match\n\n    def check_response(self, response, callback, name=None):\n        \"\"\"\n        Raise an error if the view returned None or an uncalled coroutine.\n        \"\"\"\n        if not (response is None or asyncio.iscoroutine(response)):\n            return\n        if not name:\n            if isinstance(callback, types.FunctionType):  # FBV\n                name = \"The view %s.%s\" % (callback.__module__, callback.__name__)\n            else:  # CBV\n                name = \"The view %s.%s.__call__\" % (\n                    callback.__module__,\n                    callback.__class__.__name__,\n                )\n        if response is None:\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned None \"\n                \"instead.\" % name\n            )\n        elif asyncio.iscoroutine(response):\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned an \"\n                \"unawaited coroutine instead. You may need to add an 'await' \"\n                \"into your view.\" % name\n            )\n\n    # Other utility methods.",
+    "token_count": 2364,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 2364
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:356-365",
+    "content": "# django/core/handlers/base.py:356-365  (django.core.handlers.base.BaseHandler.process_exception_by_middleware)\nclass BaseHandler:\n    def process_exception_by_middleware(self, exception, request):\n        \"\"\"\n        Pass the exception to the exception middleware. If no middleware\n        return a response for this exception, return None.\n        \"\"\"\n        for middleware_method in self._exception_middleware:\n            response = middleware_method(request, exception)\n            if response:\n                return response\n        return None",
+    "token_count": 106,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.process_exception_by_middleware"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 106
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:1-17",
+    "content": "# django/core/handlers/base.py:1-17  (django.core.handlers.base)\nimport asyncio\nimport logging\nimport types\n\nfrom asgiref.sync import async_to_sync, iscoroutinefunction, sync_to_async\n\nfrom django.conf import settings\nfrom django.core.exceptions import ImproperlyConfigured, MiddlewareNotUsed\nfrom django.core.signals import request_finished\nfrom django.db import connections, transaction\nfrom django.urls import get_resolver, set_urlconf\nfrom django.utils.log import log_response\nfrom django.utils.module_loading import import_string\n\nfrom .exception import convert_exception_to_response\n\nlogger = logging.getLogger(\"django.request\")",
+    "token_count": 131,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:368-370",
+    "content": "# django/core/handlers/base.py:368-370  (django.core.handlers.base.reset_urlconf)\ndef reset_urlconf(sender, **kwargs):\n    \"\"\"Reset the URLconf after each request is finished.\"\"\"\n    set_urlconf(None)",
+    "token_count": 53,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.reset_urlconf"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:373-373",
+    "content": "# django/core/handlers/base.py:373-373  (django.core.handlers.base)\nrequest_finished.connect(reset_urlconf)",
+    "token_count": 31,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 31
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/multipartparser.py:47-405#signature",
+    "content": "# django/http/multipartparser.py:47-405  (django.http.multipartparser.MultiPartParser [signature])\nclass MultiPartParser:\n    'An RFC 7578 multipart/form-data parser.'\n    ...",
+    "token_count": 47,
+    "rank": 15,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.http.multipartparser.MultiPartParser"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "stub",
+     "bm25_rank": 27,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:499-528#signature",
+    "content": "# django/urls/resolvers.py:499-528  (django.urls.resolvers.URLResolver._check_custom_error_handlers [signature])\nclass URLResolver:\n    def _check_custom_error_handlers(self):\n        ...",
+    "token_count": 46,
+    "rank": 16,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.urls.resolvers.URLResolver._check_custom_error_handlers"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "stub",
+     "bm25_rank": 28,
+     "chunk_kind": "method",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/log.py:210-255#signature",
+    "content": "# django/utils/log.py:210-255  (django.utils.log.log_response [signature])\ndef log_response(\n    message,\n    *args,\n    response=None,\n    request=None,\n    logger=request_logger,\n    level=None,\n    exception=None,\n):\n    'Log errors based on HttpResponse status.'\n    ...",
+    "token_count": 67,
+    "rank": 17,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.log.log_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "stub",
+     "bm25_rank": 30,
+     "chunk_kind": "function",
+     "engine_token_count": 67
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/datastructures.py:258-265#signature",
+    "content": "# django/utils/datastructures.py:258-265  (django.utils.datastructures.DictWrapper [signature])\nclass DictWrapper(dict):\n    'Wrap accesses to a dictionary so that certain values (those starting with'\n    ...",
+    "token_count": 48,
+    "rank": 18,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.datastructures.DictWrapper"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "stub",
+     "bm25_rank": 31,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/handlers/tests.py:236-249#signature",
+    "content": "# tests/handlers/tests.py:236-249  (tests.handlers.tests.HandlerRequestTests.test_no_response [signature])\nclass HandlerRequestTests(SimpleTestCase):\n    def test_no_response(self):\n        ...",
+    "token_count": 46,
+    "rank": 19,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.handlers.tests.HandlerRequestTests.test_no_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "stub",
+     "bm25_rank": 32,
+     "chunk_kind": "method",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/views.py:36-60#signature",
+    "content": "# tests/test_client/views.py:36-60  (tests.test_client.views.trace_view [signature])\ndef trace_view(request):\n    'A simple view that expects a TRACE request and echoes its status line.'\n    ...",
+    "token_count": 46,
+    "rank": 20,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_client.views.trace_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "stub",
+     "bm25_rank": 33,
+     "chunk_kind": "function",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:210-254#signature",
+    "content": "# django/test/client.py:210-254  (django.test.client.AsyncClientHandler.__call__ [signature])\nclass AsyncClientHandler(BaseHandler):\n    async def __call__(self, scope):\n        # Set up middleware if needed. We couldn't do this earlier, because\n        # settings weren't available.\n        ...",
+    "token_count": 70,
+    "rank": 21,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.test.client.AsyncClientHandler.__call__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "stub",
+     "bm25_rank": 35,
+     "chunk_kind": "method",
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:101-119#signature",
+    "content": "# django/middleware/csrf.py:101-119  (django.middleware.csrf.get_token [signature])\ndef get_token(request):\n    'Return the CSRF token required for a POST form. The token is an'\n    ...",
+    "token_count": 49,
+    "rank": 22,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.middleware.csrf.get_token"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "stub",
+     "bm25_rank": 36,
+     "chunk_kind": "function",
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/handlers/tests.py:313-319#signature",
+    "content": "# tests/handlers/tests.py:313-319  (tests.handlers.tests.AsyncHandlerRequestTests.test_no_response [signature])\nclass AsyncHandlerRequestTests(SimpleTestCase):\n    async def test_no_response(self):\n        ...",
+    "token_count": 49,
+    "rank": 23,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.handlers.tests.AsyncHandlerRequestTests.test_no_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "stub",
+     "bm25_rank": 38,
+     "chunk_kind": "method",
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/generic/base.py:134-144#signature",
+    "content": "# django/views/generic/base.py:134-144  (django.views.generic.base.View.dispatch [signature])\nclass View:\n    def dispatch(self, request, *args, **kwargs):\n        # Try to dispatch to the right method; if a method doesn't exist,\n        # defer to the error handler. Also defer to the error handler if the\n        # request method isn't on the approved list.\n        ...",
+    "token_count": 89,
+    "rank": 24,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.views.generic.base.View.dispatch"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "stub",
+     "bm25_rank": 39,
+     "chunk_kind": "method",
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/generic/base.py:81-124#signature",
+    "content": "# django/views/generic/base.py:81-124  (django.views.generic.base.View.as_view [signature])\nclass View:\n    @classonlymethod\n    def as_view(cls, **initkwargs):\n        'Main entry point for a request-response process.'\n        ...",
+    "token_count": 58,
+    "rank": 25,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.views.generic.base.View.as_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "stub",
+     "bm25_rank": 40,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:476-488#signature",
+    "content": "# django/middleware/csrf.py:476-488  (django.middleware.csrf.CsrfViewMiddleware.process_response [signature])\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        ...",
+    "token_count": 51,
+    "rank": 26,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.middleware.csrf.CsrfViewMiddleware.process_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "stub",
+     "bm25_rank": 41,
+     "chunk_kind": "method",
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/check_framework/test_urls.py:222-243#signature",
+    "content": "# tests/check_framework/test_urls.py:222-243  (tests.check_framework.test_urls.CheckCustomErrorHandlersTests.test_bad_class_based_handlers [signature])\nclass CheckCustomErrorHandlersTests(SimpleTestCase):\n    @override_settings(\n        ROOT_URLCONF=\"check_framework.urls.bad_class_based_error_handlers\",\n    )\n    def test_bad_class_based_handlers(self):\n        ...",
+    "token_count": 77,
+    "rank": 27,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.check_framework.test_urls.CheckCustomErrorHandlersTests.test_bad_class_based_handlers"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "stub",
+     "bm25_rank": 42,
+     "chunk_kind": "method",
+     "engine_token_count": 77
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/base.py:292-299#signature",
+    "content": "# django/core/cache/backends/base.py:292-299  (django.core.cache.backends.base.BaseCache.__contains__ [signature])\nclass BaseCache:\n    def __contains__(self, key):\n        'Return True if the key is in the cache and has not expired.'\n        ...",
+    "token_count": 62,
+    "rank": 28,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.core.cache.backends.base.BaseCache.__contains__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "stub",
+     "bm25_rank": 44,
+     "chunk_kind": "method",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/log.py:80-84#signature",
+    "content": "# django/utils/log.py:80-84  (django.utils.log.AdminEmailHandler [signature])\nclass AdminEmailHandler(logging.Handler):\n    'An exception log handler that emails log entries to site admins.'\n    ...",
+    "token_count": 45,
+    "rank": 29,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.log.AdminEmailHandler"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "stub",
+     "bm25_rank": 45,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/handlers/tests_custom_error_handlers.py:41-46#signature",
+    "content": "# tests/handlers/tests_custom_error_handlers.py:41-46  (tests.handlers.tests_custom_error_handlers.CustomErrorHandlerTests.test_handler_renders_template_response [signature])\nclass CustomErrorHandlerTests(SimpleTestCase):\n    def test_handler_renders_template_response(self):\n        'BaseHandler should render TemplateResponse if necessary.'\n        ...",
+    "token_count": 69,
+    "rank": 30,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.handlers.tests_custom_error_handlers.CustomErrorHandlerTests.test_handler_renders_template_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "stub",
+     "bm25_rank": 46,
+     "chunk_kind": "method",
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:1786-1869#part1of2#signature",
+    "content": "# django/db/models/sql/query.py:1786-1869#part1of2  (django.db.models.sql.query.Query.setup_joins [signature])\nclass Query(BaseExpression):\n    def setup_joins(\n        self,\n        names,\n        opts,\n        alias,\n        can_reuse=None,\n        allow_many=True,\n        reuse_with_filtered_relation=False,\n    ):\n        'Compute the necessary table joins for the passage through the fields'\n        ...",
+    "token_count": 95,
+    "rank": 31,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.sql.query.Query.setup_joins"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "stub",
+     "bm25_rank": 47,
+     "chunk_kind": "function_part",
+     "engine_token_count": 95
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/base.py:206-282#signature",
+    "content": "# django/template/base.py:206-282  (django.template.base.Template.get_exception_info [signature])\nclass Template:\n    def get_exception_info(self, exception, token):\n        'Return a dictionary containing contextual line information of where'\n        ...",
+    "token_count": 53,
+    "rank": 32,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.base.Template.get_exception_info"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "stub",
+     "bm25_rank": 48,
+     "chunk_kind": "method",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:152-164",
+    "content": "# django/core/handlers/asgi.py:152-164  (django.core.handlers.asgi.ASGIHandler.__call__)\nclass ASGIHandler(base.BaseHandler):\n    async def __call__(self, scope, receive, send):\n        \"\"\"\n        Async entrypoint - parses the request and hands off to get_response.\n        \"\"\"\n        # Serve only HTTP connections.\n        # FIXME: Allow to override this.\n        if scope[\"type\"] != \"http\":\n            raise ValueError(\n                \"Django can only handle ASGI/HTTP connections, not %s.\" % scope[\"type\"]\n            )\n\n        async with ThreadSensitiveContext():\n            await self.handle(scope, receive, send)",
+    "token_count": 143,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.__call__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "method",
+     "engine_token_count": 143
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:166-194",
+    "content": "# django/core/handlers/asgi.py:166-194  (django.core.handlers.asgi.ASGIHandler.handle)\nclass ASGIHandler(base.BaseHandler):\n    async def handle(self, scope, receive, send):\n        \"\"\"\n        Handles the ASGI request. Called via the __call__ method.\n        \"\"\"\n        # Receive the HTTP request body as a stream object.\n        try:\n            body_file = await self.read_body(receive)\n        except RequestAborted:\n            return\n        # Request is complete and can be served.\n        set_script_prefix(self.get_script_prefix(scope))\n        await sync_to_async(signals.request_started.send, thread_sensitive=True)(\n            sender=self.__class__, scope=scope\n        )\n        # Get the request and check for basic issues.\n        request, error_response = self.create_request(scope, body_file)\n        if request is None:\n            body_file.close()\n            await self.send_response(error_response, send)\n            return\n        # Get the response, using the async mode of BaseHandler.\n        response = await self.get_response_async(request)\n        response._handler_class = self.__class__\n        # Increase chunk size on file responses (ASGI servers handles low-level\n        # chunking).\n        if isinstance(response, FileResponse):\n            response.block_size = self.chunk_size\n        # Send the response.\n        await self.send_response(response, send)",
+    "token_count": 287,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.handle"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 287
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:234-244",
+    "content": "# django/core/handlers/asgi.py:234-244  (django.core.handlers.asgi.ASGIHandler.handle_uncaught_exception)\nclass ASGIHandler(base.BaseHandler):\n    def handle_uncaught_exception(self, request, resolver, exc_info):\n        \"\"\"Last-chance handler for exceptions.\"\"\"\n        # There's no WSGI server to catch the exception further up\n        # if this fails, so translate it into a plain text response.\n        try:\n            return super().handle_uncaught_exception(request, resolver, exc_info)\n        except Exception:\n            return HttpResponseServerError(\n                traceback.format_exc() if settings.DEBUG else \"Internal Server Error\",\n                content_type=\"text/plain\",\n            )",
+    "token_count": 146,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.handle_uncaught_exception"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "method",
+     "engine_token_count": 146
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:217-232",
+    "content": "# django/core/handlers/asgi.py:217-232  (django.core.handlers.asgi.ASGIHandler.create_request)\nclass ASGIHandler(base.BaseHandler):\n    def create_request(self, scope, body_file):\n        \"\"\"\n        Create the Request object and returns either (request, None) or\n        (None, response) if there is an error response.\n        \"\"\"\n        try:\n            return self.request_class(scope, body_file), None\n        except UnicodeDecodeError:\n            logger.warning(\n                \"Bad Request (UnicodeDecodeError)\",\n                exc_info=sys.exc_info(),\n                extra={\"status_code\": 400},\n            )\n            return None, HttpResponseBadRequest()\n        except RequestDataTooBig:\n            return None, HttpResponse(\"413 Payload too large\", status=413)",
+    "token_count": 169,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.create_request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "method",
+     "engine_token_count": 169
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/user_commands/models.py:1-14",
+    "content": "# tests/user_commands/models.py:1-14  (tests.user_commands.models)\n\"\"\"\nUser-registered management commands\n\nThe ``manage.py`` utility provides a number of useful commands for managing a\nDjango project. If you want to add a utility command of your own, you can.\n\nThe user-defined command ``dance`` is defined in the management/commands\nsubdirectory of this test application. It is a simple command that responds\nwith a printed message when invoked.\n\nFor more details on how to define your own ``manage.py`` commands, look at the\n``django.core.management.commands`` directory. This directory contains the\ndefinitions for the base Django ``manage.py`` commands.\n\"\"\"",
+    "token_count": 141,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "module_block",
+     "engine_token_count": 141
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:114-114",
+    "content": "# django/core/handlers/wsgi.py:114-114  (django.core.handlers.wsgi.WSGIHandler)\nclass WSGIHandler(base.BaseHandler):\n    request_class = WSGIRequest",
+    "token_count": 46,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIHandler"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:120-144",
+    "content": "# django/core/handlers/wsgi.py:120-144  (django.core.handlers.wsgi.WSGIHandler.__call__)\nclass WSGIHandler(base.BaseHandler):\n    def __call__(self, environ, start_response):\n        set_script_prefix(get_script_name(environ))\n        signals.request_started.send(sender=self.__class__, environ=environ)\n        request = self.request_class(environ)\n        response = self.get_response(request)\n\n        response._handler_class = self.__class__\n\n        status = \"%d %s\" % (response.status_code, response.reason_phrase)\n        response_headers = [\n            *response.items(),\n            *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n        ]\n        start_response(status, response_headers)\n        if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n            \"wsgi.file_wrapper\"\n        ):\n            # If `wsgi.file_wrapper` is used the WSGI server does not call\n            # .close on the response, but on the file wrapper. Patch it to use\n            # response.close instead which takes care of closing all files.\n            response.file_to_stream.close = response.close\n            response = environ[\"wsgi.file_wrapper\"](\n                response.file_to_stream, response.block_size\n            )\n        return response",
+    "token_count": 276,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIHandler.__call__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 276
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:142-146",
+    "content": "# django/core/handlers/asgi.py:142-146  (django.core.handlers.asgi.ASGIHandler)\nclass ASGIHandler(base.BaseHandler):\n    \"\"\"Handler for ASGI requests.\"\"\"\n\n    request_class = ASGIRequest\n    # Size to chunk response bodies into for multiple response messages.\n    chunk_size = 2**16",
+    "token_count": 75,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:870-915",
+    "content": "# django/test/client.py:870-915  (django.test.client.Client.request)\nclass Client(ClientMixin, RequestFactory):\n    def request(self, **request):\n        \"\"\"\n        Make a generic request. Compose the environment dictionary and pass\n        to the handler, return the result of the handler. Assume defaults for\n        the query environment, which can be overridden using the arguments to\n        the request.\n        \"\"\"\n        environ = self._base_environ(**request)\n\n        # Curry a data dictionary into an instance of the template renderer\n        # callback function.\n        data = {}\n        on_template_render = partial(store_rendered_templates, data)\n        signal_uid = \"template-render-%s\" % id(request)\n        signals.template_rendered.connect(on_template_render, dispatch_uid=signal_uid)\n        # Capture exceptions created by the handler.\n        exception_uid = \"request-exception-%s\" % id(request)\n        got_request_exception.connect(self.store_exc_info, dispatch_uid=exception_uid)\n        try:\n            response = self.handler(environ)\n        finally:\n            signals.template_rendered.disconnect(dispatch_uid=signal_uid)\n            got_request_exception.disconnect(dispatch_uid=exception_uid)\n        # Check for signaled exceptions.\n        self.check_exception(response)\n        # Save the client and request that stimulated the response.\n        response.client = self\n        response.request = request\n        # Add any rendered template detail to the response.\n        response.templates = data.get(\"templates\", [])\n        response.context = data.get(\"context\")\n        response.json = partial(self._parse_json, response)\n        # Attach the ResolverMatch instance to the response.\n        urlconf = getattr(response.wsgi_request, \"urlconf\", None)\n        response.resolver_match = SimpleLazyObject(\n            lambda: resolve(request[\"PATH_INFO\"], urlconf=urlconf),\n        )\n        # Flatten a single context. Not really necessary anymore thanks to the\n        # __getattr__ flattening in ContextList, but has some edge case\n        # backwards compatibility implications.\n        if response.context and len(response.context) == 1:\n            response.context = response.context[0]\n        # Update persistent cookie data.\n        if response.cookies:\n            self.cookies.update(response.cookies)\n        return response",
+    "token_count": 457,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.Client.request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 457
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:149-153",
+    "content": "# django/test/client.py:149-153  (django.test.client.ClientHandler)\nclass ClientHandler(BaseHandler):\n    \"\"\"\n    An HTTP Handler that can be used for testing purposes. Use the WSGI\n    interface to compose requests, but return the raw HttpResponse object with\n    the originating WSGIRequest attached to its ``wsgi_request`` attribute.\n    \"\"\"",
+    "token_count": 80,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.ClientHandler"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/exception.py:162-170",
+    "content": "# django/core/handlers/exception.py:162-170  (django.core.handlers.exception.get_exception_response)\ndef get_exception_response(request, resolver, status_code, exception):\n    try:\n        callback = resolver.resolve_error_handler(status_code)\n        response = callback(request, exception=exception)\n    except Exception:\n        signals.got_request_exception.send(sender=None, request=request)\n        response = handle_uncaught_exception(request, resolver, sys.exc_info())\n\n    return response",
+    "token_count": 98,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.exception.get_exception_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "function",
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:1224-1272",
+    "content": "# django/test/client.py:1224-1272  (django.test.client.AsyncClient.request)\nclass AsyncClient(ClientMixin, AsyncRequestFactory):\n    async def request(self, **request):\n        \"\"\"\n        Make a generic request. Compose the scope dictionary and pass to the\n        handler, return the result of the handler. Assume defaults for the\n        query environment, which can be overridden using the arguments to the\n        request.\n        \"\"\"\n        if \"follow\" in request:\n            raise NotImplementedError(\n                \"AsyncClient request methods do not accept the follow parameter.\"\n            )\n        scope = self._base_scope(**request)\n        # Curry a data dictionary into an instance of the template renderer\n        # callback function.\n        data = {}\n        on_template_render = partial(store_rendered_templates, data)\n        signal_uid = \"template-render-%s\" % id(request)\n        signals.template_rendered.connect(on_template_render, dispatch_uid=signal_uid)\n        # Capture exceptions created by the handler.\n        exception_uid = \"request-exception-%s\" % id(request)\n        got_request_exception.connect(self.store_exc_info, dispatch_uid=exception_uid)\n        try:\n            response = await self.handler(scope)\n        finally:\n            signals.template_rendered.disconnect(dispatch_uid=signal_uid)\n            got_request_exception.disconnect(dispatch_uid=exception_uid)\n        # Check for signaled exceptions.\n        self.check_exception(response)\n        # Save the client and request that stimulated the response.\n        response.client = self\n        response.request = request\n        # Add any rendered template detail to the response.\n        response.templates = data.get(\"templates\", [])\n        response.context = data.get(\"context\")\n        response.json = partial(self._parse_json, response)\n        # Attach the ResolverMatch instance to the response.\n        urlconf = getattr(response.asgi_request, \"urlconf\", None)\n        response.resolver_match = SimpleLazyObject(\n            lambda: resolve(request[\"path\"], urlconf=urlconf),\n        )\n        # Flatten a single context. Not really necessary anymore thanks to the\n        # __getattr__ flattening in ContextList, but has some edge case\n        # backwards compatibility implications.\n        if response.context and len(response.context) == 1:\n            response.context = response.context[0]\n        # Update persistent cookie data.\n        if response.cookies:\n            self.cookies.update(response.cookies)\n        return response",
+    "token_count": 488,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.AsyncClient.request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "method",
+     "engine_token_count": 488
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:196-215",
+    "content": "# django/core/handlers/asgi.py:196-215  (django.core.handlers.asgi.ASGIHandler.read_body)\nclass ASGIHandler(base.BaseHandler):\n    async def read_body(self, receive):\n        \"\"\"Reads an HTTP body from an ASGI connection.\"\"\"\n        # Use the tempfile that auto rolls-over to a disk file as it fills up.\n        body_file = tempfile.SpooledTemporaryFile(\n            max_size=settings.FILE_UPLOAD_MAX_MEMORY_SIZE, mode=\"w+b\"\n        )\n        while True:\n            message = await receive()\n            if message[\"type\"] == \"http.disconnect\":\n                body_file.close()\n                # Early client disconnect.\n                raise RequestAborted()\n            # Add a body chunk from the message, if provided.\n            if \"body\" in message:\n                body_file.write(message[\"body\"])\n            # Quit out if that's the end.\n            if not message.get(\"more_body\", False):\n                break\n        body_file.seek(0)\n        return body_file",
+    "token_count": 208,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.read_body"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 208
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:319-325",
+    "content": "# django/core/handlers/asgi.py:319-325  (django.core.handlers.asgi.ASGIHandler.get_script_prefix)\nclass ASGIHandler(base.BaseHandler):\n    def get_script_prefix(self, scope):\n        \"\"\"\n        Return the script prefix to use from either the scope or a setting.\n        \"\"\"\n        if settings.FORCE_SCRIPT_NAME:\n            return settings.FORCE_SCRIPT_NAME\n        return scope.get(\"root_path\", \"\") or \"\"",
+    "token_count": 97,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.get_script_prefix"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "method",
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/exception.py:24-60",
+    "content": "# django/core/handlers/exception.py:24-60  (django.core.handlers.exception.convert_exception_to_response)\ndef convert_exception_to_response(get_response):\n    \"\"\"\n    Wrap the given get_response callable in exception-to-response conversion.\n\n    All exceptions will be converted. All known 4xx exceptions (Http404,\n    PermissionDenied, MultiPartParserError, SuspiciousOperation) will be\n    converted to the appropriate response, and all other exceptions will be\n    converted to 500 responses.\n\n    This decorator is automatically applied to all middleware to ensure that\n    no middleware leaks an exception and that the next middleware in the stack\n    can rely on getting a response instead of an exception.\n    \"\"\"\n    if iscoroutinefunction(get_response):\n\n        @wraps(get_response)\n        async def inner(request):\n            try:\n                response = await get_response(request)\n            except Exception as exc:\n                response = await sync_to_async(\n                    response_for_exception, thread_sensitive=False\n                )(request, exc)\n            return response\n\n        return inner\n    else:\n\n        @wraps(get_response)\n        def inner(request):\n            try:\n                response = get_response(request)\n            except Exception as exc:\n                response = response_for_exception(request, exc)\n            return response\n\n        return inner",
+    "token_count": 267,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.exception.convert_exception_to_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "function",
+     "engine_token_count": 267
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:148-150",
+    "content": "# django/core/handlers/asgi.py:148-150  (django.core.handlers.asgi.ASGIHandler.__init__)\nclass ASGIHandler(base.BaseHandler):\n    def __init__(self):\n        super().__init__()\n        self.load_middleware(is_async=True)",
+    "token_count": 60,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.__init__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "method",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:419-474",
+    "content": "# django/middleware/csrf.py:419-474  (django.middleware.csrf.CsrfViewMiddleware.process_view)\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def process_view(self, request, callback, callback_args, callback_kwargs):\n        if getattr(request, \"csrf_processing_done\", False):\n            return None\n\n        # Wait until request.META[\"CSRF_COOKIE\"] has been manipulated before\n        # bailing out, so that get_token still works\n        if getattr(callback, \"csrf_exempt\", False):\n            return None\n\n        # Assume that anything not defined as 'safe' by RFC 9110 needs protection\n        if request.method in (\"GET\", \"HEAD\", \"OPTIONS\", \"TRACE\"):\n            return self._accept(request)\n\n        if getattr(request, \"_dont_enforce_csrf_checks\", False):\n            # Mechanism to turn off CSRF checks for test suite. It comes after\n            # the creation of CSRF cookies, so that everything else continues\n            # to work exactly the same (e.g. cookies are sent, etc.), but\n            # before any branches that call the _reject method.\n            return self._accept(request)\n\n        # Reject the request if the Origin header doesn't match an allowed\n        # value.\n        if \"HTTP_ORIGIN\" in request.META:\n            if not self._origin_verified(request):\n                return self._reject(\n                    request, REASON_BAD_ORIGIN % request.META[\"HTTP_ORIGIN\"]\n                )\n        elif request.is_secure():\n            # If the Origin header wasn't provided, reject HTTPS requests if\n            # the Referer header doesn't match an allowed value.\n            #\n            # Suppose user visits http://example.com/\n            # An active network attacker (man-in-the-middle, MITM) sends a\n            # POST form that targets https://example.com/detonate-bomb/ and\n            # submits it via JavaScript.\n            #\n            # The attacker will need to provide a CSRF cookie and token, but\n            # that's no problem for a MITM and the session-independent secret\n            # we're using. So the MITM can circumvent the CSRF protection. This\n            # is true for any HTTP connection, but anyone using HTTPS expects\n            # better! For this reason, for https://example.com/ we need\n            # additional protection that treats http://example.com/ as\n            # completely untrusted. Under HTTPS, Barth et al. found that the\n            # Referer header is missing for same-domain requests in only about\n            # 0.2% of cases or less, so we can use strict Referer checking.\n            try:\n                self._check_referer(request)\n            except RejectRequest as exc:\n                return self._reject(request, exc.reason)\n\n        try:\n            self._check_token(request)\n        except RejectRequest as exc:\n            return self._reject(request, exc.reason)\n\n        return self._accept(request)",
+    "token_count": 607,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.csrf.CsrfViewMiddleware.process_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "method",
+     "engine_token_count": 607
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/multipartparser.py:132-182#part1of3",
+    "content": "# django/http/multipartparser.py:132-182#part1of3  (django.http.multipartparser.MultiPartParser._parse)\nclass MultiPartParser:\n    def _parse(self):\n        \"\"\"\n        Parse the POST data and break it into a FILES MultiValueDict and a POST\n        MultiValueDict.\n\n        Return a tuple containing the POST and FILES dictionary, respectively.\n        \"\"\"\n        from django.http import QueryDict\n\n        encoding = self._encoding\n        handlers = self._upload_handlers\n\n        # HTTP spec says that Content-Length >= 0 is valid\n        # handling content-length == 0 before continuing\n        if self._content_length == 0:\n            return QueryDict(encoding=self._encoding), MultiValueDict()\n\n        # See if any of the handlers take care of the parsing.\n        # This allows overriding everything if need be.\n        for handler in handlers:\n            result = handler.handle_raw_input(\n                self._input_data,\n                self._meta,\n                self._content_length,\n                self._boundary,\n                encoding,\n            )\n            # Check to see if it was handled\n            if result is not None:\n                return result[0], result[1]\n\n        # Create the data structures to be used later.\n        self._post = QueryDict(mutable=True)\n        self._files = MultiValueDict()\n\n        # Instantiate the parser and stream:\n        stream = LazyStream(ChunkIter(self._input_data, self._chunk_size))\n\n        # Whether or not to signal a file-completion at the beginning of the loop.\n        old_field_name = None\n        counters = [0] * len(handlers)\n\n        # Number of bytes that have been read.\n        num_bytes_read = 0\n        # To count the number of keys in the request.\n        num_post_keys = 0\n        # To count the number of files in the request.\n        num_files = 0\n        # To limit the amount of data read from the request.\n        read_size = None\n        # Whether a file upload is finished.\n        uploaded_file = True",
+    "token_count": 429,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.multipartparser.MultiPartParser._parse"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "function_part",
+     "engine_token_count": 429
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/base.py:184-268",
+    "content": "# django/core/management/base.py:184-268  (django.core.management.base.BaseCommand)\nclass BaseCommand:\n    \"\"\"\n    The base class from which all management commands ultimately\n    derive.\n\n    Use this class if you want access to all of the mechanisms which\n    parse the command-line arguments and work out what code to call in\n    response; if you don't need to change any of that behavior,\n    consider using one of the subclasses defined in this file.\n\n    If you are interested in overriding/customizing various aspects of\n    the command-parsing and -execution behavior, the normal flow works\n    as follows:\n\n    1. ``django-admin`` or ``manage.py`` loads the command class\n       and calls its ``run_from_argv()`` method.\n\n    2. The ``run_from_argv()`` method calls ``create_parser()`` to get\n       an ``ArgumentParser`` for the arguments, parses them, performs\n       any environment changes requested by options like\n       ``pythonpath``, and then calls the ``execute()`` method,\n       passing the parsed arguments.\n\n    3. The ``execute()`` method attempts to carry out the command by\n       calling the ``handle()`` method with the parsed arguments; any\n       output produced by ``handle()`` will be printed to standard\n       output and, if the command is intended to produce a block of\n       SQL statements, will be wrapped in ``BEGIN`` and ``COMMIT``.\n\n    4. If ``handle()`` or ``execute()`` raised any exception (e.g.\n       ``CommandError``), ``run_from_argv()`` will  instead print an error\n       message to ``stderr``.\n\n    Thus, the ``handle()`` method is typically the starting point for\n    subclasses; many built-in commands and command types either place\n    all of their logic in ``handle()``, or perform some additional\n    parsing work in ``handle()`` and then delegate from it to more\n    specialized methods as needed.\n\n    Several attributes affect behavior at various steps along the way:\n\n    ``help``\n        A short description of the command, which will be printed in\n        help messages.\n\n    ``output_transaction``\n        A boolean indicating whether the command outputs SQL\n        statements; if ``True``, the output will automatically be\n        wrapped with ``BEGIN;`` and ``COMMIT;``. Default value is\n        ``False``.\n\n    ``requires_migrations_checks``\n        A boolean; if ``True``, the command prints a warning if the set of\n        migrations on disk don't match the migrations in the database.\n\n    ``requires_system_checks``\n        A list or tuple of tags, e.g. [Tags.staticfiles, Tags.models]. System\n        checks registered in the chosen tags will be checked for errors prior\n        to executing the command. The value '__all__' can be used to specify\n        that all system checks should be performed. Default value is '__all__'.\n\n        To validate an individual application's models\n        rather than all applications' models, call\n        ``self.check(app_configs)`` from ``handle()``, where ``app_configs``\n        is the list of application's configuration provided by the\n        app registry.\n\n    ``stealth_options``\n        A tuple of any options the command uses which aren't defined by the\n        argument parser.\n    \"\"\"\n\n    # Metadata about this command.\n    help = \"\"\n\n    # Configuration shortcuts that alter various logic.\n    _called_from_command_line = False\n    output_transaction = False  # Whether to wrap the output in a \"BEGIN; COMMIT;\"\n    requires_migrations_checks = False\n    requires_system_checks = \"__all__\"\n    # Arguments, common to all commands, which aren't defined by the argument\n    # parser.\n    base_stealth_options = (\"stderr\", \"stdout\")\n    # Command-specific options not defined by the argument parser.\n    stealth_options = ()\n    suppressed_base_arguments = set()",
+    "token_count": 822,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.management.base.BaseCommand"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 822
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/exception.py:173-186",
+    "content": "# django/core/handlers/exception.py:173-186  (django.core.handlers.exception.handle_uncaught_exception)\ndef handle_uncaught_exception(request, resolver, exc_info):\n    \"\"\"\n    Processing for any otherwise uncaught exceptions (those that will\n    generate HTTP 500 responses).\n    \"\"\"\n    if settings.DEBUG_PROPAGATE_EXCEPTIONS:\n        raise\n\n    if settings.DEBUG:\n        return debug.technical_500_response(request, *exc_info)\n\n    # Return an HttpResponse that displays a friendly error message.\n    callback = resolver.resolve_error_handler(500)\n    return callback(request)",
+    "token_count": 129,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.exception.handle_uncaught_exception"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "function",
+     "engine_token_count": 129
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/cache.py:1-55",
+    "content": "# django/middleware/cache.py:1-55  (django.middleware.cache)\n\"\"\"\nCache middleware. If enabled, each Django-powered page will be cached based on\nURL. The canonical way to enable cache middleware is to set\n``UpdateCacheMiddleware`` as your first piece of middleware, and\n``FetchFromCacheMiddleware`` as the last::\n\n    MIDDLEWARE = [\n        'django.middleware.cache.UpdateCacheMiddleware',\n        ...\n        'django.middleware.cache.FetchFromCacheMiddleware'\n    ]\n\nThis is counter-intuitive, but correct: ``UpdateCacheMiddleware`` needs to run\nlast during the response phase, which processes middleware bottom-up;\n``FetchFromCacheMiddleware`` needs to run last during the request phase, which\nprocesses middleware top-down.\n\nThe single-class ``CacheMiddleware`` can be used for some simple sites.\nHowever, if any other piece of middleware needs to affect the cache key, you'll\nneed to use the two-part ``UpdateCacheMiddleware`` and\n``FetchFromCacheMiddleware``. This'll most often happen when you're using\nDjango's ``LocaleMiddleware``.\n\nMore details about how the caching works:\n\n* Only GET or HEAD-requests with status code 200 are cached.\n\n* The number of seconds each page is stored for is set by the \"max-age\" section\n  of the response's \"Cache-Control\" header, falling back to the\n  CACHE_MIDDLEWARE_SECONDS setting if the section was not found.\n\n* This middleware expects that a HEAD request is answered with the same response\n  headers exactly like the corresponding GET request.\n\n* When a hit occurs, a shallow copy of the original response object is returned\n  from process_request.\n\n* Pages will be cached based on the contents of the request headers listed in\n  the response's \"Vary\" header.\n\n* This middleware also sets ETag, Last-Modified, Expires and Cache-Control\n  headers on the response object.\n\n\"\"\"\n\nfrom django.conf import settings\nfrom django.core.cache import DEFAULT_CACHE_ALIAS, caches\nfrom django.utils.cache import (\n    get_cache_key,\n    get_max_age,\n    has_vary_header,\n    learn_cache_key,\n    patch_response_headers,\n)\nfrom django.utils.deprecation import MiddlewareMixin",
+    "token_count": 453,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "module_block",
+     "engine_token_count": 453
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:116-118",
+    "content": "# django/core/handlers/wsgi.py:116-118  (django.core.handlers.wsgi.WSGIHandler.__init__)\nclass WSGIHandler(base.BaseHandler):\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.load_middleware()",
+    "token_count": 69,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIHandler.__init__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "method",
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/file_uploads/tests.py:671-715",
+    "content": "# tests/file_uploads/tests.py:671-715  (tests.file_uploads.tests.FileUploadTests.test_file_error_blocking)\nclass FileUploadTests(TestCase):\n    def test_file_error_blocking(self):\n        \"\"\"\n        The server should not block when there are upload errors (bug #8622).\n        This can happen if something -- i.e. an exception handler -- tries to\n        access POST while handling an error in parsing POST. This shouldn't\n        cause an infinite loop!\n        \"\"\"\n\n        class POSTAccessingHandler(client.ClientHandler):\n            \"\"\"A handler that'll access POST during an exception.\"\"\"\n\n            def handle_uncaught_exception(self, request, resolver, exc_info):\n                ret = super().handle_uncaught_exception(request, resolver, exc_info)\n                request.POST  # evaluate\n                return ret\n\n        # Maybe this is a little more complicated that it needs to be; but if\n        # the django.test.client.FakePayload.read() implementation changes then\n        # this test would fail.  So we need to know exactly what kind of error\n        # it raises when there is an attempt to read more than the available bytes:\n        try:\n            client.FakePayload(b\"a\").read(2)\n        except Exception as err:\n            reference_error = err\n\n        # install the custom handler that tries to access request.POST\n        self.client.handler = POSTAccessingHandler()\n\n        with open(__file__, \"rb\") as fp:\n            post_data = {\n                \"name\": \"Ringo\",\n                \"file_field\": fp,\n            }\n            try:\n                self.client.post(\"/upload_errors/\", post_data)\n            except reference_error.__class__ as err:\n                self.assertNotEqual(\n                    str(err),\n                    str(reference_error),\n                    \"Caught a repeated exception that'll cause an infinite loop in \"\n                    \"file uploads.\",\n                )\n            except Exception as err:\n                # CustomUploadError is the error that should have been raised\n                self.assertEqual(err.__class__, uploadhandler.CustomUploadError)",
+    "token_count": 414,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.file_uploads.tests.FileUploadTests.test_file_error_blocking"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "method",
+     "engine_token_count": 414
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/handlers.py:33-39",
+    "content": "# django/contrib/staticfiles/handlers.py:33-39  (django.contrib.staticfiles.handlers.StaticFilesHandlerMixin._should_handle)\nclass StaticFilesHandlerMixin:\n    def _should_handle(self, path):\n        \"\"\"\n        Check if the path should be handled. Ignore the path if:\n        * the host is provided as part of the base_url\n        * the request's path isn't under the media path (or equal)\n        \"\"\"\n        return path.startswith(self.base_url[2]) and not self.base_url[1]",
+    "token_count": 111,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.handlers.StaticFilesHandlerMixin._should_handle"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "full",
+     "bm25_rank": 24,
+     "chunk_kind": "method",
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/handlers/tests.py:321-329",
+    "content": "# tests/handlers/tests.py:321-329  (tests.handlers.tests.AsyncHandlerRequestTests.test_unawaited_response)\nclass AsyncHandlerRequestTests(SimpleTestCase):\n    async def test_unawaited_response(self):\n        msg = (\n            \"The view handlers.views.CoroutineClearingView.__call__ didn't\"\n            \" return an HttpResponse object. It returned an unawaited\"\n            \" coroutine instead. You may need to add an 'await'\"\n            \" into your view.\"\n        )\n        with self.assertRaisesMessage(ValueError, msg):\n            await self.async_client.get(\"/unawaited/\")",
+    "token_count": 126,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.handlers.tests.AsyncHandlerRequestTests.test_unawaited_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "full",
+     "bm25_rank": 25,
+     "chunk_kind": "method",
+     "engine_token_count": 126
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:159-200",
+    "content": "# django/test/client.py:159-200  (django.test.client.ClientHandler.__call__)\nclass ClientHandler(BaseHandler):\n    def __call__(self, environ):\n        # Set up middleware if needed. We couldn't do this earlier, because\n        # settings weren't available.\n        if self._middleware_chain is None:\n            self.load_middleware()\n\n        request_started.disconnect(close_old_connections)\n        request_started.send(sender=self.__class__, environ=environ)\n        request_started.connect(close_old_connections)\n        request = WSGIRequest(environ)\n        # sneaky little hack so that we can easily get round\n        # CsrfViewMiddleware.  This makes life easier, and is probably\n        # required for backwards compatibility with external tests against\n        # admin views.\n        request._dont_enforce_csrf_checks = not self.enforce_csrf_checks\n\n        # Request goes through middleware.\n        response = self.get_response(request)\n\n        # Simulate behaviors of most web servers.\n        conditional_content_removal(request, response)\n\n        # Attach the originating request to the response so that it could be\n        # later retrieved.\n        response.wsgi_request = request\n\n        # Emulate a WSGI server by calling the close method on completion.\n        if response.streaming:\n            if response.is_async:\n                response.streaming_content = aclosing_iterator_wrapper(\n                    response.streaming_content, response.close\n                )\n            else:\n                response.streaming_content = closing_iterator_wrapper(\n                    response.streaming_content, response.close\n                )\n        else:\n            request_finished.disconnect(close_old_connections)\n            response.close()  # will fire request_finished\n            request_finished.connect(close_old_connections)\n\n        return response",
+    "token_count": 347,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.ClientHandler.__call__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "full",
+     "bm25_rank": 26,
+     "chunk_kind": "method",
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12968,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging Django's request-handling entrypoint in\ndjango/core/handlers/base.py. Starting from\n`BaseHandler._get_response`, trace the exact causal pipeline a real\nHTTP request travels through this method: how the view callback is\nresolved, how it is wrapped before being invoked, and how the result\nis validated before being returned. Assume the wrapped callback\nraises an exception when invoked (the except branch), so the\nexception-middleware stage is part of the traced pipeline rather than\nskipped.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.handlers.base.BaseHandler._get_response\", \"django.core.handlers.base.BaseHandler.resolve_request\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/core/handlers/base.py",
+   "cutoff": 240,
+   "n_components": 64,
+   "n_full": 40,
+   "n_stub": 18,
+   "n_dropped": 6,
+   "packed_tokens": 12968,
+   "latency_ms": {
+    "L_priority_sort": [
+     1364.101801
+    ],
+    "L_binary_search_tokenize": [
+     93.077131
+    ],
+    "L_retrieve": [
+     1461.359784
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12968,
+   "prompt_tokens": 13318,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13331,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/core/handlers/base.py:174-226  (django.core.handlers.base.BaseHandler._get_response)\nclass BaseHandler:\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response\n\n# django/core/handlers/base.py:152-172  (django.core.handlers.base.BaseHandler.get_response_async)\nclass BaseHandler:\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n# django/core/handlers/base.py:228-298  (django.core.handlers.base.BaseHandler._get_response_async)\nclass BaseHandler:\n    async def _get_response_async(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware.\n        for middleware_method in self._view_middleware:\n            response = await middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is a synchronous view, run it in a subthread\n            if not iscoroutinefunction(wrapped_callback):\n                wrapped_callback = sync_to_async(\n                    wrapped_callback, thread_sensitive=True\n                )\n            try:\n                response = await wrapped_callback(\n                    request, *callback_args, **callback_kwargs\n                )\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None or an uncalled coroutine.\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = await middleware_method(request, response)\n                # Complain if the template response middleware returned None or\n                # an uncalled coroutine.\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                if iscoroutinefunction(response.render):\n                    response = await response.render()\n                else:\n                    response = await sync_to_async(\n                        response.render, thread_sensitive=True\n                    )()\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Make sure the response is not a coroutine\n        if asyncio.iscoroutine(response):\n            raise RuntimeError(\"Response is still a coroutine.\")\n        return response\n\n# django/core/handlers/base.py:136-150  (django.core.handlers.base.BaseHandler.get_response)\nclass BaseHandler:\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n# django/core/handlers/base.py:300-315  (django.core.handlers.base.BaseHandler.resolve_request)\nclass BaseHandler:\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match\n\n# django/core/handlers/base.py:104-134  (django.core.handlers.base.BaseHandler.adapt_method_mode)\nclass BaseHandler:\n    def adapt_method_mode(\n        self,\n        is_async,\n        method,\n        method_is_async=None,\n        debug=False,\n        name=None,\n    ):\n        \"\"\"\n        Adapt a method to be in the correct \"mode\":\n        - If is_async is False:\n          - Synchronous methods are left alone\n          - Asynchronous methods are wrapped with async_to_sync\n        - If is_async is True:\n          - Synchronous methods are wrapped with sync_to_async()\n          - Asynchronous methods are left alone\n        \"\"\"\n        if method_is_async is None:\n            method_is_async = iscoroutinefunction(method)\n        if debug and not name:\n            name = name or \"method %s()\" % method.__qualname__\n        if is_async:\n            if not method_is_async:\n                if debug:\n                    logger.debug(\"Synchronous handler adapted for %s.\", name)\n                return sync_to_async(method, thread_sensitive=True)\n        elif method_is_async:\n            if debug:\n                logger.debug(\"Asynchronous handler adapted for %s.\", name)\n            return async_to_sync(method)\n        return method\n\n# django/core/handlers/base.py:317-341  (django.core.handlers.base.BaseHandler.check_response)\nclass BaseHandler:\n    def check_response(self, response, callback, name=None):\n        \"\"\"\n        Raise an error if the view returned None or an uncalled coroutine.\n        \"\"\"\n        if not (response is None or asyncio.iscoroutine(response)):\n            return\n        if not name:\n            if isinstance(callback, types.FunctionType):  # FBV\n                name = \"The view %s.%s\" % (callback.__module__, callback.__name__)\n            else:  # CBV\n                name = \"The view %s.%s.__call__\" % (\n                    callback.__module__,\n                    callback.__class__.__name__,\n                )\n        if response is None:\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned None \"\n                \"instead.\" % name\n            )\n        elif asyncio.iscoroutine(response):\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned an \"\n                \"unawaited coroutine instead. You may need to add an 'await' \"\n                \"into your view.\" % name\n            )\n\n# django/core/handlers/base.py:26-102  (django.core.handlers.base.BaseHandler.load_middleware)\nclass BaseHandler:\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler\n\n# django/core/handlers/base.py:345-354  (django.core.handlers.base.BaseHandler.make_view_atomic)\nclass BaseHandler:\n    def make_view_atomic(self, view):\n        non_atomic_requests = getattr(view, \"_non_atomic_requests\", set())\n        for alias, settings_dict in connections.settings.items():\n            if settings_dict[\"ATOMIC_REQUESTS\"] and alias not in non_atomic_requests:\n                if iscoroutinefunction(view):\n                    raise RuntimeError(\n                        \"You cannot use ATOMIC_REQUESTS with async views.\"\n                    )\n                view = transaction.atomic(using=alias)(view)\n        return view\n\n# django/core/handlers/base.py:21-343  (django.core.handlers.base.BaseHandler)\nclass BaseHandler:\n    _view_middleware = None\n    _template_response_middleware = None\n    _exception_middleware = None\n    _middleware_chain = None\n\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler\n\n    def adapt_method_mode(\n        self,\n        is_async,\n        method,\n        method_is_async=None,\n        debug=False,\n        name=None,\n    ):\n        \"\"\"\n        Adapt a method to be in the correct \"mode\":\n        - If is_async is False:\n          - Synchronous methods are left alone\n          - Asynchronous methods are wrapped with async_to_sync\n        - If is_async is True:\n          - Synchronous methods are wrapped with sync_to_async()\n          - Asynchronous methods are left alone\n        \"\"\"\n        if method_is_async is None:\n            method_is_async = iscoroutinefunction(method)\n        if debug and not name:\n            name = name or \"method %s()\" % method.__qualname__\n        if is_async:\n            if not method_is_async:\n                if debug:\n                    logger.debug(\"Synchronous handler adapted for %s.\", name)\n                return sync_to_async(method, thread_sensitive=True)\n        elif method_is_async:\n            if debug:\n                logger.debug(\"Asynchronous handler adapted for %s.\", name)\n            return async_to_sync(method)\n        return method\n\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response\n\n    async def _get_response_async(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware.\n        for middleware_method in self._view_middleware:\n            response = await middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is a synchronous view, run it in a subthread\n            if not iscoroutinefunction(wrapped_callback):\n                wrapped_callback = sync_to_async(\n                    wrapped_callback, thread_sensitive=True\n                )\n            try:\n                response = await wrapped_callback(\n                    request, *callback_args, **callback_kwargs\n                )\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None or an uncalled coroutine.\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = await middleware_method(request, response)\n                # Complain if the template response middleware returned None or\n                # an uncalled coroutine.\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                if iscoroutinefunction(response.render):\n                    response = await response.render()\n                else:\n                    response = await sync_to_async(\n                        response.render, thread_sensitive=True\n                    )()\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Make sure the response is not a coroutine\n        if asyncio.iscoroutine(response):\n            raise RuntimeError(\"Response is still a coroutine.\")\n        return response\n\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match\n\n    def check_response(self, response, callback, name=None):\n        \"\"\"\n        Raise an error if the view returned None or an uncalled coroutine.\n        \"\"\"\n        if not (response is None or asyncio.iscoroutine(response)):\n            return\n        if not name:\n            if isinstance(callback, types.FunctionType):  # FBV\n                name = \"The view %s.%s\" % (callback.__module__, callback.__name__)\n            else:  # CBV\n                name = \"The view %s.%s.__call__\" % (\n                    callback.__module__,\n                    callback.__class__.__name__,\n                )\n        if response is None:\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned None \"\n                \"instead.\" % name\n            )\n        elif asyncio.iscoroutine(response):\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned an \"\n                \"unawaited coroutine instead. You may need to add an 'await' \"\n                \"into your view.\" % name\n            )\n\n    # Other utility methods.\n\n# django/core/handlers/base.py:356-365  (django.core.handlers.base.BaseHandler.process_exception_by_middleware)\nclass BaseHandler:\n    def process_exception_by_middleware(self, exception, request):\n        \"\"\"\n        Pass the exception to the exception middleware. If no middleware\n        return a response for this exception, return None.\n        \"\"\"\n        for middleware_method in self._exception_middleware:\n            response = middleware_method(request, exception)\n            if response:\n                return response\n        return None\n\n# django/core/handlers/base.py:1-17  (django.core.handlers.base)\nimport asyncio\nimport logging\nimport types\n\nfrom asgiref.sync import async_to_sync, iscoroutinefunction, sync_to_async\n\nfrom django.conf import settings\nfrom django.core.exceptions import ImproperlyConfigured, MiddlewareNotUsed\nfrom django.core.signals import request_finished\nfrom django.db import connections, transaction\nfrom django.urls import get_resolver, set_urlconf\nfrom django.utils.log import log_response\nfrom django.utils.module_loading import import_string\n\nfrom .exception import convert_exception_to_response\n\nlogger = logging.getLogger(\"django.request\")\n\n# django/core/handlers/base.py:368-370  (django.core.handlers.base.reset_urlconf)\ndef reset_urlconf(sender, **kwargs):\n    \"\"\"Reset the URLconf after each request is finished.\"\"\"\n    set_urlconf(None)\n\n# django/core/handlers/base.py:373-373  (django.core.handlers.base)\nrequest_finished.connect(reset_urlconf)\n\n# django/http/multipartparser.py:47-405  (django.http.multipartparser.MultiPartParser [signature])\nclass MultiPartParser:\n    'An RFC 7578 multipart/form-data parser.'\n    ...\n\n# django/urls/resolvers.py:499-528  (django.urls.resolvers.URLResolver._check_custom_error_handlers [signature])\nclass URLResolver:\n    def _check_custom_error_handlers(self):\n        ...\n\n# django/utils/log.py:210-255  (django.utils.log.log_response [signature])\ndef log_response(\n    message,\n    *args,\n    response=None,\n    request=None,\n    logger=request_logger,\n    level=None,\n    exception=None,\n):\n    'Log errors based on HttpResponse status.'\n    ...\n\n# django/utils/datastructures.py:258-265  (django.utils.datastructures.DictWrapper [signature])\nclass DictWrapper(dict):\n    'Wrap accesses to a dictionary so that certain values (those starting with'\n    ...\n\n# tests/handlers/tests.py:236-249  (tests.handlers.tests.HandlerRequestTests.test_no_response [signature])\nclass HandlerRequestTests(SimpleTestCase):\n    def test_no_response(self):\n        ...\n\n# tests/test_client/views.py:36-60  (tests.test_client.views.trace_view [signature])\ndef trace_view(request):\n    'A simple view that expects a TRACE request and echoes its status line.'\n    ...\n\n# django/test/client.py:210-254  (django.test.client.AsyncClientHandler.__call__ [signature])\nclass AsyncClientHandler(BaseHandler):\n    async def __call__(self, scope):\n        # Set up middleware if needed. We couldn't do this earlier, because\n        # settings weren't available.\n        ...\n\n# django/middleware/csrf.py:101-119  (django.middleware.csrf.get_token [signature])\ndef get_token(request):\n    'Return the CSRF token required for a POST form. The token is an'\n    ...\n\n# tests/handlers/tests.py:313-319  (tests.handlers.tests.AsyncHandlerRequestTests.test_no_response [signature])\nclass AsyncHandlerRequestTests(SimpleTestCase):\n    async def test_no_response(self):\n        ...\n\n# django/views/generic/base.py:134-144  (django.views.generic.base.View.dispatch [signature])\nclass View:\n    def dispatch(self, request, *args, **kwargs):\n        # Try to dispatch to the right method; if a method doesn't exist,\n        # defer to the error handler. Also defer to the error handler if the\n        # request method isn't on the approved list.\n        ...\n\n# django/views/generic/base.py:81-124  (django.views.generic.base.View.as_view [signature])\nclass View:\n    @classonlymethod\n    def as_view(cls, **initkwargs):\n        'Main entry point for a request-response process.'\n        ...\n\n# django/middleware/csrf.py:476-488  (django.middleware.csrf.CsrfViewMiddleware.process_response [signature])\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        ...\n\n# tests/check_framework/test_urls.py:222-243  (tests.check_framework.test_urls.CheckCustomErrorHandlersTests.test_bad_class_based_handlers [signature])\nclass CheckCustomErrorHandlersTests(SimpleTestCase):\n    @override_settings(\n        ROOT_URLCONF=\"check_framework.urls.bad_class_based_error_handlers\",\n    )\n    def test_bad_class_based_handlers(self):\n        ...\n\n# django/core/cache/backends/base.py:292-299  (django.core.cache.backends.base.BaseCache.__contains__ [signature])\nclass BaseCache:\n    def __contains__(self, key):\n        'Return True if the key is in the cache and has not expired.'\n        ...\n\n# django/utils/log.py:80-84  (django.utils.log.AdminEmailHandler [signature])\nclass AdminEmailHandler(logging.Handler):\n    'An exception log handler that emails log entries to site admins.'\n    ...\n\n# tests/handlers/tests_custom_error_handlers.py:41-46  (tests.handlers.tests_custom_error_handlers.CustomErrorHandlerTests.test_handler_renders_template_response [signature])\nclass CustomErrorHandlerTests(SimpleTestCase):\n    def test_handler_renders_template_response(self):\n        'BaseHandler should render TemplateResponse if necessary.'\n        ...\n\n# django/db/models/sql/query.py:1786-1869#part1of2  (django.db.models.sql.query.Query.setup_joins [signature])\nclass Query(BaseExpression):\n    def setup_joins(\n        self,\n        names,\n        opts,\n        alias,\n        can_reuse=None,\n        allow_many=True,\n        reuse_with_filtered_relation=False,\n    ):\n        'Compute the necessary table joins for the passage through the fields'\n        ...\n\n# django/template/base.py:206-282  (django.template.base.Template.get_exception_info [signature])\nclass Template:\n    def get_exception_info(self, exception, token):\n        'Return a dictionary containing contextual line information of where'\n        ...\n\n# django/core/handlers/asgi.py:152-164  (django.core.handlers.asgi.ASGIHandler.__call__)\nclass ASGIHandler(base.BaseHandler):\n    async def __call__(self, scope, receive, send):\n        \"\"\"\n        Async entrypoint - parses the request and hands off to get_response.\n        \"\"\"\n        # Serve only HTTP connections.\n        # FIXME: Allow to override this.\n        if scope[\"type\"] != \"http\":\n            raise ValueError(\n                \"Django can only handle ASGI/HTTP connections, not %s.\" % scope[\"type\"]\n            )\n\n        async with ThreadSensitiveContext():\n            await self.handle(scope, receive, send)\n\n# django/core/handlers/asgi.py:166-194  (django.core.handlers.asgi.ASGIHandler.handle)\nclass ASGIHandler(base.BaseHandler):\n    async def handle(self, scope, receive, send):\n        \"\"\"\n        Handles the ASGI request. Called via the __call__ method.\n        \"\"\"\n        # Receive the HTTP request body as a stream object.\n        try:\n            body_file = await self.read_body(receive)\n        except RequestAborted:\n            return\n        # Request is complete and can be served.\n        set_script_prefix(self.get_script_prefix(scope))\n        await sync_to_async(signals.request_started.send, thread_sensitive=True)(\n            sender=self.__class__, scope=scope\n        )\n        # Get the request and check for basic issues.\n        request, error_response = self.create_request(scope, body_file)\n        if request is None:\n            body_file.close()\n            await self.send_response(error_response, send)\n            return\n        # Get the response, using the async mode of BaseHandler.\n        response = await self.get_response_async(request)\n        response._handler_class = self.__class__\n        # Increase chunk size on file responses (ASGI servers handles low-level\n        # chunking).\n        if isinstance(response, FileResponse):\n            response.block_size = self.chunk_size\n        # Send the response.\n        await self.send_response(response, send)\n\n# django/core/handlers/asgi.py:234-244  (django.core.handlers.asgi.ASGIHandler.handle_uncaught_exception)\nclass ASGIHandler(base.BaseHandler):\n    def handle_uncaught_exception(self, request, resolver, exc_info):\n        \"\"\"Last-chance handler for exceptions.\"\"\"\n        # There's no WSGI server to catch the exception further up\n        # if this fails, so translate it into a plain text response.\n        try:\n            return super().handle_uncaught_exception(request, resolver, exc_info)\n        except Exception:\n            return HttpResponseServerError(\n                traceback.format_exc() if settings.DEBUG else \"Internal Server Error\",\n                content_type=\"text/plain\",\n            )\n\n# django/core/handlers/asgi.py:217-232  (django.core.handlers.asgi.ASGIHandler.create_request)\nclass ASGIHandler(base.BaseHandler):\n    def create_request(self, scope, body_file):\n        \"\"\"\n        Create the Request object and returns either (request, None) or\n        (None, response) if there is an error response.\n        \"\"\"\n        try:\n            return self.request_class(scope, body_file), None\n        except UnicodeDecodeError:\n            logger.warning(\n                \"Bad Request (UnicodeDecodeError)\",\n                exc_info=sys.exc_info(),\n                extra={\"status_code\": 400},\n            )\n            return None, HttpResponseBadRequest()\n        except RequestDataTooBig:\n            return None, HttpResponse(\"413 Payload too large\", status=413)\n\n# tests/user_commands/models.py:1-14  (tests.user_commands.models)\n\"\"\"\nUser-registered management commands\n\nThe ``manage.py`` utility provides a number of useful commands for managing a\nDjango project. If you want to add a utility command of your own, you can.\n\nThe user-defined command ``dance`` is defined in the management/commands\nsubdirectory of this test application. It is a simple command that responds\nwith a printed message when invoked.\n\nFor more details on how to define your own ``manage.py`` commands, look at the\n``django.core.management.commands`` directory. This directory contains the\ndefinitions for the base Django ``manage.py`` commands.\n\"\"\"\n\n# django/core/handlers/wsgi.py:114-114  (django.core.handlers.wsgi.WSGIHandler)\nclass WSGIHandler(base.BaseHandler):\n    request_class = WSGIRequest\n\n# django/core/handlers/wsgi.py:120-144  (django.core.handlers.wsgi.WSGIHandler.__call__)\nclass WSGIHandler(base.BaseHandler):\n    def __call__(self, environ, start_response):\n        set_script_prefix(get_script_name(environ))\n        signals.request_started.send(sender=self.__class__, environ=environ)\n        request = self.request_class(environ)\n        response = self.get_response(request)\n\n        response._handler_class = self.__class__\n\n        status = \"%d %s\" % (response.status_code, response.reason_phrase)\n        response_headers = [\n            *response.items(),\n            *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n        ]\n        start_response(status, response_headers)\n        if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n            \"wsgi.file_wrapper\"\n        ):\n            # If `wsgi.file_wrapper` is used the WSGI server does not call\n            # .close on the response, but on the file wrapper. Patch it to use\n            # response.close instead which takes care of closing all files.\n            response.file_to_stream.close = response.close\n            response = environ[\"wsgi.file_wrapper\"](\n                response.file_to_stream, response.block_size\n            )\n        return response\n\n# django/core/handlers/asgi.py:142-146  (django.core.handlers.asgi.ASGIHandler)\nclass ASGIHandler(base.BaseHandler):\n    \"\"\"Handler for ASGI requests.\"\"\"\n\n    request_class = ASGIRequest\n    # Size to chunk response bodies into for multiple response messages.\n    chunk_size = 2**16\n\n# django/test/client.py:870-915  (django.test.client.Client.request)\nclass Client(ClientMixin, RequestFactory):\n    def request(self, **request):\n        \"\"\"\n        Make a generic request. Compose the environment dictionary and pass\n        to the handler, return the result of the handler. Assume defaults for\n        the query environment, which can be overridden using the arguments to\n        the request.\n        \"\"\"\n        environ = self._base_environ(**request)\n\n        # Curry a data dictionary into an instance of the template renderer\n        # callback function.\n        data = {}\n        on_template_render = partial(store_rendered_templates, data)\n        signal_uid = \"template-render-%s\" % id(request)\n        signals.template_rendered.connect(on_template_render, dispatch_uid=signal_uid)\n        # Capture exceptions created by the handler.\n        exception_uid = \"request-exception-%s\" % id(request)\n        got_request_exception.connect(self.store_exc_info, dispatch_uid=exception_uid)\n        try:\n            response = self.handler(environ)\n        finally:\n            signals.template_rendered.disconnect(dispatch_uid=signal_uid)\n            got_request_exception.disconnect(dispatch_uid=exception_uid)\n        # Check for signaled exceptions.\n        self.check_exception(response)\n        # Save the client and request that stimulated the response.\n        response.client = self\n        response.request = request\n        # Add any rendered template detail to the response.\n        response.templates = data.get(\"templates\", [])\n        response.context = data.get(\"context\")\n        response.json = partial(self._parse_json, response)\n        # Attach the ResolverMatch instance to the response.\n        urlconf = getattr(response.wsgi_request, \"urlconf\", None)\n        response.resolver_match = SimpleLazyObject(\n            lambda: resolve(request[\"PATH_INFO\"], urlconf=urlconf),\n        )\n        # Flatten a single context. Not really necessary anymore thanks to the\n        # __getattr__ flattening in ContextList, but has some edge case\n        # backwards compatibility implications.\n        if response.context and len(response.context) == 1:\n            response.context = response.context[0]\n        # Update persistent cookie data.\n        if response.cookies:\n            self.cookies.update(response.cookies)\n        return response\n\n# django/test/client.py:149-153  (django.test.client.ClientHandler)\nclass ClientHandler(BaseHandler):\n    \"\"\"\n    An HTTP Handler that can be used for testing purposes. Use the WSGI\n    interface to compose requests, but return the raw HttpResponse object with\n    the originating WSGIRequest attached to its ``wsgi_request`` attribute.\n    \"\"\"\n\n# django/core/handlers/exception.py:162-170  (django.core.handlers.exception.get_exception_response)\ndef get_exception_response(request, resolver, status_code, exception):\n    try:\n        callback = resolver.resolve_error_handler(status_code)\n        response = callback(request, exception=exception)\n    except Exception:\n        signals.got_request_exception.send(sender=None, request=request)\n        response = handle_uncaught_exception(request, resolver, sys.exc_info())\n\n    return response\n\n# django/test/client.py:1224-1272  (django.test.client.AsyncClient.request)\nclass AsyncClient(ClientMixin, AsyncRequestFactory):\n    async def request(self, **request):\n        \"\"\"\n        Make a generic request. Compose the scope dictionary and pass to the\n        handler, return the result of the handler. Assume defaults for the\n        query environment, which can be overridden using the arguments to the\n        request.\n        \"\"\"\n        if \"follow\" in request:\n            raise NotImplementedError(\n                \"AsyncClient request methods do not accept the follow parameter.\"\n            )\n        scope = self._base_scope(**request)\n        # Curry a data dictionary into an instance of the template renderer\n        # callback function.\n        data = {}\n        on_template_render = partial(store_rendered_templates, data)\n        signal_uid = \"template-render-%s\" % id(request)\n        signals.template_rendered.connect(on_template_render, dispatch_uid=signal_uid)\n        # Capture exceptions created by the handler.\n        exception_uid = \"request-exception-%s\" % id(request)\n        got_request_exception.connect(self.store_exc_info, dispatch_uid=exception_uid)\n        try:\n            response = await self.handler(scope)\n        finally:\n            signals.template_rendered.disconnect(dispatch_uid=signal_uid)\n            got_request_exception.disconnect(dispatch_uid=exception_uid)\n        # Check for signaled exceptions.\n        self.check_exception(response)\n        # Save the client and request that stimulated the response.\n        response.client = self\n        response.request = request\n        # Add any rendered template detail to the response.\n        response.templates = data.get(\"templates\", [])\n        response.context = data.get(\"context\")\n        response.json = partial(self._parse_json, response)\n        # Attach the ResolverMatch instance to the response.\n        urlconf = getattr(response.asgi_request, \"urlconf\", None)\n        response.resolver_match = SimpleLazyObject(\n            lambda: resolve(request[\"path\"], urlconf=urlconf),\n        )\n        # Flatten a single context. Not really necessary anymore thanks to the\n        # __getattr__ flattening in ContextList, but has some edge case\n        # backwards compatibility implications.\n        if response.context and len(response.context) == 1:\n            response.context = response.context[0]\n        # Update persistent cookie data.\n        if response.cookies:\n            self.cookies.update(response.cookies)\n        return response\n\n# django/core/handlers/asgi.py:196-215  (django.core.handlers.asgi.ASGIHandler.read_body)\nclass ASGIHandler(base.BaseHandler):\n    async def read_body(self, receive):\n        \"\"\"Reads an HTTP body from an ASGI connection.\"\"\"\n        # Use the tempfile that auto rolls-over to a disk file as it fills up.\n        body_file = tempfile.SpooledTemporaryFile(\n            max_size=settings.FILE_UPLOAD_MAX_MEMORY_SIZE, mode=\"w+b\"\n        )\n        while True:\n            message = await receive()\n            if message[\"type\"] == \"http.disconnect\":\n                body_file.close()\n                # Early client disconnect.\n                raise RequestAborted()\n            # Add a body chunk from the message, if provided.\n            if \"body\" in message:\n                body_file.write(message[\"body\"])\n            # Quit out if that's the end.\n            if not message.get(\"more_body\", False):\n                break\n        body_file.seek(0)\n        return body_file\n\n# django/core/handlers/asgi.py:319-325  (django.core.handlers.asgi.ASGIHandler.get_script_prefix)\nclass ASGIHandler(base.BaseHandler):\n    def get_script_prefix(self, scope):\n        \"\"\"\n        Return the script prefix to use from either the scope or a setting.\n        \"\"\"\n        if settings.FORCE_SCRIPT_NAME:\n            return settings.FORCE_SCRIPT_NAME\n        return scope.get(\"root_path\", \"\") or \"\"\n\n# django/core/handlers/exception.py:24-60  (django.core.handlers.exception.convert_exception_to_response)\ndef convert_exception_to_response(get_response):\n    \"\"\"\n    Wrap the given get_response callable in exception-to-response conversion.\n\n    All exceptions will be converted. All known 4xx exceptions (Http404,\n    PermissionDenied, MultiPartParserError, SuspiciousOperation) will be\n    converted to the appropriate response, and all other exceptions will be\n    converted to 500 responses.\n\n    This decorator is automatically applied to all middleware to ensure that\n    no middleware leaks an exception and that the next middleware in the stack\n    can rely on getting a response instead of an exception.\n    \"\"\"\n    if iscoroutinefunction(get_response):\n\n        @wraps(get_response)\n        async def inner(request):\n            try:\n                response = await get_response(request)\n            except Exception as exc:\n                response = await sync_to_async(\n                    response_for_exception, thread_sensitive=False\n                )(request, exc)\n            return response\n\n        return inner\n    else:\n\n        @wraps(get_response)\n        def inner(request):\n            try:\n                response = get_response(request)\n            except Exception as exc:\n                response = response_for_exception(request, exc)\n            return response\n\n        return inner\n\n# django/core/handlers/asgi.py:148-150  (django.core.handlers.asgi.ASGIHandler.__init__)\nclass ASGIHandler(base.BaseHandler):\n    def __init__(self):\n        super().__init__()\n        self.load_middleware(is_async=True)\n\n# django/middleware/csrf.py:419-474  (django.middleware.csrf.CsrfViewMiddleware.process_view)\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def process_view(self, request, callback, callback_args, callback_kwargs):\n        if getattr(request, \"csrf_processing_done\", False):\n            return None\n\n        # Wait until request.META[\"CSRF_COOKIE\"] has been manipulated before\n        # bailing out, so that get_token still works\n        if getattr(callback, \"csrf_exempt\", False):\n            return None\n\n        # Assume that anything not defined as 'safe' by RFC 9110 needs protection\n        if request.method in (\"GET\", \"HEAD\", \"OPTIONS\", \"TRACE\"):\n            return self._accept(request)\n\n        if getattr(request, \"_dont_enforce_csrf_checks\", False):\n            # Mechanism to turn off CSRF checks for test suite. It comes after\n            # the creation of CSRF cookies, so that everything else continues\n            # to work exactly the same (e.g. cookies are sent, etc.), but\n            # before any branches that call the _reject method.\n            return self._accept(request)\n\n        # Reject the request if the Origin header doesn't match an allowed\n        # value.\n        if \"HTTP_ORIGIN\" in request.META:\n            if not self._origin_verified(request):\n                return self._reject(\n                    request, REASON_BAD_ORIGIN % request.META[\"HTTP_ORIGIN\"]\n                )\n        elif request.is_secure():\n            # If the Origin header wasn't provided, reject HTTPS requests if\n            # the Referer header doesn't match an allowed value.\n            #\n            # Suppose user visits http://example.com/\n            # An active network attacker (man-in-the-middle, MITM) sends a\n            # POST form that targets https://example.com/detonate-bomb/ and\n            # submits it via JavaScript.\n            #\n            # The attacker will need to provide a CSRF cookie and token, but\n            # that's no problem for a MITM and the session-independent secret\n            # we're using. So the MITM can circumvent the CSRF protection. This\n            # is true for any HTTP connection, but anyone using HTTPS expects\n            # better! For this reason, for https://example.com/ we need\n            # additional protection that treats http://example.com/ as\n            # completely untrusted. Under HTTPS, Barth et al. found that the\n            # Referer header is missing for same-domain requests in only about\n            # 0.2% of cases or less, so we can use strict Referer checking.\n            try:\n                self._check_referer(request)\n            except RejectRequest as exc:\n                return self._reject(request, exc.reason)\n\n        try:\n            self._check_token(request)\n        except RejectRequest as exc:\n            return self._reject(request, exc.reason)\n\n        return self._accept(request)\n\n# django/http/multipartparser.py:132-182#part1of3  (django.http.multipartparser.MultiPartParser._parse)\nclass MultiPartParser:\n    def _parse(self):\n        \"\"\"\n        Parse the POST data and break it into a FILES MultiValueDict and a POST\n        MultiValueDict.\n\n        Return a tuple containing the POST and FILES dictionary, respectively.\n        \"\"\"\n        from django.http import QueryDict\n\n        encoding = self._encoding\n        handlers = self._upload_handlers\n\n        # HTTP spec says that Content-Length >= 0 is valid\n        # handling content-length == 0 before continuing\n        if self._content_length == 0:\n            return QueryDict(encoding=self._encoding), MultiValueDict()\n\n        # See if any of the handlers take care of the parsing.\n        # This allows overriding everything if need be.\n        for handler in handlers:\n            result = handler.handle_raw_input(\n                self._input_data,\n                self._meta,\n                self._content_length,\n                self._boundary,\n                encoding,\n            )\n            # Check to see if it was handled\n            if result is not None:\n                return result[0], result[1]\n\n        # Create the data structures to be used later.\n        self._post = QueryDict(mutable=True)\n        self._files = MultiValueDict()\n\n        # Instantiate the parser and stream:\n        stream = LazyStream(ChunkIter(self._input_data, self._chunk_size))\n\n        # Whether or not to signal a file-completion at the beginning of the loop.\n        old_field_name = None\n        counters = [0] * len(handlers)\n\n        # Number of bytes that have been read.\n        num_bytes_read = 0\n        # To count the number of keys in the request.\n        num_post_keys = 0\n        # To count the number of files in the request.\n        num_files = 0\n        # To limit the amount of data read from the request.\n        read_size = None\n        # Whether a file upload is finished.\n        uploaded_file = True\n\n# django/core/management/base.py:184-268  (django.core.management.base.BaseCommand)\nclass BaseCommand:\n    \"\"\"\n    The base class from which all management commands ultimately\n    derive.\n\n    Use this class if you want access to all of the mechanisms which\n    parse the command-line arguments and work out what code to call in\n    response; if you don't need to change any of that behavior,\n    consider using one of the subclasses defined in this file.\n\n    If you are interested in overriding/customizing various aspects of\n    the command-parsing and -execution behavior, the normal flow works\n    as follows:\n\n    1. ``django-admin`` or ``manage.py`` loads the command class\n       and calls its ``run_from_argv()`` method.\n\n    2. The ``run_from_argv()`` method calls ``create_parser()`` to get\n       an ``ArgumentParser`` for the arguments, parses them, performs\n       any environment changes requested by options like\n       ``pythonpath``, and then calls the ``execute()`` method,\n       passing the parsed arguments.\n\n    3. The ``execute()`` method attempts to carry out the command by\n       calling the ``handle()`` method with the parsed arguments; any\n       output produced by ``handle()`` will be printed to standard\n       output and, if the command is intended to produce a block of\n       SQL statements, will be wrapped in ``BEGIN`` and ``COMMIT``.\n\n    4. If ``handle()`` or ``execute()`` raised any exception (e.g.\n       ``CommandError``), ``run_from_argv()`` will  instead print an error\n       message to ``stderr``.\n\n    Thus, the ``handle()`` method is typically the starting point for\n    subclasses; many built-in commands and command types either place\n    all of their logic in ``handle()``, or perform some additional\n    parsing work in ``handle()`` and then delegate from it to more\n    specialized methods as needed.\n\n    Several attributes affect behavior at various steps along the way:\n\n    ``help``\n        A short description of the command, which will be printed in\n        help messages.\n\n    ``output_transaction``\n        A boolean indicating whether the command outputs SQL\n        statements; if ``True``, the output will automatically be\n        wrapped with ``BEGIN;`` and ``COMMIT;``. Default value is\n        ``False``.\n\n    ``requires_migrations_checks``\n        A boolean; if ``True``, the command prints a warning if the set of\n        migrations on disk don't match the migrations in the database.\n\n    ``requires_system_checks``\n        A list or tuple of tags, e.g. [Tags.staticfiles, Tags.models]. System\n        checks registered in the chosen tags will be checked for errors prior\n        to executing the command. The value '__all__' can be used to specify\n        that all system checks should be performed. Default value is '__all__'.\n\n        To validate an individual application's models\n        rather than all applications' models, call\n        ``self.check(app_configs)`` from ``handle()``, where ``app_configs``\n        is the list of application's configuration provided by the\n        app registry.\n\n    ``stealth_options``\n        A tuple of any options the command uses which aren't defined by the\n        argument parser.\n    \"\"\"\n\n    # Metadata about this command.\n    help = \"\"\n\n    # Configuration shortcuts that alter various logic.\n    _called_from_command_line = False\n    output_transaction = False  # Whether to wrap the output in a \"BEGIN; COMMIT;\"\n    requires_migrations_checks = False\n    requires_system_checks = \"__all__\"\n    # Arguments, common to all commands, which aren't defined by the argument\n    # parser.\n    base_stealth_options = (\"stderr\", \"stdout\")\n    # Command-specific options not defined by the argument parser.\n    stealth_options = ()\n    suppressed_base_arguments = set()\n\n# django/core/handlers/exception.py:173-186  (django.core.handlers.exception.handle_uncaught_exception)\ndef handle_uncaught_exception(request, resolver, exc_info):\n    \"\"\"\n    Processing for any otherwise uncaught exceptions (those that will\n    generate HTTP 500 responses).\n    \"\"\"\n    if settings.DEBUG_PROPAGATE_EXCEPTIONS:\n        raise\n\n    if settings.DEBUG:\n        return debug.technical_500_response(request, *exc_info)\n\n    # Return an HttpResponse that displays a friendly error message.\n    callback = resolver.resolve_error_handler(500)\n    return callback(request)\n\n# django/middleware/cache.py:1-55  (django.middleware.cache)\n\"\"\"\nCache middleware. If enabled, each Django-powered page will be cached based on\nURL. The canonical way to enable cache middleware is to set\n``UpdateCacheMiddleware`` as your first piece of middleware, and\n``FetchFromCacheMiddleware`` as the last::\n\n    MIDDLEWARE = [\n        'django.middleware.cache.UpdateCacheMiddleware',\n        ...\n        'django.middleware.cache.FetchFromCacheMiddleware'\n    ]\n\nThis is counter-intuitive, but correct: ``UpdateCacheMiddleware`` needs to run\nlast during the response phase, which processes middleware bottom-up;\n``FetchFromCacheMiddleware`` needs to run last during the request phase, which\nprocesses middleware top-down.\n\nThe single-class ``CacheMiddleware`` can be used for some simple sites.\nHowever, if any other piece of middleware needs to affect the cache key, you'll\nneed to use the two-part ``UpdateCacheMiddleware`` and\n``FetchFromCacheMiddleware``. This'll most often happen when you're using\nDjango's ``LocaleMiddleware``.\n\nMore details about how the caching works:\n\n* Only GET or HEAD-requests with status code 200 are cached.\n\n* The number of seconds each page is stored for is set by the \"max-age\" section\n  of the response's \"Cache-Control\" header, falling back to the\n  CACHE_MIDDLEWARE_SECONDS setting if the section was not found.\n\n* This middleware expects that a HEAD request is answered with the same response\n  headers exactly like the corresponding GET request.\n\n* When a hit occurs, a shallow copy of the original response object is returned\n  from process_request.\n\n* Pages will be cached based on the contents of the request headers listed in\n  the response's \"Vary\" header.\n\n* This middleware also sets ETag, Last-Modified, Expires and Cache-Control\n  headers on the response object.\n\n\"\"\"\n\nfrom django.conf import settings\nfrom django.core.cache import DEFAULT_CACHE_ALIAS, caches\nfrom django.utils.cache import (\n    get_cache_key,\n    get_max_age,\n    has_vary_header,\n    learn_cache_key,\n    patch_response_headers,\n)\nfrom django.utils.deprecation import MiddlewareMixin\n\n# django/core/handlers/wsgi.py:116-118  (django.core.handlers.wsgi.WSGIHandler.__init__)\nclass WSGIHandler(base.BaseHandler):\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.load_middleware()\n\n# tests/file_uploads/tests.py:671-715  (tests.file_uploads.tests.FileUploadTests.test_file_error_blocking)\nclass FileUploadTests(TestCase):\n    def test_file_error_blocking(self):\n        \"\"\"\n        The server should not block when there are upload errors (bug #8622).\n        This can happen if something -- i.e. an exception handler -- tries to\n        access POST while handling an error in parsing POST. This shouldn't\n        cause an infinite loop!\n        \"\"\"\n\n        class POSTAccessingHandler(client.ClientHandler):\n            \"\"\"A handler that'll access POST during an exception.\"\"\"\n\n            def handle_uncaught_exception(self, request, resolver, exc_info):\n                ret = super().handle_uncaught_exception(request, resolver, exc_info)\n                request.POST  # evaluate\n                return ret\n\n        # Maybe this is a little more complicated that it needs to be; but if\n        # the django.test.client.FakePayload.read() implementation changes then\n        # this test would fail.  So we need to know exactly what kind of error\n        # it raises when there is an attempt to read more than the available bytes:\n        try:\n            client.FakePayload(b\"a\").read(2)\n        except Exception as err:\n            reference_error = err\n\n        # install the custom handler that tries to access request.POST\n        self.client.handler = POSTAccessingHandler()\n\n        with open(__file__, \"rb\") as fp:\n            post_data = {\n                \"name\": \"Ringo\",\n                \"file_field\": fp,\n            }\n            try:\n                self.client.post(\"/upload_errors/\", post_data)\n            except reference_error.__class__ as err:\n                self.assertNotEqual(\n                    str(err),\n                    str(reference_error),\n                    \"Caught a repeated exception that'll cause an infinite loop in \"\n                    \"file uploads.\",\n                )\n            except Exception as err:\n                # CustomUploadError is the error that should have been raised\n                self.assertEqual(err.__class__, uploadhandler.CustomUploadError)\n\n# django/contrib/staticfiles/handlers.py:33-39  (django.contrib.staticfiles.handlers.StaticFilesHandlerMixin._should_handle)\nclass StaticFilesHandlerMixin:\n    def _should_handle(self, path):\n        \"\"\"\n        Check if the path should be handled. Ignore the path if:\n        * the host is provided as part of the base_url\n        * the request's path isn't under the media path (or equal)\n        \"\"\"\n        return path.startswith(self.base_url[2]) and not self.base_url[1]\n\n# tests/handlers/tests.py:321-329  (tests.handlers.tests.AsyncHandlerRequestTests.test_unawaited_response)\nclass AsyncHandlerRequestTests(SimpleTestCase):\n    async def test_unawaited_response(self):\n        msg = (\n            \"The view handlers.views.CoroutineClearingView.__call__ didn't\"\n            \" return an HttpResponse object. It returned an unawaited\"\n            \" coroutine instead. You may need to add an 'await'\"\n            \" into your view.\"\n        )\n        with self.assertRaisesMessage(ValueError, msg):\n            await self.async_client.get(\"/unawaited/\")\n\n# django/test/client.py:159-200  (django.test.client.ClientHandler.__call__)\nclass ClientHandler(BaseHandler):\n    def __call__(self, environ):\n        # Set up middleware if needed. We couldn't do this earlier, because\n        # settings weren't available.\n        if self._middleware_chain is None:\n            self.load_middleware()\n\n        request_started.disconnect(close_old_connections)\n        request_started.send(sender=self.__class__, environ=environ)\n        request_started.connect(close_old_connections)\n        request = WSGIRequest(environ)\n        # sneaky little hack so that we can easily get round\n        # CsrfViewMiddleware.  This makes life easier, and is probably\n        # required for backwards compatibility with external tests against\n        # admin views.\n        request._dont_enforce_csrf_checks = not self.enforce_csrf_checks\n\n        # Request goes through middleware.\n        response = self.get_response(request)\n\n        # Simulate behaviors of most web servers.\n        conditional_content_removal(request, response)\n\n        # Attach the originating request to the response so that it could be\n        # later retrieved.\n        response.wsgi_request = request\n\n        # Emulate a WSGI server by calling the close method on completion.\n        if response.streaming:\n            if response.is_async:\n                response.streaming_content = aclosing_iterator_wrapper(\n                    response.streaming_content, response.close\n                )\n            else:\n                response.streaming_content = closing_iterator_wrapper(\n                    response.streaming_content, response.close\n                )\n        else:\n            request_finished.disconnect(close_old_connections)\n            response.close()  # will fire request_finished\n            request_finished.connect(close_old_connections)\n\n        return response\n\n## Task\n\nYou are debugging Django's request-handling entrypoint in\ndjango/core/handlers/base.py. Starting from\n`BaseHandler._get_response`, trace the exact causal pipeline a real\nHTTP request travels through this method: how the view callback is\nresolved, how it is wrapped before being invoked, and how the result\nis validated before being returned. Assume the wrapped callback\nraises an exception when invoked (the except branch), so the\nexception-middleware stage is part of the traced pipeline rather than\nskipped.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.handlers.base.BaseHandler._get_response\", \"django.core.handlers.base.BaseHandler.resolve_request\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

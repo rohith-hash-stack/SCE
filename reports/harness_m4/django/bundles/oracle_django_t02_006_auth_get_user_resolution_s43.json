@@ -1,0 +1,181 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "django_t02_006_auth_get_user_resolution",
+  "items": [
+   {
+    "source_id": "django/contrib/auth/middleware.py:9-12",
+    "content": "# django/contrib/auth/middleware.py:9-12  (django.contrib.auth.middleware.get_user)\ndef get_user(request):\n    if not hasattr(request, \"_cached_user\"):\n        request._cached_user = auth.get_user(request)\n    return request._cached_user",
+    "token_count": 54,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.middleware.get_user"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:182-223",
+    "content": "# django/contrib/auth/__init__.py:182-223  (django.contrib.auth.get_user)\ndef get_user(request):\n    \"\"\"\n    Return the user model instance associated with the given request session.\n    If no user is retrieved, return an instance of `AnonymousUser`.\n    \"\"\"\n    from .models import AnonymousUser\n\n    user = None\n    try:\n        user_id = _get_user_session_key(request)\n        backend_path = request.session[BACKEND_SESSION_KEY]\n    except KeyError:\n        pass\n    else:\n        if backend_path in settings.AUTHENTICATION_BACKENDS:\n            backend = load_backend(backend_path)\n            user = backend.get_user(user_id)\n            # Verify the session\n            if hasattr(user, \"get_session_auth_hash\"):\n                session_hash = request.session.get(HASH_SESSION_KEY)\n                if not session_hash:\n                    session_hash_verified = False\n                else:\n                    session_auth_hash = user.get_session_auth_hash()\n                    session_hash_verified = constant_time_compare(\n                        session_hash, session_auth_hash\n                    )\n                if not session_hash_verified:\n                    # If the current secret does not verify the session, try\n                    # with the fallback secrets and stop when a matching one is\n                    # found.\n                    if session_hash and any(\n                        constant_time_compare(session_hash, fallback_auth_hash)\n                        for fallback_auth_hash in user.get_session_auth_fallback_hash()\n                    ):\n                        request.session.cycle_key()\n                        request.session[HASH_SESSION_KEY] = session_auth_hash\n                    else:\n                        request.session.flush()\n                        user = None\n\n    return user or AnonymousUser()",
+    "token_count": 327,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.get_user"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 327
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:57-60",
+    "content": "# django/contrib/auth/__init__.py:57-60  (django.contrib.auth._get_user_session_key)\ndef _get_user_session_key(request):\n    # This value in the session is always serialized to a string, so we need\n    # to convert it back to Python whenever we access it.\n    return get_user_model()._meta.pk.to_python(request.session[SESSION_KEY])",
+    "token_count": 81,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth._get_user_session_key"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:20-21",
+    "content": "# django/contrib/auth/__init__.py:20-21  (django.contrib.auth.load_backend)\ndef load_backend(path):\n    return import_string(path)()",
+    "token_count": 35,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.load_backend"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 35
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:159-164",
+    "content": "# django/contrib/auth/backends.py:159-164  (django.contrib.auth.backends.ModelBackend.get_user)\n    def get_user(self, user_id):\n        try:\n            user = UserModel._default_manager.get(pk=user_id)\n        except UserModel.DoesNotExist:\n            return None\n        return user if self.user_can_authenticate(user) else None",
+    "token_count": 73,
+    "rank": 5,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.get_user"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:15-25",
+    "content": "# django/contrib/auth/middleware.py:15-25  (django.contrib.auth.middleware.AuthenticationMiddleware)\nclass AuthenticationMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        if not hasattr(request, \"session\"):\n            raise ImproperlyConfigured(\n                \"The Django authentication middleware requires session \"\n                \"middleware to be installed. Edit your MIDDLEWARE setting to \"\n                \"insert \"\n                \"'django.contrib.sessions.middleware.SessionMiddleware' before \"\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n            )\n        request.user = SimpleLazyObject(lambda: get_user(request))",
+    "token_count": 119,
+    "rank": 6,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.middleware.AuthenticationMiddleware"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:16-25",
+    "content": "# django/contrib/auth/middleware.py:16-25  (django.contrib.auth.middleware.AuthenticationMiddleware.process_request)\n    def process_request(self, request):\n        if not hasattr(request, \"session\"):\n            raise ImproperlyConfigured(\n                \"The Django authentication middleware requires session \"\n                \"middleware to be installed. Edit your MIDDLEWARE setting to \"\n                \"insert \"\n                \"'django.contrib.sessions.middleware.SessionMiddleware' before \"\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n            )\n        request.user = SimpleLazyObject(lambda: get_user(request))",
+    "token_count": 114,
+    "rank": 7,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.middleware.AuthenticationMiddleware.process_request"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:417-499",
+    "content": "# django/contrib/auth/models.py:417-499  (django.contrib.auth.models.AnonymousUser)\nclass AnonymousUser:\n    id = None\n    pk = None\n    username = \"\"\n    is_staff = False\n    is_active = False\n    is_superuser = False\n    _groups = EmptyManager(Group)\n    _user_permissions = EmptyManager(Permission)\n\n    def __str__(self):\n        return \"AnonymousUser\"\n\n    def __eq__(self, other):\n        return isinstance(other, self.__class__)\n\n    def __hash__(self):\n        return 1  # instances always return the same hash value\n\n    def __int__(self):\n        raise TypeError(\n            \"Cannot cast AnonymousUser to int. Are you trying to use it in place of \"\n            \"User?\"\n        )\n\n    def save(self):\n        raise NotImplementedError(\n            \"Django doesn't provide a DB representation for AnonymousUser.\"\n        )\n\n    def delete(self):\n        raise NotImplementedError(\n            \"Django doesn't provide a DB representation for AnonymousUser.\"\n        )\n\n    def set_password(self, raw_password):\n        raise NotImplementedError(\n            \"Django doesn't provide a DB representation for AnonymousUser.\"\n        )\n\n    def check_password(self, raw_password):\n        raise NotImplementedError(\n            \"Django doesn't provide a DB representation for AnonymousUser.\"\n        )\n\n    @property\n    def groups(self):\n        return self._groups\n\n    @property\n    def user_permissions(self):\n        return self._user_permissions\n\n    def get_user_permissions(self, obj=None):\n        return _user_get_permissions(self, obj, \"user\")\n\n    def get_group_permissions(self, obj=None):\n        return set()\n\n    def get_all_permissions(self, obj=None):\n        return _user_get_permissions(self, obj, \"all\")\n\n    def has_perm(self, perm, obj=None):\n        return _user_has_perm(self, perm, obj=obj)\n\n    def has_perms(self, perm_list, obj=None):\n        if not is_iterable(perm_list) or isinstance(perm_list, str):\n            raise ValueError(\"perm_list must be an iterable of permissions.\")\n        return all(self.has_perm(perm, obj) for perm in perm_list)\n\n    def has_module_perms(self, module):\n        return _user_has_module_perms(self, module)\n\n    @property\n    def is_anonymous(self):\n        return True\n\n    @property\n    def is_authenticated(self):\n        return False\n\n    def get_username(self):\n        return self.username",
+    "token_count": 511,
+    "rank": 8,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.models.AnonymousUser"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 511
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/crypto.py:65-67",
+    "content": "# django/utils/crypto.py:65-67  (django.utils.crypto.constant_time_compare)\ndef constant_time_compare(val1, val2):\n    \"\"\"Return True if the two strings are equal, False otherwise.\"\"\"\n    return secrets.compare_digest(force_bytes(val1), force_bytes(val2))",
+    "token_count": 59,
+    "rank": 9,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.utils.crypto.constant_time_compare"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/functional.py:398-452",
+    "content": "# django/utils/functional.py:398-452  (django.utils.functional.SimpleLazyObject)\nclass SimpleLazyObject(LazyObject):\n    \"\"\"\n    A lazy object initialized from any function.\n\n    Designed for compound objects of unknown type. For builtins or objects of\n    known type, use django.utils.functional.lazy.\n    \"\"\"\n\n    def __init__(self, func):\n        \"\"\"\n        Pass in a callable that returns the object to be wrapped.\n\n        If copies are made of the resulting SimpleLazyObject, which can happen\n        in various circumstances within Django, then you must ensure that the\n        callable can be safely run more than once and will return the same\n        value.\n        \"\"\"\n        self.__dict__[\"_setupfunc\"] = func\n        super().__init__()\n\n    def _setup(self):\n        self._wrapped = self._setupfunc()\n\n    # Return a meaningful representation of the lazy object for debugging\n    # without evaluating the wrapped object.\n    def __repr__(self):\n        if self._wrapped is empty:\n            repr_attr = self._setupfunc\n        else:\n            repr_attr = self._wrapped\n        return \"<%s: %r>\" % (type(self).__name__, repr_attr)\n\n    def __copy__(self):\n        if self._wrapped is empty:\n            # If uninitialized, copy the wrapper. Use SimpleLazyObject, not\n            # self.__class__, because the latter is proxied.\n            return SimpleLazyObject(self._setupfunc)\n        else:\n            # If initialized, return a copy of the wrapped object.\n            return copy.copy(self._wrapped)\n\n    def __deepcopy__(self, memo):\n        if self._wrapped is empty:\n            # We have to use SimpleLazyObject, not self.__class__, because the\n            # latter is proxied.\n            result = SimpleLazyObject(self._setupfunc)\n            memo[id(self)] = result\n            return result\n        return copy.deepcopy(self._wrapped, memo)\n\n    __add__ = new_method_proxy(operator.add)\n\n    @new_method_proxy\n    def __radd__(self, other):\n        return other + self",
+    "token_count": 438,
+    "rank": 10,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.utils.functional.SimpleLazyObject"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 438
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1811,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are debugging how Django resolves `request.user` in\ndjango/contrib/auth. Starting from `middleware.get_user`, trace the\nreal causal pipeline that determines which authentication backend\nwill be asked to resolve the user, in the order each stage is\nactually reached, up to and including the call that loads that\nbackend. Do not trace into the backend's own `get_user` call itself -\nwhich concrete backend class this becomes is resolved dynamically at\nruntime, not statically in this pipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.middleware.get_user\", \"django.contrib.auth.get_user\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 10,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1811,
+   "prompt_tokens": 2132,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2145,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/auth/middleware.py:9-12  (django.contrib.auth.middleware.get_user)\ndef get_user(request):\n    if not hasattr(request, \"_cached_user\"):\n        request._cached_user = auth.get_user(request)\n    return request._cached_user\n\n# django/contrib/auth/__init__.py:182-223  (django.contrib.auth.get_user)\ndef get_user(request):\n    \"\"\"\n    Return the user model instance associated with the given request session.\n    If no user is retrieved, return an instance of `AnonymousUser`.\n    \"\"\"\n    from .models import AnonymousUser\n\n    user = None\n    try:\n        user_id = _get_user_session_key(request)\n        backend_path = request.session[BACKEND_SESSION_KEY]\n    except KeyError:\n        pass\n    else:\n        if backend_path in settings.AUTHENTICATION_BACKENDS:\n            backend = load_backend(backend_path)\n            user = backend.get_user(user_id)\n            # Verify the session\n            if hasattr(user, \"get_session_auth_hash\"):\n                session_hash = request.session.get(HASH_SESSION_KEY)\n                if not session_hash:\n                    session_hash_verified = False\n                else:\n                    session_auth_hash = user.get_session_auth_hash()\n                    session_hash_verified = constant_time_compare(\n                        session_hash, session_auth_hash\n                    )\n                if not session_hash_verified:\n                    # If the current secret does not verify the session, try\n                    # with the fallback secrets and stop when a matching one is\n                    # found.\n                    if session_hash and any(\n                        constant_time_compare(session_hash, fallback_auth_hash)\n                        for fallback_auth_hash in user.get_session_auth_fallback_hash()\n                    ):\n                        request.session.cycle_key()\n                        request.session[HASH_SESSION_KEY] = session_auth_hash\n                    else:\n                        request.session.flush()\n                        user = None\n\n    return user or AnonymousUser()\n\n# django/contrib/auth/__init__.py:57-60  (django.contrib.auth._get_user_session_key)\ndef _get_user_session_key(request):\n    # This value in the session is always serialized to a string, so we need\n    # to convert it back to Python whenever we access it.\n    return get_user_model()._meta.pk.to_python(request.session[SESSION_KEY])\n\n# django/contrib/auth/__init__.py:20-21  (django.contrib.auth.load_backend)\ndef load_backend(path):\n    return import_string(path)()\n\n# django/contrib/auth/backends.py:159-164  (django.contrib.auth.backends.ModelBackend.get_user)\n    def get_user(self, user_id):\n        try:\n            user = UserModel._default_manager.get(pk=user_id)\n        except UserModel.DoesNotExist:\n            return None\n        return user if self.user_can_authenticate(user) else None\n\n# django/contrib/auth/middleware.py:15-25  (django.contrib.auth.middleware.AuthenticationMiddleware)\nclass AuthenticationMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        if not hasattr(request, \"session\"):\n            raise ImproperlyConfigured(\n                \"The Django authentication middleware requires session \"\n                \"middleware to be installed. Edit your MIDDLEWARE setting to \"\n                \"insert \"\n                \"'django.contrib.sessions.middleware.SessionMiddleware' before \"\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n            )\n        request.user = SimpleLazyObject(lambda: get_user(request))\n\n# django/contrib/auth/middleware.py:16-25  (django.contrib.auth.middleware.AuthenticationMiddleware.process_request)\n    def process_request(self, request):\n        if not hasattr(request, \"session\"):\n            raise ImproperlyConfigured(\n                \"The Django authentication middleware requires session \"\n                \"middleware to be installed. Edit your MIDDLEWARE setting to \"\n                \"insert \"\n                \"'django.contrib.sessions.middleware.SessionMiddleware' before \"\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n            )\n        request.user = SimpleLazyObject(lambda: get_user(request))\n\n# django/contrib/auth/models.py:417-499  (django.contrib.auth.models.AnonymousUser)\nclass AnonymousUser:\n    id = None\n    pk = None\n    username = \"\"\n    is_staff = False\n    is_active = False\n    is_superuser = False\n    _groups = EmptyManager(Group)\n    _user_permissions = EmptyManager(Permission)\n\n    def __str__(self):\n        return \"AnonymousUser\"\n\n    def __eq__(self, other):\n        return isinstance(other, self.__class__)\n\n    def __hash__(self):\n        return 1  # instances always return the same hash value\n\n    def __int__(self):\n        raise TypeError(\n            \"Cannot cast AnonymousUser to int. Are you trying to use it in place of \"\n            \"User?\"\n        )\n\n    def save(self):\n        raise NotImplementedError(\n            \"Django doesn't provide a DB representation for AnonymousUser.\"\n        )\n\n    def delete(self):\n        raise NotImplementedError(\n            \"Django doesn't provide a DB representation for AnonymousUser.\"\n        )\n\n    def set_password(self, raw_password):\n        raise NotImplementedError(\n            \"Django doesn't provide a DB representation for AnonymousUser.\"\n        )\n\n    def check_password(self, raw_password):\n        raise NotImplementedError(\n            \"Django doesn't provide a DB representation for AnonymousUser.\"\n        )\n\n    @property\n    def groups(self):\n        return self._groups\n\n    @property\n    def user_permissions(self):\n        return self._user_permissions\n\n    def get_user_permissions(self, obj=None):\n        return _user_get_permissions(self, obj, \"user\")\n\n    def get_group_permissions(self, obj=None):\n        return set()\n\n    def get_all_permissions(self, obj=None):\n        return _user_get_permissions(self, obj, \"all\")\n\n    def has_perm(self, perm, obj=None):\n        return _user_has_perm(self, perm, obj=obj)\n\n    def has_perms(self, perm_list, obj=None):\n        if not is_iterable(perm_list) or isinstance(perm_list, str):\n            raise ValueError(\"perm_list must be an iterable of permissions.\")\n        return all(self.has_perm(perm, obj) for perm in perm_list)\n\n    def has_module_perms(self, module):\n        return _user_has_module_perms(self, module)\n\n    @property\n    def is_anonymous(self):\n        return True\n\n    @property\n    def is_authenticated(self):\n        return False\n\n    def get_username(self):\n        return self.username\n\n# django/utils/crypto.py:65-67  (django.utils.crypto.constant_time_compare)\ndef constant_time_compare(val1, val2):\n    \"\"\"Return True if the two strings are equal, False otherwise.\"\"\"\n    return secrets.compare_digest(force_bytes(val1), force_bytes(val2))\n\n# django/utils/functional.py:398-452  (django.utils.functional.SimpleLazyObject)\nclass SimpleLazyObject(LazyObject):\n    \"\"\"\n    A lazy object initialized from any function.\n\n    Designed for compound objects of unknown type. For builtins or objects of\n    known type, use django.utils.functional.lazy.\n    \"\"\"\n\n    def __init__(self, func):\n        \"\"\"\n        Pass in a callable that returns the object to be wrapped.\n\n        If copies are made of the resulting SimpleLazyObject, which can happen\n        in various circumstances within Django, then you must ensure that the\n        callable can be safely run more than once and will return the same\n        value.\n        \"\"\"\n        self.__dict__[\"_setupfunc\"] = func\n        super().__init__()\n\n    def _setup(self):\n        self._wrapped = self._setupfunc()\n\n    # Return a meaningful representation of the lazy object for debugging\n    # without evaluating the wrapped object.\n    def __repr__(self):\n        if self._wrapped is empty:\n            repr_attr = self._setupfunc\n        else:\n            repr_attr = self._wrapped\n        return \"<%s: %r>\" % (type(self).__name__, repr_attr)\n\n    def __copy__(self):\n        if self._wrapped is empty:\n            # If uninitialized, copy the wrapper. Use SimpleLazyObject, not\n            # self.__class__, because the latter is proxied.\n            return SimpleLazyObject(self._setupfunc)\n        else:\n            # If initialized, return a copy of the wrapped object.\n            return copy.copy(self._wrapped)\n\n    def __deepcopy__(self, memo):\n        if self._wrapped is empty:\n            # We have to use SimpleLazyObject, not self.__class__, because the\n            # latter is proxied.\n            result = SimpleLazyObject(self._setupfunc)\n            memo[id(self)] = result\n            return result\n        return copy.deepcopy(self._wrapped, memo)\n\n    __add__ = new_method_proxy(operator.add)\n\n    @new_method_proxy\n    def __radd__(self, other):\n        return other + self\n\n## Task\n\nYou are debugging how Django resolves `request.user` in\ndjango/contrib/auth. Starting from `middleware.get_user`, trace the\nreal causal pipeline that determines which authentication backend\nwill be asked to resolve the user, in the order each stage is\nactually reached, up to and including the call that loads that\nbackend. Do not trace into the backend's own `get_user` call itself -\nwhich concrete backend class this becomes is resolved dynamically at\nruntime, not statically in this pipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.middleware.get_user\", \"django.contrib.auth.get_user\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

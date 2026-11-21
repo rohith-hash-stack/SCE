@@ -1,0 +1,386 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t5_004_response_init_headers_cookies",
+  "items": [
+   {
+    "source_id": "django/http/response.py:368-433",
+    "content": "# django/http/response.py:368-433  (django.http.response.HttpResponse)\nclass HttpResponse(HttpResponseBase):\n    \"\"\"\n    An HTTP response class with a string as content.\n\n    This content can be read, appended to, or replaced.\n    \"\"\"\n\n    streaming = False\n\n    def __init__(self, content=b\"\", *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        # Content is a bytestring. See the `content` property methods.\n        self.content = content\n\n    def __repr__(self):\n        return \"<%(cls)s status_code=%(status_code)d%(content_type)s>\" % {\n            \"cls\": self.__class__.__name__,\n            \"status_code\": self.status_code,\n            \"content_type\": self._content_type_for_repr,\n        }\n\n    def serialize(self):\n        \"\"\"Full HTTP message, including headers, as a bytestring.\"\"\"\n        return self.serialize_headers() + b\"\\r\\n\\r\\n\" + self.content\n\n    __bytes__ = serialize\n\n    @property\n    def content(self):\n        return b\"\".join(self._container)\n\n    @content.setter\n    def content(self, value):\n        # Consume iterators upon assignment to allow repeated iteration.\n        if hasattr(value, \"__iter__\") and not isinstance(\n            value, (bytes, memoryview, str)\n        ):\n            content = b\"\".join(self.make_bytes(chunk) for chunk in value)\n            if hasattr(value, \"close\"):\n                try:\n                    value.close()\n                except Exception:\n                    pass\n        else:\n            content = self.make_bytes(value)\n        # Create a list of properly encoded bytestrings to support write().\n        self._container = [content]\n\n    def __iter__(self):\n        return iter(self._container)\n\n    def write(self, content):\n        self._container.append(self.make_bytes(content))\n\n    def tell(self):\n        return len(self.content)\n\n    def getvalue(self):\n        return self.content\n\n    def writable(self):\n        return True\n\n    def writelines(self, lines):\n        for line in lines:\n            self.write(line)",
+    "token_count": 436,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponse"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 415,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:377-380",
+    "content": "# django/http/response.py:377-380  (django.http.response.HttpResponse.__init__)\n    def __init__(self, content=b\"\", *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        # Content is a bytestring. See the `content` property methods.\n        self.content = content",
+    "token_count": 71,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponse.__init__"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 48,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:682-695",
+    "content": "# django/http/response.py:682-695  (django.http.response.HttpResponseNotAllowed)\nclass HttpResponseNotAllowed(HttpResponse):\n    status_code = 405\n\n    def __init__(self, permitted_methods, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Allow\"] = \", \".join(permitted_methods)\n\n    def __repr__(self):\n        return \"<%(cls)s [%(methods)s] status_code=%(status_code)d%(content_type)s>\" % {\n            \"cls\": self.__class__.__name__,\n            \"status_code\": self.status_code,\n            \"content_type\": self._content_type_for_repr,\n            \"methods\": self[\"Allow\"],\n        }",
+    "token_count": 149,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseNotAllowed"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 125,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:685-687",
+    "content": "# django/http/response.py:685-687  (django.http.response.HttpResponseNotAllowed.__init__)\n    def __init__(self, permitted_methods, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Allow\"] = \", \".join(permitted_methods)",
+    "token_count": 63,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseNotAllowed.__init__"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 39,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:654-667",
+    "content": "# django/http/response.py:654-667  (django.http.response.HttpResponseNotModified)\nclass HttpResponseNotModified(HttpResponse):\n    status_code = 304\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        del self[\"content-type\"]\n\n    @HttpResponse.content.setter\n    def content(self, value):\n        if value:\n            raise AttributeError(\n                \"You cannot set content to a 304 (Not Modified) response\"\n            )\n        self._container = []",
+    "token_count": 116,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseNotModified"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 89,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:657-659",
+    "content": "# django/http/response.py:657-659  (django.http.response.HttpResponseNotModified.__init__)\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        del self[\"content-type\"]",
+    "token_count": 55,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseNotModified.__init__"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 30,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:615-643",
+    "content": "# django/http/response.py:615-643  (django.http.response.HttpResponseRedirectBase)\nclass HttpResponseRedirectBase(HttpResponse):\n    allowed_schemes = [\"http\", \"https\", \"ftp\"]\n\n    def __init__(self, redirect_to, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Location\"] = iri_to_uri(redirect_to)\n        redirect_to_str = str(redirect_to)\n        if len(redirect_to_str) > MAX_URL_REDIRECT_LENGTH:\n            raise DisallowedRedirect(\n                f\"Unsafe redirect exceeding {MAX_URL_REDIRECT_LENGTH} characters\"\n            )\n        parsed = urlparse(redirect_to_str)\n        if parsed.scheme and parsed.scheme not in self.allowed_schemes:\n            raise DisallowedRedirect(\n                \"Unsafe redirect to URL with protocol '%s'\" % parsed.scheme\n            )\n\n    url = property(lambda self: self[\"Location\"])\n\n    def __repr__(self):\n        return (\n            '<%(cls)s status_code=%(status_code)d%(content_type)s, url=\"%(url)s\">'\n            % {\n                \"cls\": self.__class__.__name__,\n                \"status_code\": self.status_code,\n                \"content_type\": self._content_type_for_repr,\n                \"url\": self.url,\n            }\n        )",
+    "token_count": 264,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseRedirectBase"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 241,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:618-630",
+    "content": "# django/http/response.py:618-630  (django.http.response.HttpResponseRedirectBase.__init__)\n    def __init__(self, redirect_to, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Location\"] = iri_to_uri(redirect_to)\n        redirect_to_str = str(redirect_to)\n        if len(redirect_to_str) > MAX_URL_REDIRECT_LENGTH:\n            raise DisallowedRedirect(\n                f\"Unsafe redirect exceeding {MAX_URL_REDIRECT_LENGTH} characters\"\n            )\n        parsed = urlparse(redirect_to_str)\n        if parsed.scheme and parsed.scheme not in self.allowed_schemes:\n            raise DisallowedRedirect(\n                \"Unsafe redirect to URL with protocol '%s'\" % parsed.scheme\n            )",
+    "token_count": 157,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseRedirectBase.__init__"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 132,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:710-741",
+    "content": "# django/http/response.py:710-741  (django.http.response.JsonResponse)\nclass JsonResponse(HttpResponse):\n    \"\"\"\n    An HTTP response class that consumes data to be serialized to JSON.\n\n    :param data: Data to be dumped into json. By default only ``dict`` objects\n      are allowed to be passed due to a security flaw before ECMAScript 5. See\n      the ``safe`` parameter for more information.\n    :param encoder: Should be a json encoder class. Defaults to\n      ``django.core.serializers.json.DjangoJSONEncoder``.\n    :param safe: Controls if only ``dict`` objects may be serialized. Defaults\n      to ``True``.\n    :param json_dumps_params: A dictionary of kwargs passed to json.dumps().\n    \"\"\"\n\n    def __init__(\n        self,\n        data,\n        encoder=DjangoJSONEncoder,\n        safe=True,\n        json_dumps_params=None,\n        **kwargs,\n    ):\n        if safe and not isinstance(data, dict):\n            raise TypeError(\n                \"In order to allow non-dict objects to be serialized set the \"\n                \"safe parameter to False.\"\n            )\n        if json_dumps_params is None:\n            json_dumps_params = {}\n        kwargs.setdefault(\"content_type\", \"application/json\")\n        data = json.dumps(data, cls=encoder, **json_dumps_params)\n        super().__init__(content=data, **kwargs)",
+    "token_count": 292,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.JsonResponse"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 271,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:724-741",
+    "content": "# django/http/response.py:724-741  (django.http.response.JsonResponse.__init__)\n    def __init__(\n        self,\n        data,\n        encoder=DjangoJSONEncoder,\n        safe=True,\n        json_dumps_params=None,\n        **kwargs,\n    ):\n        if safe and not isinstance(data, dict):\n            raise TypeError(\n                \"In order to allow non-dict objects to be serialized set the \"\n                \"safe parameter to False.\"\n            )\n        if json_dumps_params is None:\n            json_dumps_params = {}\n        kwargs.setdefault(\"content_type\", \"application/json\")\n        data = json.dumps(data, cls=encoder, **json_dumps_params)\n        super().__init__(content=data, **kwargs)",
+    "token_count": 152,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.JsonResponse.__init__"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 129,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/response.py:10-144",
+    "content": "# django/template/response.py:10-144  (django.template.response.SimpleTemplateResponse)\nclass SimpleTemplateResponse(HttpResponse):\n    rendering_attrs = [\"template_name\", \"context_data\", \"_post_render_callbacks\"]\n\n    def __init__(\n        self,\n        template,\n        context=None,\n        content_type=None,\n        status=None,\n        charset=None,\n        using=None,\n        headers=None,\n    ):\n        # It would seem obvious to call these next two members 'template' and\n        # 'context', but those names are reserved as part of the test Client\n        # API. To avoid the name collision, we use different names.\n        self.template_name = template\n        self.context_data = context\n\n        self.using = using\n\n        self._post_render_callbacks = []\n\n        # _request stores the current request object in subclasses that know\n        # about requests, like TemplateResponse. It's defined in the base class\n        # to minimize code duplication.\n        # It's called self._request because self.request gets overwritten by\n        # django.test.client.Client. Unlike template_name and context_data,\n        # _request should not be considered part of the public API.\n        self._request = None\n\n        # content argument doesn't make sense here because it will be replaced\n        # with rendered template so we always pass empty string in order to\n        # prevent errors and provide shorter signature.\n        super().__init__(\"\", content_type, status, charset=charset, headers=headers)\n\n        # _is_rendered tracks whether the template and context has been baked\n        # into a final response.\n        # Super __init__ doesn't know any better than to set self.content to\n        # the empty string we just gave it, which wrongly sets _is_rendered\n        # True, so we initialize it to False after the call to super __init__.\n        self._is_rendered = False\n\n    def __getstate__(self):\n        \"\"\"\n        Raise an exception if trying to pickle an unrendered response. Pickle\n        only rendered data, not the data used to construct the response.\n        \"\"\"\n        obj_dict = self.__dict__.copy()\n        if not self._is_rendered:\n            raise ContentNotRenderedError(\n                \"The response content must be rendered before it can be pickled.\"\n            )\n        for attr in self.rendering_attrs:\n            if attr in obj_dict:\n                del obj_dict[attr]\n\n        return obj_dict\n\n    def resolve_template(self, template):\n        \"\"\"Accept a template object, path-to-template, or list of paths.\"\"\"\n        if isinstance(template, (list, tuple)):\n            return select_template(template, using=self.using)\n        elif isinstance(template, str):\n            return get_template(template, using=self.using)\n        else:\n            return template\n\n    def resolve_context(self, context):\n        return context\n\n    @property\n    def rendered_content(self):\n        \"\"\"Return the freshly rendered content for the template and context\n        described by the TemplateResponse.\n\n        This *does not* set the final content of the response. To set the\n        response content, you must either call render(), or set the\n        content explicitly using the value of this property.\n        \"\"\"\n        template = self.resolve_template(self.template_name)\n        context = self.resolve_context(self.context_data)\n        return template.render(context, self._request)\n\n    def add_post_render_callback(self, callback):\n        \"\"\"Add a new post-rendering callback.\n\n        If the response has already been rendered,\n        invoke the callback immediately.\n        \"\"\"\n        if self._is_rendered:\n            callback(self)\n        else:\n            self._post_render_callbacks.append(callback)\n\n    def render(self):\n        \"\"\"Render (thereby finalizing) the content of the response.\n\n        If the content has already been rendered, this is a no-op.\n\n        Return the baked response instance.\n        \"\"\"\n        retval = self\n        if not self._is_rendered:\n            self.content = self.rendered_content\n            for post_callback in self._post_render_callbacks:\n                newretval = post_callback(retval)\n                if newretval is not None:\n                    retval = newretval\n        return retval\n\n    @property\n    def is_rendered(self):\n        return self._is_rendered\n\n    def __iter__(self):\n        if not self._is_rendered:\n            raise ContentNotRenderedError(\n                \"The response content must be rendered before it can be iterated over.\"\n            )\n        return super().__iter__()\n\n    @property\n    def content(self):\n        if not self._is_rendered:\n            raise ContentNotRenderedError(\n                \"The response content must be rendered before it can be accessed.\"\n            )\n        return super().content\n\n    @content.setter\n    def content(self, value):\n        \"\"\"Set the content for the response.\"\"\"\n        HttpResponse.content.fset(self, value)\n        self._is_rendered = True",
+    "token_count": 1011,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.response.SimpleTemplateResponse"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 990,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/response.py:13-51",
+    "content": "# django/template/response.py:13-51  (django.template.response.SimpleTemplateResponse.__init__)\n    def __init__(\n        self,\n        template,\n        context=None,\n        content_type=None,\n        status=None,\n        charset=None,\n        using=None,\n        headers=None,\n    ):\n        # It would seem obvious to call these next two members 'template' and\n        # 'context', but those names are reserved as part of the test Client\n        # API. To avoid the name collision, we use different names.\n        self.template_name = template\n        self.context_data = context\n\n        self.using = using\n\n        self._post_render_callbacks = []\n\n        # _request stores the current request object in subclasses that know\n        # about requests, like TemplateResponse. It's defined in the base class\n        # to minimize code duplication.\n        # It's called self._request because self.request gets overwritten by\n        # django.test.client.Client. Unlike template_name and context_data,\n        # _request should not be considered part of the public API.\n        self._request = None\n\n        # content argument doesn't make sense here because it will be replaced\n        # with rendered template so we always pass empty string in order to\n        # prevent errors and provide shorter signature.\n        super().__init__(\"\", content_type, status, charset=charset, headers=headers)\n\n        # _is_rendered tracks whether the template and context has been baked\n        # into a final response.\n        # Super __init__ doesn't know any better than to set self.content to\n        # the empty string we just gave it, which wrongly sets _is_rendered\n        # True, so we initialize it to False after the call to super __init__.\n        self._is_rendered = False",
+    "token_count": 369,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.response.SimpleTemplateResponse.__init__"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 347,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/response.py:147-164",
+    "content": "# django/template/response.py:147-164  (django.template.response.TemplateResponse)\nclass TemplateResponse(SimpleTemplateResponse):\n    rendering_attrs = SimpleTemplateResponse.rendering_attrs + [\"_request\"]\n\n    def __init__(\n        self,\n        request,\n        template,\n        context=None,\n        content_type=None,\n        status=None,\n        charset=None,\n        using=None,\n        headers=None,\n    ):\n        super().__init__(\n            template, context, content_type, status, charset, using, headers=headers\n        )\n        self._request = request",
+    "token_count": 115,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.response.TemplateResponse"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 94,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/response.py:150-164",
+    "content": "# django/template/response.py:150-164  (django.template.response.TemplateResponse.__init__)\n    def __init__(\n        self,\n        request,\n        template,\n        context=None,\n        content_type=None,\n        status=None,\n        charset=None,\n        using=None,\n        headers=None,\n    ):\n        super().__init__(\n            template, context, content_type, status, charset, using, headers=headers\n        )\n        self._request = request",
+    "token_count": 94,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.response.TemplateResponse.__init__"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 71,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/csrf_tests/views.py:10-24",
+    "content": "# tests/csrf_tests/views.py:10-24  (tests.csrf_tests.views.TestingHttpResponse)\nclass TestingHttpResponse(HttpResponse):\n    \"\"\"\n    A version of HttpResponse that stores what cookie values are passed to\n    set_cookie() when CSRF_USE_SESSIONS=False.\n    \"\"\"\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        # This is a list of the cookie values passed to set_cookie() over\n        # the course of the request-response.\n        self._cookies_set = []\n\n    def set_cookie(self, key, value, **kwargs):\n        super().set_cookie(key, value, **kwargs)\n        self._cookies_set.append(value)",
+    "token_count": 147,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.csrf_tests.views.TestingHttpResponse"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 124,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/csrf_tests/views.py:16-20",
+    "content": "# tests/csrf_tests/views.py:16-20  (tests.csrf_tests.views.TestingHttpResponse.__init__)\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        # This is a list of the cookie values passed to set_cookie() over\n        # the course of the request-response.\n        self._cookies_set = []",
+    "token_count": 81,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.csrf_tests.views.TestingHttpResponse.__init__"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 56,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:106-365",
+    "content": "# django/http/response.py:106-365  (django.http.response.HttpResponseBase)\nclass HttpResponseBase:\n    \"\"\"\n    An HTTP response base class with dictionary-accessed headers.\n\n    This class doesn't handle content. It should not be used directly.\n    Use the HttpResponse and StreamingHttpResponse subclasses instead.\n    \"\"\"\n\n    status_code = 200\n\n    def __init__(\n        self, content_type=None, status=None, reason=None, charset=None, headers=None\n    ):\n        self.headers = ResponseHeaders(headers)\n        self._charset = charset\n        if \"Content-Type\" not in self.headers:\n            if content_type is None:\n                content_type = f\"text/html; charset={self.charset}\"\n            self.headers[\"Content-Type\"] = content_type\n        elif content_type:\n            raise ValueError(\n                \"'headers' must not contain 'Content-Type' when the \"\n                \"'content_type' parameter is provided.\"\n            )\n        self._resource_closers = []\n        # This parameter is set by the handler. It's necessary to preserve the\n        # historical behavior of request_finished.\n        self._handler_class = None\n        self.cookies = SimpleCookie()\n        self.closed = False\n        if status is not None:\n            try:\n                self.status_code = int(status)\n            except (ValueError, TypeError):\n                raise TypeError(\"HTTP status code must be an integer.\")\n\n            if not 100 <= self.status_code <= 599:\n                raise ValueError(\"HTTP status code must be an integer from 100 to 599.\")\n        self._reason_phrase = reason\n\n    @property\n    def reason_phrase(self):\n        if self._reason_phrase is not None:\n            return self._reason_phrase\n        # Leave self._reason_phrase unset in order to use the default\n        # reason phrase for status code.\n        return responses.get(self.status_code, \"Unknown Status Code\")\n\n    @reason_phrase.setter\n    def reason_phrase(self, value):\n        self._reason_phrase = value\n\n    @property\n    def charset(self):\n        if self._charset is not None:\n            return self._charset\n        # The Content-Type header may not yet be set, because the charset is\n        # being inserted *into* it.\n        if content_type := self.headers.get(\"Content-Type\"):\n            if matched := _charset_from_content_type_re.search(content_type):\n                # Extract the charset and strip its double quotes.\n                # Note that having parsed it from the Content-Type, we don't\n                # store it back into the _charset for later intentionally, to\n                # allow for the Content-Type to be switched again later.\n                return matched[\"charset\"].replace('\"', \"\")\n        return settings.DEFAULT_CHARSET\n\n    @charset.setter\n    def charset(self, value):\n        self._charset = value\n\n    def serialize_headers(self):\n        \"\"\"HTTP headers as a bytestring.\"\"\"\n        return b\"\\r\\n\".join(\n            [\n                key.encode(\"ascii\") + b\": \" + value.encode(\"latin-1\")\n                for key, value in self.headers.items()\n            ]\n        )\n\n    __bytes__ = serialize_headers\n\n    @property\n    def _content_type_for_repr(self):\n        return (\n            ', \"%s\"' % self.headers[\"Content-Type\"]\n            if \"Content-Type\" in self.headers\n            else \"\"\n        )\n\n    def __setitem__(self, header, value):\n        self.headers[header] = value\n\n    def __delitem__(self, header):\n        del self.headers[header]\n\n    def __getitem__(self, header):\n        return self.headers[header]\n\n    def has_header(self, header):\n        \"\"\"Case-insensitive check for a header.\"\"\"\n        return header in self.headers\n\n    __contains__ = has_header\n\n    def items(self):\n        return self.headers.items()\n\n    def get(self, header, alternate=None):\n        return self.headers.get(header, alternate)\n\n    def set_cookie(\n        self,\n        key,\n        value=\"\",\n        max_age=None,\n        expires=None,\n        path=\"/\",\n        domain=None,\n        secure=False,\n        httponly=False,\n        samesite=None,\n    ):\n        \"\"\"\n        Set a cookie.\n\n        ``expires`` can be:\n        - a string in the correct format,\n        - a naive ``datetime.datetime`` object in UTC,\n        - an aware ``datetime.datetime`` object in any time zone.\n        If it is a ``datetime.datetime`` object then calculate ``max_age``.\n\n        ``max_age`` can be:\n        - int/float specifying seconds,\n        - ``datetime.timedelta`` object.\n        \"\"\"\n        self.cookies[key] = value\n        if expires is not None:\n            if isinstance(expires, datetime.datetime):\n                if timezone.is_naive(expires):\n                    expires = timezone.make_aware(expires, datetime.timezone.utc)\n                delta = expires - datetime.datetime.now(tz=datetime.timezone.utc)\n                # Add one second so the date matches exactly (a fraction of\n                # time gets lost between converting to a timedelta and\n                # then the date string).\n                delta += datetime.timedelta(seconds=1)\n                # Just set max_age - the max_age logic will set expires.\n                expires = None\n                if max_age is not None:\n                    raise ValueError(\"'expires' and 'max_age' can't be used together.\")\n                max_age = max(0, delta.days * 86400 + delta.seconds)\n            else:\n                self.cookies[key][\"expires\"] = expires\n        else:\n            self.cookies[key][\"expires\"] = \"\"\n        if max_age is not None:\n            if isinstance(max_age, datetime.timedelta):\n                max_age = max_age.total_seconds()\n            self.cookies[key][\"max-age\"] = int(max_age)\n            # IE requires expires, so set it if hasn't been already.\n            if not expires:\n                self.cookies[key][\"expires\"] = http_date(time.time() + max_age)\n        if path is not None:\n            self.cookies[key][\"path\"] = path\n        if domain is not None:\n            self.cookies[key][\"domain\"] = domain\n        if secure:\n            self.cookies[key][\"secure\"] = True\n        if httponly:\n            self.cookies[key][\"httponly\"] = True\n        if samesite:\n            if samesite.lower() not in (\"lax\", \"none\", \"strict\"):\n                raise ValueError('samesite must be \"lax\", \"none\", or \"strict\".')\n            self.cookies[key][\"samesite\"] = samesite\n\n    def setdefault(self, key, value):\n        \"\"\"Set a header unless it has already been set.\"\"\"\n        self.headers.setdefault(key, value)\n\n    def set_signed_cookie(self, key, value, salt=\"\", **kwargs):\n        value = signing.get_cookie_signer(salt=key + salt).sign(value)\n        return self.set_cookie(key, value, **kwargs)\n\n    def delete_cookie(self, key, path=\"/\", domain=None, samesite=None):\n        # Browsers can ignore the Set-Cookie header if the cookie doesn't use\n        # the secure flag and:\n        # - the cookie name starts with \"__Host-\" or \"__Secure-\", or\n        # - the samesite is \"none\".\n        secure = key.startswith((\"__Secure-\", \"__Host-\")) or (\n            samesite and samesite.lower() == \"none\"\n        )\n        self.set_cookie(\n            key,\n            max_age=0,\n            path=path,\n            domain=domain,\n            secure=secure,\n            expires=\"Thu, 01 Jan 1970 00:00:00 GMT\",\n            samesite=samesite,\n        )\n\n    # Common methods used by subclasses\n\n    def make_bytes(self, value):\n        \"\"\"Turn a value into a bytestring encoded in the output charset.\"\"\"\n        # Per PEP 3333, this response body must be bytes. To avoid returning\n        # an instance of a subclass, this function returns `bytes(value)`.\n        # This doesn't make a copy when `value` already contains bytes.\n\n        # Handle string types -- we can't rely on force_bytes here because:\n        # - Python attempts str conversion first\n        # - when self._charset != 'utf-8' it re-encodes the content\n        if isinstance(value, (bytes, memoryview)):\n            return bytes(value)\n        if isinstance(value, str):\n            return bytes(value.encode(self.charset))\n        # Handle non-string types.\n        return str(value).encode(self.charset)\n\n    # These methods partially implement the file-like object interface.\n    # See https://docs.python.org/library/io.html#io.IOBase\n\n    # The WSGI server must call this method upon completion of the request.\n    # See http://blog.dscpl.com.au/2012/10/obligations-for-calling-close-on.html\n    def close(self):\n        for closer in self._resource_closers:\n            try:\n                closer()\n            except Exception:\n                pass\n        # Free resources that were still referenced.\n        self._resource_closers.clear()\n        self.closed = True\n        signals.request_finished.send(sender=self._handler_class)\n\n    def write(self, content):\n        raise OSError(\"This %s instance is not writable\" % self.__class__.__name__)\n\n    def flush(self):\n        pass\n\n    def tell(self):\n        raise OSError(\n            \"This %s instance cannot tell its position\" % self.__class__.__name__\n        )\n\n    # These methods partially implement a stream-like object interface.\n    # See https://docs.python.org/library/io.html#io.IOBase\n\n    def readable(self):\n        return False\n\n    def seekable(self):\n        return False\n\n    def writable(self):\n        return False\n\n    def writelines(self, lines):\n        raise OSError(\"This %s instance is not writable\" % self.__class__.__name__)",
+    "token_count": 2055,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseBase"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 2009,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/response.py:116-144",
+    "content": "# django/http/response.py:116-144  (django.http.response.HttpResponseBase.__init__)\n    def __init__(\n        self, content_type=None, status=None, reason=None, charset=None, headers=None\n    ):\n        self.headers = ResponseHeaders(headers)\n        self._charset = charset\n        if \"Content-Type\" not in self.headers:\n            if content_type is None:\n                content_type = f\"text/html; charset={self.charset}\"\n            self.headers[\"Content-Type\"] = content_type\n        elif content_type:\n            raise ValueError(\n                \"'headers' must not contain 'Content-Type' when the \"\n                \"'content_type' parameter is provided.\"\n            )\n        self._resource_closers = []\n        # This parameter is set by the handler. It's necessary to preserve the\n        # historical behavior of request_finished.\n        self._handler_class = None\n        self.cookies = SimpleCookie()\n        self.closed = False\n        if status is not None:\n            try:\n                self.status_code = int(status)\n            except (ValueError, TypeError):\n                raise TypeError(\"HTTP status code must be an integer.\")\n\n            if not 100 <= self.status_code <= 599:\n                raise ValueError(\"HTTP status code must be an integer from 100 to 599.\")\n        self._reason_phrase = reason",
+    "token_count": 280,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.response.HttpResponseBase.__init__"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 248,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 5907,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `django.http.response.HttpResponse.__init__` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "django.http.response.HttpResponse.__init__",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "prism_blast_mode": true,
+   "manifest_candidates": 11,
+   "manifest_candidates_unfiltered": 11,
+   "requested_symbols": [
+    "django.http.response.HttpResponseNotAllowed.__init__",
+    "django.http.response.HttpResponseNotModified.__init__",
+    "django.http.response.HttpResponseRedirectBase.__init__",
+    "django.http.response.JsonResponse.__init__",
+    "django.template.response.SimpleTemplateResponse.__init__",
+    "django.template.response.TemplateResponse.__init__",
+    "tests.csrf_tests.views.TestingHttpResponse.__init__"
+   ],
+   "turn1_requested_count": 7,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "{\"thought_process\": \"rule: every caller row\", \"requested_symbols\": [\"django.http.response.HttpResponseNotAllowed.__init__\", \"django.http.response.HttpResponseNotModified.__init__\", \"django.http.response.HttpResponseRedirectBase.__init__\", \"django.http.response.JsonResponse.__init__\", \"django.template.response.SimpleTemplateResponse.__init__\", \"django.template.response.TemplateResponse.__init__\", \"tests.csrf_tests.views.TestingHttpResponse.__init__\"]}",
+     "prompt_tokens": 0,
+     "completion_tokens": 0,
+     "latency_seconds": 0.0,
+     "model": "rule_callers",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     347.631127
+    ],
+    "L_turn2_hydrate": [
+     721.842113
+    ],
+    "L_retrieve": [
+     1089.38721
+    ]
+   },
+   "turn1_selector": "rule_callers",
+   "turn1_source": "rule",
+   "manifest_rows": 10,
+   "manifest_caller_fraction": 0.7,
+   "turn1_picks_in_manifest": 7,
+   "turn1_picks_caller_fraction": 1.0,
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 5907,
+   "prompt_tokens": 6052,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 6065,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/http/response.py:368-433  (django.http.response.HttpResponse)\nclass HttpResponse(HttpResponseBase):\n    \"\"\"\n    An HTTP response class with a string as content.\n\n    This content can be read, appended to, or replaced.\n    \"\"\"\n\n    streaming = False\n\n    def __init__(self, content=b\"\", *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        # Content is a bytestring. See the `content` property methods.\n        self.content = content\n\n    def __repr__(self):\n        return \"<%(cls)s status_code=%(status_code)d%(content_type)s>\" % {\n            \"cls\": self.__class__.__name__,\n            \"status_code\": self.status_code,\n            \"content_type\": self._content_type_for_repr,\n        }\n\n    def serialize(self):\n        \"\"\"Full HTTP message, including headers, as a bytestring.\"\"\"\n        return self.serialize_headers() + b\"\\r\\n\\r\\n\" + self.content\n\n    __bytes__ = serialize\n\n    @property\n    def content(self):\n        return b\"\".join(self._container)\n\n    @content.setter\n    def content(self, value):\n        # Consume iterators upon assignment to allow repeated iteration.\n        if hasattr(value, \"__iter__\") and not isinstance(\n            value, (bytes, memoryview, str)\n        ):\n            content = b\"\".join(self.make_bytes(chunk) for chunk in value)\n            if hasattr(value, \"close\"):\n                try:\n                    value.close()\n                except Exception:\n                    pass\n        else:\n            content = self.make_bytes(value)\n        # Create a list of properly encoded bytestrings to support write().\n        self._container = [content]\n\n    def __iter__(self):\n        return iter(self._container)\n\n    def write(self, content):\n        self._container.append(self.make_bytes(content))\n\n    def tell(self):\n        return len(self.content)\n\n    def getvalue(self):\n        return self.content\n\n    def writable(self):\n        return True\n\n    def writelines(self, lines):\n        for line in lines:\n            self.write(line)\n\n# django/http/response.py:377-380  (django.http.response.HttpResponse.__init__)\n    def __init__(self, content=b\"\", *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        # Content is a bytestring. See the `content` property methods.\n        self.content = content\n\n# django/http/response.py:682-695  (django.http.response.HttpResponseNotAllowed)\nclass HttpResponseNotAllowed(HttpResponse):\n    status_code = 405\n\n    def __init__(self, permitted_methods, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Allow\"] = \", \".join(permitted_methods)\n\n    def __repr__(self):\n        return \"<%(cls)s [%(methods)s] status_code=%(status_code)d%(content_type)s>\" % {\n            \"cls\": self.__class__.__name__,\n            \"status_code\": self.status_code,\n            \"content_type\": self._content_type_for_repr,\n            \"methods\": self[\"Allow\"],\n        }\n\n# django/http/response.py:685-687  (django.http.response.HttpResponseNotAllowed.__init__)\n    def __init__(self, permitted_methods, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Allow\"] = \", \".join(permitted_methods)\n\n# django/http/response.py:654-667  (django.http.response.HttpResponseNotModified)\nclass HttpResponseNotModified(HttpResponse):\n    status_code = 304\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        del self[\"content-type\"]\n\n    @HttpResponse.content.setter\n    def content(self, value):\n        if value:\n            raise AttributeError(\n                \"You cannot set content to a 304 (Not Modified) response\"\n            )\n        self._container = []\n\n# django/http/response.py:657-659  (django.http.response.HttpResponseNotModified.__init__)\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        del self[\"content-type\"]\n\n# django/http/response.py:615-643  (django.http.response.HttpResponseRedirectBase)\nclass HttpResponseRedirectBase(HttpResponse):\n    allowed_schemes = [\"http\", \"https\", \"ftp\"]\n\n    def __init__(self, redirect_to, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Location\"] = iri_to_uri(redirect_to)\n        redirect_to_str = str(redirect_to)\n        if len(redirect_to_str) > MAX_URL_REDIRECT_LENGTH:\n            raise DisallowedRedirect(\n                f\"Unsafe redirect exceeding {MAX_URL_REDIRECT_LENGTH} characters\"\n            )\n        parsed = urlparse(redirect_to_str)\n        if parsed.scheme and parsed.scheme not in self.allowed_schemes:\n            raise DisallowedRedirect(\n                \"Unsafe redirect to URL with protocol '%s'\" % parsed.scheme\n            )\n\n    url = property(lambda self: self[\"Location\"])\n\n    def __repr__(self):\n        return (\n            '<%(cls)s status_code=%(status_code)d%(content_type)s, url=\"%(url)s\">'\n            % {\n                \"cls\": self.__class__.__name__,\n                \"status_code\": self.status_code,\n                \"content_type\": self._content_type_for_repr,\n                \"url\": self.url,\n            }\n        )\n\n# django/http/response.py:618-630  (django.http.response.HttpResponseRedirectBase.__init__)\n    def __init__(self, redirect_to, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self[\"Location\"] = iri_to_uri(redirect_to)\n        redirect_to_str = str(redirect_to)\n        if len(redirect_to_str) > MAX_URL_REDIRECT_LENGTH:\n            raise DisallowedRedirect(\n                f\"Unsafe redirect exceeding {MAX_URL_REDIRECT_LENGTH} characters\"\n            )\n        parsed = urlparse(redirect_to_str)\n        if parsed.scheme and parsed.scheme not in self.allowed_schemes:\n            raise DisallowedRedirect(\n                \"Unsafe redirect to URL with protocol '%s'\" % parsed.scheme\n            )\n\n# django/http/response.py:710-741  (django.http.response.JsonResponse)\nclass JsonResponse(HttpResponse):\n    \"\"\"\n    An HTTP response class that consumes data to be serialized to JSON.\n\n    :param data: Data to be dumped into json. By default only ``dict`` objects\n      are allowed to be passed due to a security flaw before ECMAScript 5. See\n      the ``safe`` parameter for more information.\n    :param encoder: Should be a json encoder class. Defaults to\n      ``django.core.serializers.json.DjangoJSONEncoder``.\n    :param safe: Controls if only ``dict`` objects may be serialized. Defaults\n      to ``True``.\n    :param json_dumps_params: A dictionary of kwargs passed to json.dumps().\n    \"\"\"\n\n    def __init__(\n        self,\n        data,\n        encoder=DjangoJSONEncoder,\n        safe=True,\n        json_dumps_params=None,\n        **kwargs,\n    ):\n        if safe and not isinstance(data, dict):\n            raise TypeError(\n                \"In order to allow non-dict objects to be serialized set the \"\n                \"safe parameter to False.\"\n            )\n        if json_dumps_params is None:\n            json_dumps_params = {}\n        kwargs.setdefault(\"content_type\", \"application/json\")\n        data = json.dumps(data, cls=encoder, **json_dumps_params)\n        super().__init__(content=data, **kwargs)\n\n# django/http/response.py:724-741  (django.http.response.JsonResponse.__init__)\n    def __init__(\n        self,\n        data,\n        encoder=DjangoJSONEncoder,\n        safe=True,\n        json_dumps_params=None,\n        **kwargs,\n    ):\n        if safe and not isinstance(data, dict):\n            raise TypeError(\n                \"In order to allow non-dict objects to be serialized set the \"\n                \"safe parameter to False.\"\n            )\n        if json_dumps_params is None:\n            json_dumps_params = {}\n        kwargs.setdefault(\"content_type\", \"application/json\")\n        data = json.dumps(data, cls=encoder, **json_dumps_params)\n        super().__init__(content=data, **kwargs)\n\n# django/template/response.py:10-144  (django.template.response.SimpleTemplateResponse)\nclass SimpleTemplateResponse(HttpResponse):\n    rendering_attrs = [\"template_name\", \"context_data\", \"_post_render_callbacks\"]\n\n    def __init__(\n        self,\n        template,\n        context=None,\n        content_type=None,\n        status=None,\n        charset=None,\n        using=None,\n        headers=None,\n    ):\n        # It would seem obvious to call these next two members 'template' and\n        # 'context', but those names are reserved as part of the test Client\n        # API. To avoid the name collision, we use different names.\n        self.template_name = template\n        self.context_data = context\n\n        self.using = using\n\n        self._post_render_callbacks = []\n\n        # _request stores the current request object in subclasses that know\n        # about requests, like TemplateResponse. It's defined in the base class\n        # to minimize code duplication.\n        # It's called self._request because self.request gets overwritten by\n        # django.test.client.Client. Unlike template_name and context_data,\n        # _request should not be considered part of the public API.\n        self._request = None\n\n        # content argument doesn't make sense here because it will be replaced\n        # with rendered template so we always pass empty string in order to\n        # prevent errors and provide shorter signature.\n        super().__init__(\"\", content_type, status, charset=charset, headers=headers)\n\n        # _is_rendered tracks whether the template and context has been baked\n        # into a final response.\n        # Super __init__ doesn't know any better than to set self.content to\n        # the empty string we just gave it, which wrongly sets _is_rendered\n        # True, so we initialize it to False after the call to super __init__.\n        self._is_rendered = False\n\n    def __getstate__(self):\n        \"\"\"\n        Raise an exception if trying to pickle an unrendered response. Pickle\n        only rendered data, not the data used to construct the response.\n        \"\"\"\n        obj_dict = self.__dict__.copy()\n        if not self._is_rendered:\n            raise ContentNotRenderedError(\n                \"The response content must be rendered before it can be pickled.\"\n            )\n        for attr in self.rendering_attrs:\n            if attr in obj_dict:\n                del obj_dict[attr]\n\n        return obj_dict\n\n    def resolve_template(self, template):\n        \"\"\"Accept a template object, path-to-template, or list of paths.\"\"\"\n        if isinstance(template, (list, tuple)):\n            return select_template(template, using=self.using)\n        elif isinstance(template, str):\n            return get_template(template, using=self.using)\n        else:\n            return template\n\n    def resolve_context(self, context):\n        return context\n\n    @property\n    def rendered_content(self):\n        \"\"\"Return the freshly rendered content for the template and context\n        described by the TemplateResponse.\n\n        This *does not* set the final content of the response. To set the\n        response content, you must either call render(), or set the\n        content explicitly using the value of this property.\n        \"\"\"\n        template = self.resolve_template(self.template_name)\n        context = self.resolve_context(self.context_data)\n        return template.render(context, self._request)\n\n    def add_post_render_callback(self, callback):\n        \"\"\"Add a new post-rendering callback.\n\n        If the response has already been rendered,\n        invoke the callback immediately.\n        \"\"\"\n        if self._is_rendered:\n            callback(self)\n        else:\n            self._post_render_callbacks.append(callback)\n\n    def render(self):\n        \"\"\"Render (thereby finalizing) the content of the response.\n\n        If the content has already been rendered, this is a no-op.\n\n        Return the baked response instance.\n        \"\"\"\n        retval = self\n        if not self._is_rendered:\n            self.content = self.rendered_content\n            for post_callback in self._post_render_callbacks:\n                newretval = post_callback(retval)\n                if newretval is not None:\n                    retval = newretval\n        return retval\n\n    @property\n    def is_rendered(self):\n        return self._is_rendered\n\n    def __iter__(self):\n        if not self._is_rendered:\n            raise ContentNotRenderedError(\n                \"The response content must be rendered before it can be iterated over.\"\n            )\n        return super().__iter__()\n\n    @property\n    def content(self):\n        if not self._is_rendered:\n            raise ContentNotRenderedError(\n                \"The response content must be rendered before it can be accessed.\"\n            )\n        return super().content\n\n    @content.setter\n    def content(self, value):\n        \"\"\"Set the content for the response.\"\"\"\n        HttpResponse.content.fset(self, value)\n        self._is_rendered = True\n\n# django/template/response.py:13-51  (django.template.response.SimpleTemplateResponse.__init__)\n    def __init__(\n        self,\n        template,\n        context=None,\n        content_type=None,\n        status=None,\n        charset=None,\n        using=None,\n        headers=None,\n    ):\n        # It would seem obvious to call these next two members 'template' and\n        # 'context', but those names are reserved as part of the test Client\n        # API. To avoid the name collision, we use different names.\n        self.template_name = template\n        self.context_data = context\n\n        self.using = using\n\n        self._post_render_callbacks = []\n\n        # _request stores the current request object in subclasses that know\n        # about requests, like TemplateResponse. It's defined in the base class\n        # to minimize code duplication.\n        # It's called self._request because self.request gets overwritten by\n        # django.test.client.Client. Unlike template_name and context_data,\n        # _request should not be considered part of the public API.\n        self._request = None\n\n        # content argument doesn't make sense here because it will be replaced\n        # with rendered template so we always pass empty string in order to\n        # prevent errors and provide shorter signature.\n        super().__init__(\"\", content_type, status, charset=charset, headers=headers)\n\n        # _is_rendered tracks whether the template and context has been baked\n        # into a final response.\n        # Super __init__ doesn't know any better than to set self.content to\n        # the empty string we just gave it, which wrongly sets _is_rendered\n        # True, so we initialize it to False after the call to super __init__.\n        self._is_rendered = False\n\n# django/template/response.py:147-164  (django.template.response.TemplateResponse)\nclass TemplateResponse(SimpleTemplateResponse):\n    rendering_attrs = SimpleTemplateResponse.rendering_attrs + [\"_request\"]\n\n    def __init__(\n        self,\n        request,\n        template,\n        context=None,\n        content_type=None,\n        status=None,\n        charset=None,\n        using=None,\n        headers=None,\n    ):\n        super().__init__(\n            template, context, content_type, status, charset, using, headers=headers\n        )\n        self._request = request\n\n# django/template/response.py:150-164  (django.template.response.TemplateResponse.__init__)\n    def __init__(\n        self,\n        request,\n        template,\n        context=None,\n        content_type=None,\n        status=None,\n        charset=None,\n        using=None,\n        headers=None,\n    ):\n        super().__init__(\n            template, context, content_type, status, charset, using, headers=headers\n        )\n        self._request = request\n\n# tests/csrf_tests/views.py:10-24  (tests.csrf_tests.views.TestingHttpResponse)\nclass TestingHttpResponse(HttpResponse):\n    \"\"\"\n    A version of HttpResponse that stores what cookie values are passed to\n    set_cookie() when CSRF_USE_SESSIONS=False.\n    \"\"\"\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        # This is a list of the cookie values passed to set_cookie() over\n        # the course of the request-response.\n        self._cookies_set = []\n\n    def set_cookie(self, key, value, **kwargs):\n        super().set_cookie(key, value, **kwargs)\n        self._cookies_set.append(value)\n\n# tests/csrf_tests/views.py:16-20  (tests.csrf_tests.views.TestingHttpResponse.__init__)\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        # This is a list of the cookie values passed to set_cookie() over\n        # the course of the request-response.\n        self._cookies_set = []\n\n# django/http/response.py:106-365  (django.http.response.HttpResponseBase)\nclass HttpResponseBase:\n    \"\"\"\n    An HTTP response base class with dictionary-accessed headers.\n\n    This class doesn't handle content. It should not be used directly.\n    Use the HttpResponse and StreamingHttpResponse subclasses instead.\n    \"\"\"\n\n    status_code = 200\n\n    def __init__(\n        self, content_type=None, status=None, reason=None, charset=None, headers=None\n    ):\n        self.headers = ResponseHeaders(headers)\n        self._charset = charset\n        if \"Content-Type\" not in self.headers:\n            if content_type is None:\n                content_type = f\"text/html; charset={self.charset}\"\n            self.headers[\"Content-Type\"] = content_type\n        elif content_type:\n            raise ValueError(\n                \"'headers' must not contain 'Content-Type' when the \"\n                \"'content_type' parameter is provided.\"\n            )\n        self._resource_closers = []\n        # This parameter is set by the handler. It's necessary to preserve the\n        # historical behavior of request_finished.\n        self._handler_class = None\n        self.cookies = SimpleCookie()\n        self.closed = False\n        if status is not None:\n            try:\n                self.status_code = int(status)\n            except (ValueError, TypeError):\n                raise TypeError(\"HTTP status code must be an integer.\")\n\n            if not 100 <= self.status_code <= 599:\n                raise ValueError(\"HTTP status code must be an integer from 100 to 599.\")\n        self._reason_phrase = reason\n\n    @property\n    def reason_phrase(self):\n        if self._reason_phrase is not None:\n            return self._reason_phrase\n        # Leave self._reason_phrase unset in order to use the default\n        # reason phrase for status code.\n        return responses.get(self.status_code, \"Unknown Status Code\")\n\n    @reason_phrase.setter\n    def reason_phrase(self, value):\n        self._reason_phrase = value\n\n    @property\n    def charset(self):\n        if self._charset is not None:\n            return self._charset\n        # The Content-Type header may not yet be set, because the charset is\n        # being inserted *into* it.\n        if content_type := self.headers.get(\"Content-Type\"):\n            if matched := _charset_from_content_type_re.search(content_type):\n                # Extract the charset and strip its double quotes.\n                # Note that having parsed it from the Content-Type, we don't\n                # store it back into the _charset for later intentionally, to\n                # allow for the Content-Type to be switched again later.\n                return matched[\"charset\"].replace('\"', \"\")\n        return settings.DEFAULT_CHARSET\n\n    @charset.setter\n    def charset(self, value):\n        self._charset = value\n\n    def serialize_headers(self):\n        \"\"\"HTTP headers as a bytestring.\"\"\"\n        return b\"\\r\\n\".join(\n            [\n                key.encode(\"ascii\") + b\": \" + value.encode(\"latin-1\")\n                for key, value in self.headers.items()\n            ]\n        )\n\n    __bytes__ = serialize_headers\n\n    @property\n    def _content_type_for_repr(self):\n        return (\n            ', \"%s\"' % self.headers[\"Content-Type\"]\n            if \"Content-Type\" in self.headers\n            else \"\"\n        )\n\n    def __setitem__(self, header, value):\n        self.headers[header] = value\n\n    def __delitem__(self, header):\n        del self.headers[header]\n\n    def __getitem__(self, header):\n        return self.headers[header]\n\n    def has_header(self, header):\n        \"\"\"Case-insensitive check for a header.\"\"\"\n        return header in self.headers\n\n    __contains__ = has_header\n\n    def items(self):\n        return self.headers.items()\n\n    def get(self, header, alternate=None):\n        return self.headers.get(header, alternate)\n\n    def set_cookie(\n        self,\n        key,\n        value=\"\",\n        max_age=None,\n        expires=None,\n        path=\"/\",\n        domain=None,\n        secure=False,\n        httponly=False,\n        samesite=None,\n    ):\n        \"\"\"\n        Set a cookie.\n\n        ``expires`` can be:\n        - a string in the correct format,\n        - a naive ``datetime.datetime`` object in UTC,\n        - an aware ``datetime.datetime`` object in any time zone.\n        If it is a ``datetime.datetime`` object then calculate ``max_age``.\n\n        ``max_age`` can be:\n        - int/float specifying seconds,\n        - ``datetime.timedelta`` object.\n        \"\"\"\n        self.cookies[key] = value\n        if expires is not None:\n            if isinstance(expires, datetime.datetime):\n                if timezone.is_naive(expires):\n                    expires = timezone.make_aware(expires, datetime.timezone.utc)\n                delta = expires - datetime.datetime.now(tz=datetime.timezone.utc)\n                # Add one second so the date matches exactly (a fraction of\n                # time gets lost between converting to a timedelta and\n                # then the date string).\n                delta += datetime.timedelta(seconds=1)\n                # Just set max_age - the max_age logic will set expires.\n                expires = None\n                if max_age is not None:\n                    raise ValueError(\"'expires' and 'max_age' can't be used together.\")\n                max_age = max(0, delta.days * 86400 + delta.seconds)\n            else:\n                self.cookies[key][\"expires\"] = expires\n        else:\n            self.cookies[key][\"expires\"] = \"\"\n        if max_age is not None:\n            if isinstance(max_age, datetime.timedelta):\n                max_age = max_age.total_seconds()\n            self.cookies[key][\"max-age\"] = int(max_age)\n            # IE requires expires, so set it if hasn't been already.\n            if not expires:\n                self.cookies[key][\"expires\"] = http_date(time.time() + max_age)\n        if path is not None:\n            self.cookies[key][\"path\"] = path\n        if domain is not None:\n            self.cookies[key][\"domain\"] = domain\n        if secure:\n            self.cookies[key][\"secure\"] = True\n        if httponly:\n            self.cookies[key][\"httponly\"] = True\n        if samesite:\n            if samesite.lower() not in (\"lax\", \"none\", \"strict\"):\n                raise ValueError('samesite must be \"lax\", \"none\", or \"strict\".')\n            self.cookies[key][\"samesite\"] = samesite\n\n    def setdefault(self, key, value):\n        \"\"\"Set a header unless it has already been set.\"\"\"\n        self.headers.setdefault(key, value)\n\n    def set_signed_cookie(self, key, value, salt=\"\", **kwargs):\n        value = signing.get_cookie_signer(salt=key + salt).sign(value)\n        return self.set_cookie(key, value, **kwargs)\n\n    def delete_cookie(self, key, path=\"/\", domain=None, samesite=None):\n        # Browsers can ignore the Set-Cookie header if the cookie doesn't use\n        # the secure flag and:\n        # - the cookie name starts with \"__Host-\" or \"__Secure-\", or\n        # - the samesite is \"none\".\n        secure = key.startswith((\"__Secure-\", \"__Host-\")) or (\n            samesite and samesite.lower() == \"none\"\n        )\n        self.set_cookie(\n            key,\n            max_age=0,\n            path=path,\n            domain=domain,\n            secure=secure,\n            expires=\"Thu, 01 Jan 1970 00:00:00 GMT\",\n            samesite=samesite,\n        )\n\n    # Common methods used by subclasses\n\n    def make_bytes(self, value):\n        \"\"\"Turn a value into a bytestring encoded in the output charset.\"\"\"\n        # Per PEP 3333, this response body must be bytes. To avoid returning\n        # an instance of a subclass, this function returns `bytes(value)`.\n        # This doesn't make a copy when `value` already contains bytes.\n\n        # Handle string types -- we can't rely on force_bytes here because:\n        # - Python attempts str conversion first\n        # - when self._charset != 'utf-8' it re-encodes the content\n        if isinstance(value, (bytes, memoryview)):\n            return bytes(value)\n        if isinstance(value, str):\n            return bytes(value.encode(self.charset))\n        # Handle non-string types.\n        return str(value).encode(self.charset)\n\n    # These methods partially implement the file-like object interface.\n    # See https://docs.python.org/library/io.html#io.IOBase\n\n    # The WSGI server must call this method upon completion of the request.\n    # See http://blog.dscpl.com.au/2012/10/obligations-for-calling-close-on.html\n    def close(self):\n        for closer in self._resource_closers:\n            try:\n                closer()\n            except Exception:\n                pass\n        # Free resources that were still referenced.\n        self._resource_closers.clear()\n        self.closed = True\n        signals.request_finished.send(sender=self._handler_class)\n\n    def write(self, content):\n        raise OSError(\"This %s instance is not writable\" % self.__class__.__name__)\n\n    def flush(self):\n        pass\n\n    def tell(self):\n        raise OSError(\n            \"This %s instance cannot tell its position\" % self.__class__.__name__\n        )\n\n    # These methods partially implement a stream-like object interface.\n    # See https://docs.python.org/library/io.html#io.IOBase\n\n    def readable(self):\n        return False\n\n    def seekable(self):\n        return False\n\n    def writable(self):\n        return False\n\n    def writelines(self, lines):\n        raise OSError(\"This %s instance is not writable\" % self.__class__.__name__)\n\n# django/http/response.py:116-144  (django.http.response.HttpResponseBase.__init__)\n    def __init__(\n        self, content_type=None, status=None, reason=None, charset=None, headers=None\n    ):\n        self.headers = ResponseHeaders(headers)\n        self._charset = charset\n        if \"Content-Type\" not in self.headers:\n            if content_type is None:\n                content_type = f\"text/html; charset={self.charset}\"\n            self.headers[\"Content-Type\"] = content_type\n        elif content_type:\n            raise ValueError(\n                \"'headers' must not contain 'Content-Type' when the \"\n                \"'content_type' parameter is provided.\"\n            )\n        self._resource_closers = []\n        # This parameter is set by the handler. It's necessary to preserve the\n        # historical behavior of request_finished.\n        self._handler_class = None\n        self.cookies = SimpleCookie()\n        self.closed = False\n        if status is not None:\n            try:\n                self.status_code = int(status)\n            except (ValueError, TypeError):\n                raise TypeError(\"HTTP status code must be an integer.\")\n\n            if not 100 <= self.status_code <= 599:\n                raise ValueError(\"HTTP status code must be an integer from 100 to 599.\")\n        self._reason_phrase = reason\n\n## Task\n\nWhat breaks if `django.http.response.HttpResponse.__init__` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

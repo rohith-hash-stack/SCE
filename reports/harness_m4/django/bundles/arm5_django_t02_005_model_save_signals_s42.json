@@ -1,0 +1,196 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t02_005_model_save_signals",
+  "items": [
+   {
+    "source_id": "django/db/models/base.py:459-2477",
+    "content": "# django/db/models/base.py:459-2477  (django.db.models.base.Model)\nclass Model(AltersData, metaclass=ModelBase):\n    ...",
+    "token_count": 38,
+    "rank": 1,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.base.Model"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 15,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:767-819",
+    "content": "# django/db/models/base.py:767-819  (django.db.models.base.Model.save)\n    def save(\n        self, force_insert=False, force_update=False, using=None, update_fields=None\n    ):\n        \"\"\"\n        Save the current instance. Override this in a subclass if you want to\n        control the saving process.\n\n        The 'force_insert' and 'force_update' parameters can be used to insist\n        that the \"save\" must be an SQL insert or update (or equivalent for\n        non-SQL backends), respectively. Normally, they should not be set.\n        \"\"\"\n        self._prepare_related_fields_for_save(operation_name=\"save\")\n\n        using = using or router.db_for_write(self.__class__, instance=self)\n        if force_insert and (force_update or update_fields):\n            raise ValueError(\"Cannot force both insert and updating in model saving.\")\n\n        deferred_fields = self.get_deferred_fields()\n        if update_fields is not None:\n            # If update_fields is empty, skip the save. We do also check for\n            # no-op saves later on for inheritance cases. This bailout is\n            # still needed for skipping signal sending.\n            if not update_fields:\n                return\n\n            update_fields = frozenset(update_fields)\n            field_names = self._meta._non_pk_concrete_field_names\n            non_model_fields = update_fields.difference(field_names)\n\n            if non_model_fields:\n                raise ValueError(\n                    \"The following fields do not exist in this model, are m2m \"\n                    \"fields, or are non-concrete fields: %s\"\n                    % \", \".join(non_model_fields)\n                )\n\n        # If saving to the same database, and this model is deferred, then\n        # automatically do an \"update_fields\" save on the loaded fields.\n        elif not force_insert and deferred_fields and using == self._state.db:\n            field_names = set()\n            for field in self._meta.concrete_fields:\n                if not field.primary_key and not hasattr(field, \"through\"):\n                    field_names.add(field.attname)\n            loaded_fields = field_names.difference(deferred_fields)\n            if loaded_fields:\n                update_fields = frozenset(loaded_fields)\n\n        self.save_base(\n            using=using,\n            force_insert=force_insert,\n            force_update=force_update,\n            update_fields=update_fields,\n        )",
+    "token_count": 489,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model.save"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 466,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:1069-1121",
+    "content": "# django/db/models/base.py:1069-1121  (django.db.models.base.Model._prepare_related_fields_for_save)\n    def _prepare_related_fields_for_save(self, operation_name, fields=None):\n        # Ensure that a model instance without a PK hasn't been assigned to\n        # a ForeignKey, GenericForeignKey or OneToOneField on this model. If\n        # the field is nullable, allowing the save would result in silent data\n        # loss.\n        for field in self._meta.concrete_fields:\n            if fields and field not in fields:\n                continue\n            # If the related field isn't cached, then an instance hasn't been\n            # assigned and there's no need to worry about this check.\n            if field.is_relation and field.is_cached(self):\n                obj = getattr(self, field.name, None)\n                if not obj:\n                    continue\n                # A pk may have been assigned manually to a model instance not\n                # saved to the database (or auto-generated in a case like\n                # UUIDField), but we allow the save to proceed and rely on the\n                # database to raise an IntegrityError if applicable. If\n                # constraints aren't supported by the database, there's the\n                # unavoidable risk of data corruption.\n                if obj.pk is None:\n                    # Remove the object from a related instance cache.\n                    if not field.remote_field.multiple:\n                        field.remote_field.delete_cached_value(obj)\n                    raise ValueError(\n                        \"%s() prohibited to prevent data loss due to unsaved \"\n                        \"related object '%s'.\" % (operation_name, field.name)\n                    )\n                elif getattr(self, field.attname) in field.empty_values:\n                    # Set related object if it has been saved after an\n                    # assignment.\n                    setattr(self, field.name, obj)\n                # If the relationship's pk/to_field was changed, clear the\n                # cached relationship.\n                if getattr(obj, field.target_field.attname) != getattr(\n                    self, field.attname\n                ):\n                    field.delete_cached_value(self)\n        # GenericForeignKeys are private.\n        for field in self._meta.private_fields:\n            if fields and field not in fields:\n                continue\n            if (\n                field.is_relation\n                and field.is_cached(self)\n                and hasattr(field, \"fk_field\")\n            ):\n                obj = field.get_cached_value(self, default=None)\n                if obj and obj.pk is None:\n                    raise ValueError(\n                        f\"{operation_name}() prohibited to prevent data loss due to \"\n                        f\"unsaved related object '{field.name}'.\"\n                    )",
+    "token_count": 537,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model._prepare_related_fields_for_save"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 507,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:665-673",
+    "content": "# django/db/models/base.py:665-673  (django.db.models.base.Model.get_deferred_fields)\n    def get_deferred_fields(self):\n        \"\"\"\n        Return a set containing names of deferred fields for this instance.\n        \"\"\"\n        return {\n            f.attname\n            for f in self._meta.concrete_fields\n            if f.attname not in self.__dict__\n        }",
+    "token_count": 85,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model.get_deferred_fields"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 58,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:835-899",
+    "content": "# django/db/models/base.py:835-899  (django.db.models.base.Model.save_base)\n    def save_base(\n        self,\n        raw=False,\n        force_insert=False,\n        force_update=False,\n        using=None,\n        update_fields=None,\n    ):\n        \"\"\"\n        Handle the parts of saving which should be done only once per save,\n        yet need to be done in raw saves, too. This includes some sanity\n        checks and signal sending.\n\n        The 'raw' argument is telling save_base not to save any parent\n        models and not to do any changes to the values before save. This\n        is used by fixture loading.\n        \"\"\"\n        using = using or router.db_for_write(self.__class__, instance=self)\n        assert not (force_insert and (force_update or update_fields))\n        assert update_fields is None or update_fields\n        cls = origin = self.__class__\n        # Skip proxies, but keep the origin as the proxy model.\n        if cls._meta.proxy:\n            cls = cls._meta.concrete_model\n        meta = cls._meta\n        if not meta.auto_created:\n            pre_save.send(\n                sender=origin,\n                instance=self,\n                raw=raw,\n                using=using,\n                update_fields=update_fields,\n            )\n        # A transaction isn't needed if one query is issued.\n        if meta.parents:\n            context_manager = transaction.atomic(using=using, savepoint=False)\n        else:\n            context_manager = transaction.mark_for_rollback_on_error(using=using)\n        with context_manager:\n            parent_inserted = False\n            if not raw:\n                parent_inserted = self._save_parents(cls, using, update_fields)\n            updated = self._save_table(\n                raw,\n                cls,\n                force_insert or parent_inserted,\n                force_update,\n                using,\n                update_fields,\n            )\n        # Store the database on which the object was saved\n        self._state.db = using\n        # Once saved, this is no longer a to-be-added instance.\n        self._state.adding = False\n\n        # Signal that the save is complete\n        if not meta.auto_created:\n            post_save.send(\n                sender=origin,\n                instance=self,\n                created=(not updated),\n                update_fields=update_fields,\n                raw=raw,\n                using=using,\n            )",
+    "token_count": 482,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model.save_base"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 458,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:903-936",
+    "content": "# django/db/models/base.py:903-936  (django.db.models.base.Model._save_parents)\n    def _save_parents(self, cls, using, update_fields):\n        ...",
+    "token_count": 41,
+    "rank": 6,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.base.Model._save_parents"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 16,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:938-1026",
+    "content": "# django/db/models/base.py:938-1026  (django.db.models.base.Model._save_table)\n    def _save_table(\n        self,\n        raw=False,\n        cls=None,\n        force_insert=False,\n        force_update=False,\n        using=None,\n        update_fields=None,\n    ):\n        ...",
+    "token_count": 66,
+    "rank": 7,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.base.Model._save_table"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 40,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1738,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are debugging Django model save behavior in\ndjango/db/models/base.py. Starting from `Model.save`, trace the real\ncausal pipeline of Model methods it calls that are responsible for\nactually persisting the instance and dispatching the `pre_save`/\n`post_save` signals.\n\nFirst give a short (2-4 sentence) explanation of the pipeline,\nnoting where the pre_save/post_save signal dispatch happens even\nthough Signal instances aren't themselves indexed method symbols.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified Model symbol names in that\ncausal order - only symbols actually present in the provided context\npackage may appear, e.g.:\n\n```json\n[\"django.db.models.base.Model.save\", \"django.db.models.base.Model.save_base\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "django.db.models.base.Model.save",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 32,
+   "manifest_candidates_unfiltered": 32,
+   "requested_symbols": [
+    "django.db.models.base.Model.save",
+    "django.db.models.base.Model._prepare_related_fields_for_save",
+    "django.db.models.base.Model.get_deferred_fields",
+    "django.db.models.base.Model.save_base",
+    "django.db.models.signals.pre_save.send",
+    "django.db.models.base.Model._save_parents",
+    "django.db.models.base.Model._save_table",
+    "django.db.models.signals.post_save.send"
+   ],
+   "turn1_requested_count": 8,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "django.db.models.signals.pre_save.send",
+    "django.db.models.signals.post_save.send"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The Model.save method initiates the saving process by preparing related fields and then calling save_base. The save_base method is responsible for saving the instance to the database and dispatching the pre_save and post_save signals. The actual persistence is handled by _save_parents and _save_table methods.\",\n  \"requested_symbols\": [\n    \"django.db.models.base.Model.save\",\n    \"django.db.models.base.Model._prepare_related_fields_for_save\",\n    \"django.db.models.base.Model.get_deferred_fields\",\n    \"django.db.models.base.Model.save_base\",\n    \"django.db.models.signals.pre_save.send\",\n    \"django.db.models.base.Model._save_parents\",\n    \"django.db.models.base.Model._save_table\",\n    \"django.db.models.signals.post_save.send\"\n  ]\n}\n```",
+     "prompt_tokens": 1883,
+     "completion_tokens": 167,
+     "latency_seconds": 13.5132382339998,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     384.509329
+    ],
+    "L_turn2_hydrate": [
+     850.190131
+    ],
+    "L_retrieve": [
+     14753.725452
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1738,
+   "prompt_tokens": 2040,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2053,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/db/models/base.py:459-2477  (django.db.models.base.Model)\nclass Model(AltersData, metaclass=ModelBase):\n    ...\n\n# django/db/models/base.py:767-819  (django.db.models.base.Model.save)\n    def save(\n        self, force_insert=False, force_update=False, using=None, update_fields=None\n    ):\n        \"\"\"\n        Save the current instance. Override this in a subclass if you want to\n        control the saving process.\n\n        The 'force_insert' and 'force_update' parameters can be used to insist\n        that the \"save\" must be an SQL insert or update (or equivalent for\n        non-SQL backends), respectively. Normally, they should not be set.\n        \"\"\"\n        self._prepare_related_fields_for_save(operation_name=\"save\")\n\n        using = using or router.db_for_write(self.__class__, instance=self)\n        if force_insert and (force_update or update_fields):\n            raise ValueError(\"Cannot force both insert and updating in model saving.\")\n\n        deferred_fields = self.get_deferred_fields()\n        if update_fields is not None:\n            # If update_fields is empty, skip the save. We do also check for\n            # no-op saves later on for inheritance cases. This bailout is\n            # still needed for skipping signal sending.\n            if not update_fields:\n                return\n\n            update_fields = frozenset(update_fields)\n            field_names = self._meta._non_pk_concrete_field_names\n            non_model_fields = update_fields.difference(field_names)\n\n            if non_model_fields:\n                raise ValueError(\n                    \"The following fields do not exist in this model, are m2m \"\n                    \"fields, or are non-concrete fields: %s\"\n                    % \", \".join(non_model_fields)\n                )\n\n        # If saving to the same database, and this model is deferred, then\n        # automatically do an \"update_fields\" save on the loaded fields.\n        elif not force_insert and deferred_fields and using == self._state.db:\n            field_names = set()\n            for field in self._meta.concrete_fields:\n                if not field.primary_key and not hasattr(field, \"through\"):\n                    field_names.add(field.attname)\n            loaded_fields = field_names.difference(deferred_fields)\n            if loaded_fields:\n                update_fields = frozenset(loaded_fields)\n\n        self.save_base(\n            using=using,\n            force_insert=force_insert,\n            force_update=force_update,\n            update_fields=update_fields,\n        )\n\n# django/db/models/base.py:1069-1121  (django.db.models.base.Model._prepare_related_fields_for_save)\n    def _prepare_related_fields_for_save(self, operation_name, fields=None):\n        # Ensure that a model instance without a PK hasn't been assigned to\n        # a ForeignKey, GenericForeignKey or OneToOneField on this model. If\n        # the field is nullable, allowing the save would result in silent data\n        # loss.\n        for field in self._meta.concrete_fields:\n            if fields and field not in fields:\n                continue\n            # If the related field isn't cached, then an instance hasn't been\n            # assigned and there's no need to worry about this check.\n            if field.is_relation and field.is_cached(self):\n                obj = getattr(self, field.name, None)\n                if not obj:\n                    continue\n                # A pk may have been assigned manually to a model instance not\n                # saved to the database (or auto-generated in a case like\n                # UUIDField), but we allow the save to proceed and rely on the\n                # database to raise an IntegrityError if applicable. If\n                # constraints aren't supported by the database, there's the\n                # unavoidable risk of data corruption.\n                if obj.pk is None:\n                    # Remove the object from a related instance cache.\n                    if not field.remote_field.multiple:\n                        field.remote_field.delete_cached_value(obj)\n                    raise ValueError(\n                        \"%s() prohibited to prevent data loss due to unsaved \"\n                        \"related object '%s'.\" % (operation_name, field.name)\n                    )\n                elif getattr(self, field.attname) in field.empty_values:\n                    # Set related object if it has been saved after an\n                    # assignment.\n                    setattr(self, field.name, obj)\n                # If the relationship's pk/to_field was changed, clear the\n                # cached relationship.\n                if getattr(obj, field.target_field.attname) != getattr(\n                    self, field.attname\n                ):\n                    field.delete_cached_value(self)\n        # GenericForeignKeys are private.\n        for field in self._meta.private_fields:\n            if fields and field not in fields:\n                continue\n            if (\n                field.is_relation\n                and field.is_cached(self)\n                and hasattr(field, \"fk_field\")\n            ):\n                obj = field.get_cached_value(self, default=None)\n                if obj and obj.pk is None:\n                    raise ValueError(\n                        f\"{operation_name}() prohibited to prevent data loss due to \"\n                        f\"unsaved related object '{field.name}'.\"\n                    )\n\n# django/db/models/base.py:665-673  (django.db.models.base.Model.get_deferred_fields)\n    def get_deferred_fields(self):\n        \"\"\"\n        Return a set containing names of deferred fields for this instance.\n        \"\"\"\n        return {\n            f.attname\n            for f in self._meta.concrete_fields\n            if f.attname not in self.__dict__\n        }\n\n# django/db/models/base.py:835-899  (django.db.models.base.Model.save_base)\n    def save_base(\n        self,\n        raw=False,\n        force_insert=False,\n        force_update=False,\n        using=None,\n        update_fields=None,\n    ):\n        \"\"\"\n        Handle the parts of saving which should be done only once per save,\n        yet need to be done in raw saves, too. This includes some sanity\n        checks and signal sending.\n\n        The 'raw' argument is telling save_base not to save any parent\n        models and not to do any changes to the values before save. This\n        is used by fixture loading.\n        \"\"\"\n        using = using or router.db_for_write(self.__class__, instance=self)\n        assert not (force_insert and (force_update or update_fields))\n        assert update_fields is None or update_fields\n        cls = origin = self.__class__\n        # Skip proxies, but keep the origin as the proxy model.\n        if cls._meta.proxy:\n            cls = cls._meta.concrete_model\n        meta = cls._meta\n        if not meta.auto_created:\n            pre_save.send(\n                sender=origin,\n                instance=self,\n                raw=raw,\n                using=using,\n                update_fields=update_fields,\n            )\n        # A transaction isn't needed if one query is issued.\n        if meta.parents:\n            context_manager = transaction.atomic(using=using, savepoint=False)\n        else:\n            context_manager = transaction.mark_for_rollback_on_error(using=using)\n        with context_manager:\n            parent_inserted = False\n            if not raw:\n                parent_inserted = self._save_parents(cls, using, update_fields)\n            updated = self._save_table(\n                raw,\n                cls,\n                force_insert or parent_inserted,\n                force_update,\n                using,\n                update_fields,\n            )\n        # Store the database on which the object was saved\n        self._state.db = using\n        # Once saved, this is no longer a to-be-added instance.\n        self._state.adding = False\n\n        # Signal that the save is complete\n        if not meta.auto_created:\n            post_save.send(\n                sender=origin,\n                instance=self,\n                created=(not updated),\n                update_fields=update_fields,\n                raw=raw,\n                using=using,\n            )\n\n# django/db/models/base.py:903-936  (django.db.models.base.Model._save_parents)\n    def _save_parents(self, cls, using, update_fields):\n        ...\n\n# django/db/models/base.py:938-1026  (django.db.models.base.Model._save_table)\n    def _save_table(\n        self,\n        raw=False,\n        cls=None,\n        force_insert=False,\n        force_update=False,\n        using=None,\n        update_fields=None,\n    ):\n        ...\n\n## Task\n\nYou are debugging Django model save behavior in\ndjango/db/models/base.py. Starting from `Model.save`, trace the real\ncausal pipeline of Model methods it calls that are responsible for\nactually persisting the instance and dispatching the `pre_save`/\n`post_save` signals.\n\nFirst give a short (2-4 sentence) explanation of the pipeline,\nnoting where the pre_save/post_save signal dispatch happens even\nthough Signal instances aren't themselves indexed method symbols.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified Model symbol names in that\ncausal order - only symbols actually present in the provided context\npackage may appear, e.g.:\n\n```json\n[\"django.db.models.base.Model.save\", \"django.db.models.base.Model.save_base\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

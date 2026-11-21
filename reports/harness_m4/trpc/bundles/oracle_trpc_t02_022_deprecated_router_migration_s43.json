@@ -1,0 +1,91 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "trpc_t02_022_deprecated_router_migration",
+  "items": [
+   {
+    "source_id": "deprecated/interop.ts:200-232",
+    "content": "# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}",
+    "token_count": 272,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "deprecated.interop.migrateRouter"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/interop.ts:171-199",
+    "content": "# deprecated/interop.ts:171-199  (deprecated.interop.migrateProcedure)\nfunction migrateProcedure<\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n>(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n  const def = oldProc._def();\n\n  const inputParser = getParseFnOrPassThrough(def.inputParser);\n  const outputParser = getParseFnOrPassThrough(def.outputParser);\n\n  const inputMiddleware = createInputMiddleware(inputParser);\n\n  const builder = createBuilder({\n    inputs: [def.inputParser],\n    middlewares: [\n      ...(def.middlewares as any),\n      inputMiddleware,\n      createOutputMiddleware(outputParser),\n    ],\n    meta: def.meta,\n    output: def.outputParser,\n    mutation: type === 'mutation',\n    query: type === 'query',\n    subscription: type === 'subscription',\n  });\n\n  const proc = builder[type]((opts) => def.resolver(opts as any));\n\n  return proc as any;\n}",
+    "token_count": 220,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "deprecated.interop.migrateProcedure"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 220
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/mergeWithoutOverrides.ts:4-19",
+    "content": "# core/internals/mergeWithoutOverrides.ts:4-19  (core.internals.mergeWithoutOverrides.mergeWithoutOverrides)\nexport function mergeWithoutOverrides<TType extends Record<string, unknown>>(\n  obj1: TType,\n  ...objs: Partial<TType>[]\n): TType {\n  const newObj: TType = Object.assign(Object.create(null), obj1);\n\n  for (const overrides of objs) {\n    for (const key in overrides) {\n      if (key in newObj && newObj[key] !== overrides[key]) {\n        throw new Error(`Duplicate key ${key}`);\n      }\n      newObj[key as keyof TType] = overrides[key] as TType[keyof TType];\n    }\n  }\n  return newObj;\n}",
+    "token_count": 149,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.internals.mergeWithoutOverrides.mergeWithoutOverrides"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 149
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:194-277",
+    "content": "# core/router.ts:194-277  (core.router.createRouterFactory)\nexport function createRouterFactory<TConfig extends AnyRootConfig>(\n  config: TConfig,\n) {\n  return function createRouterInner<\n    TProcRouterRecord extends ProcedureRouterRecord,\n  >(\n    procedures: TProcRouterRecord,\n  ): CreateRouterInner<TConfig, TProcRouterRecord> {\n    const reservedWordsUsed = new Set(\n      Object.keys(procedures).filter((v) => reservedWords.includes(v)),\n    );\n    if (reservedWordsUsed.size > 0) {\n      throw new Error(\n        'Reserved words used in `router({})` call: ' +\n          Array.from(reservedWordsUsed).join(', '),\n      );\n    }\n\n    const routerProcedures: ProcedureRecord = omitPrototype({});\n    function recursiveGetPaths(procedures: ProcedureRouterRecord, path = '') {\n      for (const [key, procedureOrRouter] of Object.entries(procedures ?? {})) {\n        const newPath = `${path}${key}`;\n\n        if (isRouter(procedureOrRouter)) {\n          recursiveGetPaths(procedureOrRouter._def.procedures, `${newPath}.`);\n          continue;\n        }\n\n        if (routerProcedures[newPath]) {\n          throw new Error(`Duplicate key: ${newPath}`);\n        }\n\n        routerProcedures[newPath] = procedureOrRouter;\n      }\n    }\n    recursiveGetPaths(procedures);\n\n    const _def: AnyRouterDef<TConfig> = {\n      _config: config,\n      router: true,\n      procedures: routerProcedures,\n      ...emptyRouter,\n      record: procedures,\n      queries: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.query)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      mutations: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.mutation)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      subscriptions: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.subscription)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n    };\n\n    const router: AnyRouter = {\n      ...procedures,\n      _def,\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n    };\n\n    return router as any;\n  };\n}",
+    "token_count": 682,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.router.createRouterFactory"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 682
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1323,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how tRPC migrates a legacy (v9-shaped) router into the modern router shape, starting from `migrateRouter` in deprecated/interop.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"deprecated.interop.migrateRouter\", \"deprecated.interop.migrateProcedure\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 4,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1323,
+   "prompt_tokens": 1582,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1595,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}\n\n# deprecated/interop.ts:171-199  (deprecated.interop.migrateProcedure)\nfunction migrateProcedure<\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n>(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n  const def = oldProc._def();\n\n  const inputParser = getParseFnOrPassThrough(def.inputParser);\n  const outputParser = getParseFnOrPassThrough(def.outputParser);\n\n  const inputMiddleware = createInputMiddleware(inputParser);\n\n  const builder = createBuilder({\n    inputs: [def.inputParser],\n    middlewares: [\n      ...(def.middlewares as any),\n      inputMiddleware,\n      createOutputMiddleware(outputParser),\n    ],\n    meta: def.meta,\n    output: def.outputParser,\n    mutation: type === 'mutation',\n    query: type === 'query',\n    subscription: type === 'subscription',\n  });\n\n  const proc = builder[type]((opts) => def.resolver(opts as any));\n\n  return proc as any;\n}\n\n# core/internals/mergeWithoutOverrides.ts:4-19  (core.internals.mergeWithoutOverrides.mergeWithoutOverrides)\nexport function mergeWithoutOverrides<TType extends Record<string, unknown>>(\n  obj1: TType,\n  ...objs: Partial<TType>[]\n): TType {\n  const newObj: TType = Object.assign(Object.create(null), obj1);\n\n  for (const overrides of objs) {\n    for (const key in overrides) {\n      if (key in newObj && newObj[key] !== overrides[key]) {\n        throw new Error(`Duplicate key ${key}`);\n      }\n      newObj[key as keyof TType] = overrides[key] as TType[keyof TType];\n    }\n  }\n  return newObj;\n}\n\n# core/router.ts:194-277  (core.router.createRouterFactory)\nexport function createRouterFactory<TConfig extends AnyRootConfig>(\n  config: TConfig,\n) {\n  return function createRouterInner<\n    TProcRouterRecord extends ProcedureRouterRecord,\n  >(\n    procedures: TProcRouterRecord,\n  ): CreateRouterInner<TConfig, TProcRouterRecord> {\n    const reservedWordsUsed = new Set(\n      Object.keys(procedures).filter((v) => reservedWords.includes(v)),\n    );\n    if (reservedWordsUsed.size > 0) {\n      throw new Error(\n        'Reserved words used in `router({})` call: ' +\n          Array.from(reservedWordsUsed).join(', '),\n      );\n    }\n\n    const routerProcedures: ProcedureRecord = omitPrototype({});\n    function recursiveGetPaths(procedures: ProcedureRouterRecord, path = '') {\n      for (const [key, procedureOrRouter] of Object.entries(procedures ?? {})) {\n        const newPath = `${path}${key}`;\n\n        if (isRouter(procedureOrRouter)) {\n          recursiveGetPaths(procedureOrRouter._def.procedures, `${newPath}.`);\n          continue;\n        }\n\n        if (routerProcedures[newPath]) {\n          throw new Error(`Duplicate key: ${newPath}`);\n        }\n\n        routerProcedures[newPath] = procedureOrRouter;\n      }\n    }\n    recursiveGetPaths(procedures);\n\n    const _def: AnyRouterDef<TConfig> = {\n      _config: config,\n      router: true,\n      procedures: routerProcedures,\n      ...emptyRouter,\n      record: procedures,\n      queries: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.query)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      mutations: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.mutation)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      subscriptions: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.subscription)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n    };\n\n    const router: AnyRouter = {\n      ...procedures,\n      _def,\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n    };\n\n    return router as any;\n  };\n}\n\n## Task\n\nYou are investigating how tRPC migrates a legacy (v9-shaped) router into the modern router shape, starting from `migrateRouter` in deprecated/interop.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"deprecated.interop.migrateRouter\", \"deprecated.interop.migrateProcedure\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

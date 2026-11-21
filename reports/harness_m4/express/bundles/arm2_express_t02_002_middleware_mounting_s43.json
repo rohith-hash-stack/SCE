@@ -1,0 +1,1217 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "express_t02_002_middleware_mounting",
+  "items": [
+   {
+    "source_id": "lib/application.js:194-249",
+    "content": "# lib/application.js:194-249  (lib.application.use)\napp.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate app.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var fns = flatten(slice.call(arguments, offset));\n\n  if (fns.length === 0) {\n    throw new TypeError('app.use() requires a middleware function')\n  }\n\n  // setup router\n  this.lazyrouter();\n  var router = this._router;\n\n  fns.forEach(function (fn) {\n    // non-express app\n    if (!fn || !fn.handle || !fn.set) {\n      return router.use(path, fn);\n    }\n\n    debug('.use app under %s', path);\n    fn.mountpath = path;\n    fn.parent = this;\n\n    // restore .app property on req and res\n    router.use(path, function mounted_app(req, res, next) {\n      var orig = req.app;\n      fn.handle(req, res, function (err) {\n        setPrototypeOf(req, orig.request)\n        setPrototypeOf(res, orig.response)\n        next(err);\n      });\n    });\n\n    // mounted an app\n    fn.emit('mount', this);\n  }, this);\n\n  return this;\n};",
+    "token_count": 341,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.use"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 341
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:184-192",
+    "content": "# lib/application.js:184-192  (lib.application)\n/**\n * Proxy `Router#use()` to add middleware to the app router.\n * See Router#use() documentation for details.\n *\n * If the _fn_ parameter is an express app, then it will be\n * mounted at the _route_ specified.\n *\n * @public\n */",
+    "token_count": 76,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:251-259",
+    "content": "# lib/application.js:251-259  (lib.application)\n/**\n * Proxy to the app `Router#route()`\n * Returns a new `Route` instance for the _path_.\n *\n * Routes are isolated middleware stacks for specific paths.\n * See the Route api docs for details.\n *\n * @public\n */",
+    "token_count": 69,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:165-182",
+    "content": "# lib/application.js:165-182  (lib.application.handle)\napp.handle = function handle(req, res, callback) {\n  var router = this._router;\n\n  // final handler\n  var done = callback || finalhandler(req, res, {\n    env: this.get('env'),\n    onerror: logerror.bind(this)\n  });\n\n  // no routes\n  if (!router) {\n    debug('no routes defined on app');\n    done();\n    return;\n  }\n\n  router.handle(req, res, done);\n};",
+    "token_count": 113,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.handle"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 113
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:261-264",
+    "content": "# lib/application.js:261-264  (lib.application.route)\napp.route = function route(path) {\n  this.lazyrouter();\n  return this._router.route(path);\n};",
+    "token_count": 40,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.route"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:156-163",
+    "content": "# lib/application.js:156-163  (lib.application)\n/**\n * Dispatch a req, res pair into the application. Starts pipeline processing.\n *\n * If no callback is provided, then default error handlers will respond\n * in the event of an error bubbling through the stack.\n *\n * @private\n */",
+    "token_count": 67,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 67
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:266-298",
+    "content": "# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 321,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 321
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:136-154",
+    "content": "# lib/application.js:136-154  (lib.application.lazyrouter)\n/**\n * lazily adds the base router if it has not yet been added.\n *\n * We cannot add the base router in the defaultConfiguration because\n * it reads app settings which might be set after that has run.\n *\n * @private\n */\napp.lazyrouter = function lazyrouter() {\n  if (!this._router) {\n    this._router = new Router({\n      caseSensitive: this.enabled('case sensitive routing'),\n      strict: this.enabled('strict routing')\n    });\n\n    this._router.use(query(this.get('query parser fn')));\n    this._router.use(middleware.init(this));\n  }\n};",
+    "token_count": 142,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.lazyrouter"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 142
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:300-314",
+    "content": "# lib/application.js:300-314  (lib.application.engine)\napp.engine = function engine(ext, fn) {\n  if (typeof fn !== 'function') {\n    throw new Error('callback function required');\n  }\n\n  // get file extension\n  var extension = ext[0] !== '.'\n    ? '.' + ext\n    : ext;\n\n  // store engine\n  this.engines[extension] = fn;\n\n  return this;\n};",
+    "token_count": 96,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.engine"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:77-134",
+    "content": "# lib/application.js:77-134  (lib.application.defaultConfiguration)\napp.defaultConfiguration = function defaultConfiguration() {\n  var env = process.env.NODE_ENV || 'development';\n\n  // default settings\n  this.enable('x-powered-by');\n  this.set('etag', 'weak');\n  this.set('env', env);\n  this.set('query parser', 'extended');\n  this.set('subdomain offset', 2);\n  this.set('trust proxy', false);\n\n  // trust proxy inherit back-compat\n  Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n    configurable: true,\n    value: true\n  });\n\n  debug('booting in %s mode', env);\n\n  this.on('mount', function onmount(parent) {\n    // inherit trust proxy\n    if (this.settings[trustProxyDefaultSymbol] === true\n      && typeof parent.settings['trust proxy fn'] === 'function') {\n      delete this.settings['trust proxy'];\n      delete this.settings['trust proxy fn'];\n    }\n\n    // inherit protos\n    setPrototypeOf(this.request, parent.request)\n    setPrototypeOf(this.response, parent.response)\n    setPrototypeOf(this.engines, parent.engines)\n    setPrototypeOf(this.settings, parent.settings)\n  });\n\n  // setup locals\n  this.locals = Object.create(null);\n\n  // top-most app is mounted at /\n  this.mountpath = '/';\n\n  // default locals\n  this.locals.settings = this.settings;\n\n  // default configuration\n  this.set('view', View);\n  this.set('views', resolve('views'));\n  this.set('jsonp callback name', 'callback');\n\n  if (env === 'production') {\n    this.enable('view cache');\n  }\n\n  Object.defineProperty(this, 'router', {\n    get: function() {\n      throw new Error('\\'app.router\\' is deprecated!\\nPlease see the 3.x to 4.x migration guide for details on how to update your app.');\n    }\n  });\n};",
+    "token_count": 404,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.defaultConfiguration",
+     "lib.application.defaultConfiguration.get"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 404
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:316-326",
+    "content": "# lib/application.js:316-326  (lib.application)\n/**\n * Proxy to `Router#param()` with one added api feature. The _name_ parameter\n * can be an array of names.\n *\n * See the Router#param() docs for more details.\n *\n * @param {String|Array} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 92,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 92
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:72-75",
+    "content": "# lib/application.js:72-75  (lib.application)\n/**\n * Initialize application configuration.\n * @private\n */",
+    "token_count": 26,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 26
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:328-342",
+    "content": "# lib/application.js:328-342  (lib.application.param)\napp.param = function param(name, fn) {\n  this.lazyrouter();\n\n  if (Array.isArray(name)) {\n    for (var i = 0; i < name.length; i++) {\n      this.param(name[i], fn);\n    }\n\n    return this;\n  }\n\n  this._router.param(name, fn);\n\n  return this;\n};",
+    "token_count": 88,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.param"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 88
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:64-70",
+    "content": "# lib/application.js:64-70  (lib.application.init)\napp.init = function init() {\n  this.cache = {};\n  this.engines = {};\n  this.settings = {};\n\n  this.defaultConfiguration();\n};",
+    "token_count": 45,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.init"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:344-357",
+    "content": "# lib/application.js:344-357  (lib.application)\n/**\n * Assign `setting` to `val`, or return `setting`'s value.\n *\n *    app.set('foo', 'bar');\n *    app.set('foo');\n *    // => \"bar\"\n *\n * Mounted servers inherit their parent server's settings.\n *\n * @param {String} setting\n * @param {*} [val]\n * @return {Server} for chaining\n * @public\n */",
+    "token_count": 102,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 102
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:1-62",
+    "content": "# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */",
+    "token_count": 347,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:359-401",
+    "content": "# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};",
+    "token_count": 241,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.set"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 241
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:403-415",
+    "content": "# lib/application.js:403-415  (lib.application)\n/**\n * Return the app's absolute pathname\n * based on the parent(s) that have\n * mounted it.\n *\n * For example if the application was\n * mounted as \"/admin\", which itself\n * was mounted as \"/blog\" then the\n * return value would be \"/blog/admin\".\n *\n * @return {String}\n * @private\n */",
+    "token_count": 89,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:417-421",
+    "content": "# lib/application.js:417-421  (lib.application.path)\napp.path = function path() {\n  return this.parent\n    ? this.parent.path() + this.mountpath\n    : '';\n};",
+    "token_count": 45,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:423-436",
+    "content": "# lib/application.js:423-436  (lib.application)\n/**\n * Check if `setting` is enabled (truthy).\n *\n *    app.enabled('foo')\n *    // => false\n *\n *    app.enable('foo')\n *    app.enabled('foo')\n *    // => true\n *\n * @param {String} setting\n * @return {Boolean}\n * @public\n */",
+    "token_count": 85,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 989,
+     "stub_priority": 1489,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:438-440",
+    "content": "# lib/application.js:438-440  (lib.application.enabled)\napp.enabled = function enabled(setting) {\n  return Boolean(this.set(setting));\n};",
+    "token_count": 34,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.enabled"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 988,
+     "stub_priority": 1488,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 34
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:442-455",
+    "content": "# lib/application.js:442-455  (lib.application)\n/**\n * Check if `setting` is disabled.\n *\n *    app.disabled('foo')\n *    // => true\n *\n *    app.enable('foo')\n *    app.disabled('foo')\n *    // => false\n *\n * @param {String} setting\n * @return {Boolean}\n * @public\n */",
+    "token_count": 82,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 987,
+     "stub_priority": 1487,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:457-459",
+    "content": "# lib/application.js:457-459  (lib.application.disabled)\napp.disabled = function disabled(setting) {\n  return !this.set(setting);\n};",
+    "token_count": 34,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.disabled"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 986,
+     "stub_priority": 1486,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 34
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:461-467",
+    "content": "# lib/application.js:461-467  (lib.application)\n/**\n * Enable `setting`.\n *\n * @param {String} setting\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 46,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 985,
+     "stub_priority": 1485,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:469-471",
+    "content": "# lib/application.js:469-471  (lib.application.enable)\napp.enable = function enable(setting) {\n  return this.set(setting, true);\n};",
+    "token_count": 35,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.enable"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 984,
+     "stub_priority": 1484,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 35
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:473-479",
+    "content": "# lib/application.js:473-479  (lib.application)\n/**\n * Disable `setting`.\n *\n * @param {String} setting\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 46,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 983,
+     "stub_priority": 1483,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:481-483",
+    "content": "# lib/application.js:481-483  (lib.application.disable)\napp.disable = function disable(setting) {\n  return this.set(setting, false);\n};",
+    "token_count": 35,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.disable"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 982,
+     "stub_priority": 1482,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 35
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:485-512",
+    "content": "# lib/application.js:485-512  (lib.application)\n/**\n * Delegate `.VERB(...)` calls to `router.VERB(...)`.\n */\n\nmethods.forEach(function(method){\n  app[method] = function(path){\n    if (method === 'get' && arguments.length === 1) {\n      // app.get(setting)\n      return this.set(path);\n    }\n\n    this.lazyrouter();\n\n    var route = this._router.route(path);\n    route[method].apply(route, slice.call(arguments, 1));\n    return this;\n  };\n});\n\n/**\n * Special-cased \"all\" method, applying the given route `path`,\n * middleware, and callback to _every_ HTTP method.\n *\n * @param {String} path\n * @param {Function} ...\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 173,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 981,
+     "stub_priority": 1481,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 173
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:514-525",
+    "content": "# lib/application.js:514-525  (lib.application.all)\napp.all = function all(path) {\n  this.lazyrouter();\n\n  var route = this._router.route(path);\n  var args = slice.call(arguments, 1);\n\n  for (var i = 0; i < methods.length; i++) {\n    route[methods[i]].apply(route, args);\n  }\n\n  return this;\n};",
+    "token_count": 87,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.all"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 980,
+     "stub_priority": 1480,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 87
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:527-546",
+    "content": "# lib/application.js:527-546  (lib.application)\n// del -> delete alias\n\napp.del = deprecate.function(app.delete, 'app.del: Use app.delete instead');\n\n/**\n * Render the given view `name` name with `options`\n * and a callback accepting an error and the\n * rendered template string.\n *\n * Example:\n *\n *    app.render('email', { name: 'Tobi' }, function(err, html){\n *      // ...\n *    })\n *\n * @param {String} name\n * @param {Object|Function} options or fn\n * @param {Function} callback\n * @public\n */",
+    "token_count": 137,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 979,
+     "stub_priority": 1479,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 137
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:548-610",
+    "content": "# lib/application.js:548-610  (lib.application.render)\napp.render = function render(name, options, callback) {\n  var cache = this.cache;\n  var done = callback;\n  var engines = this.engines;\n  var opts = options;\n  var renderOptions = {};\n  var view;\n\n  // support callback function as second arg\n  if (typeof options === 'function') {\n    done = options;\n    opts = {};\n  }\n\n  // merge app.locals\n  merge(renderOptions, this.locals);\n\n  // merge options._locals\n  if (opts._locals) {\n    merge(renderOptions, opts._locals);\n  }\n\n  // merge options\n  merge(renderOptions, opts);\n\n  // set .cache unless explicitly provided\n  if (renderOptions.cache == null) {\n    renderOptions.cache = this.enabled('view cache');\n  }\n\n  // primed cache\n  if (renderOptions.cache) {\n    view = cache[name];\n  }\n\n  // view\n  if (!view) {\n    var View = this.get('view');\n\n    view = new View(name, {\n      defaultEngine: this.get('view engine'),\n      root: this.get('views'),\n      engines: engines\n    });\n\n    if (!view.path) {\n      var dirs = Array.isArray(view.root) && view.root.length > 1\n        ? 'directories \"' + view.root.slice(0, -1).join('\", \"') + '\" or \"' + view.root[view.root.length - 1] + '\"'\n        : 'directory \"' + view.root + '\"'\n      var err = new Error('Failed to lookup view \"' + name + '\" in views ' + dirs);\n      err.view = view;\n      return done(err);\n    }\n\n    // prime the cache\n    if (renderOptions.cache) {\n      cache[name] = view;\n    }\n  }\n\n  // render\n  tryRender(view, renderOptions, done);\n};",
+    "token_count": 402,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.render"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 978,
+     "stub_priority": 1478,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 402
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:612-631",
+    "content": "# lib/application.js:612-631  (lib.application)\n/**\n * Listen for connections.\n *\n * A node `http.Server` is returned, with this\n * application (which is a `Function`) as its\n * callback. If you wish to create both an HTTP\n * and HTTPS server you may do so with the \"http\"\n * and \"https\" modules as shown here:\n *\n *    var http = require('http')\n *      , https = require('https')\n *      , express = require('express')\n *      , app = express();\n *\n *    http.createServer(app).listen(80);\n *    https.createServer({ ... }, app).listen(443);\n *\n * @return {http.Server}\n * @public\n */",
+    "token_count": 159,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 977,
+     "stub_priority": 1477,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 159
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:633-636",
+    "content": "# lib/application.js:633-636  (lib.application.listen)\napp.listen = function listen() {\n  var server = http.createServer(this);\n  return server.listen.apply(server, arguments);\n};",
+    "token_count": 43,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.listen"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 976,
+     "stub_priority": 1476,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 43
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:638-643",
+    "content": "# lib/application.js:638-643  (lib.application)\n/**\n * Log error using console.error.\n *\n * @param {Error} err\n * @private\n */",
+    "token_count": 39,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 975,
+     "stub_priority": 1475,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:645-648",
+    "content": "# lib/application.js:645-648  (lib.application.logerror)\nfunction logerror(err) {\n  /* istanbul ignore next */\n  if (this.get('env') !== 'test') console.error(err.stack || err.toString());\n}",
+    "token_count": 54,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.logerror"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 974,
+     "stub_priority": 1474,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:650-653",
+    "content": "# lib/application.js:650-653  (lib.application)\n/**\n * Try rendering a view.\n * @private\n */",
+    "token_count": 29,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 973,
+     "stub_priority": 1473,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 29
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:655-661",
+    "content": "# lib/application.js:655-661  (lib.application.tryRender)\nfunction tryRender(view, options, callback) {\n  try {\n    view.render(options, callback);\n  } catch (err) {\n    callback(err);\n  }\n}",
+    "token_count": 53,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.tryRender"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 972,
+     "stub_priority": 1472,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.format.js:177-243#signature",
+    "content": "# test/res.format.js:177-243  (test.res.format.test [signature])\nfunction test(app) {\n  // ...\n}",
+    "token_count": 31,
+    "rank": 38,
+    "kind": "signature_stub",
+    "symbols": [
+     "test.res.format.test"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "stub",
+     "bm25_rank": 28,
+     "chunk_kind": "function",
+     "engine_token_count": 31
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:439-487#signature",
+    "content": "# lib/router/index.js:439-487  (lib.router.use [signature])\nproto.use = function use(fn) {\n  // ...\n};",
+    "token_count": 33,
+    "rank": 39,
+    "kind": "signature_stub",
+    "symbols": [
+     "lib.router.use"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "stub",
+     "bm25_rank": 30,
+     "chunk_kind": "function",
+     "engine_token_count": 33
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/express.js:37-57#signature",
+    "content": "# lib/express.js:37-57  (lib.express.createApplication [signature])\nfunction createApplication() {\n  // ...\n}",
+    "token_count": 30,
+    "rank": 40,
+    "kind": "signature_stub",
+    "symbols": [
+     "lib.express.createApplication",
+     "lib.express.createApplication.app"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "stub",
+     "bm25_rank": 32,
+     "chunk_kind": "function",
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:627-682",
+    "content": "# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 384,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "module_block",
+     "engine_token_count": 384
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:460-499",
+    "content": "# lib/response.js:460-499  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendfile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendfile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendfile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */",
+    "token_count": 360,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "module_block",
+     "engine_token_count": 360
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:378-417",
+    "content": "# lib/response.js:378-417  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendFile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendFile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendFile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */",
+    "token_count": 357,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "module_block",
+     "engine_token_count": 357
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/static-files/index.js:1-43",
+    "content": "# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');",
+    "token_count": 348,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "module_block",
+     "engine_token_count": 348
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:86-130",
+    "content": "# lib/request.js:86-130  (lib.request)\n/**\n * To do: update docs.\n *\n * Check if the given `type(s)` is acceptable, returning\n * the best match when true, otherwise `undefined`, in which\n * case you should respond with 406 \"Not Acceptable\".\n *\n * The `type` value may be a single MIME type string\n * such as \"application/json\", an extension name\n * such as \"json\", a comma-delimited list such as \"json, html, text/plain\",\n * an argument list such as `\"json\", \"html\", \"text/plain\"`,\n * or an array `[\"json\", \"html\", \"text/plain\"]`. When a list\n * or array is given, the _best_ match, if any is returned.\n *\n * Examples:\n *\n *     // Accept: text/html\n *     req.accepts('html');\n *     // => \"html\"\n *\n *     // Accept: text/*, application/json\n *     req.accepts('html');\n *     // => \"html\"\n *     req.accepts('text/html');\n *     // => \"text/html\"\n *     req.accepts('json, text');\n *     // => \"json\"\n *     req.accepts('application/json');\n *     // => \"application/json\"\n *\n *     // Accept: text/*, application/json\n *     req.accepts('image/png');\n *     req.accepts('png');\n *     // => undefined\n *\n *     // Accept: text/*;q=.5, application/json\n *     req.accepts(['html', 'json']);\n *     req.accepts('html', 'json');\n *     req.accepts('html, json');\n *     // => \"json\"\n *\n * @param {String|Array} type(s)\n * @return {String|Array|Boolean}\n * @public\n */",
+    "token_count": 392,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "module_block",
+     "engine_token_count": 392
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:63-95",
+    "content": "# lib/router/index.js:63-95  (lib.router)\n/**\n * Map the given param placeholder `name`(s) to the given callback.\n *\n * Parameter mapping is used to provide pre-conditions to routes\n * which use normalized placeholders. For example a _:user_id_ parameter\n * could automatically load a user's information from the database without\n * any additional code,\n *\n * The callback uses the same signature as middleware, the only difference\n * being that the value of the placeholder is passed, in this case the _id_\n * of the user. Once the `next()` function is invoked, just like middleware\n * it will continue on to execute the route, or subsequent parameter functions.\n *\n * Just like in middleware, you must either respond to the request or call next\n * to avoid stalling the request.\n *\n *  app.param('user_id', function(req, res, next, id){\n *    User.find(id, function(err, user){\n *      if (err) {\n *        return next(err);\n *      } else if (!user) {\n *        return next(new Error('failed to load user'));\n *      }\n *      req.user = user;\n *      next();\n *    });\n *  });\n *\n * @param {String} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 286,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "module_block",
+     "engine_token_count": 286
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:184-210",
+    "content": "# lib/request.js:184-210  (lib.request)\nreq.acceptsLanguage = deprecate.function(req.acceptsLanguages,\n  'req.acceptsLanguage: Use acceptsLanguages instead');\n\n/**\n * Parse Range header field, capping to the given `size`.\n *\n * Unspecified ranges such as \"0-\" require knowledge of your resource length. In\n * the case of a byte range this is of course the total number of bytes. If the\n * Range header field is not given `undefined` is returned, `-1` when unsatisfiable,\n * and `-2` when syntactically invalid.\n *\n * When ranges are returned, the array has a \"type\" property which is the type of\n * range that is required (most commonly, \"bytes\"). Each array element is an object\n * with a \"start\" and \"end\" property for the portion of the range.\n *\n * The \"combine\" option can be set to `true` and overlapping & adjacent ranges\n * will be combined into a single range.\n *\n * NOTE: remember that ranges are inclusive, so for example \"Range: users=0-3\"\n * should respond with 4 users when available, not 3.\n *\n * @param {number} size\n * @param {object} [options]\n * @param {boolean} [options.combine=false]\n * @return {number|array}\n * @public\n */",
+    "token_count": 293,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "module_block",
+     "engine_token_count": 293
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/web-service/index.js:21-117",
+    "content": "# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 774,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "module_block",
+     "engine_token_count": 774
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:292-414#part1of2",
+    "content": "# lib/request.js:292-414#part1of2  (lib.request)\n/**\n * Return the protocol string \"http\" or \"https\"\n * when requested with TLS. When the \"trust proxy\"\n * setting trusts the socket address, the\n * \"X-Forwarded-Proto\" header field will be trusted\n * and used if present.\n *\n * If you're running behind a reverse proxy that\n * supplies https for you this may be enabled.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'protocol', function protocol(){\n  var proto = this.connection.encrypted\n    ? 'https'\n    : 'http';\n  var trust = this.app.get('trust proxy fn');\n\n  if (!trust(this.connection.remoteAddress, 0)) {\n    return proto;\n  }\n\n  // Note: X-Forwarded-Proto is normally only ever a\n  //       single value, but this is to be safe.\n  var header = this.get('X-Forwarded-Proto') || proto\n  var index = header.indexOf(',')\n\n  return index !== -1\n    ? header.substring(0, index).trim()\n    : header.trim()\n});\n\n/**\n * Short-hand for:\n *\n *    req.protocol === 'https'\n *\n * @return {Boolean}\n * @public\n */\n\ndefineGetter(req, 'secure', function secure(){\n  return this.protocol === 'https';\n});\n\n/**\n * Return the remote address from the trusted proxy.\n *\n * The is the remote address on the socket unless\n * \"trust proxy\" is set.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'ip', function ip(){\n  var trust = this.app.get('trust proxy fn');\n  return proxyaddr(this, trust);\n});\n\n/**\n * When \"trust proxy\" is set, trusted proxy addresses + client.\n *\n * For example if the value were \"client, proxy1, proxy2\"\n * you would receive the array `[\"client\", \"proxy1\", \"proxy2\"]`\n * where \"proxy2\" is the furthest down-stream and \"proxy1\" and\n * \"proxy2\" were trusted.\n *\n * @return {Array}\n * @public\n */\n\ndefineGetter(req, 'ips', function ips() {\n  var trust = this.app.get('trust proxy fn');\n  var addrs = proxyaddr.all(this, trust);\n\n  // reverse the order (to farthest -> closest)\n  // and remove socket address\n  addrs.reverse().pop()\n\n  return addrs\n});\n\n/**\n * Return subdomains as an array.\n *\n * Subdomains are the dot-separated parts of the host before the main domain of\n * the app. By default, the domain of the app is assumed to be the last two\n * parts of the host. This can be changed by setting \"subdomain offset\".\n *\n * For example, if the domain is \"tobi.ferrets.example.com\":\n * If \"subdomain offset\" is not set, req.subdomains is `[\"ferrets\", \"tobi\"]`.\n * If \"subdomain offset\" is 3, req.subdomains is `[\"tobi\"]`.\n *\n * @return {Array}\n * @public\n */\n\ndefineGetter(req, 'subdomains', function subdomains() {\n  var hostname = this.hostname;\n\n  if (!hostname) return [];\n\n  var offset = this.app.get('subdomain offset');\n  var subdomains = !isIP(hostname)\n    ? hostname.split('.').reverse()\n    : [hostname];\n\n  return subdomains.slice(offset);\n});\n\n/**\n * Short-hand for `url.parse(req.url).pathname`.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'path', function path() {\n  return parse(this).pathname;\n});",
+    "token_count": 781,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "module_block",
+     "engine_token_count": 781
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/route-middleware/index.js:36-48",
+    "content": "# examples/route-middleware/index.js:36-48  (examples.route-middleware.andRestrictToSelf)\nfunction andRestrictToSelf(req, res, next) {\n  // If our authenticated user is the user we are viewing\n  // then everything is fine :)\n  if (req.authenticatedUser.id === req.user.id) {\n    next();\n  } else {\n    // You may want to implement specific exceptions\n    // such as UnauthorizedError or similar so that you\n    // can handle these can be special-cased in an error handler\n    // (view ./examples/pages for this)\n    next(new Error('Unauthorized'));\n  }\n}",
+    "token_count": 137,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.route-middleware.andRestrictToSelf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "function",
+     "engine_token_count": 137
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-locals/index.js:64-84",
+    "content": "# examples/view-locals/index.js:64-84  (examples.view-locals)\napp.get('/middleware', count, users, function (req, res) {\n  res.render('index', {\n    title: 'Users',\n    count: req.count,\n    users: req.users.filter(ferrets)\n  });\n});\n\n\n\n\n// this approach is much like the last\n// however we're explicitly exposing\n// the locals within each middleware\n//\n// note that this may not always work\n// well, for example here we filter\n// the users in the middleware, which\n// may not be ideal for our application.\n// so in that sense the previous example\n// is more flexible with `req.users`.",
+    "token_count": 147,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "module_block",
+     "engine_token_count": 147
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-locals/index.js:102-155",
+    "content": "# examples/view-locals/index.js:102-155  (examples.view-locals)\napp.get('/middleware-locals', count2, users2, function (req, res) {\n  // you can see now how we have much less\n  // to pass to res.render(). If we have\n  // several routes related to users this\n  // can be a great productivity booster\n  res.render('index', { title: 'Users' });\n});\n\n// keep in mind that middleware may be placed anywhere\n// and in various combinations, so if you have locals\n// that you wish to make available to all subsequent\n// middleware/routes you can do something like this:\n\n/*\n\napp.use(function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// or suppose you have some /admin\n// \"global\" local variables:\n\n/*\n\napp.use('/api', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// the following is effectively the same,\n// but uses a route instead:\n\n/*\n\napp.all('/api/*', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 310,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "module_block",
+     "engine_token_count": 310
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error-pages/index.js:1-103",
+    "content": "# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 721,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "module_block",
+     "engine_token_count": 721
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:29-53",
+    "content": "# examples/error/index.js:29-53  (examples.error)\napp.get('/', function () {\n  // Caught and passed down to the errorHandler middleware\n  throw new Error('something broke!');\n});\n\napp.get('/next', function(req, res, next){\n  // We can also pass exceptions to next()\n  // The reason for process.nextTick() is to show that\n  // next() can be called inside an async operation,\n  // in real life it can be a DB read or HTTP request.\n  process.nextTick(function(){\n    next(new Error('oh no!'));\n  });\n});\n\n// the error handler is placed after routes\n// if it were above it would not receive errors\n// from app.get() etc\napp.use(error);\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 191,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "module_block",
+     "engine_token_count": 191
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:424-437",
+    "content": "# lib/router/index.js:424-437  (lib.router)\n/**\n * Use the given middleware function, with optional path, defaulting to \"/\".\n *\n * Use (like `.all`) will run for any http METHOD, but it will not add\n * handlers for those methods so OPTIONS requests will not consider `.use`\n * functions even if they could respond.\n *\n * The other difference is that _route_ path is stripped and not visible\n * to the handler function. The main effect of this feature is that mounted\n * handlers can operate without any code changes regardless of the \"prefix\"\n * pathname.\n *\n * @public\n */",
+    "token_count": 134,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "module_block",
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/req.accepts.js:1-125",
+    "content": "# test/req.accepts.js:1-125  (test.req.accepts)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('req', function(){\n  describe('.accepts(type)', function(){\n    it('should return true when Accept is not present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .expect('yes', done);\n    })\n\n    it('should return true when present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'application/json')\n      .expect('yes', done);\n    })\n\n    it('should return false otherwise', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('no', done);\n    })\n  })\n\n  it('should accept an argument list of type names', function(done){\n    var app = express();\n\n    app.use(function(req, res, next){\n      res.end(req.accepts('json', 'html'));\n    });\n\n    request(app)\n    .get('/')\n    .set('Accept', 'application/json')\n    .expect('json', done);\n  })\n\n  describe('.accepts(types)', function(){\n    it('should return the first when Accept is not present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['json', 'html']));\n      });\n\n      request(app)\n      .get('/')\n      .expect('json', done);\n    })\n\n    it('should return the first acceptable type', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['json', 'html']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('html', done);\n    })\n\n    it('should return false when no match is made', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['text/html', 'application/json']) ? 'yup' : 'nope');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'foo/bar, bar/baz')\n      .expect('nope', done);\n    })\n\n    it('should take quality into account', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['text/html', 'application/json']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', '*/html; q=.5, application/json')\n      .expect('application/json', done);\n    })\n\n    it('should return the first acceptable type with canonical mime types', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['application/json', 'text/html']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', '*/html')\n      .expect('text/html', done);\n    })\n  })\n})",
+    "token_count": 740,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "module_block",
+     "engine_token_count": 740
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:1-18",
+    "content": "# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.",
+    "token_count": 114,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "module_block",
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:293-352",
+    "content": "# lib/response.js:293-352  (lib.response.jsonp)\nres.jsonp = function jsonp(obj) {\n  var val = obj;\n\n  // allow status / body\n  if (arguments.length === 2) {\n    // res.jsonp(body, status) backwards compat\n    if (typeof arguments[1] === 'number') {\n      deprecate('res.jsonp(obj, status): Use res.status(status).jsonp(obj) instead');\n      this.statusCode = arguments[1];\n    } else {\n      deprecate('res.jsonp(status, obj): Use res.status(status).jsonp(obj) instead');\n      this.statusCode = arguments[0];\n      val = arguments[1];\n    }\n  }\n\n  // settings\n  var app = this.app;\n  var escape = app.get('json escape')\n  var replacer = app.get('json replacer');\n  var spaces = app.get('json spaces');\n  var body = stringify(val, replacer, spaces, escape)\n  var callback = this.req.query[app.get('jsonp callback name')];\n\n  // content-type\n  if (!this.get('Content-Type')) {\n    this.set('X-Content-Type-Options', 'nosniff');\n    this.set('Content-Type', 'application/json');\n  }\n\n  // fixup callback\n  if (Array.isArray(callback)) {\n    callback = callback[0];\n  }\n\n  // jsonp\n  if (typeof callback === 'string' && callback.length !== 0) {\n    this.set('X-Content-Type-Options', 'nosniff');\n    this.set('Content-Type', 'text/javascript');\n\n    // restrict callback charset\n    callback = callback.replace(/[^\\[\\]\\w$.]/g, '');\n\n    if (body === undefined) {\n      // empty argument\n      body = ''\n    } else if (typeof body === 'string') {\n      // replace chars not allowed in JavaScript that are in JSON\n      body = body\n        .replace(/\\u2028/g, '\\\\u2028')\n        .replace(/\\u2029/g, '\\\\u2029')\n    }\n\n    // the /**/ is a specific security mitigation for \"Rosetta Flash JSONP abuse\"\n    // the typeof check is just to reduce client error noise\n    body = '/**/ typeof ' + callback + ' === \\'function\\' && ' + callback + '(' + body + ');';\n  }\n\n  return this.send(body);\n};",
+    "token_count": 515,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.jsonp"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "function",
+     "engine_token_count": 515
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:529-548",
+    "content": "# lib/response.js:529-548  (lib.response)\nres.sendfile = deprecate.function(res.sendfile,\n  'res.sendfile: Use res.sendFile instead');\n\n/**\n * Transfer the file at the given `path` as an attachment.\n *\n * Optionally providing an alternate attachment `filename`,\n * and optional callback `callback(err)`. The callback is invoked\n * when the data transfer is complete, or when an error has\n * occurred. Be sure to check `res.headersSent` if you plan to respond.\n *\n * Optionally providing an `options` object to use with `res.sendFile()`.\n * This function will set the `Content-Disposition` header, overriding\n * any `Content-Disposition` header passed as header options in order\n * to set the attachment and filename.\n *\n * This method uses `res.sendFile()`.\n *\n * @public\n */",
+    "token_count": 180,
+    "rank": 59,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "module_block",
+     "engine_token_count": 180
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/express.js:59-116",
+    "content": "# lib/express.js:59-116  (lib.express)\n/**\n * Expose the prototypes.\n */\n\nexports.application = proto;\nexports.request = req;\nexports.response = res;\n\n/**\n * Expose constructors.\n */\n\nexports.Route = Route;\nexports.Router = Router;\n\n/**\n * Expose middleware\n */\n\nexports.json = bodyParser.json\nexports.query = require('./middleware/query');\nexports.raw = bodyParser.raw\nexports.static = require('serve-static');\nexports.text = bodyParser.text\nexports.urlencoded = bodyParser.urlencoded\n\n/**\n * Replace removed middleware with an appropriate error message.\n */\n\nvar removedMiddlewares = [\n  'bodyParser',\n  'compress',\n  'cookieSession',\n  'session',\n  'logger',\n  'cookieParser',\n  'favicon',\n  'responseTime',\n  'errorHandler',\n  'timeout',\n  'methodOverride',\n  'vhost',\n  'csrf',\n  'directory',\n  'limit',\n  'multipart',\n  'staticCache'\n]\n\nremovedMiddlewares.forEach(function (name) {\n  Object.defineProperty(exports, name, {\n    get: function () {\n      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');\n    },\n    configurable: true\n  });\n});",
+    "token_count": 273,
+    "rank": 60,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "module_block",
+     "engine_token_count": 273
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/express.json.js:254-323#part2of3",
+    "content": "# test/express.json.js:254-323#part2of3  (test.express.json)\ndescribe('express.json()', function () {\n  describe('with strict option', function () {\n    describe('when undefined', function () {\n      before(function () {\n        this.app = createApp()\n      })\n\n      it('should 400 on primitives', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('true')\n          .expect(400, '[entity.parse.failed] ' + parseError('#rue').replace(/#/g, 't'), done)\n      })\n    })\n\n    describe('when false', function () {\n      before(function () {\n        this.app = createApp({ strict: false })\n      })\n\n      it('should parse primitives', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('true')\n          .expect(200, 'true', done)\n      })\n    })\n\n    describe('when true', function () {\n      before(function () {\n        this.app = createApp({ strict: true })\n      })\n\n      it('should not parse primitives', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('true')\n          .expect(400, '[entity.parse.failed] ' + parseError('#rue').replace(/#/g, 't'), done)\n      })\n\n      it('should not parse primitives with leading whitespaces', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('    true')\n          .expect(400, '[entity.parse.failed] ' + parseError('    #rue').replace(/#/g, 't'), done)\n      })\n\n      it('should allow leading whitespaces in JSON', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('   { \"user\": \"tobi\" }')\n          .expect(200, '{\"user\":\"tobi\"}', done)\n      })\n\n      it('should include correct message in stack trace', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .set('X-Error-Property', 'stack')\n          .send('true')\n          .expect(400)\n          .expect(shouldContainInBody(parseError('#rue').replace(/#/g, 't')))\n          .end(done)\n      })\n    })\n  })\n})",
+    "token_count": 571,
+    "rank": 61,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "module_block",
+     "engine_token_count": 571
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:252-276",
+    "content": "# lib/request.js:252-276  (lib.request)\n/**\n * Check if the incoming request contains the \"Content-Type\"\n * header field, and it contains the given mime `type`.\n *\n * Examples:\n *\n *      // With Content-Type: text/html; charset=utf-8\n *      req.is('html');\n *      req.is('text/html');\n *      req.is('text/*');\n *      // => true\n *\n *      // When Content-Type is application/json\n *      req.is('json');\n *      req.is('application/json');\n *      req.is('application/*');\n *      // => true\n *\n *      req.is('html');\n *      // => false\n *\n * @param {String|Array} types...\n * @return {String|false|null}\n * @public\n */",
+    "token_count": 171,
+    "rank": 62,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "module_block",
+     "engine_token_count": 171
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12590,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are investigating how Express mounts middleware in lib/application.js. Starting from `use`, trace the exact causal pipeline that runs when middleware is mounted on an application for the first time: what triggers the application's internal router to be lazily constructed, and what real configuration lookups happen along the way.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.use\", \"lib.application.lazyrouter\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "lib/application.js",
+   "cutoff": 280,
+   "n_components": 87,
+   "n_full": 59,
+   "n_stub": 3,
+   "n_dropped": 25,
+   "packed_tokens": 12590,
+   "latency_ms": {
+    "L_priority_sort": [
+     17.17455
+    ],
+    "L_binary_search_tokenize": [
+     0.427417
+    ],
+    "L_retrieve": [
+     18.084064
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12590,
+   "prompt_tokens": 12860,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 12873,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/application.js:194-249  (lib.application.use)\napp.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate app.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var fns = flatten(slice.call(arguments, offset));\n\n  if (fns.length === 0) {\n    throw new TypeError('app.use() requires a middleware function')\n  }\n\n  // setup router\n  this.lazyrouter();\n  var router = this._router;\n\n  fns.forEach(function (fn) {\n    // non-express app\n    if (!fn || !fn.handle || !fn.set) {\n      return router.use(path, fn);\n    }\n\n    debug('.use app under %s', path);\n    fn.mountpath = path;\n    fn.parent = this;\n\n    // restore .app property on req and res\n    router.use(path, function mounted_app(req, res, next) {\n      var orig = req.app;\n      fn.handle(req, res, function (err) {\n        setPrototypeOf(req, orig.request)\n        setPrototypeOf(res, orig.response)\n        next(err);\n      });\n    });\n\n    // mounted an app\n    fn.emit('mount', this);\n  }, this);\n\n  return this;\n};\n\n# lib/application.js:184-192  (lib.application)\n/**\n * Proxy `Router#use()` to add middleware to the app router.\n * See Router#use() documentation for details.\n *\n * If the _fn_ parameter is an express app, then it will be\n * mounted at the _route_ specified.\n *\n * @public\n */\n\n# lib/application.js:251-259  (lib.application)\n/**\n * Proxy to the app `Router#route()`\n * Returns a new `Route` instance for the _path_.\n *\n * Routes are isolated middleware stacks for specific paths.\n * See the Route api docs for details.\n *\n * @public\n */\n\n# lib/application.js:165-182  (lib.application.handle)\napp.handle = function handle(req, res, callback) {\n  var router = this._router;\n\n  // final handler\n  var done = callback || finalhandler(req, res, {\n    env: this.get('env'),\n    onerror: logerror.bind(this)\n  });\n\n  // no routes\n  if (!router) {\n    debug('no routes defined on app');\n    done();\n    return;\n  }\n\n  router.handle(req, res, done);\n};\n\n# lib/application.js:261-264  (lib.application.route)\napp.route = function route(path) {\n  this.lazyrouter();\n  return this._router.route(path);\n};\n\n# lib/application.js:156-163  (lib.application)\n/**\n * Dispatch a req, res pair into the application. Starts pipeline processing.\n *\n * If no callback is provided, then default error handlers will respond\n * in the event of an error bubbling through the stack.\n *\n * @private\n */\n\n# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# lib/application.js:136-154  (lib.application.lazyrouter)\n/**\n * lazily adds the base router if it has not yet been added.\n *\n * We cannot add the base router in the defaultConfiguration because\n * it reads app settings which might be set after that has run.\n *\n * @private\n */\napp.lazyrouter = function lazyrouter() {\n  if (!this._router) {\n    this._router = new Router({\n      caseSensitive: this.enabled('case sensitive routing'),\n      strict: this.enabled('strict routing')\n    });\n\n    this._router.use(query(this.get('query parser fn')));\n    this._router.use(middleware.init(this));\n  }\n};\n\n# lib/application.js:300-314  (lib.application.engine)\napp.engine = function engine(ext, fn) {\n  if (typeof fn !== 'function') {\n    throw new Error('callback function required');\n  }\n\n  // get file extension\n  var extension = ext[0] !== '.'\n    ? '.' + ext\n    : ext;\n\n  // store engine\n  this.engines[extension] = fn;\n\n  return this;\n};\n\n# lib/application.js:77-134  (lib.application.defaultConfiguration)\napp.defaultConfiguration = function defaultConfiguration() {\n  var env = process.env.NODE_ENV || 'development';\n\n  // default settings\n  this.enable('x-powered-by');\n  this.set('etag', 'weak');\n  this.set('env', env);\n  this.set('query parser', 'extended');\n  this.set('subdomain offset', 2);\n  this.set('trust proxy', false);\n\n  // trust proxy inherit back-compat\n  Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n    configurable: true,\n    value: true\n  });\n\n  debug('booting in %s mode', env);\n\n  this.on('mount', function onmount(parent) {\n    // inherit trust proxy\n    if (this.settings[trustProxyDefaultSymbol] === true\n      && typeof parent.settings['trust proxy fn'] === 'function') {\n      delete this.settings['trust proxy'];\n      delete this.settings['trust proxy fn'];\n    }\n\n    // inherit protos\n    setPrototypeOf(this.request, parent.request)\n    setPrototypeOf(this.response, parent.response)\n    setPrototypeOf(this.engines, parent.engines)\n    setPrototypeOf(this.settings, parent.settings)\n  });\n\n  // setup locals\n  this.locals = Object.create(null);\n\n  // top-most app is mounted at /\n  this.mountpath = '/';\n\n  // default locals\n  this.locals.settings = this.settings;\n\n  // default configuration\n  this.set('view', View);\n  this.set('views', resolve('views'));\n  this.set('jsonp callback name', 'callback');\n\n  if (env === 'production') {\n    this.enable('view cache');\n  }\n\n  Object.defineProperty(this, 'router', {\n    get: function() {\n      throw new Error('\\'app.router\\' is deprecated!\\nPlease see the 3.x to 4.x migration guide for details on how to update your app.');\n    }\n  });\n};\n\n# lib/application.js:316-326  (lib.application)\n/**\n * Proxy to `Router#param()` with one added api feature. The _name_ parameter\n * can be an array of names.\n *\n * See the Router#param() docs for more details.\n *\n * @param {String|Array} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# lib/application.js:72-75  (lib.application)\n/**\n * Initialize application configuration.\n * @private\n */\n\n# lib/application.js:328-342  (lib.application.param)\napp.param = function param(name, fn) {\n  this.lazyrouter();\n\n  if (Array.isArray(name)) {\n    for (var i = 0; i < name.length; i++) {\n      this.param(name[i], fn);\n    }\n\n    return this;\n  }\n\n  this._router.param(name, fn);\n\n  return this;\n};\n\n# lib/application.js:64-70  (lib.application.init)\napp.init = function init() {\n  this.cache = {};\n  this.engines = {};\n  this.settings = {};\n\n  this.defaultConfiguration();\n};\n\n# lib/application.js:344-357  (lib.application)\n/**\n * Assign `setting` to `val`, or return `setting`'s value.\n *\n *    app.set('foo', 'bar');\n *    app.set('foo');\n *    // => \"bar\"\n *\n * Mounted servers inherit their parent server's settings.\n *\n * @param {String} setting\n * @param {*} [val]\n * @return {Server} for chaining\n * @public\n */\n\n# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */\n\n# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# lib/application.js:403-415  (lib.application)\n/**\n * Return the app's absolute pathname\n * based on the parent(s) that have\n * mounted it.\n *\n * For example if the application was\n * mounted as \"/admin\", which itself\n * was mounted as \"/blog\" then the\n * return value would be \"/blog/admin\".\n *\n * @return {String}\n * @private\n */\n\n# lib/application.js:417-421  (lib.application.path)\napp.path = function path() {\n  return this.parent\n    ? this.parent.path() + this.mountpath\n    : '';\n};\n\n# lib/application.js:423-436  (lib.application)\n/**\n * Check if `setting` is enabled (truthy).\n *\n *    app.enabled('foo')\n *    // => false\n *\n *    app.enable('foo')\n *    app.enabled('foo')\n *    // => true\n *\n * @param {String} setting\n * @return {Boolean}\n * @public\n */\n\n# lib/application.js:438-440  (lib.application.enabled)\napp.enabled = function enabled(setting) {\n  return Boolean(this.set(setting));\n};\n\n# lib/application.js:442-455  (lib.application)\n/**\n * Check if `setting` is disabled.\n *\n *    app.disabled('foo')\n *    // => true\n *\n *    app.enable('foo')\n *    app.disabled('foo')\n *    // => false\n *\n * @param {String} setting\n * @return {Boolean}\n * @public\n */\n\n# lib/application.js:457-459  (lib.application.disabled)\napp.disabled = function disabled(setting) {\n  return !this.set(setting);\n};\n\n# lib/application.js:461-467  (lib.application)\n/**\n * Enable `setting`.\n *\n * @param {String} setting\n * @return {app} for chaining\n * @public\n */\n\n# lib/application.js:469-471  (lib.application.enable)\napp.enable = function enable(setting) {\n  return this.set(setting, true);\n};\n\n# lib/application.js:473-479  (lib.application)\n/**\n * Disable `setting`.\n *\n * @param {String} setting\n * @return {app} for chaining\n * @public\n */\n\n# lib/application.js:481-483  (lib.application.disable)\napp.disable = function disable(setting) {\n  return this.set(setting, false);\n};\n\n# lib/application.js:485-512  (lib.application)\n/**\n * Delegate `.VERB(...)` calls to `router.VERB(...)`.\n */\n\nmethods.forEach(function(method){\n  app[method] = function(path){\n    if (method === 'get' && arguments.length === 1) {\n      // app.get(setting)\n      return this.set(path);\n    }\n\n    this.lazyrouter();\n\n    var route = this._router.route(path);\n    route[method].apply(route, slice.call(arguments, 1));\n    return this;\n  };\n});\n\n/**\n * Special-cased \"all\" method, applying the given route `path`,\n * middleware, and callback to _every_ HTTP method.\n *\n * @param {String} path\n * @param {Function} ...\n * @return {app} for chaining\n * @public\n */\n\n# lib/application.js:514-525  (lib.application.all)\napp.all = function all(path) {\n  this.lazyrouter();\n\n  var route = this._router.route(path);\n  var args = slice.call(arguments, 1);\n\n  for (var i = 0; i < methods.length; i++) {\n    route[methods[i]].apply(route, args);\n  }\n\n  return this;\n};\n\n# lib/application.js:527-546  (lib.application)\n// del -> delete alias\n\napp.del = deprecate.function(app.delete, 'app.del: Use app.delete instead');\n\n/**\n * Render the given view `name` name with `options`\n * and a callback accepting an error and the\n * rendered template string.\n *\n * Example:\n *\n *    app.render('email', { name: 'Tobi' }, function(err, html){\n *      // ...\n *    })\n *\n * @param {String} name\n * @param {Object|Function} options or fn\n * @param {Function} callback\n * @public\n */\n\n# lib/application.js:548-610  (lib.application.render)\napp.render = function render(name, options, callback) {\n  var cache = this.cache;\n  var done = callback;\n  var engines = this.engines;\n  var opts = options;\n  var renderOptions = {};\n  var view;\n\n  // support callback function as second arg\n  if (typeof options === 'function') {\n    done = options;\n    opts = {};\n  }\n\n  // merge app.locals\n  merge(renderOptions, this.locals);\n\n  // merge options._locals\n  if (opts._locals) {\n    merge(renderOptions, opts._locals);\n  }\n\n  // merge options\n  merge(renderOptions, opts);\n\n  // set .cache unless explicitly provided\n  if (renderOptions.cache == null) {\n    renderOptions.cache = this.enabled('view cache');\n  }\n\n  // primed cache\n  if (renderOptions.cache) {\n    view = cache[name];\n  }\n\n  // view\n  if (!view) {\n    var View = this.get('view');\n\n    view = new View(name, {\n      defaultEngine: this.get('view engine'),\n      root: this.get('views'),\n      engines: engines\n    });\n\n    if (!view.path) {\n      var dirs = Array.isArray(view.root) && view.root.length > 1\n        ? 'directories \"' + view.root.slice(0, -1).join('\", \"') + '\" or \"' + view.root[view.root.length - 1] + '\"'\n        : 'directory \"' + view.root + '\"'\n      var err = new Error('Failed to lookup view \"' + name + '\" in views ' + dirs);\n      err.view = view;\n      return done(err);\n    }\n\n    // prime the cache\n    if (renderOptions.cache) {\n      cache[name] = view;\n    }\n  }\n\n  // render\n  tryRender(view, renderOptions, done);\n};\n\n# lib/application.js:612-631  (lib.application)\n/**\n * Listen for connections.\n *\n * A node `http.Server` is returned, with this\n * application (which is a `Function`) as its\n * callback. If you wish to create both an HTTP\n * and HTTPS server you may do so with the \"http\"\n * and \"https\" modules as shown here:\n *\n *    var http = require('http')\n *      , https = require('https')\n *      , express = require('express')\n *      , app = express();\n *\n *    http.createServer(app).listen(80);\n *    https.createServer({ ... }, app).listen(443);\n *\n * @return {http.Server}\n * @public\n */\n\n# lib/application.js:633-636  (lib.application.listen)\napp.listen = function listen() {\n  var server = http.createServer(this);\n  return server.listen.apply(server, arguments);\n};\n\n# lib/application.js:638-643  (lib.application)\n/**\n * Log error using console.error.\n *\n * @param {Error} err\n * @private\n */\n\n# lib/application.js:645-648  (lib.application.logerror)\nfunction logerror(err) {\n  /* istanbul ignore next */\n  if (this.get('env') !== 'test') console.error(err.stack || err.toString());\n}\n\n# lib/application.js:650-653  (lib.application)\n/**\n * Try rendering a view.\n * @private\n */\n\n# lib/application.js:655-661  (lib.application.tryRender)\nfunction tryRender(view, options, callback) {\n  try {\n    view.render(options, callback);\n  } catch (err) {\n    callback(err);\n  }\n}\n\n# test/res.format.js:177-243  (test.res.format.test [signature])\nfunction test(app) {\n  // ...\n}\n\n# lib/router/index.js:439-487  (lib.router.use [signature])\nproto.use = function use(fn) {\n  // ...\n};\n\n# lib/express.js:37-57  (lib.express.createApplication [signature])\nfunction createApplication() {\n  // ...\n}\n\n# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# lib/response.js:460-499  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendfile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendfile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendfile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */\n\n# lib/response.js:378-417  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendFile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendFile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendFile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */\n\n# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');\n\n# lib/request.js:86-130  (lib.request)\n/**\n * To do: update docs.\n *\n * Check if the given `type(s)` is acceptable, returning\n * the best match when true, otherwise `undefined`, in which\n * case you should respond with 406 \"Not Acceptable\".\n *\n * The `type` value may be a single MIME type string\n * such as \"application/json\", an extension name\n * such as \"json\", a comma-delimited list such as \"json, html, text/plain\",\n * an argument list such as `\"json\", \"html\", \"text/plain\"`,\n * or an array `[\"json\", \"html\", \"text/plain\"]`. When a list\n * or array is given, the _best_ match, if any is returned.\n *\n * Examples:\n *\n *     // Accept: text/html\n *     req.accepts('html');\n *     // => \"html\"\n *\n *     // Accept: text/*, application/json\n *     req.accepts('html');\n *     // => \"html\"\n *     req.accepts('text/html');\n *     // => \"text/html\"\n *     req.accepts('json, text');\n *     // => \"json\"\n *     req.accepts('application/json');\n *     // => \"application/json\"\n *\n *     // Accept: text/*, application/json\n *     req.accepts('image/png');\n *     req.accepts('png');\n *     // => undefined\n *\n *     // Accept: text/*;q=.5, application/json\n *     req.accepts(['html', 'json']);\n *     req.accepts('html', 'json');\n *     req.accepts('html, json');\n *     // => \"json\"\n *\n * @param {String|Array} type(s)\n * @return {String|Array|Boolean}\n * @public\n */\n\n# lib/router/index.js:63-95  (lib.router)\n/**\n * Map the given param placeholder `name`(s) to the given callback.\n *\n * Parameter mapping is used to provide pre-conditions to routes\n * which use normalized placeholders. For example a _:user_id_ parameter\n * could automatically load a user's information from the database without\n * any additional code,\n *\n * The callback uses the same signature as middleware, the only difference\n * being that the value of the placeholder is passed, in this case the _id_\n * of the user. Once the `next()` function is invoked, just like middleware\n * it will continue on to execute the route, or subsequent parameter functions.\n *\n * Just like in middleware, you must either respond to the request or call next\n * to avoid stalling the request.\n *\n *  app.param('user_id', function(req, res, next, id){\n *    User.find(id, function(err, user){\n *      if (err) {\n *        return next(err);\n *      } else if (!user) {\n *        return next(new Error('failed to load user'));\n *      }\n *      req.user = user;\n *      next();\n *    });\n *  });\n *\n * @param {String} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# lib/request.js:184-210  (lib.request)\nreq.acceptsLanguage = deprecate.function(req.acceptsLanguages,\n  'req.acceptsLanguage: Use acceptsLanguages instead');\n\n/**\n * Parse Range header field, capping to the given `size`.\n *\n * Unspecified ranges such as \"0-\" require knowledge of your resource length. In\n * the case of a byte range this is of course the total number of bytes. If the\n * Range header field is not given `undefined` is returned, `-1` when unsatisfiable,\n * and `-2` when syntactically invalid.\n *\n * When ranges are returned, the array has a \"type\" property which is the type of\n * range that is required (most commonly, \"bytes\"). Each array element is an object\n * with a \"start\" and \"end\" property for the portion of the range.\n *\n * The \"combine\" option can be set to `true` and overlapping & adjacent ranges\n * will be combined into a single range.\n *\n * NOTE: remember that ranges are inclusive, so for example \"Range: users=0-3\"\n * should respond with 4 users when available, not 3.\n *\n * @param {number} size\n * @param {object} [options]\n * @param {boolean} [options.combine=false]\n * @return {number|array}\n * @public\n */\n\n# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/request.js:292-414#part1of2  (lib.request)\n/**\n * Return the protocol string \"http\" or \"https\"\n * when requested with TLS. When the \"trust proxy\"\n * setting trusts the socket address, the\n * \"X-Forwarded-Proto\" header field will be trusted\n * and used if present.\n *\n * If you're running behind a reverse proxy that\n * supplies https for you this may be enabled.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'protocol', function protocol(){\n  var proto = this.connection.encrypted\n    ? 'https'\n    : 'http';\n  var trust = this.app.get('trust proxy fn');\n\n  if (!trust(this.connection.remoteAddress, 0)) {\n    return proto;\n  }\n\n  // Note: X-Forwarded-Proto is normally only ever a\n  //       single value, but this is to be safe.\n  var header = this.get('X-Forwarded-Proto') || proto\n  var index = header.indexOf(',')\n\n  return index !== -1\n    ? header.substring(0, index).trim()\n    : header.trim()\n});\n\n/**\n * Short-hand for:\n *\n *    req.protocol === 'https'\n *\n * @return {Boolean}\n * @public\n */\n\ndefineGetter(req, 'secure', function secure(){\n  return this.protocol === 'https';\n});\n\n/**\n * Return the remote address from the trusted proxy.\n *\n * The is the remote address on the socket unless\n * \"trust proxy\" is set.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'ip', function ip(){\n  var trust = this.app.get('trust proxy fn');\n  return proxyaddr(this, trust);\n});\n\n/**\n * When \"trust proxy\" is set, trusted proxy addresses + client.\n *\n * For example if the value were \"client, proxy1, proxy2\"\n * you would receive the array `[\"client\", \"proxy1\", \"proxy2\"]`\n * where \"proxy2\" is the furthest down-stream and \"proxy1\" and\n * \"proxy2\" were trusted.\n *\n * @return {Array}\n * @public\n */\n\ndefineGetter(req, 'ips', function ips() {\n  var trust = this.app.get('trust proxy fn');\n  var addrs = proxyaddr.all(this, trust);\n\n  // reverse the order (to farthest -> closest)\n  // and remove socket address\n  addrs.reverse().pop()\n\n  return addrs\n});\n\n/**\n * Return subdomains as an array.\n *\n * Subdomains are the dot-separated parts of the host before the main domain of\n * the app. By default, the domain of the app is assumed to be the last two\n * parts of the host. This can be changed by setting \"subdomain offset\".\n *\n * For example, if the domain is \"tobi.ferrets.example.com\":\n * If \"subdomain offset\" is not set, req.subdomains is `[\"ferrets\", \"tobi\"]`.\n * If \"subdomain offset\" is 3, req.subdomains is `[\"tobi\"]`.\n *\n * @return {Array}\n * @public\n */\n\ndefineGetter(req, 'subdomains', function subdomains() {\n  var hostname = this.hostname;\n\n  if (!hostname) return [];\n\n  var offset = this.app.get('subdomain offset');\n  var subdomains = !isIP(hostname)\n    ? hostname.split('.').reverse()\n    : [hostname];\n\n  return subdomains.slice(offset);\n});\n\n/**\n * Short-hand for `url.parse(req.url).pathname`.\n *\n * @return {String}\n * @public\n */\n\ndefineGetter(req, 'path', function path() {\n  return parse(this).pathname;\n});\n\n# examples/route-middleware/index.js:36-48  (examples.route-middleware.andRestrictToSelf)\nfunction andRestrictToSelf(req, res, next) {\n  // If our authenticated user is the user we are viewing\n  // then everything is fine :)\n  if (req.authenticatedUser.id === req.user.id) {\n    next();\n  } else {\n    // You may want to implement specific exceptions\n    // such as UnauthorizedError or similar so that you\n    // can handle these can be special-cased in an error handler\n    // (view ./examples/pages for this)\n    next(new Error('Unauthorized'));\n  }\n}\n\n# examples/view-locals/index.js:64-84  (examples.view-locals)\napp.get('/middleware', count, users, function (req, res) {\n  res.render('index', {\n    title: 'Users',\n    count: req.count,\n    users: req.users.filter(ferrets)\n  });\n});\n\n\n\n\n// this approach is much like the last\n// however we're explicitly exposing\n// the locals within each middleware\n//\n// note that this may not always work\n// well, for example here we filter\n// the users in the middleware, which\n// may not be ideal for our application.\n// so in that sense the previous example\n// is more flexible with `req.users`.\n\n# examples/view-locals/index.js:102-155  (examples.view-locals)\napp.get('/middleware-locals', count2, users2, function (req, res) {\n  // you can see now how we have much less\n  // to pass to res.render(). If we have\n  // several routes related to users this\n  // can be a great productivity booster\n  res.render('index', { title: 'Users' });\n});\n\n// keep in mind that middleware may be placed anywhere\n// and in various combinations, so if you have locals\n// that you wish to make available to all subsequent\n// middleware/routes you can do something like this:\n\n/*\n\napp.use(function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// or suppose you have some /admin\n// \"global\" local variables:\n\n/*\n\napp.use('/api', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// the following is effectively the same,\n// but uses a route instead:\n\n/*\n\napp.all('/api/*', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/error/index.js:29-53  (examples.error)\napp.get('/', function () {\n  // Caught and passed down to the errorHandler middleware\n  throw new Error('something broke!');\n});\n\napp.get('/next', function(req, res, next){\n  // We can also pass exceptions to next()\n  // The reason for process.nextTick() is to show that\n  // next() can be called inside an async operation,\n  // in real life it can be a DB read or HTTP request.\n  process.nextTick(function(){\n    next(new Error('oh no!'));\n  });\n});\n\n// the error handler is placed after routes\n// if it were above it would not receive errors\n// from app.get() etc\napp.use(error);\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/router/index.js:424-437  (lib.router)\n/**\n * Use the given middleware function, with optional path, defaulting to \"/\".\n *\n * Use (like `.all`) will run for any http METHOD, but it will not add\n * handlers for those methods so OPTIONS requests will not consider `.use`\n * functions even if they could respond.\n *\n * The other difference is that _route_ path is stripped and not visible\n * to the handler function. The main effect of this feature is that mounted\n * handlers can operate without any code changes regardless of the \"prefix\"\n * pathname.\n *\n * @public\n */\n\n# test/req.accepts.js:1-125  (test.req.accepts)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('req', function(){\n  describe('.accepts(type)', function(){\n    it('should return true when Accept is not present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .expect('yes', done);\n    })\n\n    it('should return true when present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'application/json')\n      .expect('yes', done);\n    })\n\n    it('should return false otherwise', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('no', done);\n    })\n  })\n\n  it('should accept an argument list of type names', function(done){\n    var app = express();\n\n    app.use(function(req, res, next){\n      res.end(req.accepts('json', 'html'));\n    });\n\n    request(app)\n    .get('/')\n    .set('Accept', 'application/json')\n    .expect('json', done);\n  })\n\n  describe('.accepts(types)', function(){\n    it('should return the first when Accept is not present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['json', 'html']));\n      });\n\n      request(app)\n      .get('/')\n      .expect('json', done);\n    })\n\n    it('should return the first acceptable type', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['json', 'html']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('html', done);\n    })\n\n    it('should return false when no match is made', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['text/html', 'application/json']) ? 'yup' : 'nope');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'foo/bar, bar/baz')\n      .expect('nope', done);\n    })\n\n    it('should take quality into account', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['text/html', 'application/json']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', '*/html; q=.5, application/json')\n      .expect('application/json', done);\n    })\n\n    it('should return the first acceptable type with canonical mime types', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['application/json', 'text/html']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', '*/html')\n      .expect('text/html', done);\n    })\n  })\n})\n\n# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.\n\n# lib/response.js:293-352  (lib.response.jsonp)\nres.jsonp = function jsonp(obj) {\n  var val = obj;\n\n  // allow status / body\n  if (arguments.length === 2) {\n    // res.jsonp(body, status) backwards compat\n    if (typeof arguments[1] === 'number') {\n      deprecate('res.jsonp(obj, status): Use res.status(status).jsonp(obj) instead');\n      this.statusCode = arguments[1];\n    } else {\n      deprecate('res.jsonp(status, obj): Use res.status(status).jsonp(obj) instead');\n      this.statusCode = arguments[0];\n      val = arguments[1];\n    }\n  }\n\n  // settings\n  var app = this.app;\n  var escape = app.get('json escape')\n  var replacer = app.get('json replacer');\n  var spaces = app.get('json spaces');\n  var body = stringify(val, replacer, spaces, escape)\n  var callback = this.req.query[app.get('jsonp callback name')];\n\n  // content-type\n  if (!this.get('Content-Type')) {\n    this.set('X-Content-Type-Options', 'nosniff');\n    this.set('Content-Type', 'application/json');\n  }\n\n  // fixup callback\n  if (Array.isArray(callback)) {\n    callback = callback[0];\n  }\n\n  // jsonp\n  if (typeof callback === 'string' && callback.length !== 0) {\n    this.set('X-Content-Type-Options', 'nosniff');\n    this.set('Content-Type', 'text/javascript');\n\n    // restrict callback charset\n    callback = callback.replace(/[^\\[\\]\\w$.]/g, '');\n\n    if (body === undefined) {\n      // empty argument\n      body = ''\n    } else if (typeof body === 'string') {\n      // replace chars not allowed in JavaScript that are in JSON\n      body = body\n        .replace(/\\u2028/g, '\\\\u2028')\n        .replace(/\\u2029/g, '\\\\u2029')\n    }\n\n    // the /**/ is a specific security mitigation for \"Rosetta Flash JSONP abuse\"\n    // the typeof check is just to reduce client error noise\n    body = '/**/ typeof ' + callback + ' === \\'function\\' && ' + callback + '(' + body + ');';\n  }\n\n  return this.send(body);\n};\n\n# lib/response.js:529-548  (lib.response)\nres.sendfile = deprecate.function(res.sendfile,\n  'res.sendfile: Use res.sendFile instead');\n\n/**\n * Transfer the file at the given `path` as an attachment.\n *\n * Optionally providing an alternate attachment `filename`,\n * and optional callback `callback(err)`. The callback is invoked\n * when the data transfer is complete, or when an error has\n * occurred. Be sure to check `res.headersSent` if you plan to respond.\n *\n * Optionally providing an `options` object to use with `res.sendFile()`.\n * This function will set the `Content-Disposition` header, overriding\n * any `Content-Disposition` header passed as header options in order\n * to set the attachment and filename.\n *\n * This method uses `res.sendFile()`.\n *\n * @public\n */\n\n# lib/express.js:59-116  (lib.express)\n/**\n * Expose the prototypes.\n */\n\nexports.application = proto;\nexports.request = req;\nexports.response = res;\n\n/**\n * Expose constructors.\n */\n\nexports.Route = Route;\nexports.Router = Router;\n\n/**\n * Expose middleware\n */\n\nexports.json = bodyParser.json\nexports.query = require('./middleware/query');\nexports.raw = bodyParser.raw\nexports.static = require('serve-static');\nexports.text = bodyParser.text\nexports.urlencoded = bodyParser.urlencoded\n\n/**\n * Replace removed middleware with an appropriate error message.\n */\n\nvar removedMiddlewares = [\n  'bodyParser',\n  'compress',\n  'cookieSession',\n  'session',\n  'logger',\n  'cookieParser',\n  'favicon',\n  'responseTime',\n  'errorHandler',\n  'timeout',\n  'methodOverride',\n  'vhost',\n  'csrf',\n  'directory',\n  'limit',\n  'multipart',\n  'staticCache'\n]\n\nremovedMiddlewares.forEach(function (name) {\n  Object.defineProperty(exports, name, {\n    get: function () {\n      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');\n    },\n    configurable: true\n  });\n});\n\n# test/express.json.js:254-323#part2of3  (test.express.json)\ndescribe('express.json()', function () {\n  describe('with strict option', function () {\n    describe('when undefined', function () {\n      before(function () {\n        this.app = createApp()\n      })\n\n      it('should 400 on primitives', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('true')\n          .expect(400, '[entity.parse.failed] ' + parseError('#rue').replace(/#/g, 't'), done)\n      })\n    })\n\n    describe('when false', function () {\n      before(function () {\n        this.app = createApp({ strict: false })\n      })\n\n      it('should parse primitives', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('true')\n          .expect(200, 'true', done)\n      })\n    })\n\n    describe('when true', function () {\n      before(function () {\n        this.app = createApp({ strict: true })\n      })\n\n      it('should not parse primitives', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('true')\n          .expect(400, '[entity.parse.failed] ' + parseError('#rue').replace(/#/g, 't'), done)\n      })\n\n      it('should not parse primitives with leading whitespaces', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('    true')\n          .expect(400, '[entity.parse.failed] ' + parseError('    #rue').replace(/#/g, 't'), done)\n      })\n\n      it('should allow leading whitespaces in JSON', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .send('   { \"user\": \"tobi\" }')\n          .expect(200, '{\"user\":\"tobi\"}', done)\n      })\n\n      it('should include correct message in stack trace', function (done) {\n        request(this.app)\n          .post('/')\n          .set('Content-Type', 'application/json')\n          .set('X-Error-Property', 'stack')\n          .send('true')\n          .expect(400)\n          .expect(shouldContainInBody(parseError('#rue').replace(/#/g, 't')))\n          .end(done)\n      })\n    })\n  })\n})\n\n# lib/request.js:252-276  (lib.request)\n/**\n * Check if the incoming request contains the \"Content-Type\"\n * header field, and it contains the given mime `type`.\n *\n * Examples:\n *\n *      // With Content-Type: text/html; charset=utf-8\n *      req.is('html');\n *      req.is('text/html');\n *      req.is('text/*');\n *      // => true\n *\n *      // When Content-Type is application/json\n *      req.is('json');\n *      req.is('application/json');\n *      req.is('application/*');\n *      // => true\n *\n *      req.is('html');\n *      // => false\n *\n * @param {String|Array} types...\n * @return {String|false|null}\n * @public\n */\n\n## Task\n\nYou are investigating how Express mounts middleware in lib/application.js. Starting from `use`, trace the exact causal pipeline that runs when middleware is mounted on an application for the first time: what triggers the application's internal router to be lazily constructed, and what real configuration lookups happen along the way.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.use\", \"lib.application.lazyrouter\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

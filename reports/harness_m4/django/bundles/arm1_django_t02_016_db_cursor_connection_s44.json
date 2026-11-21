@@ -1,0 +1,1045 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t02_016_db_cursor_connection",
+  "items": [
+   {
+    "source_id": "django/db/backends/base/base.py:45-661",
+    "content": "# django/db/backends/base/base.py:45-661  (django.db.backends.base.base.BaseDatabaseWrapper)\nclass BaseDatabaseWrapper:\n    \"\"\"Represent a database connection.\"\"\"\n\n    # Mapping of Field objects to their column types.\n    data_types = {}\n    # Mapping of Field objects to their SQL suffix such as AUTOINCREMENT.\n    data_types_suffix = {}\n    # Mapping of Field objects to their SQL for CHECK constraints.\n    data_type_check_constraints = {}\n    ops = None\n    vendor = \"unknown\"\n    display_name = \"unknown\"\n    SchemaEditorClass = None\n    # Classes instantiated in __init__().\n    client_class = None\n    creation_class = None\n    features_class = None\n    introspection_class = None\n    ops_class = None\n    validation_class = BaseDatabaseValidation\n\n    queries_limit = 9000\n\n    def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS):\n        # Connection related attributes.\n        # The underlying database connection.\n        self.connection = None\n        # `settings_dict` should be a dictionary containing keys such as\n        # NAME, USER, etc. It's called `settings_dict` instead of `settings`\n        # to disambiguate it from Django settings modules.\n        self.settings_dict = settings_dict\n        self.alias = alias\n        # Query logging in debug mode or when explicitly enabled.\n        self.queries_log = deque(maxlen=self.queries_limit)\n        self.force_debug_cursor = False\n\n        # Transaction related attributes.\n        # Tracks if the connection is in autocommit mode. Per PEP 249, by\n        # default, it isn't.\n        self.autocommit = False\n        # Tracks if the connection is in a transaction managed by 'atomic'.\n        self.in_atomic_block = False\n        # Increment to generate unique savepoint ids.\n        self.savepoint_state = 0\n        # List of savepoints created by 'atomic'.\n        self.savepoint_ids = []\n        # Stack of active 'atomic' blocks.\n        self.atomic_blocks = []\n        # Tracks if the outermost 'atomic' block should commit on exit,\n        # ie. if autocommit was active on entry.\n        self.commit_on_exit = True\n        # Tracks if the transaction should be rolled back to the next\n        # available savepoint because of an exception in an inner block.\n        self.needs_rollback = False\n        self.rollback_exc = None\n\n        # Connection termination related attributes.\n        self.close_at = None\n        self.closed_in_transaction = False\n        self.errors_occurred = False\n        self.health_check_enabled = False\n        self.health_check_done = False\n\n        # Thread-safety related attributes.\n        self._thread_sharing_lock = threading.Lock()\n        self._thread_sharing_count = 0\n        self._thread_ident = _thread.get_ident()\n\n        # A list of no-argument functions to run when the transaction commits.\n        # Each entry is an (sids, func, robust) tuple, where sids is a set of\n        # the active savepoint IDs when this function was registered and robust\n        # specifies whether it's allowed for the function to fail.\n        self.run_on_commit = []\n\n        # Should we run the on-commit hooks the next time set_autocommit(True)\n        # is called?\n        self.run_commit_hooks_on_set_autocommit_on = False\n\n        # A stack of wrappers to be invoked around execute()/executemany()\n        # calls. Each entry is a function taking five arguments: execute, sql,\n        # params, many, and context. It's the function's responsibility to\n        # call execute(sql, params, many, context).\n        self.execute_wrappers = []\n\n        self.client = self.client_class(self)\n        self.creation = self.creation_class(self)\n        self.features = self.features_class(self)\n        self.introspection = self.introspection_class(self)\n        self.ops = self.ops_class(self)\n        self.validation = self.validation_class(self)\n\n    def __repr__(self):\n        return (\n            f\"<{self.__class__.__qualname__} \"\n            f\"vendor={self.vendor!r} alias={self.alias!r}>\"\n        )\n\n    def ensure_timezone(self):\n        \"\"\"\n        Ensure the connection's timezone is set to `self.timezone_name` and\n        return whether it changed or not.\n        \"\"\"\n        return False\n\n    @cached_property\n    def timezone(self):\n        \"\"\"\n        Return a tzinfo of the database connection time zone.\n\n        This is only used when time zone support is enabled. When a datetime is\n        read from the database, it is always returned in this time zone.\n\n        When the database backend supports time zones, it doesn't matter which\n        time zone Django uses, as long as aware datetimes are used everywhere.\n        Other users connecting to the database can choose their own time zone.\n\n        When the database backend doesn't support time zones, the time zone\n        Django uses may be constrained by the requirements of other users of\n        the database.\n        \"\"\"\n        if not settings.USE_TZ:\n            return None\n        elif self.settings_dict[\"TIME_ZONE\"] is None:\n            return datetime.timezone.utc\n        else:\n            return timezone_constructor(self.settings_dict[\"TIME_ZONE\"])\n\n    @cached_property\n    def timezone_name(self):\n        \"\"\"\n        Name of the time zone of the database connection.\n        \"\"\"\n        if not settings.USE_TZ:\n            return settings.TIME_ZONE\n        elif self.settings_dict[\"TIME_ZONE\"] is None:\n            return \"UTC\"\n        else:\n            return self.settings_dict[\"TIME_ZONE\"]\n\n    @property\n    def queries_logged(self):\n        return self.force_debug_cursor or settings.DEBUG\n\n    @property\n    def queries(self):\n        if len(self.queries_log) == self.queries_log.maxlen:\n            warnings.warn(\n                \"Limit for query logging exceeded, only the last {} queries \"\n                \"will be returned.\".format(self.queries_log.maxlen)\n            )\n        return list(self.queries_log)\n\n    def get_database_version(self):\n        \"\"\"Return a tuple of the database's version.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_database_version() \"\n            \"method.\"\n        )\n\n    def check_database_version_supported(self):\n        \"\"\"\n        Raise an error if the database version isn't supported by this\n        version of Django.\n        \"\"\"\n        if (\n            self.features.minimum_database_version is not None\n            and self.get_database_version() < self.features.minimum_database_version\n        ):\n            db_version = \".\".join(map(str, self.get_database_version()))\n            min_db_version = \".\".join(map(str, self.features.minimum_database_version))\n            raise NotSupportedError(\n                f\"{self.display_name} {min_db_version} or later is required \"\n                f\"(found {db_version}).\"\n            )\n\n    # ##### Backend-specific methods for creating connections and cursors #####\n\n    def get_connection_params(self):\n        \"\"\"Return a dict of parameters suitable for get_new_connection.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_connection_params() \"\n            \"method\"\n        )\n\n    def get_new_connection(self, conn_params):\n        \"\"\"Open a connection to the database.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_new_connection() \"\n            \"method\"\n        )\n\n    def init_connection_state(self):\n        \"\"\"Initialize the database connection settings.\"\"\"\n        if self.alias not in RAN_DB_VERSION_CHECK:\n            self.check_database_version_supported()\n            RAN_DB_VERSION_CHECK.add(self.alias)\n\n    def create_cursor(self, name=None):\n        \"\"\"Create a cursor. Assume that a connection is established.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a create_cursor() method\"\n        )\n\n    # ##### Backend-specific methods for creating connections #####\n\n    @async_unsafe\n    def connect(self):\n        \"\"\"Connect to the database. Assume that the connection is closed.\"\"\"\n        # Check for invalid configurations.\n        self.check_settings()\n        # In case the previous connection was closed while in an atomic block\n        self.in_atomic_block = False\n        self.savepoint_ids = []\n        self.atomic_blocks = []\n        self.needs_rollback = False\n        # Reset parameters defining when to close/health-check the connection.\n        self.health_check_enabled = self.settings_dict[\"CONN_HEALTH_CHECKS\"]\n        max_age = self.settings_dict[\"CONN_MAX_AGE\"]\n        self.close_at = None if max_age is None else time.monotonic() + max_age\n        self.closed_in_transaction = False\n        self.errors_occurred = False\n        # New connections are healthy.\n        self.health_check_done = True\n        # Establish the connection\n        conn_params = self.get_connection_params()\n        self.connection = self.get_new_connection(conn_params)\n        self.set_autocommit(self.settings_dict[\"AUTOCOMMIT\"])\n        self.init_connection_state()\n        connection_created.send(sender=self.__class__, connection=self)\n\n        self.run_on_commit = []\n\n    def check_settings(self):\n        if self.settings_dict[\"TIME_ZONE\"] is not None and not settings.USE_TZ:\n            raise ImproperlyConfigured(\n                \"Connection '%s' cannot set TIME_ZONE because USE_TZ is False.\"\n                % self.alias\n            )\n\n    @async_unsafe\n    def ensure_connection(self):\n        \"\"\"Guarantee that a connection to the database is established.\"\"\"\n        if self.connection is None:\n            with self.wrap_database_errors:\n                self.connect()\n\n    # ##### Backend-specific wrappers for PEP-249 connection methods #####\n\n    def _prepare_cursor(self, cursor):\n        \"\"\"\n        Validate the connection is usable and perform database cursor wrapping.\n        \"\"\"\n        self.validate_thread_sharing()\n        if self.queries_logged:\n            wrapped_cursor = self.make_debug_cursor(cursor)\n        else:\n            wrapped_cursor = self.make_cursor(cursor)\n        return wrapped_cursor\n\n    def _cursor(self, name=None):\n        self.close_if_health_check_failed()\n        self.ensure_connection()\n        with self.wrap_database_errors:\n            return self._prepare_cursor(self.create_cursor(name))\n\n    def _commit(self):\n        if self.connection is not None:\n            with debug_transaction(self, \"COMMIT\"), self.wrap_database_errors:\n                return self.connection.commit()\n\n    def _rollback(self):\n        if self.connection is not None:\n            with debug_transaction(self, \"ROLLBACK\"), self.wrap_database_errors:\n                return self.connection.rollback()\n\n    def _close(self):\n        if self.connection is not None:\n            with self.wrap_database_errors:\n                return self.connection.close()\n\n    # ##### Generic wrappers for PEP-249 connection methods #####\n\n    @async_unsafe\n    def cursor(self):\n        \"\"\"Create a cursor, opening a connection if necessary.\"\"\"\n        return self._cursor()\n\n    @async_unsafe\n    def commit(self):\n        \"\"\"Commit a transaction and reset the dirty flag.\"\"\"\n        self.validate_thread_sharing()\n        self.validate_no_atomic_block()\n        self._commit()\n        # A successful commit means that the database connection works.\n        self.errors_occurred = False\n        self.run_commit_hooks_on_set_autocommit_on = True\n\n    @async_unsafe\n    def rollback(self):\n        \"\"\"Roll back a transaction and reset the dirty flag.\"\"\"\n        self.validate_thread_sharing()\n        self.validate_no_atomic_block()\n        self._rollback()\n        # A successful rollback means that the database connection works.\n        self.errors_occurred = False\n        self.needs_rollback = False\n        self.run_on_commit = []\n\n    @async_unsafe\n    def close(self):\n        \"\"\"Close the connection to the database.\"\"\"\n        self.validate_thread_sharing()\n        self.run_on_commit = []\n\n        # Don't call validate_no_atomic_block() to avoid making it difficult\n        # to get rid of a connection in an invalid state. The next connect()\n        # will reset the transaction state anyway.\n        if self.closed_in_transaction or self.connection is None:\n            return\n        try:\n            self._close()\n        finally:\n            if self.in_atomic_block:\n                self.closed_in_transaction = True\n                self.needs_rollback = True\n            else:\n                self.connection = None\n\n    # ##### Backend-specific savepoint management methods #####\n\n    def _savepoint(self, sid):\n        with self.cursor() as cursor:\n            cursor.execute(self.ops.savepoint_create_sql(sid))\n\n    def _savepoint_rollback(self, sid):\n        with self.cursor() as cursor:\n            cursor.execute(self.ops.savepoint_rollback_sql(sid))\n\n    def _savepoint_commit(self, sid):\n        with self.cursor() as cursor:\n            cursor.execute(self.ops.savepoint_commit_sql(sid))\n\n    def _savepoint_allowed(self):\n        # Savepoints cannot be created outside a transaction\n        return self.features.uses_savepoints and not self.get_autocommit()\n\n    # ##### Generic savepoint management methods #####\n\n    @async_unsafe\n    def savepoint(self):\n        \"\"\"\n        Create a savepoint inside the current transaction. Return an\n        identifier for the savepoint that will be used for the subsequent\n        rollback or commit. Do nothing if savepoints are not supported.\n        \"\"\"\n        if not self._savepoint_allowed():\n            return\n\n        thread_ident = _thread.get_ident()\n        tid = str(thread_ident).replace(\"-\", \"\")\n\n        self.savepoint_state += 1\n        sid = \"s%s_x%d\" % (tid, self.savepoint_state)\n\n        self.validate_thread_sharing()\n        self._savepoint(sid)\n\n        return sid\n\n    @async_unsafe\n    def savepoint_rollback(self, sid):\n        \"\"\"\n        Roll back to a savepoint. Do nothing if savepoints are not supported.\n        \"\"\"\n        if not self._savepoint_allowed():\n            return\n\n        self.validate_thread_sharing()\n        self._savepoint_rollback(sid)\n\n        # Remove any callbacks registered while this savepoint was active.\n        self.run_on_commit = [\n            (sids, func, robust)\n            for (sids, func, robust) in self.run_on_commit\n            if sid not in sids\n        ]\n\n    @async_unsafe\n    def savepoint_commit(self, sid):\n        \"\"\"\n        Release a savepoint. Do nothing if savepoints are not supported.\n        \"\"\"\n        if not self._savepoint_allowed():\n            return\n\n        self.validate_thread_sharing()\n        self._savepoint_commit(sid)\n\n    @async_unsafe\n    def clean_savepoints(self):\n        \"\"\"\n        Reset the counter used to generate unique savepoint ids in this thread.\n        \"\"\"\n        self.savepoint_state = 0\n\n    # ##### Backend-specific transaction management methods #####\n\n    def _set_autocommit(self, autocommit):\n        \"\"\"\n        Backend-specific implementation to enable or disable autocommit.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a _set_autocommit() method\"\n        )\n\n    # ##### Generic transaction management methods #####\n\n    def get_autocommit(self):\n        \"\"\"Get the autocommit state.\"\"\"\n        self.ensure_connection()\n        return self.autocommit\n\n    def set_autocommit(\n        self, autocommit, force_begin_transaction_with_broken_autocommit=False\n    ):\n        \"\"\"\n        Enable or disable autocommit.\n\n        The usual way to start a transaction is to turn autocommit off.\n        SQLite does not properly start a transaction when disabling\n        autocommit. To avoid this buggy behavior and to actually enter a new\n        transaction, an explicit BEGIN is required. Using\n        force_begin_transaction_with_broken_autocommit=True will issue an\n        explicit BEGIN with SQLite. This option will be ignored for other\n        backends.\n        \"\"\"\n        self.validate_no_atomic_block()\n        self.close_if_health_check_failed()\n        self.ensure_connection()\n\n        start_transaction_under_autocommit = (\n            force_begin_transaction_with_broken_autocommit\n            and not autocommit\n            and hasattr(self, \"_start_transaction_under_autocommit\")\n        )\n\n        if start_transaction_under_autocommit:\n            self._start_transaction_under_autocommit()\n        elif autocommit:\n            self._set_autocommit(autocommit)\n        else:\n            with debug_transaction(self, \"BEGIN\"):\n                self._set_autocommit(autocommit)\n        self.autocommit = autocommit\n\n        if autocommit and self.run_commit_hooks_on_set_autocommit_on:\n            self.run_and_clear_commit_hooks()\n            self.run_commit_hooks_on_set_autocommit_on = False\n\n    def get_rollback(self):\n        \"\"\"Get the \"needs rollback\" flag -- for *advanced use* only.\"\"\"\n        if not self.in_atomic_block:\n            raise TransactionManagementError(\n                \"The rollback flag doesn't work outside of an 'atomic' block.\"\n            )\n        return self.needs_rollback\n\n    def set_rollback(self, rollback):\n        \"\"\"\n        Set or unset the \"needs rollback\" flag -- for *advanced use* only.\n        \"\"\"\n        if not self.in_atomic_block:\n            raise TransactionManagementError(\n                \"The rollback flag doesn't work outside of an 'atomic' block.\"\n            )\n        self.needs_rollback = rollback\n\n    def validate_no_atomic_block(self):\n        \"\"\"Raise an error if an atomic block is active.\"\"\"\n        if self.in_atomic_block:\n            raise TransactionManagementError(\n                \"This is forbidden when an 'atomic' block is active.\"\n            )\n\n    def validate_no_broken_transaction(self):\n        if self.needs_rollback:\n            raise TransactionManagementError(\n                \"An error occurred in the current transaction. You can't \"\n                \"execute queries until the end of the 'atomic' block.\"\n            ) from self.rollback_exc\n\n    # ##### Foreign key constraints checks handling #####\n\n    @contextmanager\n    def constraint_checks_disabled(self):\n        \"\"\"\n        Disable foreign key constraint checking.\n        \"\"\"\n        disabled = self.disable_constraint_checking()\n        try:\n            yield\n        finally:\n            if disabled:\n                self.enable_constraint_checking()\n\n    def disable_constraint_checking(self):\n        \"\"\"\n        Backends can implement as needed to temporarily disable foreign key\n        constraint checking. Should return True if the constraints were\n        disabled and will need to be reenabled.\n        \"\"\"\n        return False\n\n    def enable_constraint_checking(self):\n        \"\"\"\n        Backends can implement as needed to re-enable foreign key constraint\n        checking.\n        \"\"\"\n        pass\n\n    def check_constraints(self, table_names=None):\n        \"\"\"\n        Backends can override this method if they can apply constraint\n        checking (e.g. via \"SET CONSTRAINTS ALL IMMEDIATE\"). Should raise an\n        IntegrityError if any invalid foreign key references are encountered.\n        \"\"\"\n        pass\n\n    # ##### Connection termination handling #####\n\n    def is_usable(self):\n        \"\"\"\n        Test if the database connection is usable.\n\n        This method may assume that self.connection is not None.\n\n        Actual implementations should take care not to raise exceptions\n        as that may prevent Django from recycling unusable connections.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require an is_usable() method\"\n        )\n\n    def close_if_health_check_failed(self):\n        \"\"\"Close existing connection if it fails a health check.\"\"\"\n        if (\n            self.connection is None\n            or not self.health_check_enabled\n            or self.health_check_done\n        ):\n            return\n\n        if not self.is_usable():\n            self.close()\n        self.health_check_done = True\n\n    def close_if_unusable_or_obsolete(self):\n        \"\"\"\n        Close the current connection if unrecoverable errors have occurred\n        or if it outlived its maximum age.\n        \"\"\"\n        if self.connection is not None:\n            self.health_check_done = False\n            # If the application didn't restore the original autocommit setting,\n            # don't take chances, drop the connection.\n            if self.get_autocommit() != self.settings_dict[\"AUTOCOMMIT\"]:\n                self.close()\n                return\n\n            # If an exception other than DataError or IntegrityError occurred\n            # since the last commit / rollback, check if the connection works.\n            if self.errors_occurred:\n                if self.is_usable():\n                    self.errors_occurred = False\n                    self.health_check_done = True\n                else:\n                    self.close()\n                    return\n\n            if self.close_at is not None and time.monotonic() >= self.close_at:\n                self.close()\n                return\n\n    # ##### Thread safety handling #####\n\n    @property\n    def allow_thread_sharing(self):\n        with self._thread_sharing_lock:\n            return self._thread_sharing_count > 0\n\n    def inc_thread_sharing(self):\n        with self._thread_sharing_lock:\n            self._thread_sharing_count += 1\n\n    def dec_thread_sharing(self):\n        with self._thread_sharing_lock:\n            if self._thread_sharing_count <= 0:\n                raise RuntimeError(\n                    \"Cannot decrement the thread sharing count below zero.\"\n                )\n            self._thread_sharing_count -= 1\n\n    def validate_thread_sharing(self):\n        \"\"\"\n        Validate that the connection isn't accessed by another thread than the\n        one which originally created it, unless the connection was explicitly\n        authorized to be shared between threads (via the `inc_thread_sharing()`\n        method). Raise an exception if the validation fails.\n        \"\"\"\n        if not (self.allow_thread_sharing or self._thread_ident == _thread.get_ident()):\n            raise DatabaseError(\n                \"DatabaseWrapper objects created in a \"\n                \"thread can only be used in that same thread. The object \"\n                \"with alias '%s' was created in thread id %s and this is \"\n                \"thread id %s.\" % (self.alias, self._thread_ident, _thread.get_ident())\n            )\n\n    # ##### Miscellaneous #####",
+    "token_count": 4523,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 27,
+     "rerank_score": 2.66137433052063,
+     "bm25_rank": 83,
+     "dense_rank": 70,
+     "oversized_chunk": true,
+     "engine_token_count": 4523
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/postgresql/base.py:386-394",
+    "content": "# django/db/backends/postgresql/base.py:386-394  (django.db.backends.postgresql.base.DatabaseWrapper.is_usable)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def is_usable(self):\n        try:\n            # Use a psycopg cursor directly, bypassing Django's utilities.\n            with self.connection.cursor() as cursor:\n                cursor.execute(\"SELECT 1\")\n        except Database.Error:\n            return False\n        else:\n            return True",
+    "token_count": 94,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.postgresql.base.DatabaseWrapper.is_usable"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 39,
+     "rerank_score": 1.0632966756820679,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:292-301",
+    "content": "# django/db/backends/base/base.py:292-301  (django.db.backends.base.base.BaseDatabaseWrapper._prepare_cursor)\nclass BaseDatabaseWrapper:\n    def _prepare_cursor(self, cursor):\n        \"\"\"\n        Validate the connection is usable and perform database cursor wrapping.\n        \"\"\"\n        self.validate_thread_sharing()\n        if self.queries_logged:\n            wrapped_cursor = self.make_debug_cursor(cursor)\n        else:\n            wrapped_cursor = self.make_cursor(cursor)\n        return wrapped_cursor",
+    "token_count": 100,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper._prepare_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": 0.8533810377120972,
+     "bm25_rank": 14,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 100
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/postgresql/base.py:396-432",
+    "content": "# django/db/backends/postgresql/base.py:396-432  (django.db.backends.postgresql.base.DatabaseWrapper._nodb_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @contextmanager\n    def _nodb_cursor(self):\n        cursor = None\n        try:\n            with super()._nodb_cursor() as cursor:\n                yield cursor\n        except (Database.DatabaseError, WrappedDatabaseError):\n            if cursor is not None:\n                raise\n            warnings.warn(\n                \"Normally Django will use a connection to the 'postgres' database \"\n                \"to avoid running initialization queries against the production \"\n                \"database when it's not needed (for example, when running tests). \"\n                \"Django was unable to create a connection to the 'postgres' database \"\n                \"and will use the first PostgreSQL database instead.\",\n                RuntimeWarning,\n            )\n            for connection in connections.all():\n                if (\n                    connection.vendor == \"postgresql\"\n                    and connection.settings_dict[\"NAME\"] != \"postgres\"\n                ):\n                    conn = self.__class__(\n                        {\n                            **self.settings_dict,\n                            \"NAME\": connection.settings_dict[\"NAME\"],\n                        },\n                        alias=self.alias,\n                    )\n                    try:\n                        with conn.cursor() as cursor:\n                            yield cursor\n                    finally:\n                        conn.close()\n                    break\n            else:\n                raise",
+    "token_count": 272,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.postgresql.base.DatabaseWrapper._nodb_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 6,
+     "rerank_score": 0.8372077941894531,
+     "bm25_rank": 21,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:685-687",
+    "content": "# django/db/backends/base/base.py:685-687  (django.db.backends.base.base.BaseDatabaseWrapper.make_debug_cursor)\nclass BaseDatabaseWrapper:\n    def make_debug_cursor(self, cursor):\n        \"\"\"Create a cursor that logs all queries in self.queries_log.\"\"\"\n        return utils.CursorDebugWrapper(cursor, self)",
+    "token_count": 69,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.make_debug_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 1,
+     "rerank_score": 0.688580334186554,
+     "bm25_rank": 9,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/utils.py:108-143",
+    "content": "# django/db/backends/utils.py:108-143  (django.db.backends.utils.CursorDebugWrapper.debug_sql)\nclass CursorDebugWrapper(CursorWrapper):\n    # XXX callproc isn't instrumented at this time.\n\n    @contextmanager\n    def debug_sql(\n        self, sql=None, params=None, use_last_executed_query=False, many=False\n    ):\n        start = time.monotonic()\n        try:\n            yield\n        finally:\n            stop = time.monotonic()\n            duration = stop - start\n            if use_last_executed_query:\n                sql = self.db.ops.last_executed_query(self.cursor, sql, params)\n            try:\n                times = len(params) if many else \"\"\n            except TypeError:\n                # params could be an iterator.\n                times = \"?\"\n            self.db.queries_log.append(\n                {\n                    \"sql\": \"%s times: %s\" % (times, sql) if many else sql,\n                    \"time\": \"%.3f\" % duration,\n                }\n            )\n            logger.debug(\n                \"(%.3f) %s; args=%s; alias=%s\",\n                duration,\n                sql,\n                params,\n                self.db.alias,\n                extra={\n                    \"duration\": duration,\n                    \"sql\": sql,\n                    \"params\": params,\n                    \"alias\": self.db.alias,\n                },\n            )",
+    "token_count": 281,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.utils.CursorDebugWrapper.debug_sql"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": 0.6090717315673828,
+     "bm25_rank": null,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 281
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/backends/postgresql/tests.py:27-83",
+    "content": "# tests/backends/postgresql/tests.py:27-83  (tests.backends.postgresql.tests.Tests.test_nodb_cursor)\nclass Tests(TestCase):\n    def test_nodb_cursor(self):\n        \"\"\"\n        The _nodb_cursor() fallbacks to the default connection database when\n        access to the 'postgres' database is not granted.\n        \"\"\"\n        orig_connect = BaseDatabaseWrapper.connect\n\n        def mocked_connect(self):\n            if self.settings_dict[\"NAME\"] is None:\n                raise DatabaseError()\n            return orig_connect(self)\n\n        with connection._nodb_cursor() as cursor:\n            self.assertIs(cursor.closed, False)\n            self.assertIsNotNone(cursor.db.connection)\n            self.assertIsNone(cursor.db.settings_dict[\"NAME\"])\n        self.assertIs(cursor.closed, True)\n        self.assertIsNone(cursor.db.connection)\n\n        # Now assume the 'postgres' db isn't available\n        msg = (\n            \"Normally Django will use a connection to the 'postgres' database \"\n            \"to avoid running initialization queries against the production \"\n            \"database when it's not needed (for example, when running tests). \"\n            \"Django was unable to create a connection to the 'postgres' \"\n            \"database and will use the first PostgreSQL database instead.\"\n        )\n        with self.assertWarnsMessage(RuntimeWarning, msg):\n            with mock.patch(\n                \"django.db.backends.base.base.BaseDatabaseWrapper.connect\",\n                side_effect=mocked_connect,\n                autospec=True,\n            ):\n                with mock.patch.object(\n                    connection,\n                    \"settings_dict\",\n                    {**connection.settings_dict, \"NAME\": \"postgres\"},\n                ):\n                    with connection._nodb_cursor() as cursor:\n                        self.assertIs(cursor.closed, False)\n                        self.assertIsNotNone(cursor.db.connection)\n        self.assertIs(cursor.closed, True)\n        self.assertIsNone(cursor.db.connection)\n        self.assertIsNotNone(cursor.db.settings_dict[\"NAME\"])\n        self.assertEqual(\n            cursor.db.settings_dict[\"NAME\"], connections[\"other\"].settings_dict[\"NAME\"]\n        )\n        # Cursor is yielded only for the first PostgreSQL database.\n        with self.assertWarnsMessage(RuntimeWarning, msg):\n            with mock.patch(\n                \"django.db.backends.base.base.BaseDatabaseWrapper.connect\",\n                side_effect=mocked_connect,\n                autospec=True,\n            ):\n                with connection._nodb_cursor() as cursor:\n                    self.assertIs(cursor.closed, False)\n                    self.assertIsNotNone(cursor.db.connection)",
+    "token_count": 485,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.backends.postgresql.tests.Tests.test_nodb_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 10,
+     "rerank_score": 0.5463019609451294,
+     "bm25_rank": 20,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 485
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/utils.py:100-102",
+    "content": "# django/db/backends/utils.py:100-102  (django.db.backends.utils.CursorDebugWrapper.execute)\nclass CursorDebugWrapper(CursorWrapper):\n    # XXX callproc isn't instrumented at this time.\n\n    def execute(self, sql, params=None):\n        with self.debug_sql(sql, params, use_last_executed_query=True):\n            return super().execute(sql, params)",
+    "token_count": 82,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.utils.CursorDebugWrapper.execute"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 35,
+     "rerank_score": 0.4066893458366394,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:183-185",
+    "content": "# django/db/backends/base/base.py:183-185  (django.db.backends.base.base.BaseDatabaseWrapper.queries_logged)\nclass BaseDatabaseWrapper:\n    @property\n    def queries_logged(self):\n        return self.force_debug_cursor or settings.DEBUG",
+    "token_count": 54,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.queries_logged"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": 0.38239479064941406,
+     "bm25_rank": 57,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:689-691",
+    "content": "# django/db/backends/base/base.py:689-691  (django.db.backends.base.base.BaseDatabaseWrapper.make_cursor)\nclass BaseDatabaseWrapper:\n    def make_cursor(self, cursor):\n        \"\"\"Create a cursor without debug logging.\"\"\"\n        return utils.CursorWrapper(cursor, self)",
+    "token_count": 60,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.make_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 5,
+     "rerank_score": 0.2856573164463043,
+     "bm25_rank": 16,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/postgresql/base.py:439-440",
+    "content": "# django/db/backends/postgresql/base.py:439-440  (django.db.backends.postgresql.base.DatabaseWrapper.make_debug_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def make_debug_cursor(self, cursor):\n        return CursorDebugWrapper(cursor, self)",
+    "token_count": 56,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.postgresql.base.DatabaseWrapper.make_debug_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 8,
+     "rerank_score": 0.2545703053474426,
+     "bm25_rank": 39,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:574-585",
+    "content": "# django/db/backends/base/base.py:574-585  (django.db.backends.base.base.BaseDatabaseWrapper.is_usable)\nclass BaseDatabaseWrapper:\n    def is_usable(self):\n        \"\"\"\n        Test if the database connection is usable.\n\n        This method may assume that self.connection is not None.\n\n        Actual implementations should take care not to raise exceptions\n        as that may prevent Django from recycling unusable connections.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require an is_usable() method\"\n        )",
+    "token_count": 113,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.is_usable"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 25,
+     "rerank_score": 0.005881324410438538,
+     "bm25_rank": 7,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 113
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/sqlite3/base.py:189-190",
+    "content": "# django/db/backends/sqlite3/base.py:189-190  (django.db.backends.sqlite3.base.DatabaseWrapper.create_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def create_cursor(self, name=None):\n        return self.connection.cursor(factory=SQLiteCursorWrapper)",
+    "token_count": 58,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.sqlite3.base.DatabaseWrapper.create_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 16,
+     "rerank_score": -0.03396198898553848,
+     "bm25_rank": 28,
+     "dense_rank": 29,
+     "oversized_chunk": false,
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/backends/tests.py:1-43",
+    "content": "# tests/backends/tests.py:1-43  (tests.backends.tests)\n\"\"\"Tests related to django.db.backends that haven't been organized.\"\"\"\nimport datetime\nimport threading\nimport unittest\nimport warnings\nfrom unittest import mock\n\nfrom django.core.management.color import no_style\nfrom django.db import (\n    DEFAULT_DB_ALIAS,\n    DatabaseError,\n    IntegrityError,\n    connection,\n    connections,\n    reset_queries,\n    transaction,\n)\nfrom django.db.backends.base.base import BaseDatabaseWrapper\nfrom django.db.backends.signals import connection_created\nfrom django.db.backends.utils import CursorWrapper\nfrom django.db.models.sql.constants import CURSOR\nfrom django.test import (\n    TestCase,\n    TransactionTestCase,\n    override_settings,\n    skipIfDBFeature,\n    skipUnlessDBFeature,\n)\n\nfrom .models import (\n    Article,\n    Object,\n    ObjectReference,\n    Person,\n    Post,\n    RawData,\n    Reporter,\n    ReporterProxy,\n    SchoolClass,\n    SQLKeywordsModel,\n    Square,\n    VeryLongModelNameZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ,\n)",
+    "token_count": 228,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -0.05323392525315285,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 228
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:228-233",
+    "content": "# django/db/backends/base/base.py:228-233  (django.db.backends.base.base.BaseDatabaseWrapper.get_new_connection)\nclass BaseDatabaseWrapper:\n    def get_new_connection(self, conn_params):\n        \"\"\"Open a connection to the database.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_new_connection() \"\n            \"method\"\n        )",
+    "token_count": 80,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.get_new_connection"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 20,
+     "rerank_score": -0.3216283917427063,
+     "bm25_rank": 4,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/gis/db/backends/oracle/base.py:1-6",
+    "content": "# django/contrib/gis/db/backends/oracle/base.py:1-6  (django.contrib.gis.db.backends.oracle.base)\nfrom django.db.backends.oracle.base import DatabaseWrapper as OracleDatabaseWrapper\n\nfrom .features import DatabaseFeatures\nfrom .introspection import OracleIntrospection\nfrom .operations import OracleOperations\nfrom .schema import OracleGISSchemaEditor",
+    "token_count": 75,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 43,
+     "rerank_score": -0.3803131878376007,
+     "bm25_rank": null,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/postgresql/base.py:345-371",
+    "content": "# django/db/backends/postgresql/base.py:345-371  (django.db.backends.postgresql.base.DatabaseWrapper.chunked_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def chunked_cursor(self):\n        self._named_cursor_idx += 1\n        # Get the current async task\n        # Note that right now this is behind @async_unsafe, so this is\n        # unreachable, but in future we'll start loosening this restriction.\n        # For now, it's here so that every use of \"threading\" is\n        # also async-compatible.\n        try:\n            current_task = asyncio.current_task()\n        except RuntimeError:\n            current_task = None\n        # Current task can be none even if the current_task call didn't error\n        if current_task:\n            task_ident = str(id(current_task))\n        else:\n            task_ident = \"sync\"\n        # Use that and the thread ident to get a unique name\n        return self._cursor(\n            name=\"_django_curs_%d_%s_%d\"\n            % (\n                # Avoid reusing name in other threads / tasks\n                threading.current_thread().ident,\n                task_ident,\n                self._named_cursor_idx,\n            )\n        )",
+    "token_count": 259,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.postgresql.base.DatabaseWrapper.chunked_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 18,
+     "rerank_score": -0.3875674903392792,
+     "bm25_rank": 52,
+     "dense_rank": 31,
+     "oversized_chunk": false,
+     "engine_token_count": 259
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/backends/postgresql/tests.py:85-121",
+    "content": "# tests/backends/postgresql/tests.py:85-121  (tests.backends.postgresql.tests.Tests.test_nodb_cursor_raises_postgres_authentication_failure)\nclass Tests(TestCase):\n    def test_nodb_cursor_raises_postgres_authentication_failure(self):\n        \"\"\"\n        _nodb_cursor() re-raises authentication failure to the 'postgres' db\n        when other connection to the PostgreSQL database isn't available.\n        \"\"\"\n\n        def mocked_connect(self):\n            raise DatabaseError()\n\n        def mocked_all(self):\n            test_connection = copy.copy(connections[DEFAULT_DB_ALIAS])\n            test_connection.settings_dict = copy.deepcopy(connection.settings_dict)\n            test_connection.settings_dict[\"NAME\"] = \"postgres\"\n            return [test_connection]\n\n        msg = (\n            \"Normally Django will use a connection to the 'postgres' database \"\n            \"to avoid running initialization queries against the production \"\n            \"database when it's not needed (for example, when running tests). \"\n            \"Django was unable to create a connection to the 'postgres' \"\n            \"database and will use the first PostgreSQL database instead.\"\n        )\n        with self.assertWarnsMessage(RuntimeWarning, msg):\n            mocker_connections_all = mock.patch(\n                \"django.utils.connection.BaseConnectionHandler.all\",\n                side_effect=mocked_all,\n                autospec=True,\n            )\n            mocker_connect = mock.patch(\n                \"django.db.backends.base.base.BaseDatabaseWrapper.connect\",\n                side_effect=mocked_connect,\n                autospec=True,\n            )\n            with mocker_connections_all, mocker_connect:\n                with self.assertRaises(DatabaseError):\n                    with connection._nodb_cursor():\n                        pass",
+    "token_count": 326,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.backends.postgresql.tests.Tests.test_nodb_cursor_raises_postgres_authentication_failure"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 23,
+     "rerank_score": -0.5021951794624329,
+     "bm25_rank": 89,
+     "dense_rank": 60,
+     "oversized_chunk": false,
+     "engine_token_count": 326
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/postgresql/base.py:298-306",
+    "content": "# django/db/backends/postgresql/base.py:298-306  (django.db.backends.postgresql.base.DatabaseWrapper.ensure_role)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def ensure_role(self):\n        if self.connection is None:\n            return False\n        if new_role := self.settings_dict.get(\"OPTIONS\", {}).get(\"assume_role\"):\n            with self.connection.cursor() as cursor:\n                sql = self.ops.compose_sql(\"SET ROLE %s\", [new_role])\n                cursor.execute(sql)\n            return True\n        return False",
+    "token_count": 110,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.postgresql.base.DatabaseWrapper.ensure_role"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 44,
+     "rerank_score": -0.5703850984573364,
+     "bm25_rank": 22,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 110
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/transaction.py:1-9",
+    "content": "# django/db/transaction.py:1-9  (django.db.transaction)\nfrom contextlib import ContextDecorator, contextmanager\n\nfrom django.db import (\n    DEFAULT_DB_ALIAS,\n    DatabaseError,\n    Error,\n    ProgrammingError,\n    connections,\n)",
+    "token_count": 51,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 21,
+     "rerank_score": -0.571744978427887,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/oracle/base.py:261-302",
+    "content": "# django/db/backends/oracle/base.py:261-302  (django.db.backends.oracle.base.DatabaseWrapper.init_connection_state)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def init_connection_state(self):\n        super().init_connection_state()\n        cursor = self.create_cursor()\n        # Set the territory first. The territory overrides NLS_DATE_FORMAT\n        # and NLS_TIMESTAMP_FORMAT to the territory default. When all of\n        # these are set in single statement it isn't clear what is supposed\n        # to happen.\n        cursor.execute(\"ALTER SESSION SET NLS_TERRITORY = 'AMERICA'\")\n        # Set Oracle date to ANSI date format.  This only needs to execute\n        # once when we create a new connection. We also set the Territory\n        # to 'AMERICA' which forces Sunday to evaluate to a '1' in\n        # TO_CHAR().\n        cursor.execute(\n            \"ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'\"\n            \" NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'\"\n            + (\" TIME_ZONE = 'UTC'\" if settings.USE_TZ else \"\")\n        )\n        cursor.close()\n        if \"operators\" not in self.__dict__:\n            # Ticket #14149: Check whether our LIKE implementation will\n            # work for this connection or we need to fall back on LIKEC.\n            # This check is performed only once per DatabaseWrapper\n            # instance per thread, since subsequent connections will use\n            # the same settings.\n            cursor = self.create_cursor()\n            try:\n                cursor.execute(\n                    \"SELECT 1 FROM DUAL WHERE DUMMY %s\"\n                    % self._standard_operators[\"contains\"],\n                    [\"X\"],\n                )\n            except Database.DatabaseError:\n                self.operators = self._likec_operators\n                self.pattern_ops = self._likec_pattern_ops\n            else:\n                self.operators = self._standard_operators\n                self.pattern_ops = self._standard_pattern_ops\n            cursor.close()\n        self.connection.stmtcachesize = 20\n        # Ensure all changes are preserved even when AUTOCOMMIT is False.\n        if not self.get_autocommit():\n            self.commit()",
+    "token_count": 475,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.oracle.base.DatabaseWrapper.init_connection_state"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 32,
+     "rerank_score": -0.7818317413330078,
+     "bm25_rank": 75,
+     "dense_rank": 87,
+     "oversized_chunk": false,
+     "engine_token_count": 475
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/mysql/base.py:276-279",
+    "content": "# django/db/backends/mysql/base.py:276-279  (django.db.backends.mysql.base.DatabaseWrapper.create_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def create_cursor(self, name=None):\n        cursor = self.connection.cursor()\n        return CursorWrapper(cursor)",
+    "token_count": 63,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.mysql.base.DatabaseWrapper.create_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 13,
+     "rerank_score": -0.8383386135101318,
+     "bm25_rank": 24,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/dummy/base.py:1-16",
+    "content": "# django/db/backends/dummy/base.py:1-16  (django.db.backends.dummy.base)\n\"\"\"\nDummy database backend for Django.\n\nDjango uses this if the database ENGINE setting is empty (None or empty string).\n\nEach of these API functions, except connection.close(), raise\nImproperlyConfigured.\n\"\"\"\n\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.db.backends.base.base import BaseDatabaseWrapper\nfrom django.db.backends.base.client import BaseDatabaseClient\nfrom django.db.backends.base.creation import BaseDatabaseCreation\nfrom django.db.backends.base.introspection import BaseDatabaseIntrospection\nfrom django.db.backends.base.operations import BaseDatabaseOperations\nfrom django.db.backends.dummy.features import DummyDatabaseFeatures",
+    "token_count": 147,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -0.8803274035453796,
+     "bm25_rank": 65,
+     "dense_rank": 95,
+     "oversized_chunk": false,
+     "engine_token_count": 147
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:678-683",
+    "content": "# django/db/backends/base/base.py:678-683  (django.db.backends.base.base.BaseDatabaseWrapper.chunked_cursor)\nclass BaseDatabaseWrapper:\n    def chunked_cursor(self):\n        \"\"\"\n        Return a cursor that tries to avoid caching in the database (if\n        supported by the database), otherwise return a regular cursor.\n        \"\"\"\n        return self.cursor()",
+    "token_count": 78,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.chunked_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": -0.8900740146636963,
+     "bm25_rank": 3,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/oracle/base.py:1-19",
+    "content": "# django/db/backends/oracle/base.py:1-19  (django.db.backends.oracle.base)\n\"\"\"\nOracle database backend for Django.\n\nRequires cx_Oracle: https://oracle.github.io/python-cx_Oracle/\n\"\"\"\nimport datetime\nimport decimal\nimport os\nimport platform\nfrom contextlib import contextmanager\n\nfrom django.conf import settings\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.db import IntegrityError\nfrom django.db.backends.base.base import BaseDatabaseWrapper\nfrom django.db.backends.utils import debug_transaction\nfrom django.utils.asyncio import async_unsafe\nfrom django.utils.encoding import force_bytes, force_str\nfrom django.utils.functional import cached_property",
+    "token_count": 137,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -0.9067094922065735,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 137
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/commands/sqlflush.py:1-3",
+    "content": "# django/core/management/commands/sqlflush.py:1-3  (django.core.management.commands.sqlflush)\nfrom django.core.management.base import BaseCommand\nfrom django.core.management.sql import sql_flush\nfrom django.db import DEFAULT_DB_ALIAS, connections",
+    "token_count": 50,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -1.0371737480163574,
+     "bm25_rank": null,
+     "dense_rank": 27,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:241-245",
+    "content": "# django/db/backends/base/base.py:241-245  (django.db.backends.base.base.BaseDatabaseWrapper.create_cursor)\nclass BaseDatabaseWrapper:\n    def create_cursor(self, name=None):\n        \"\"\"Create a cursor. Assume that a connection is established.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a create_cursor() method\"\n        )",
+    "token_count": 78,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.create_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 15,
+     "rerank_score": -1.4650362730026245,
+     "bm25_rank": 1,
+     "dense_rank": 98,
+     "oversized_chunk": false,
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/postgresql/base.py:321-340",
+    "content": "# django/db/backends/postgresql/base.py:321-340  (django.db.backends.postgresql.base.DatabaseWrapper.create_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def create_cursor(self, name=None):\n        if name:\n            # In autocommit mode, the cursor will be used outside of a\n            # transaction, hence use a holdable cursor.\n            cursor = self.connection.cursor(\n                name, scrollable=False, withhold=self.connection.autocommit\n            )\n        else:\n            cursor = self.connection.cursor()\n\n        if is_psycopg3:\n            # Register the cursor timezone only if the connection disagrees, to\n            # avoid copying the adapter map.\n            tzloader = self.connection.adapters.get_loader(TIMESTAMPTZ_OID, Format.TEXT)\n            if self.timezone != tzloader.timezone:\n                register_tzloader(self.timezone, cursor)\n        else:\n            cursor.tzinfo_factory = self.tzinfo_factory if settings.USE_TZ else None\n        return cursor",
+    "token_count": 211,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.postgresql.base.DatabaseWrapper.create_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 11,
+     "rerank_score": -1.4992157220840454,
+     "bm25_rank": 25,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 211
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:710-724",
+    "content": "# django/db/backends/base/base.py:710-724  (django.db.backends.base.base.BaseDatabaseWrapper._nodb_cursor)\nclass BaseDatabaseWrapper:\n    @contextmanager\n    def _nodb_cursor(self):\n        \"\"\"\n        Return a cursor from an alternative connection to be used when there is\n        no need to access the main database, specifically for test db\n        creation/deletion. This also prevents the production database from\n        being exposed to potential child threads while (or after) the test\n        database is destroyed. Refs #10868, #17786, #16969.\n        \"\"\"\n        conn = self.__class__({**self.settings_dict, \"NAME\": None}, alias=NO_DB_ALIAS)\n        try:\n            with conn.cursor() as cursor:\n                yield cursor\n        finally:\n            conn.close()",
+    "token_count": 184,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper._nodb_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": -1.5048795938491821,
+     "bm25_rank": 8,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 184
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:221-226",
+    "content": "# django/db/backends/base/base.py:221-226  (django.db.backends.base.base.BaseDatabaseWrapper.get_connection_params)\nclass BaseDatabaseWrapper:\n    def get_connection_params(self):\n        \"\"\"Return a dict of parameters suitable for get_new_connection.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_connection_params() \"\n            \"method\"\n        )",
+    "token_count": 81,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.get_connection_params"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 30,
+     "rerank_score": -1.5219815969467163,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:303-307",
+    "content": "# django/db/backends/base/base.py:303-307  (django.db.backends.base.base.BaseDatabaseWrapper._cursor)\nclass BaseDatabaseWrapper:\n    def _cursor(self, name=None):\n        self.close_if_health_check_failed()\n        self.ensure_connection()\n        with self.wrap_database_errors:\n            return self._prepare_cursor(self.create_cursor(name))",
+    "token_count": 74,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper._cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -1.703781247138977,
+     "bm25_rank": 11,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:326-329",
+    "content": "# django/db/backends/base/base.py:326-329  (django.db.backends.base.base.BaseDatabaseWrapper.cursor)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def cursor(self):\n        \"\"\"Create a cursor, opening a connection if necessary.\"\"\"\n        return self._cursor()",
+    "token_count": 62,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": -1.7316792011260986,
+     "bm25_rank": 5,
+     "dense_rank": 25,
+     "oversized_chunk": false,
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:196-201",
+    "content": "# django/db/backends/base/base.py:196-201  (django.db.backends.base.base.BaseDatabaseWrapper.get_database_version)\nclass BaseDatabaseWrapper:\n    def get_database_version(self):\n        \"\"\"Return a tuple of the database's version.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_database_version() \"\n            \"method.\"\n        )",
+    "token_count": 79,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.get_database_version"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": -1.7591099739074707,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/backends/postgresql/tests.py:299-315",
+    "content": "# tests/backends/postgresql/tests.py:299-315  (tests.backends.postgresql.tests.Tests.test_connect_custom_cursor_factory)\nclass Tests(TestCase):\n    def test_connect_custom_cursor_factory(self):\n        \"\"\"\n        A custom cursor factory can be configured with DATABASES[\"options\"]\n        [\"cursor_factory\"].\n        \"\"\"\n        from django.db.backends.postgresql.base import Cursor\n\n        class MyCursor(Cursor):\n            pass\n\n        new_connection = connection.copy()\n        new_connection.settings_dict[\"OPTIONS\"][\"cursor_factory\"] = MyCursor\n        try:\n            new_connection.connect()\n            self.assertEqual(new_connection.connection.cursor_factory, MyCursor)\n        finally:\n            new_connection.close()",
+    "token_count": 138,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.backends.postgresql.tests.Tests.test_connect_custom_cursor_factory"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 26,
+     "rerank_score": -1.8154585361480713,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 138
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:341-350",
+    "content": "# django/db/backends/base/base.py:341-350  (django.db.backends.base.base.BaseDatabaseWrapper.rollback)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def rollback(self):\n        \"\"\"Roll back a transaction and reset the dirty flag.\"\"\"\n        self.validate_thread_sharing()\n        self.validate_no_atomic_block()\n        self._rollback()\n        # A successful rollback means that the database connection works.\n        self.errors_occurred = False\n        self.needs_rollback = False\n        self.run_on_commit = []",
+    "token_count": 111,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.rollback"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 38,
+     "rerank_score": -1.8443255424499512,
+     "bm25_rank": 15,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/sqlite3/base.py:192-199",
+    "content": "# django/db/backends/sqlite3/base.py:192-199  (django.db.backends.sqlite3.base.DatabaseWrapper.close)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def close(self):\n        self.validate_thread_sharing()\n        # If database is in memory, closing the connection destroys the\n        # database. To prevent accidental data loss, ignore close requests on\n        # an in-memory db.\n        if not self.is_in_memory_db():\n            BaseDatabaseWrapper.close(self)",
+    "token_count": 107,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.sqlite3.base.DatabaseWrapper.close"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 41,
+     "rerank_score": -1.8644357919692993,
+     "bm25_rank": 19,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:331-339",
+    "content": "# django/db/backends/base/base.py:331-339  (django.db.backends.base.base.BaseDatabaseWrapper.commit)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def commit(self):\n        \"\"\"Commit a transaction and reset the dirty flag.\"\"\"\n        self.validate_thread_sharing()\n        self.validate_no_atomic_block()\n        self._commit()\n        # A successful commit means that the database connection works.\n        self.errors_occurred = False\n        self.run_commit_hooks_on_set_autocommit_on = True",
+    "token_count": 107,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.commit"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 36,
+     "rerank_score": -1.932919979095459,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:646-659",
+    "content": "# django/db/backends/base/base.py:646-659  (django.db.backends.base.base.BaseDatabaseWrapper.validate_thread_sharing)\nclass BaseDatabaseWrapper:\n    def validate_thread_sharing(self):\n        \"\"\"\n        Validate that the connection isn't accessed by another thread than the\n        one which originally created it, unless the connection was explicitly\n        authorized to be shared between threads (via the `inc_thread_sharing()`\n        method). Raise an exception if the validation fails.\n        \"\"\"\n        if not (self.allow_thread_sharing or self._thread_ident == _thread.get_ident()):\n            raise DatabaseError(\n                \"DatabaseWrapper objects created in a \"\n                \"thread can only be used in that same thread. The object \"\n                \"with alias '%s' was created in thread id %s and this is \"\n                \"thread id %s.\" % (self.alias, self._thread_ident, _thread.get_ident())\n            )",
+    "token_count": 194,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.validate_thread_sharing"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 47,
+     "rerank_score": -1.9521620273590088,
+     "bm25_rank": 23,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 194
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:792-801",
+    "content": "# django/db/backends/base/base.py:792-801  (django.db.backends.base.base.BaseDatabaseWrapper.copy)\nclass BaseDatabaseWrapper:\n    def copy(self, alias=None):\n        \"\"\"\n        Return a copy of this connection.\n\n        For tests that require two connections to the same database.\n        \"\"\"\n        settings_dict = copy.deepcopy(self.settings_dict)\n        if alias is None:\n            alias = self.alias\n        return type(self)(settings_dict, alias)",
+    "token_count": 97,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.copy"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 48,
+     "rerank_score": -1.9663259983062744,
+     "bm25_rank": 26,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:283-288",
+    "content": "# django/db/backends/base/base.py:283-288  (django.db.backends.base.base.BaseDatabaseWrapper.ensure_connection)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def ensure_connection(self):\n        \"\"\"Guarantee that a connection to the database is established.\"\"\"\n        if self.connection is None:\n            with self.wrap_database_errors:\n                self.connect()",
+    "token_count": 78,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.ensure_connection"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 22,
+     "rerank_score": -1.9690520763397217,
+     "bm25_rank": 6,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:352-370",
+    "content": "# django/db/backends/base/base.py:352-370  (django.db.backends.base.base.BaseDatabaseWrapper.close)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def close(self):\n        \"\"\"Close the connection to the database.\"\"\"\n        self.validate_thread_sharing()\n        self.run_on_commit = []\n\n        # Don't call validate_no_atomic_block() to avoid making it difficult\n        # to get rid of a connection in an invalid state. The next connect()\n        # will reset the transaction state anyway.\n        if self.closed_in_transaction or self.connection is None:\n            return\n        try:\n            self._close()\n        finally:\n            if self.in_atomic_block:\n                self.closed_in_transaction = True\n                self.needs_rollback = True\n            else:\n                self.connection = None",
+    "token_count": 167,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.close"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 40,
+     "rerank_score": -2.0270469188690186,
+     "bm25_rank": 18,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 167
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:780-790",
+    "content": "# django/db/backends/base/base.py:780-790  (django.db.backends.base.base.BaseDatabaseWrapper.execute_wrapper)\nclass BaseDatabaseWrapper:\n    @contextmanager\n    def execute_wrapper(self, wrapper):\n        \"\"\"\n        Return a context manager under which the wrapper is applied to suitable\n        database query executions.\n        \"\"\"\n        self.execute_wrappers.append(wrapper)\n        try:\n            yield\n        finally:\n            self.execute_wrappers.pop()",
+    "token_count": 94,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.execute_wrapper"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 19,
+     "rerank_score": -2.029395341873169,
+     "bm25_rank": 40,
+     "dense_rank": 96,
+     "oversized_chunk": false,
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/gis/db/backends/oracle/introspection.py:1-4",
+    "content": "# django/contrib/gis/db/backends/oracle/introspection.py:1-4  (django.contrib.gis.db.backends.oracle.introspection)\nimport cx_Oracle\n\nfrom django.db.backends.oracle.introspection import DatabaseIntrospection\nfrom django.utils.functional import cached_property",
+    "token_count": 58,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 37,
+     "rerank_score": -2.3892529010772705,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/utils.py:29-31",
+    "content": "# django/db/backends/utils.py:29-31  (django.db.backends.utils.CursorWrapper.__iter__)\nclass CursorWrapper:\n    def __iter__(self):\n        with self.db.wrap_database_errors:\n            yield from self.cursor",
+    "token_count": 48,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.utils.CursorWrapper.__iter__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 46,
+     "rerank_score": -2.482914924621582,
+     "bm25_rank": null,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/oracle/base.py:304-306",
+    "content": "# django/db/backends/oracle/base.py:304-306  (django.db.backends.oracle.base.DatabaseWrapper.create_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def create_cursor(self, name=None):\n        return FormatStylePlaceholderCursor(self.connection)",
+    "token_count": 60,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.oracle.base.DatabaseWrapper.create_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 14,
+     "rerank_score": -2.5076897144317627,
+     "bm25_rank": 30,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/creation.py:26-27",
+    "content": "# django/db/backends/base/creation.py:26-27  (django.db.backends.base.creation.BaseDatabaseCreation._nodb_cursor)\nclass BaseDatabaseCreation:\n    def _nodb_cursor(self):\n        return self.connection._nodb_cursor()",
+    "token_count": 52,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.creation.BaseDatabaseCreation._nodb_cursor"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 31,
+     "rerank_score": -2.8792948722839355,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:693-708",
+    "content": "# django/db/backends/base/base.py:693-708  (django.db.backends.base.base.BaseDatabaseWrapper.temporary_connection)\nclass BaseDatabaseWrapper:\n    @contextmanager\n    def temporary_connection(self):\n        \"\"\"\n        Context manager that ensures that a connection is established, and\n        if it opened one, closes it to avoid leaving a dangling connection.\n        This is useful for operations outside of the request-response cycle.\n\n        Provide a cursor: with self.temporary_connection() as cursor: ...\n        \"\"\"\n        must_close = self.connection is None\n        try:\n            with self.cursor() as cursor:\n                yield cursor\n        finally:\n            if must_close:\n                self.close()",
+    "token_count": 142,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.temporary_connection"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 12,
+     "rerank_score": -2.8800048828125,
+     "bm25_rank": 2,
+     "dense_rank": 51,
+     "oversized_chunk": false,
+     "engine_token_count": 142
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/base.py:528-533",
+    "content": "# django/db/backends/base/base.py:528-533  (django.db.backends.base.base.BaseDatabaseWrapper.validate_no_broken_transaction)\nclass BaseDatabaseWrapper:\n    def validate_no_broken_transaction(self):\n        if self.needs_rollback:\n            raise TransactionManagementError(\n                \"An error occurred in the current transaction. You can't \"\n                \"execute queries until the end of the 'atomic' block.\"\n            ) from self.rollback_exc",
+    "token_count": 94,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.base.BaseDatabaseWrapper.validate_no_broken_transaction"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 50,
+     "rerank_score": -3.4588499069213867,
+     "bm25_rank": 27,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/utils.py:709-711",
+    "content": "# django/test/utils.py:709-711  (django.test.utils.CaptureQueriesContext)\nclass CaptureQueriesContext:\n    \"\"\"\n    Context manager that captures queries executed by the specified connection.\n    \"\"\"",
+    "token_count": 44,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.utils.CaptureQueriesContext"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 45,
+     "rerank_score": -3.940059185028076,
+     "bm25_rank": null,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 44
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/backends/postgresql/test_server_side_cursors.py:24-30",
+    "content": "# tests/backends/postgresql/test_server_side_cursors.py:24-30  (tests.backends.postgresql.test_server_side_cursors.ServerSideCursorsPostgres.inspect_cursors)\nclass ServerSideCursorsPostgres(TestCase):\n    def inspect_cursors(self):\n        with connection.cursor() as cursor:\n            cursor.execute(\n                \"SELECT {fields} FROM pg_cursors;\".format(fields=self.cursor_fields)\n            )\n            cursors = cursor.fetchall()\n        return [self.PostgresCursor._make(cursor) for cursor in cursors]",
+    "token_count": 111,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.backends.postgresql.test_server_side_cursors.ServerSideCursorsPostgres.inspect_cursors"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 34,
+     "rerank_score": -4.086094856262207,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 10797,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are debugging Django's database connection management in\ndjango/db/backends/base/base.py. Starting from\n`BaseDatabaseWrapper.cursor`, trace the real causal pipeline that\nproduces a working database cursor, in the order each stage is\nactually reached, up to and including the call that actually opens a\nnew database connection. Assume no database connection is currently\nestablished, so a new one must genuinely be opened.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.db.backends.base.base.BaseDatabaseWrapper.cursor\", \"django.db.backends.base.base.BaseDatabaseWrapper._cursor\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1263.38389
+    ],
+    "L_embed_query": [
+     330.568434
+    ],
+    "L_dense": [
+     53.341414
+    ],
+    "L_rrf": [
+     0.188156
+    ],
+    "L_rerank": [
+     24023.392604
+    ],
+    "L_retrieve": [
+     25720.206517
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 10797,
+   "prompt_tokens": 11124,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 11137,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/db/backends/base/base.py:45-661  (django.db.backends.base.base.BaseDatabaseWrapper)\nclass BaseDatabaseWrapper:\n    \"\"\"Represent a database connection.\"\"\"\n\n    # Mapping of Field objects to their column types.\n    data_types = {}\n    # Mapping of Field objects to their SQL suffix such as AUTOINCREMENT.\n    data_types_suffix = {}\n    # Mapping of Field objects to their SQL for CHECK constraints.\n    data_type_check_constraints = {}\n    ops = None\n    vendor = \"unknown\"\n    display_name = \"unknown\"\n    SchemaEditorClass = None\n    # Classes instantiated in __init__().\n    client_class = None\n    creation_class = None\n    features_class = None\n    introspection_class = None\n    ops_class = None\n    validation_class = BaseDatabaseValidation\n\n    queries_limit = 9000\n\n    def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS):\n        # Connection related attributes.\n        # The underlying database connection.\n        self.connection = None\n        # `settings_dict` should be a dictionary containing keys such as\n        # NAME, USER, etc. It's called `settings_dict` instead of `settings`\n        # to disambiguate it from Django settings modules.\n        self.settings_dict = settings_dict\n        self.alias = alias\n        # Query logging in debug mode or when explicitly enabled.\n        self.queries_log = deque(maxlen=self.queries_limit)\n        self.force_debug_cursor = False\n\n        # Transaction related attributes.\n        # Tracks if the connection is in autocommit mode. Per PEP 249, by\n        # default, it isn't.\n        self.autocommit = False\n        # Tracks if the connection is in a transaction managed by 'atomic'.\n        self.in_atomic_block = False\n        # Increment to generate unique savepoint ids.\n        self.savepoint_state = 0\n        # List of savepoints created by 'atomic'.\n        self.savepoint_ids = []\n        # Stack of active 'atomic' blocks.\n        self.atomic_blocks = []\n        # Tracks if the outermost 'atomic' block should commit on exit,\n        # ie. if autocommit was active on entry.\n        self.commit_on_exit = True\n        # Tracks if the transaction should be rolled back to the next\n        # available savepoint because of an exception in an inner block.\n        self.needs_rollback = False\n        self.rollback_exc = None\n\n        # Connection termination related attributes.\n        self.close_at = None\n        self.closed_in_transaction = False\n        self.errors_occurred = False\n        self.health_check_enabled = False\n        self.health_check_done = False\n\n        # Thread-safety related attributes.\n        self._thread_sharing_lock = threading.Lock()\n        self._thread_sharing_count = 0\n        self._thread_ident = _thread.get_ident()\n\n        # A list of no-argument functions to run when the transaction commits.\n        # Each entry is an (sids, func, robust) tuple, where sids is a set of\n        # the active savepoint IDs when this function was registered and robust\n        # specifies whether it's allowed for the function to fail.\n        self.run_on_commit = []\n\n        # Should we run the on-commit hooks the next time set_autocommit(True)\n        # is called?\n        self.run_commit_hooks_on_set_autocommit_on = False\n\n        # A stack of wrappers to be invoked around execute()/executemany()\n        # calls. Each entry is a function taking five arguments: execute, sql,\n        # params, many, and context. It's the function's responsibility to\n        # call execute(sql, params, many, context).\n        self.execute_wrappers = []\n\n        self.client = self.client_class(self)\n        self.creation = self.creation_class(self)\n        self.features = self.features_class(self)\n        self.introspection = self.introspection_class(self)\n        self.ops = self.ops_class(self)\n        self.validation = self.validation_class(self)\n\n    def __repr__(self):\n        return (\n            f\"<{self.__class__.__qualname__} \"\n            f\"vendor={self.vendor!r} alias={self.alias!r}>\"\n        )\n\n    def ensure_timezone(self):\n        \"\"\"\n        Ensure the connection's timezone is set to `self.timezone_name` and\n        return whether it changed or not.\n        \"\"\"\n        return False\n\n    @cached_property\n    def timezone(self):\n        \"\"\"\n        Return a tzinfo of the database connection time zone.\n\n        This is only used when time zone support is enabled. When a datetime is\n        read from the database, it is always returned in this time zone.\n\n        When the database backend supports time zones, it doesn't matter which\n        time zone Django uses, as long as aware datetimes are used everywhere.\n        Other users connecting to the database can choose their own time zone.\n\n        When the database backend doesn't support time zones, the time zone\n        Django uses may be constrained by the requirements of other users of\n        the database.\n        \"\"\"\n        if not settings.USE_TZ:\n            return None\n        elif self.settings_dict[\"TIME_ZONE\"] is None:\n            return datetime.timezone.utc\n        else:\n            return timezone_constructor(self.settings_dict[\"TIME_ZONE\"])\n\n    @cached_property\n    def timezone_name(self):\n        \"\"\"\n        Name of the time zone of the database connection.\n        \"\"\"\n        if not settings.USE_TZ:\n            return settings.TIME_ZONE\n        elif self.settings_dict[\"TIME_ZONE\"] is None:\n            return \"UTC\"\n        else:\n            return self.settings_dict[\"TIME_ZONE\"]\n\n    @property\n    def queries_logged(self):\n        return self.force_debug_cursor or settings.DEBUG\n\n    @property\n    def queries(self):\n        if len(self.queries_log) == self.queries_log.maxlen:\n            warnings.warn(\n                \"Limit for query logging exceeded, only the last {} queries \"\n                \"will be returned.\".format(self.queries_log.maxlen)\n            )\n        return list(self.queries_log)\n\n    def get_database_version(self):\n        \"\"\"Return a tuple of the database's version.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_database_version() \"\n            \"method.\"\n        )\n\n    def check_database_version_supported(self):\n        \"\"\"\n        Raise an error if the database version isn't supported by this\n        version of Django.\n        \"\"\"\n        if (\n            self.features.minimum_database_version is not None\n            and self.get_database_version() < self.features.minimum_database_version\n        ):\n            db_version = \".\".join(map(str, self.get_database_version()))\n            min_db_version = \".\".join(map(str, self.features.minimum_database_version))\n            raise NotSupportedError(\n                f\"{self.display_name} {min_db_version} or later is required \"\n                f\"(found {db_version}).\"\n            )\n\n    # ##### Backend-specific methods for creating connections and cursors #####\n\n    def get_connection_params(self):\n        \"\"\"Return a dict of parameters suitable for get_new_connection.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_connection_params() \"\n            \"method\"\n        )\n\n    def get_new_connection(self, conn_params):\n        \"\"\"Open a connection to the database.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_new_connection() \"\n            \"method\"\n        )\n\n    def init_connection_state(self):\n        \"\"\"Initialize the database connection settings.\"\"\"\n        if self.alias not in RAN_DB_VERSION_CHECK:\n            self.check_database_version_supported()\n            RAN_DB_VERSION_CHECK.add(self.alias)\n\n    def create_cursor(self, name=None):\n        \"\"\"Create a cursor. Assume that a connection is established.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a create_cursor() method\"\n        )\n\n    # ##### Backend-specific methods for creating connections #####\n\n    @async_unsafe\n    def connect(self):\n        \"\"\"Connect to the database. Assume that the connection is closed.\"\"\"\n        # Check for invalid configurations.\n        self.check_settings()\n        # In case the previous connection was closed while in an atomic block\n        self.in_atomic_block = False\n        self.savepoint_ids = []\n        self.atomic_blocks = []\n        self.needs_rollback = False\n        # Reset parameters defining when to close/health-check the connection.\n        self.health_check_enabled = self.settings_dict[\"CONN_HEALTH_CHECKS\"]\n        max_age = self.settings_dict[\"CONN_MAX_AGE\"]\n        self.close_at = None if max_age is None else time.monotonic() + max_age\n        self.closed_in_transaction = False\n        self.errors_occurred = False\n        # New connections are healthy.\n        self.health_check_done = True\n        # Establish the connection\n        conn_params = self.get_connection_params()\n        self.connection = self.get_new_connection(conn_params)\n        self.set_autocommit(self.settings_dict[\"AUTOCOMMIT\"])\n        self.init_connection_state()\n        connection_created.send(sender=self.__class__, connection=self)\n\n        self.run_on_commit = []\n\n    def check_settings(self):\n        if self.settings_dict[\"TIME_ZONE\"] is not None and not settings.USE_TZ:\n            raise ImproperlyConfigured(\n                \"Connection '%s' cannot set TIME_ZONE because USE_TZ is False.\"\n                % self.alias\n            )\n\n    @async_unsafe\n    def ensure_connection(self):\n        \"\"\"Guarantee that a connection to the database is established.\"\"\"\n        if self.connection is None:\n            with self.wrap_database_errors:\n                self.connect()\n\n    # ##### Backend-specific wrappers for PEP-249 connection methods #####\n\n    def _prepare_cursor(self, cursor):\n        \"\"\"\n        Validate the connection is usable and perform database cursor wrapping.\n        \"\"\"\n        self.validate_thread_sharing()\n        if self.queries_logged:\n            wrapped_cursor = self.make_debug_cursor(cursor)\n        else:\n            wrapped_cursor = self.make_cursor(cursor)\n        return wrapped_cursor\n\n    def _cursor(self, name=None):\n        self.close_if_health_check_failed()\n        self.ensure_connection()\n        with self.wrap_database_errors:\n            return self._prepare_cursor(self.create_cursor(name))\n\n    def _commit(self):\n        if self.connection is not None:\n            with debug_transaction(self, \"COMMIT\"), self.wrap_database_errors:\n                return self.connection.commit()\n\n    def _rollback(self):\n        if self.connection is not None:\n            with debug_transaction(self, \"ROLLBACK\"), self.wrap_database_errors:\n                return self.connection.rollback()\n\n    def _close(self):\n        if self.connection is not None:\n            with self.wrap_database_errors:\n                return self.connection.close()\n\n    # ##### Generic wrappers for PEP-249 connection methods #####\n\n    @async_unsafe\n    def cursor(self):\n        \"\"\"Create a cursor, opening a connection if necessary.\"\"\"\n        return self._cursor()\n\n    @async_unsafe\n    def commit(self):\n        \"\"\"Commit a transaction and reset the dirty flag.\"\"\"\n        self.validate_thread_sharing()\n        self.validate_no_atomic_block()\n        self._commit()\n        # A successful commit means that the database connection works.\n        self.errors_occurred = False\n        self.run_commit_hooks_on_set_autocommit_on = True\n\n    @async_unsafe\n    def rollback(self):\n        \"\"\"Roll back a transaction and reset the dirty flag.\"\"\"\n        self.validate_thread_sharing()\n        self.validate_no_atomic_block()\n        self._rollback()\n        # A successful rollback means that the database connection works.\n        self.errors_occurred = False\n        self.needs_rollback = False\n        self.run_on_commit = []\n\n    @async_unsafe\n    def close(self):\n        \"\"\"Close the connection to the database.\"\"\"\n        self.validate_thread_sharing()\n        self.run_on_commit = []\n\n        # Don't call validate_no_atomic_block() to avoid making it difficult\n        # to get rid of a connection in an invalid state. The next connect()\n        # will reset the transaction state anyway.\n        if self.closed_in_transaction or self.connection is None:\n            return\n        try:\n            self._close()\n        finally:\n            if self.in_atomic_block:\n                self.closed_in_transaction = True\n                self.needs_rollback = True\n            else:\n                self.connection = None\n\n    # ##### Backend-specific savepoint management methods #####\n\n    def _savepoint(self, sid):\n        with self.cursor() as cursor:\n            cursor.execute(self.ops.savepoint_create_sql(sid))\n\n    def _savepoint_rollback(self, sid):\n        with self.cursor() as cursor:\n            cursor.execute(self.ops.savepoint_rollback_sql(sid))\n\n    def _savepoint_commit(self, sid):\n        with self.cursor() as cursor:\n            cursor.execute(self.ops.savepoint_commit_sql(sid))\n\n    def _savepoint_allowed(self):\n        # Savepoints cannot be created outside a transaction\n        return self.features.uses_savepoints and not self.get_autocommit()\n\n    # ##### Generic savepoint management methods #####\n\n    @async_unsafe\n    def savepoint(self):\n        \"\"\"\n        Create a savepoint inside the current transaction. Return an\n        identifier for the savepoint that will be used for the subsequent\n        rollback or commit. Do nothing if savepoints are not supported.\n        \"\"\"\n        if not self._savepoint_allowed():\n            return\n\n        thread_ident = _thread.get_ident()\n        tid = str(thread_ident).replace(\"-\", \"\")\n\n        self.savepoint_state += 1\n        sid = \"s%s_x%d\" % (tid, self.savepoint_state)\n\n        self.validate_thread_sharing()\n        self._savepoint(sid)\n\n        return sid\n\n    @async_unsafe\n    def savepoint_rollback(self, sid):\n        \"\"\"\n        Roll back to a savepoint. Do nothing if savepoints are not supported.\n        \"\"\"\n        if not self._savepoint_allowed():\n            return\n\n        self.validate_thread_sharing()\n        self._savepoint_rollback(sid)\n\n        # Remove any callbacks registered while this savepoint was active.\n        self.run_on_commit = [\n            (sids, func, robust)\n            for (sids, func, robust) in self.run_on_commit\n            if sid not in sids\n        ]\n\n    @async_unsafe\n    def savepoint_commit(self, sid):\n        \"\"\"\n        Release a savepoint. Do nothing if savepoints are not supported.\n        \"\"\"\n        if not self._savepoint_allowed():\n            return\n\n        self.validate_thread_sharing()\n        self._savepoint_commit(sid)\n\n    @async_unsafe\n    def clean_savepoints(self):\n        \"\"\"\n        Reset the counter used to generate unique savepoint ids in this thread.\n        \"\"\"\n        self.savepoint_state = 0\n\n    # ##### Backend-specific transaction management methods #####\n\n    def _set_autocommit(self, autocommit):\n        \"\"\"\n        Backend-specific implementation to enable or disable autocommit.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a _set_autocommit() method\"\n        )\n\n    # ##### Generic transaction management methods #####\n\n    def get_autocommit(self):\n        \"\"\"Get the autocommit state.\"\"\"\n        self.ensure_connection()\n        return self.autocommit\n\n    def set_autocommit(\n        self, autocommit, force_begin_transaction_with_broken_autocommit=False\n    ):\n        \"\"\"\n        Enable or disable autocommit.\n\n        The usual way to start a transaction is to turn autocommit off.\n        SQLite does not properly start a transaction when disabling\n        autocommit. To avoid this buggy behavior and to actually enter a new\n        transaction, an explicit BEGIN is required. Using\n        force_begin_transaction_with_broken_autocommit=True will issue an\n        explicit BEGIN with SQLite. This option will be ignored for other\n        backends.\n        \"\"\"\n        self.validate_no_atomic_block()\n        self.close_if_health_check_failed()\n        self.ensure_connection()\n\n        start_transaction_under_autocommit = (\n            force_begin_transaction_with_broken_autocommit\n            and not autocommit\n            and hasattr(self, \"_start_transaction_under_autocommit\")\n        )\n\n        if start_transaction_under_autocommit:\n            self._start_transaction_under_autocommit()\n        elif autocommit:\n            self._set_autocommit(autocommit)\n        else:\n            with debug_transaction(self, \"BEGIN\"):\n                self._set_autocommit(autocommit)\n        self.autocommit = autocommit\n\n        if autocommit and self.run_commit_hooks_on_set_autocommit_on:\n            self.run_and_clear_commit_hooks()\n            self.run_commit_hooks_on_set_autocommit_on = False\n\n    def get_rollback(self):\n        \"\"\"Get the \"needs rollback\" flag -- for *advanced use* only.\"\"\"\n        if not self.in_atomic_block:\n            raise TransactionManagementError(\n                \"The rollback flag doesn't work outside of an 'atomic' block.\"\n            )\n        return self.needs_rollback\n\n    def set_rollback(self, rollback):\n        \"\"\"\n        Set or unset the \"needs rollback\" flag -- for *advanced use* only.\n        \"\"\"\n        if not self.in_atomic_block:\n            raise TransactionManagementError(\n                \"The rollback flag doesn't work outside of an 'atomic' block.\"\n            )\n        self.needs_rollback = rollback\n\n    def validate_no_atomic_block(self):\n        \"\"\"Raise an error if an atomic block is active.\"\"\"\n        if self.in_atomic_block:\n            raise TransactionManagementError(\n                \"This is forbidden when an 'atomic' block is active.\"\n            )\n\n    def validate_no_broken_transaction(self):\n        if self.needs_rollback:\n            raise TransactionManagementError(\n                \"An error occurred in the current transaction. You can't \"\n                \"execute queries until the end of the 'atomic' block.\"\n            ) from self.rollback_exc\n\n    # ##### Foreign key constraints checks handling #####\n\n    @contextmanager\n    def constraint_checks_disabled(self):\n        \"\"\"\n        Disable foreign key constraint checking.\n        \"\"\"\n        disabled = self.disable_constraint_checking()\n        try:\n            yield\n        finally:\n            if disabled:\n                self.enable_constraint_checking()\n\n    def disable_constraint_checking(self):\n        \"\"\"\n        Backends can implement as needed to temporarily disable foreign key\n        constraint checking. Should return True if the constraints were\n        disabled and will need to be reenabled.\n        \"\"\"\n        return False\n\n    def enable_constraint_checking(self):\n        \"\"\"\n        Backends can implement as needed to re-enable foreign key constraint\n        checking.\n        \"\"\"\n        pass\n\n    def check_constraints(self, table_names=None):\n        \"\"\"\n        Backends can override this method if they can apply constraint\n        checking (e.g. via \"SET CONSTRAINTS ALL IMMEDIATE\"). Should raise an\n        IntegrityError if any invalid foreign key references are encountered.\n        \"\"\"\n        pass\n\n    # ##### Connection termination handling #####\n\n    def is_usable(self):\n        \"\"\"\n        Test if the database connection is usable.\n\n        This method may assume that self.connection is not None.\n\n        Actual implementations should take care not to raise exceptions\n        as that may prevent Django from recycling unusable connections.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require an is_usable() method\"\n        )\n\n    def close_if_health_check_failed(self):\n        \"\"\"Close existing connection if it fails a health check.\"\"\"\n        if (\n            self.connection is None\n            or not self.health_check_enabled\n            or self.health_check_done\n        ):\n            return\n\n        if not self.is_usable():\n            self.close()\n        self.health_check_done = True\n\n    def close_if_unusable_or_obsolete(self):\n        \"\"\"\n        Close the current connection if unrecoverable errors have occurred\n        or if it outlived its maximum age.\n        \"\"\"\n        if self.connection is not None:\n            self.health_check_done = False\n            # If the application didn't restore the original autocommit setting,\n            # don't take chances, drop the connection.\n            if self.get_autocommit() != self.settings_dict[\"AUTOCOMMIT\"]:\n                self.close()\n                return\n\n            # If an exception other than DataError or IntegrityError occurred\n            # since the last commit / rollback, check if the connection works.\n            if self.errors_occurred:\n                if self.is_usable():\n                    self.errors_occurred = False\n                    self.health_check_done = True\n                else:\n                    self.close()\n                    return\n\n            if self.close_at is not None and time.monotonic() >= self.close_at:\n                self.close()\n                return\n\n    # ##### Thread safety handling #####\n\n    @property\n    def allow_thread_sharing(self):\n        with self._thread_sharing_lock:\n            return self._thread_sharing_count > 0\n\n    def inc_thread_sharing(self):\n        with self._thread_sharing_lock:\n            self._thread_sharing_count += 1\n\n    def dec_thread_sharing(self):\n        with self._thread_sharing_lock:\n            if self._thread_sharing_count <= 0:\n                raise RuntimeError(\n                    \"Cannot decrement the thread sharing count below zero.\"\n                )\n            self._thread_sharing_count -= 1\n\n    def validate_thread_sharing(self):\n        \"\"\"\n        Validate that the connection isn't accessed by another thread than the\n        one which originally created it, unless the connection was explicitly\n        authorized to be shared between threads (via the `inc_thread_sharing()`\n        method). Raise an exception if the validation fails.\n        \"\"\"\n        if not (self.allow_thread_sharing or self._thread_ident == _thread.get_ident()):\n            raise DatabaseError(\n                \"DatabaseWrapper objects created in a \"\n                \"thread can only be used in that same thread. The object \"\n                \"with alias '%s' was created in thread id %s and this is \"\n                \"thread id %s.\" % (self.alias, self._thread_ident, _thread.get_ident())\n            )\n\n    # ##### Miscellaneous #####\n\n# django/db/backends/postgresql/base.py:386-394  (django.db.backends.postgresql.base.DatabaseWrapper.is_usable)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def is_usable(self):\n        try:\n            # Use a psycopg cursor directly, bypassing Django's utilities.\n            with self.connection.cursor() as cursor:\n                cursor.execute(\"SELECT 1\")\n        except Database.Error:\n            return False\n        else:\n            return True\n\n# django/db/backends/base/base.py:292-301  (django.db.backends.base.base.BaseDatabaseWrapper._prepare_cursor)\nclass BaseDatabaseWrapper:\n    def _prepare_cursor(self, cursor):\n        \"\"\"\n        Validate the connection is usable and perform database cursor wrapping.\n        \"\"\"\n        self.validate_thread_sharing()\n        if self.queries_logged:\n            wrapped_cursor = self.make_debug_cursor(cursor)\n        else:\n            wrapped_cursor = self.make_cursor(cursor)\n        return wrapped_cursor\n\n# django/db/backends/postgresql/base.py:396-432  (django.db.backends.postgresql.base.DatabaseWrapper._nodb_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @contextmanager\n    def _nodb_cursor(self):\n        cursor = None\n        try:\n            with super()._nodb_cursor() as cursor:\n                yield cursor\n        except (Database.DatabaseError, WrappedDatabaseError):\n            if cursor is not None:\n                raise\n            warnings.warn(\n                \"Normally Django will use a connection to the 'postgres' database \"\n                \"to avoid running initialization queries against the production \"\n                \"database when it's not needed (for example, when running tests). \"\n                \"Django was unable to create a connection to the 'postgres' database \"\n                \"and will use the first PostgreSQL database instead.\",\n                RuntimeWarning,\n            )\n            for connection in connections.all():\n                if (\n                    connection.vendor == \"postgresql\"\n                    and connection.settings_dict[\"NAME\"] != \"postgres\"\n                ):\n                    conn = self.__class__(\n                        {\n                            **self.settings_dict,\n                            \"NAME\": connection.settings_dict[\"NAME\"],\n                        },\n                        alias=self.alias,\n                    )\n                    try:\n                        with conn.cursor() as cursor:\n                            yield cursor\n                    finally:\n                        conn.close()\n                    break\n            else:\n                raise\n\n# django/db/backends/base/base.py:685-687  (django.db.backends.base.base.BaseDatabaseWrapper.make_debug_cursor)\nclass BaseDatabaseWrapper:\n    def make_debug_cursor(self, cursor):\n        \"\"\"Create a cursor that logs all queries in self.queries_log.\"\"\"\n        return utils.CursorDebugWrapper(cursor, self)\n\n# django/db/backends/utils.py:108-143  (django.db.backends.utils.CursorDebugWrapper.debug_sql)\nclass CursorDebugWrapper(CursorWrapper):\n    # XXX callproc isn't instrumented at this time.\n\n    @contextmanager\n    def debug_sql(\n        self, sql=None, params=None, use_last_executed_query=False, many=False\n    ):\n        start = time.monotonic()\n        try:\n            yield\n        finally:\n            stop = time.monotonic()\n            duration = stop - start\n            if use_last_executed_query:\n                sql = self.db.ops.last_executed_query(self.cursor, sql, params)\n            try:\n                times = len(params) if many else \"\"\n            except TypeError:\n                # params could be an iterator.\n                times = \"?\"\n            self.db.queries_log.append(\n                {\n                    \"sql\": \"%s times: %s\" % (times, sql) if many else sql,\n                    \"time\": \"%.3f\" % duration,\n                }\n            )\n            logger.debug(\n                \"(%.3f) %s; args=%s; alias=%s\",\n                duration,\n                sql,\n                params,\n                self.db.alias,\n                extra={\n                    \"duration\": duration,\n                    \"sql\": sql,\n                    \"params\": params,\n                    \"alias\": self.db.alias,\n                },\n            )\n\n# tests/backends/postgresql/tests.py:27-83  (tests.backends.postgresql.tests.Tests.test_nodb_cursor)\nclass Tests(TestCase):\n    def test_nodb_cursor(self):\n        \"\"\"\n        The _nodb_cursor() fallbacks to the default connection database when\n        access to the 'postgres' database is not granted.\n        \"\"\"\n        orig_connect = BaseDatabaseWrapper.connect\n\n        def mocked_connect(self):\n            if self.settings_dict[\"NAME\"] is None:\n                raise DatabaseError()\n            return orig_connect(self)\n\n        with connection._nodb_cursor() as cursor:\n            self.assertIs(cursor.closed, False)\n            self.assertIsNotNone(cursor.db.connection)\n            self.assertIsNone(cursor.db.settings_dict[\"NAME\"])\n        self.assertIs(cursor.closed, True)\n        self.assertIsNone(cursor.db.connection)\n\n        # Now assume the 'postgres' db isn't available\n        msg = (\n            \"Normally Django will use a connection to the 'postgres' database \"\n            \"to avoid running initialization queries against the production \"\n            \"database when it's not needed (for example, when running tests). \"\n            \"Django was unable to create a connection to the 'postgres' \"\n            \"database and will use the first PostgreSQL database instead.\"\n        )\n        with self.assertWarnsMessage(RuntimeWarning, msg):\n            with mock.patch(\n                \"django.db.backends.base.base.BaseDatabaseWrapper.connect\",\n                side_effect=mocked_connect,\n                autospec=True,\n            ):\n                with mock.patch.object(\n                    connection,\n                    \"settings_dict\",\n                    {**connection.settings_dict, \"NAME\": \"postgres\"},\n                ):\n                    with connection._nodb_cursor() as cursor:\n                        self.assertIs(cursor.closed, False)\n                        self.assertIsNotNone(cursor.db.connection)\n        self.assertIs(cursor.closed, True)\n        self.assertIsNone(cursor.db.connection)\n        self.assertIsNotNone(cursor.db.settings_dict[\"NAME\"])\n        self.assertEqual(\n            cursor.db.settings_dict[\"NAME\"], connections[\"other\"].settings_dict[\"NAME\"]\n        )\n        # Cursor is yielded only for the first PostgreSQL database.\n        with self.assertWarnsMessage(RuntimeWarning, msg):\n            with mock.patch(\n                \"django.db.backends.base.base.BaseDatabaseWrapper.connect\",\n                side_effect=mocked_connect,\n                autospec=True,\n            ):\n                with connection._nodb_cursor() as cursor:\n                    self.assertIs(cursor.closed, False)\n                    self.assertIsNotNone(cursor.db.connection)\n\n# django/db/backends/utils.py:100-102  (django.db.backends.utils.CursorDebugWrapper.execute)\nclass CursorDebugWrapper(CursorWrapper):\n    # XXX callproc isn't instrumented at this time.\n\n    def execute(self, sql, params=None):\n        with self.debug_sql(sql, params, use_last_executed_query=True):\n            return super().execute(sql, params)\n\n# django/db/backends/base/base.py:183-185  (django.db.backends.base.base.BaseDatabaseWrapper.queries_logged)\nclass BaseDatabaseWrapper:\n    @property\n    def queries_logged(self):\n        return self.force_debug_cursor or settings.DEBUG\n\n# django/db/backends/base/base.py:689-691  (django.db.backends.base.base.BaseDatabaseWrapper.make_cursor)\nclass BaseDatabaseWrapper:\n    def make_cursor(self, cursor):\n        \"\"\"Create a cursor without debug logging.\"\"\"\n        return utils.CursorWrapper(cursor, self)\n\n# django/db/backends/postgresql/base.py:439-440  (django.db.backends.postgresql.base.DatabaseWrapper.make_debug_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def make_debug_cursor(self, cursor):\n        return CursorDebugWrapper(cursor, self)\n\n# django/db/backends/base/base.py:574-585  (django.db.backends.base.base.BaseDatabaseWrapper.is_usable)\nclass BaseDatabaseWrapper:\n    def is_usable(self):\n        \"\"\"\n        Test if the database connection is usable.\n\n        This method may assume that self.connection is not None.\n\n        Actual implementations should take care not to raise exceptions\n        as that may prevent Django from recycling unusable connections.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require an is_usable() method\"\n        )\n\n# django/db/backends/sqlite3/base.py:189-190  (django.db.backends.sqlite3.base.DatabaseWrapper.create_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def create_cursor(self, name=None):\n        return self.connection.cursor(factory=SQLiteCursorWrapper)\n\n# tests/backends/tests.py:1-43  (tests.backends.tests)\n\"\"\"Tests related to django.db.backends that haven't been organized.\"\"\"\nimport datetime\nimport threading\nimport unittest\nimport warnings\nfrom unittest import mock\n\nfrom django.core.management.color import no_style\nfrom django.db import (\n    DEFAULT_DB_ALIAS,\n    DatabaseError,\n    IntegrityError,\n    connection,\n    connections,\n    reset_queries,\n    transaction,\n)\nfrom django.db.backends.base.base import BaseDatabaseWrapper\nfrom django.db.backends.signals import connection_created\nfrom django.db.backends.utils import CursorWrapper\nfrom django.db.models.sql.constants import CURSOR\nfrom django.test import (\n    TestCase,\n    TransactionTestCase,\n    override_settings,\n    skipIfDBFeature,\n    skipUnlessDBFeature,\n)\n\nfrom .models import (\n    Article,\n    Object,\n    ObjectReference,\n    Person,\n    Post,\n    RawData,\n    Reporter,\n    ReporterProxy,\n    SchoolClass,\n    SQLKeywordsModel,\n    Square,\n    VeryLongModelNameZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ,\n)\n\n# django/db/backends/base/base.py:228-233  (django.db.backends.base.base.BaseDatabaseWrapper.get_new_connection)\nclass BaseDatabaseWrapper:\n    def get_new_connection(self, conn_params):\n        \"\"\"Open a connection to the database.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_new_connection() \"\n            \"method\"\n        )\n\n# django/contrib/gis/db/backends/oracle/base.py:1-6  (django.contrib.gis.db.backends.oracle.base)\nfrom django.db.backends.oracle.base import DatabaseWrapper as OracleDatabaseWrapper\n\nfrom .features import DatabaseFeatures\nfrom .introspection import OracleIntrospection\nfrom .operations import OracleOperations\nfrom .schema import OracleGISSchemaEditor\n\n# django/db/backends/postgresql/base.py:345-371  (django.db.backends.postgresql.base.DatabaseWrapper.chunked_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def chunked_cursor(self):\n        self._named_cursor_idx += 1\n        # Get the current async task\n        # Note that right now this is behind @async_unsafe, so this is\n        # unreachable, but in future we'll start loosening this restriction.\n        # For now, it's here so that every use of \"threading\" is\n        # also async-compatible.\n        try:\n            current_task = asyncio.current_task()\n        except RuntimeError:\n            current_task = None\n        # Current task can be none even if the current_task call didn't error\n        if current_task:\n            task_ident = str(id(current_task))\n        else:\n            task_ident = \"sync\"\n        # Use that and the thread ident to get a unique name\n        return self._cursor(\n            name=\"_django_curs_%d_%s_%d\"\n            % (\n                # Avoid reusing name in other threads / tasks\n                threading.current_thread().ident,\n                task_ident,\n                self._named_cursor_idx,\n            )\n        )\n\n# tests/backends/postgresql/tests.py:85-121  (tests.backends.postgresql.tests.Tests.test_nodb_cursor_raises_postgres_authentication_failure)\nclass Tests(TestCase):\n    def test_nodb_cursor_raises_postgres_authentication_failure(self):\n        \"\"\"\n        _nodb_cursor() re-raises authentication failure to the 'postgres' db\n        when other connection to the PostgreSQL database isn't available.\n        \"\"\"\n\n        def mocked_connect(self):\n            raise DatabaseError()\n\n        def mocked_all(self):\n            test_connection = copy.copy(connections[DEFAULT_DB_ALIAS])\n            test_connection.settings_dict = copy.deepcopy(connection.settings_dict)\n            test_connection.settings_dict[\"NAME\"] = \"postgres\"\n            return [test_connection]\n\n        msg = (\n            \"Normally Django will use a connection to the 'postgres' database \"\n            \"to avoid running initialization queries against the production \"\n            \"database when it's not needed (for example, when running tests). \"\n            \"Django was unable to create a connection to the 'postgres' \"\n            \"database and will use the first PostgreSQL database instead.\"\n        )\n        with self.assertWarnsMessage(RuntimeWarning, msg):\n            mocker_connections_all = mock.patch(\n                \"django.utils.connection.BaseConnectionHandler.all\",\n                side_effect=mocked_all,\n                autospec=True,\n            )\n            mocker_connect = mock.patch(\n                \"django.db.backends.base.base.BaseDatabaseWrapper.connect\",\n                side_effect=mocked_connect,\n                autospec=True,\n            )\n            with mocker_connections_all, mocker_connect:\n                with self.assertRaises(DatabaseError):\n                    with connection._nodb_cursor():\n                        pass\n\n# django/db/backends/postgresql/base.py:298-306  (django.db.backends.postgresql.base.DatabaseWrapper.ensure_role)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def ensure_role(self):\n        if self.connection is None:\n            return False\n        if new_role := self.settings_dict.get(\"OPTIONS\", {}).get(\"assume_role\"):\n            with self.connection.cursor() as cursor:\n                sql = self.ops.compose_sql(\"SET ROLE %s\", [new_role])\n                cursor.execute(sql)\n            return True\n        return False\n\n# django/db/transaction.py:1-9  (django.db.transaction)\nfrom contextlib import ContextDecorator, contextmanager\n\nfrom django.db import (\n    DEFAULT_DB_ALIAS,\n    DatabaseError,\n    Error,\n    ProgrammingError,\n    connections,\n)\n\n# django/db/backends/oracle/base.py:261-302  (django.db.backends.oracle.base.DatabaseWrapper.init_connection_state)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    def init_connection_state(self):\n        super().init_connection_state()\n        cursor = self.create_cursor()\n        # Set the territory first. The territory overrides NLS_DATE_FORMAT\n        # and NLS_TIMESTAMP_FORMAT to the territory default. When all of\n        # these are set in single statement it isn't clear what is supposed\n        # to happen.\n        cursor.execute(\"ALTER SESSION SET NLS_TERRITORY = 'AMERICA'\")\n        # Set Oracle date to ANSI date format.  This only needs to execute\n        # once when we create a new connection. We also set the Territory\n        # to 'AMERICA' which forces Sunday to evaluate to a '1' in\n        # TO_CHAR().\n        cursor.execute(\n            \"ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'\"\n            \" NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'\"\n            + (\" TIME_ZONE = 'UTC'\" if settings.USE_TZ else \"\")\n        )\n        cursor.close()\n        if \"operators\" not in self.__dict__:\n            # Ticket #14149: Check whether our LIKE implementation will\n            # work for this connection or we need to fall back on LIKEC.\n            # This check is performed only once per DatabaseWrapper\n            # instance per thread, since subsequent connections will use\n            # the same settings.\n            cursor = self.create_cursor()\n            try:\n                cursor.execute(\n                    \"SELECT 1 FROM DUAL WHERE DUMMY %s\"\n                    % self._standard_operators[\"contains\"],\n                    [\"X\"],\n                )\n            except Database.DatabaseError:\n                self.operators = self._likec_operators\n                self.pattern_ops = self._likec_pattern_ops\n            else:\n                self.operators = self._standard_operators\n                self.pattern_ops = self._standard_pattern_ops\n            cursor.close()\n        self.connection.stmtcachesize = 20\n        # Ensure all changes are preserved even when AUTOCOMMIT is False.\n        if not self.get_autocommit():\n            self.commit()\n\n# django/db/backends/mysql/base.py:276-279  (django.db.backends.mysql.base.DatabaseWrapper.create_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def create_cursor(self, name=None):\n        cursor = self.connection.cursor()\n        return CursorWrapper(cursor)\n\n# django/db/backends/dummy/base.py:1-16  (django.db.backends.dummy.base)\n\"\"\"\nDummy database backend for Django.\n\nDjango uses this if the database ENGINE setting is empty (None or empty string).\n\nEach of these API functions, except connection.close(), raise\nImproperlyConfigured.\n\"\"\"\n\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.db.backends.base.base import BaseDatabaseWrapper\nfrom django.db.backends.base.client import BaseDatabaseClient\nfrom django.db.backends.base.creation import BaseDatabaseCreation\nfrom django.db.backends.base.introspection import BaseDatabaseIntrospection\nfrom django.db.backends.base.operations import BaseDatabaseOperations\nfrom django.db.backends.dummy.features import DummyDatabaseFeatures\n\n# django/db/backends/base/base.py:678-683  (django.db.backends.base.base.BaseDatabaseWrapper.chunked_cursor)\nclass BaseDatabaseWrapper:\n    def chunked_cursor(self):\n        \"\"\"\n        Return a cursor that tries to avoid caching in the database (if\n        supported by the database), otherwise return a regular cursor.\n        \"\"\"\n        return self.cursor()\n\n# django/db/backends/oracle/base.py:1-19  (django.db.backends.oracle.base)\n\"\"\"\nOracle database backend for Django.\n\nRequires cx_Oracle: https://oracle.github.io/python-cx_Oracle/\n\"\"\"\nimport datetime\nimport decimal\nimport os\nimport platform\nfrom contextlib import contextmanager\n\nfrom django.conf import settings\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.db import IntegrityError\nfrom django.db.backends.base.base import BaseDatabaseWrapper\nfrom django.db.backends.utils import debug_transaction\nfrom django.utils.asyncio import async_unsafe\nfrom django.utils.encoding import force_bytes, force_str\nfrom django.utils.functional import cached_property\n\n# django/core/management/commands/sqlflush.py:1-3  (django.core.management.commands.sqlflush)\nfrom django.core.management.base import BaseCommand\nfrom django.core.management.sql import sql_flush\nfrom django.db import DEFAULT_DB_ALIAS, connections\n\n# django/db/backends/base/base.py:241-245  (django.db.backends.base.base.BaseDatabaseWrapper.create_cursor)\nclass BaseDatabaseWrapper:\n    def create_cursor(self, name=None):\n        \"\"\"Create a cursor. Assume that a connection is established.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a create_cursor() method\"\n        )\n\n# django/db/backends/postgresql/base.py:321-340  (django.db.backends.postgresql.base.DatabaseWrapper.create_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def create_cursor(self, name=None):\n        if name:\n            # In autocommit mode, the cursor will be used outside of a\n            # transaction, hence use a holdable cursor.\n            cursor = self.connection.cursor(\n                name, scrollable=False, withhold=self.connection.autocommit\n            )\n        else:\n            cursor = self.connection.cursor()\n\n        if is_psycopg3:\n            # Register the cursor timezone only if the connection disagrees, to\n            # avoid copying the adapter map.\n            tzloader = self.connection.adapters.get_loader(TIMESTAMPTZ_OID, Format.TEXT)\n            if self.timezone != tzloader.timezone:\n                register_tzloader(self.timezone, cursor)\n        else:\n            cursor.tzinfo_factory = self.tzinfo_factory if settings.USE_TZ else None\n        return cursor\n\n# django/db/backends/base/base.py:710-724  (django.db.backends.base.base.BaseDatabaseWrapper._nodb_cursor)\nclass BaseDatabaseWrapper:\n    @contextmanager\n    def _nodb_cursor(self):\n        \"\"\"\n        Return a cursor from an alternative connection to be used when there is\n        no need to access the main database, specifically for test db\n        creation/deletion. This also prevents the production database from\n        being exposed to potential child threads while (or after) the test\n        database is destroyed. Refs #10868, #17786, #16969.\n        \"\"\"\n        conn = self.__class__({**self.settings_dict, \"NAME\": None}, alias=NO_DB_ALIAS)\n        try:\n            with conn.cursor() as cursor:\n                yield cursor\n        finally:\n            conn.close()\n\n# django/db/backends/base/base.py:221-226  (django.db.backends.base.base.BaseDatabaseWrapper.get_connection_params)\nclass BaseDatabaseWrapper:\n    def get_connection_params(self):\n        \"\"\"Return a dict of parameters suitable for get_new_connection.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_connection_params() \"\n            \"method\"\n        )\n\n# django/db/backends/base/base.py:303-307  (django.db.backends.base.base.BaseDatabaseWrapper._cursor)\nclass BaseDatabaseWrapper:\n    def _cursor(self, name=None):\n        self.close_if_health_check_failed()\n        self.ensure_connection()\n        with self.wrap_database_errors:\n            return self._prepare_cursor(self.create_cursor(name))\n\n# django/db/backends/base/base.py:326-329  (django.db.backends.base.base.BaseDatabaseWrapper.cursor)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def cursor(self):\n        \"\"\"Create a cursor, opening a connection if necessary.\"\"\"\n        return self._cursor()\n\n# django/db/backends/base/base.py:196-201  (django.db.backends.base.base.BaseDatabaseWrapper.get_database_version)\nclass BaseDatabaseWrapper:\n    def get_database_version(self):\n        \"\"\"Return a tuple of the database's version.\"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseWrapper may require a get_database_version() \"\n            \"method.\"\n        )\n\n# tests/backends/postgresql/tests.py:299-315  (tests.backends.postgresql.tests.Tests.test_connect_custom_cursor_factory)\nclass Tests(TestCase):\n    def test_connect_custom_cursor_factory(self):\n        \"\"\"\n        A custom cursor factory can be configured with DATABASES[\"options\"]\n        [\"cursor_factory\"].\n        \"\"\"\n        from django.db.backends.postgresql.base import Cursor\n\n        class MyCursor(Cursor):\n            pass\n\n        new_connection = connection.copy()\n        new_connection.settings_dict[\"OPTIONS\"][\"cursor_factory\"] = MyCursor\n        try:\n            new_connection.connect()\n            self.assertEqual(new_connection.connection.cursor_factory, MyCursor)\n        finally:\n            new_connection.close()\n\n# django/db/backends/base/base.py:341-350  (django.db.backends.base.base.BaseDatabaseWrapper.rollback)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def rollback(self):\n        \"\"\"Roll back a transaction and reset the dirty flag.\"\"\"\n        self.validate_thread_sharing()\n        self.validate_no_atomic_block()\n        self._rollback()\n        # A successful rollback means that the database connection works.\n        self.errors_occurred = False\n        self.needs_rollback = False\n        self.run_on_commit = []\n\n# django/db/backends/sqlite3/base.py:192-199  (django.db.backends.sqlite3.base.DatabaseWrapper.close)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def close(self):\n        self.validate_thread_sharing()\n        # If database is in memory, closing the connection destroys the\n        # database. To prevent accidental data loss, ignore close requests on\n        # an in-memory db.\n        if not self.is_in_memory_db():\n            BaseDatabaseWrapper.close(self)\n\n# django/db/backends/base/base.py:331-339  (django.db.backends.base.base.BaseDatabaseWrapper.commit)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def commit(self):\n        \"\"\"Commit a transaction and reset the dirty flag.\"\"\"\n        self.validate_thread_sharing()\n        self.validate_no_atomic_block()\n        self._commit()\n        # A successful commit means that the database connection works.\n        self.errors_occurred = False\n        self.run_commit_hooks_on_set_autocommit_on = True\n\n# django/db/backends/base/base.py:646-659  (django.db.backends.base.base.BaseDatabaseWrapper.validate_thread_sharing)\nclass BaseDatabaseWrapper:\n    def validate_thread_sharing(self):\n        \"\"\"\n        Validate that the connection isn't accessed by another thread than the\n        one which originally created it, unless the connection was explicitly\n        authorized to be shared between threads (via the `inc_thread_sharing()`\n        method). Raise an exception if the validation fails.\n        \"\"\"\n        if not (self.allow_thread_sharing or self._thread_ident == _thread.get_ident()):\n            raise DatabaseError(\n                \"DatabaseWrapper objects created in a \"\n                \"thread can only be used in that same thread. The object \"\n                \"with alias '%s' was created in thread id %s and this is \"\n                \"thread id %s.\" % (self.alias, self._thread_ident, _thread.get_ident())\n            )\n\n# django/db/backends/base/base.py:792-801  (django.db.backends.base.base.BaseDatabaseWrapper.copy)\nclass BaseDatabaseWrapper:\n    def copy(self, alias=None):\n        \"\"\"\n        Return a copy of this connection.\n\n        For tests that require two connections to the same database.\n        \"\"\"\n        settings_dict = copy.deepcopy(self.settings_dict)\n        if alias is None:\n            alias = self.alias\n        return type(self)(settings_dict, alias)\n\n# django/db/backends/base/base.py:283-288  (django.db.backends.base.base.BaseDatabaseWrapper.ensure_connection)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def ensure_connection(self):\n        \"\"\"Guarantee that a connection to the database is established.\"\"\"\n        if self.connection is None:\n            with self.wrap_database_errors:\n                self.connect()\n\n# django/db/backends/base/base.py:352-370  (django.db.backends.base.base.BaseDatabaseWrapper.close)\nclass BaseDatabaseWrapper:\n    @async_unsafe\n    def close(self):\n        \"\"\"Close the connection to the database.\"\"\"\n        self.validate_thread_sharing()\n        self.run_on_commit = []\n\n        # Don't call validate_no_atomic_block() to avoid making it difficult\n        # to get rid of a connection in an invalid state. The next connect()\n        # will reset the transaction state anyway.\n        if self.closed_in_transaction or self.connection is None:\n            return\n        try:\n            self._close()\n        finally:\n            if self.in_atomic_block:\n                self.closed_in_transaction = True\n                self.needs_rollback = True\n            else:\n                self.connection = None\n\n# django/db/backends/base/base.py:780-790  (django.db.backends.base.base.BaseDatabaseWrapper.execute_wrapper)\nclass BaseDatabaseWrapper:\n    @contextmanager\n    def execute_wrapper(self, wrapper):\n        \"\"\"\n        Return a context manager under which the wrapper is applied to suitable\n        database query executions.\n        \"\"\"\n        self.execute_wrappers.append(wrapper)\n        try:\n            yield\n        finally:\n            self.execute_wrappers.pop()\n\n# django/contrib/gis/db/backends/oracle/introspection.py:1-4  (django.contrib.gis.db.backends.oracle.introspection)\nimport cx_Oracle\n\nfrom django.db.backends.oracle.introspection import DatabaseIntrospection\nfrom django.utils.functional import cached_property\n\n# django/db/backends/utils.py:29-31  (django.db.backends.utils.CursorWrapper.__iter__)\nclass CursorWrapper:\n    def __iter__(self):\n        with self.db.wrap_database_errors:\n            yield from self.cursor\n\n# django/db/backends/oracle/base.py:304-306  (django.db.backends.oracle.base.DatabaseWrapper.create_cursor)\nclass DatabaseWrapper(BaseDatabaseWrapper):\n    @async_unsafe\n    def create_cursor(self, name=None):\n        return FormatStylePlaceholderCursor(self.connection)\n\n# django/db/backends/base/creation.py:26-27  (django.db.backends.base.creation.BaseDatabaseCreation._nodb_cursor)\nclass BaseDatabaseCreation:\n    def _nodb_cursor(self):\n        return self.connection._nodb_cursor()\n\n# django/db/backends/base/base.py:693-708  (django.db.backends.base.base.BaseDatabaseWrapper.temporary_connection)\nclass BaseDatabaseWrapper:\n    @contextmanager\n    def temporary_connection(self):\n        \"\"\"\n        Context manager that ensures that a connection is established, and\n        if it opened one, closes it to avoid leaving a dangling connection.\n        This is useful for operations outside of the request-response cycle.\n\n        Provide a cursor: with self.temporary_connection() as cursor: ...\n        \"\"\"\n        must_close = self.connection is None\n        try:\n            with self.cursor() as cursor:\n                yield cursor\n        finally:\n            if must_close:\n                self.close()\n\n# django/db/backends/base/base.py:528-533  (django.db.backends.base.base.BaseDatabaseWrapper.validate_no_broken_transaction)\nclass BaseDatabaseWrapper:\n    def validate_no_broken_transaction(self):\n        if self.needs_rollback:\n            raise TransactionManagementError(\n                \"An error occurred in the current transaction. You can't \"\n                \"execute queries until the end of the 'atomic' block.\"\n            ) from self.rollback_exc\n\n# django/test/utils.py:709-711  (django.test.utils.CaptureQueriesContext)\nclass CaptureQueriesContext:\n    \"\"\"\n    Context manager that captures queries executed by the specified connection.\n    \"\"\"\n\n# tests/backends/postgresql/test_server_side_cursors.py:24-30  (tests.backends.postgresql.test_server_side_cursors.ServerSideCursorsPostgres.inspect_cursors)\nclass ServerSideCursorsPostgres(TestCase):\n    def inspect_cursors(self):\n        with connection.cursor() as cursor:\n            cursor.execute(\n                \"SELECT {fields} FROM pg_cursors;\".format(fields=self.cursor_fields)\n            )\n            cursors = cursor.fetchall()\n        return [self.PostgresCursor._make(cursor) for cursor in cursors]\n\n## Task\n\nYou are debugging Django's database connection management in\ndjango/db/backends/base/base.py. Starting from\n`BaseDatabaseWrapper.cursor`, trace the real causal pipeline that\nproduces a working database cursor, in the order each stage is\nactually reached, up to and including the call that actually opens a\nnew database connection. Assume no database connection is currently\nestablished, so a new one must genuinely be opened.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.db.backends.base.base.BaseDatabaseWrapper.cursor\", \"django.db.backends.base.base.BaseDatabaseWrapper._cursor\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

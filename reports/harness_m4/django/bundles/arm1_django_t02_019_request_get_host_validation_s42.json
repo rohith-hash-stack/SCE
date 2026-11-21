@@ -1,0 +1,1035 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t02_019_request_get_host_validation",
+  "items": [
+   {
+    "source_id": "django/http/request.py:131-151",
+    "content": "# django/http/request.py:131-151  (django.http.request.HttpRequest.get_host)\nclass HttpRequest:\n    def get_host(self):\n        \"\"\"Return the HTTP host using the environment or request headers.\"\"\"\n        host = self._get_raw_host()\n\n        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.\n        allowed_hosts = settings.ALLOWED_HOSTS\n        if settings.DEBUG and not allowed_hosts:\n            allowed_hosts = [\".localhost\", \"127.0.0.1\", \"[::1]\"]\n\n        domain, port = split_domain_port(host)\n        if domain and validate_host(domain, allowed_hosts):\n            return host\n        else:\n            msg = \"Invalid HTTP_HOST header: %r.\" % host\n            if domain:\n                msg += \" You may need to add %r to ALLOWED_HOSTS.\" % domain\n            else:\n                msg += (\n                    \" The domain name provided is not valid according to RFC 1034/1035.\"\n                )\n            raise DisallowedHost(msg)",
+    "token_count": 221,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.get_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 1,
+     "rerank_score": 3.529860734939575,
+     "bm25_rank": 1,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 221
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context_processors.py:36-55",
+    "content": "# django/template/context_processors.py:36-55  (django.template.context_processors.debug)\ndef debug(request):\n    \"\"\"\n    Return context variables helpful for debugging.\n    \"\"\"\n    context_extras = {}\n    if settings.DEBUG and request.META.get(\"REMOTE_ADDR\") in settings.INTERNAL_IPS:\n        context_extras[\"debug\"] = True\n        from django.db import connections\n\n        # Return a lazy reference that computes connection.queries on access,\n        # to ensure it contains queries triggered after this function runs.\n        context_extras[\"sql_queries\"] = lazy(\n            lambda: list(\n                itertools.chain.from_iterable(\n                    connections[x].queries for x in connections\n                )\n            ),\n            list,\n        )\n    return context_extras",
+    "token_count": 152,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.context_processors.debug"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 39,
+     "rerank_score": 3.1840298175811768,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:1006-1022",
+    "content": "# tests/requests_tests/tests.py:1006-1022  (tests.requests_tests.tests.HostValidationTests.test_host_validation_in_debug_mode)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(DEBUG=True, ALLOWED_HOSTS=[])\n    def test_host_validation_in_debug_mode(self):\n        \"\"\"\n        If ALLOWED_HOSTS is empty and DEBUG is True, variants of localhost are\n        allowed.\n        \"\"\"\n        valid_hosts = [\"localhost\", \"subdomain.localhost\", \"127.0.0.1\", \"[::1]\"]\n        for host in valid_hosts:\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": host}\n            self.assertEqual(request.get_host(), host)\n\n        # Other hostnames raise a DisallowedHost.\n        with self.assertRaises(DisallowedHost):\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": \"example.com\"}\n            request.get_host()",
+    "token_count": 193,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_host_validation_in_debug_mode"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 5,
+     "rerank_score": 0.991260290145874,
+     "bm25_rank": 4,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 193
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:247-252",
+    "content": "# django/http/request.py:247-252  (django.http.request.HttpRequest._get_scheme)\nclass HttpRequest:\n    def _get_scheme(self):\n        \"\"\"\n        Hook for subclasses like WSGIRequest to implement. Return 'http' by\n        default.\n        \"\"\"\n        return \"http\"",
+    "token_count": 64,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._get_scheme"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 29,
+     "rerank_score": 0.8201109170913696,
+     "bm25_rank": 66,
+     "dense_rank": 44,
+     "oversized_chunk": false,
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:153-159",
+    "content": "# django/http/request.py:153-159  (django.http.request.HttpRequest.get_port)\nclass HttpRequest:\n    def get_port(self):\n        \"\"\"Return the port number for the request as a string.\"\"\"\n        if settings.USE_X_FORWARDED_PORT and \"HTTP_X_FORWARDED_PORT\" in self.META:\n            port = self.META[\"HTTP_X_FORWARDED_PORT\"]\n        else:\n            port = self.META[\"SERVER_PORT\"]\n        return str(port)",
+    "token_count": 98,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.get_port"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 26,
+     "rerank_score": 0.2842934727668762,
+     "bm25_rank": 35,
+     "dense_rank": 70,
+     "oversized_chunk": false,
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:990-1004",
+    "content": "# tests/requests_tests/tests.py:990-1004  (tests.requests_tests.tests.HostValidationTests.test_get_port_with_x_forwarded_port)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_PORT=True)\n    def test_get_port_with_x_forwarded_port(self):\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_PORT\": \"8080\",\n            \"HTTP_X_FORWARDED_PORT\": \"80\",\n        }\n        # Should use the X-Forwarded-Port header\n        self.assertEqual(request.get_port(), \"80\")\n\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_PORT\": \"8080\",\n        }\n        self.assertEqual(request.get_port(), \"8080\")",
+    "token_count": 163,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_get_port_with_x_forwarded_port"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 10,
+     "rerank_score": 0.04130712151527405,
+     "bm25_rank": 21,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 163
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:113-129",
+    "content": "# django/http/request.py:113-129  (django.http.request.HttpRequest._get_raw_host)\nclass HttpRequest:\n    def _get_raw_host(self):\n        \"\"\"\n        Return the HTTP host using the environment or request headers. Skip\n        allowed hosts protection, so may return an insecure host.\n        \"\"\"\n        # We try three options, in order of decreasing preference.\n        if settings.USE_X_FORWARDED_HOST and (\"HTTP_X_FORWARDED_HOST\" in self.META):\n            host = self.META[\"HTTP_X_FORWARDED_HOST\"]\n        elif \"HTTP_HOST\" in self.META:\n            host = self.META[\"HTTP_HOST\"]\n        else:\n            # Reconstruct the host using the algorithm from PEP 333.\n            host = self.META[\"SERVER_NAME\"]\n            server_port = self.get_port()\n            if server_port != (\"443\" if self.is_secure() else \"80\"):\n                host = \"%s:%s\" % (host, server_port)\n        return host",
+    "token_count": 211,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._get_raw_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": 0.004241324961185455,
+     "bm25_rank": 3,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 211
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client_regress/views.py:140-144",
+    "content": "# tests/test_client_regress/views.py:140-144  (tests.test_client_regress.views.check_headers)\ndef check_headers(request):\n    \"A view that responds with value of the X-ARG-CHECK header\"\n    return HttpResponse(\n        \"HTTP_X_ARG_CHECK: %s\" % request.META.get(\"HTTP_X_ARG_CHECK\", \"Undefined\")\n    )",
+    "token_count": 79,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client_regress.views.check_headers"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 18,
+     "rerank_score": -0.050549037754535675,
+     "bm25_rank": 90,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:243-245",
+    "content": "# django/http/request.py:243-245  (django.http.request.HttpRequest._current_scheme_host)\nclass HttpRequest:\n    @cached_property\n    def _current_scheme_host(self):\n        return \"{}://{}\".format(self.scheme, self.get_host())",
+    "token_count": 54,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._current_scheme_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": -0.17916248738765717,
+     "bm25_rank": 8,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:910-972",
+    "content": "# tests/requests_tests/tests.py:910-972  (tests.requests_tests.tests.HostValidationTests.test_http_get_host_with_x_forwarded_host)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_HOST=True, ALLOWED_HOSTS=[\"*\"])\n    def test_http_get_host_with_x_forwarded_host(self):\n        # Check if X_FORWARDED_HOST is provided.\n        request = HttpRequest()\n        request.META = {\n            \"HTTP_X_FORWARDED_HOST\": \"forward.com\",\n            \"HTTP_HOST\": \"example.com\",\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        # X_FORWARDED_HOST is obeyed.\n        self.assertEqual(request.get_host(), \"forward.com\")\n\n        # Check if X_FORWARDED_HOST isn't provided.\n        request = HttpRequest()\n        request.META = {\n            \"HTTP_HOST\": \"example.com\",\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        self.assertEqual(request.get_host(), \"example.com\")\n\n        # Check if HTTP_HOST isn't provided.\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        self.assertEqual(request.get_host(), \"internal.com\")\n\n        # Check if HTTP_HOST isn't provided, and we're on a nonstandard port\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 8042,\n        }\n        self.assertEqual(request.get_host(), \"internal.com:8042\")\n\n        # Poisoned host headers are rejected as suspicious\n        legit_hosts = [\n            \"example.com\",\n            \"example.com:80\",\n            \"12.34.56.78\",\n            \"12.34.56.78:443\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"[2001:19f0:feee::dead:beef:cafe]:8080\",\n            \"xn--4ca9at.com\",  # Punycode for \u00f6\u00e4\u00fc.com\n        ]\n\n        for host in legit_hosts:\n            request = HttpRequest()\n            request.META = {\n                \"HTTP_HOST\": host,\n            }\n            request.get_host()\n\n        for host in self.poisoned_hosts:\n            with self.assertRaises(DisallowedHost):\n                request = HttpRequest()\n                request.META = {\n                    \"HTTP_HOST\": host,\n                }\n                request.get_host()",
+    "token_count": 552,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_http_get_host_with_x_forwarded_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 6,
+     "rerank_score": -0.5643503069877625,
+     "bm25_rank": 5,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 552
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:1139-1151",
+    "content": "# tests/requests_tests/tests.py:1139-1151  (tests.requests_tests.tests.RequestHeadersTests.test_base_request_headers)\nclass RequestHeadersTests(SimpleTestCase):\n    def test_base_request_headers(self):\n        request = HttpRequest()\n        request.META = self.ENVIRON\n        self.assertEqual(\n            dict(request.headers),\n            {\n                \"Content-Type\": \"text/html\",\n                \"Content-Length\": \"100\",\n                \"Accept\": \"*\",\n                \"Host\": \"example.com\",\n                \"User-Agent\": \"python-requests/1.2.0\",\n            },\n        )",
+    "token_count": 126,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.RequestHeadersTests.test_base_request_headers"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": -0.6900765895843506,
+     "bm25_rank": 77,
+     "dense_rank": 60,
+     "oversized_chunk": false,
+     "engine_token_count": 126
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:53-428",
+    "content": "# django/http/request.py:53-428  (django.http.request.HttpRequest)\nclass HttpRequest:\n    \"\"\"A basic HTTP request.\"\"\"\n\n    # The encoding used in GET/POST dicts. None means use default setting.\n    _encoding = None\n    _upload_handlers = []\n\n    def __init__(self):\n        # WARNING: The `WSGIRequest` subclass doesn't call `super`.\n        # Any variable assignment made here should also happen in\n        # `WSGIRequest.__init__()`.\n\n        self.GET = QueryDict(mutable=True)\n        self.POST = QueryDict(mutable=True)\n        self.COOKIES = {}\n        self.META = {}\n        self.FILES = MultiValueDict()\n\n        self.path = \"\"\n        self.path_info = \"\"\n        self.method = None\n        self.resolver_match = None\n        self.content_type = None\n        self.content_params = None\n\n    def __repr__(self):\n        if self.method is None or not self.get_full_path():\n            return \"<%s>\" % self.__class__.__name__\n        return \"<%s: %s %r>\" % (\n            self.__class__.__name__,\n            self.method,\n            self.get_full_path(),\n        )\n\n    @cached_property\n    def headers(self):\n        return HttpHeaders(self.META)\n\n    @cached_property\n    def accepted_types(self):\n        \"\"\"Return a list of MediaType instances.\"\"\"\n        return parse_accept_header(self.headers.get(\"Accept\", \"*/*\"))\n\n    def accepts(self, media_type):\n        return any(\n            accepted_type.match(media_type) for accepted_type in self.accepted_types\n        )\n\n    def _set_content_type_params(self, meta):\n        \"\"\"Set content_type, content_params, and encoding.\"\"\"\n        self.content_type, self.content_params = parse_header_parameters(\n            meta.get(\"CONTENT_TYPE\", \"\")\n        )\n        if \"charset\" in self.content_params:\n            try:\n                codecs.lookup(self.content_params[\"charset\"])\n            except LookupError:\n                pass\n            else:\n                self.encoding = self.content_params[\"charset\"]\n\n    def _get_raw_host(self):\n        \"\"\"\n        Return the HTTP host using the environment or request headers. Skip\n        allowed hosts protection, so may return an insecure host.\n        \"\"\"\n        # We try three options, in order of decreasing preference.\n        if settings.USE_X_FORWARDED_HOST and (\"HTTP_X_FORWARDED_HOST\" in self.META):\n            host = self.META[\"HTTP_X_FORWARDED_HOST\"]\n        elif \"HTTP_HOST\" in self.META:\n            host = self.META[\"HTTP_HOST\"]\n        else:\n            # Reconstruct the host using the algorithm from PEP 333.\n            host = self.META[\"SERVER_NAME\"]\n            server_port = self.get_port()\n            if server_port != (\"443\" if self.is_secure() else \"80\"):\n                host = \"%s:%s\" % (host, server_port)\n        return host\n\n    def get_host(self):\n        \"\"\"Return the HTTP host using the environment or request headers.\"\"\"\n        host = self._get_raw_host()\n\n        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.\n        allowed_hosts = settings.ALLOWED_HOSTS\n        if settings.DEBUG and not allowed_hosts:\n            allowed_hosts = [\".localhost\", \"127.0.0.1\", \"[::1]\"]\n\n        domain, port = split_domain_port(host)\n        if domain and validate_host(domain, allowed_hosts):\n            return host\n        else:\n            msg = \"Invalid HTTP_HOST header: %r.\" % host\n            if domain:\n                msg += \" You may need to add %r to ALLOWED_HOSTS.\" % domain\n            else:\n                msg += (\n                    \" The domain name provided is not valid according to RFC 1034/1035.\"\n                )\n            raise DisallowedHost(msg)\n\n    def get_port(self):\n        \"\"\"Return the port number for the request as a string.\"\"\"\n        if settings.USE_X_FORWARDED_PORT and \"HTTP_X_FORWARDED_PORT\" in self.META:\n            port = self.META[\"HTTP_X_FORWARDED_PORT\"]\n        else:\n            port = self.META[\"SERVER_PORT\"]\n        return str(port)\n\n    def get_full_path(self, force_append_slash=False):\n        return self._get_full_path(self.path, force_append_slash)\n\n    def get_full_path_info(self, force_append_slash=False):\n        return self._get_full_path(self.path_info, force_append_slash)\n\n    def _get_full_path(self, path, force_append_slash):\n        # RFC 3986 requires query string arguments to be in the ASCII range.\n        # Rather than crash if this doesn't happen, we encode defensively.\n        return \"%s%s%s\" % (\n            escape_uri_path(path),\n            \"/\" if force_append_slash and not path.endswith(\"/\") else \"\",\n            (\"?\" + iri_to_uri(self.META.get(\"QUERY_STRING\", \"\")))\n            if self.META.get(\"QUERY_STRING\", \"\")\n            else \"\",\n        )\n\n    def get_signed_cookie(self, key, default=RAISE_ERROR, salt=\"\", max_age=None):\n        \"\"\"\n        Attempt to return a signed cookie. If the signature fails or the\n        cookie has expired, raise an exception, unless the `default` argument\n        is provided,  in which case return that value.\n        \"\"\"\n        try:\n            cookie_value = self.COOKIES[key]\n        except KeyError:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        try:\n            value = signing.get_cookie_signer(salt=key + salt).unsign(\n                cookie_value, max_age=max_age\n            )\n        except signing.BadSignature:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        return value\n\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)\n\n    @cached_property\n    def _current_scheme_host(self):\n        return \"{}://{}\".format(self.scheme, self.get_host())\n\n    def _get_scheme(self):\n        \"\"\"\n        Hook for subclasses like WSGIRequest to implement. Return 'http' by\n        default.\n        \"\"\"\n        return \"http\"\n\n    @property\n    def scheme(self):\n        if settings.SECURE_PROXY_SSL_HEADER:\n            try:\n                header, secure_value = settings.SECURE_PROXY_SSL_HEADER\n            except ValueError:\n                raise ImproperlyConfigured(\n                    \"The SECURE_PROXY_SSL_HEADER setting must be a tuple containing \"\n                    \"two values.\"\n                )\n            header_value = self.META.get(header)\n            if header_value is not None:\n                header_value, *_ = header_value.split(\",\", 1)\n                return \"https\" if header_value.strip() == secure_value else \"http\"\n        return self._get_scheme()\n\n    def is_secure(self):\n        return self.scheme == \"https\"\n\n    @property\n    def encoding(self):\n        return self._encoding\n\n    @encoding.setter\n    def encoding(self, val):\n        \"\"\"\n        Set the encoding used for GET/POST accesses. If the GET or POST\n        dictionary has already been created, remove and recreate it on the\n        next access (so that it is decoded correctly).\n        \"\"\"\n        self._encoding = val\n        if hasattr(self, \"GET\"):\n            del self.GET\n        if hasattr(self, \"_post\"):\n            del self._post\n\n    def _initialize_handlers(self):\n        self._upload_handlers = [\n            uploadhandler.load_handler(handler, self)\n            for handler in settings.FILE_UPLOAD_HANDLERS\n        ]\n\n    @property\n    def upload_handlers(self):\n        if not self._upload_handlers:\n            # If there are no upload handlers defined, initialize them from settings.\n            self._initialize_handlers()\n        return self._upload_handlers\n\n    @upload_handlers.setter\n    def upload_handlers(self, upload_handlers):\n        if hasattr(self, \"_files\"):\n            raise AttributeError(\n                \"You cannot set the upload handlers after the upload has been \"\n                \"processed.\"\n            )\n        self._upload_handlers = upload_handlers\n\n    def parse_file_upload(self, META, post_data):\n        \"\"\"Return a tuple of (POST QueryDict, FILES MultiValueDict).\"\"\"\n        self.upload_handlers = ImmutableList(\n            self.upload_handlers,\n            warning=(\n                \"You cannot alter upload handlers after the upload has been \"\n                \"processed.\"\n            ),\n        )\n        parser = MultiPartParser(META, post_data, self.upload_handlers, self.encoding)\n        return parser.parse()\n\n    @property\n    def body(self):\n        if not hasattr(self, \"_body\"):\n            if self._read_started:\n                raise RawPostDataException(\n                    \"You cannot access body after reading from request's data stream\"\n                )\n\n            # Limit the maximum request data size that will be handled\n            # in-memory. Reject early when Content-Length is present and\n            # already exceeds the limit, avoiding reading the body at all.\n            self._check_data_too_big(int(self.META.get(\"CONTENT_LENGTH\") or 0))\n\n            # Content-Length can be absent or understated (e.g.\n            # `Transfer-Encoding: chunked` on ASGI), so for seekable\n            # streams (e.g. SpooledTemporaryFile on ASGI), check the actual\n            # buffered size before reading it all into memory.\n            if hasattr(self._stream, \"seekable\") and self._stream.seekable():\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n                did_check = True\n            else:\n                did_check = False\n\n            try:\n                if settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None and not did_check:\n                    # Read one byte past the limit to detect an oversize body\n                    # without loading it all into memory first.\n                    self._body = self.read(settings.DATA_UPLOAD_MAX_MEMORY_SIZE + 1)\n                else:\n                    self._body = self.read()\n            except OSError as e:\n                raise UnreadablePostError(*e.args) from e\n            finally:\n                self._stream.close()\n            self._stream = BytesIO(self._body)\n            if not did_check:\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n        return self._body\n\n    def _check_data_too_big(self, length):\n        if (\n            settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None\n            and length > settings.DATA_UPLOAD_MAX_MEMORY_SIZE\n        ):\n            msg = \"Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.\"\n            raise RequestDataTooBig(msg)\n\n    def _mark_post_parse_error(self):\n        self._post = QueryDict()\n        self._files = MultiValueDict()\n\n    def _load_post_and_files(self):\n        \"\"\"Populate self._post and self._files if the content-type is a form type\"\"\"\n        if self.method != \"POST\":\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n            return\n        if self._read_started and not hasattr(self, \"_body\"):\n            self._mark_post_parse_error()\n            return\n\n        if self.content_type == \"multipart/form-data\":\n            if hasattr(self, \"_body\"):\n                # Use already read data\n                data = BytesIO(self._body)\n            else:\n                data = self\n            try:\n                self._post, self._files = self.parse_file_upload(self.META, data)\n            except (MultiPartParserError, TooManyFilesSent):\n                # An error occurred while parsing POST data. Since when\n                # formatting the error the request handler might access\n                # self.POST, set self._post and self._file to prevent\n                # attempts to parse POST data again.\n                self._mark_post_parse_error()\n                raise\n        elif self.content_type == \"application/x-www-form-urlencoded\":\n            self._post, self._files = (\n                QueryDict(self.body, encoding=self._encoding),\n                MultiValueDict(),\n            )\n        else:\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n\n    def close(self):\n        if hasattr(self, \"_files\"):\n            for f in chain.from_iterable(list_[1] for list_ in self._files.lists()):\n                f.close()\n\n    # File-like and iterator interface.\n    #\n    # Expects self._stream to be set to an appropriate source of bytes by\n    # a corresponding request subclass (e.g. WSGIRequest).\n    # Also when request data has already been read by request.POST or\n    # request.body, self._stream points to a BytesIO instance\n    # containing that data.",
+    "token_count": 3057,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 8,
+     "rerank_score": -0.7082937359809875,
+     "bm25_rank": 14,
+     "dense_rank": 13,
+     "oversized_chunk": true,
+     "engine_token_count": 3057
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:1090-1097",
+    "content": "# tests/requests_tests/tests.py:1090-1097  (tests.requests_tests.tests.BuildAbsoluteURITests.test_host_retrieval)\nclass BuildAbsoluteURITests(SimpleTestCase):\n    def test_host_retrieval(self):\n        request = HttpRequest()\n        request.get_host = lambda: \"www.example.com\"\n        request.path = \"\"\n        self.assertEqual(\n            request.build_absolute_uri(location=\"/path/with:colons\"),\n            \"http://www.example.com/path/with:colons\",\n        )",
+    "token_count": 109,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.BuildAbsoluteURITests.test_host_retrieval"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 23,
+     "rerank_score": -0.9576413035392761,
+     "bm25_rank": 22,
+     "dense_rank": 82,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:743-760",
+    "content": "# django/http/request.py:743-760  (django.http.request.validate_host)\ndef validate_host(host, allowed_hosts):\n    \"\"\"\n    Validate the given host for this site.\n\n    Check that the host looks valid and matches a host or host pattern in the\n    given list of ``allowed_hosts``. Any pattern beginning with a period\n    matches a domain and all its subdomains (e.g. ``.example.com`` matches\n    ``example.com`` and any subdomain), ``*`` matches anything, and anything\n    else must match exactly.\n\n    Note: This function assumes that the given host is lowercased and has\n    already had the port, if any, stripped off.\n\n    Return ``True`` for a valid host, ``False`` otherwise.\n    \"\"\"\n    return any(\n        pattern == \"*\" or is_same_domain(host, pattern) for pattern in allowed_hosts\n    )",
+    "token_count": 187,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.validate_host"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 35,
+     "rerank_score": -0.9576687812805176,
+     "bm25_rank": 7,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 187
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:974-988",
+    "content": "# tests/requests_tests/tests.py:974-988  (tests.requests_tests.tests.HostValidationTests.test_get_port)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_PORT=False)\n    def test_get_port(self):\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_PORT\": \"8080\",\n            \"HTTP_X_FORWARDED_PORT\": \"80\",\n        }\n        # Shouldn't use the X-Forwarded-Port header\n        self.assertEqual(request.get_port(), \"8080\")\n\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_PORT\": \"8080\",\n        }\n        self.assertEqual(request.get_port(), \"8080\")",
+    "token_count": 156,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_get_port"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -1.1380137205123901,
+     "bm25_rank": 20,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:113-114",
+    "content": "# django/core/handlers/asgi.py:113-114  (django.core.handlers.asgi.ASGIRequest._get_scheme)\nclass ASGIRequest(HttpRequest):\n    def _get_scheme(self):\n        return self.scope.get(\"scheme\") or super()._get_scheme()",
+    "token_count": 60,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIRequest._get_scheme"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 41,
+     "rerank_score": -1.2908880710601807,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:827-908",
+    "content": "# tests/requests_tests/tests.py:827-908  (tests.requests_tests.tests.HostValidationTests.test_http_get_host)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(\n        USE_X_FORWARDED_HOST=False,\n        ALLOWED_HOSTS=[\n            \"forward.com\",\n            \"example.com\",\n            \"internal.com\",\n            \"12.34.56.78\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"xn--4ca9at.com\",\n            \".multitenant.com\",\n            \"INSENSITIVE.com\",\n            \"[::ffff:169.254.169.254]\",\n        ],\n    )\n    def test_http_get_host(self):\n        # Check if X_FORWARDED_HOST is provided.\n        request = HttpRequest()\n        request.META = {\n            \"HTTP_X_FORWARDED_HOST\": \"forward.com\",\n            \"HTTP_HOST\": \"example.com\",\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        # X_FORWARDED_HOST is ignored.\n        self.assertEqual(request.get_host(), \"example.com\")\n\n        # Check if X_FORWARDED_HOST isn't provided.\n        request = HttpRequest()\n        request.META = {\n            \"HTTP_HOST\": \"example.com\",\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        self.assertEqual(request.get_host(), \"example.com\")\n\n        # Check if HTTP_HOST isn't provided.\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        self.assertEqual(request.get_host(), \"internal.com\")\n\n        # Check if HTTP_HOST isn't provided, and we're on a nonstandard port\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 8042,\n        }\n        self.assertEqual(request.get_host(), \"internal.com:8042\")\n\n        legit_hosts = [\n            \"example.com\",\n            \"example.com:80\",\n            \"12.34.56.78\",\n            \"12.34.56.78:443\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"[2001:19f0:feee::dead:beef:cafe]:8080\",\n            \"xn--4ca9at.com\",  # Punycode for \u00f6\u00e4\u00fc.com\n            \"anything.multitenant.com\",\n            \"multitenant.com\",\n            \"insensitive.com\",\n            \"example.com.\",\n            \"example.com.:80\",\n            \"[::ffff:169.254.169.254]\",\n        ]\n\n        for host in legit_hosts:\n            request = HttpRequest()\n            request.META = {\n                \"HTTP_HOST\": host,\n            }\n            request.get_host()\n\n        # Poisoned host headers are rejected as suspicious\n        for host in chain(self.poisoned_hosts, [\"other.com\", \"example.com..\"]):\n            with self.assertRaises(DisallowedHost):\n                request = HttpRequest()\n                request.META = {\n                    \"HTTP_HOST\": host,\n                }\n                request.get_host()",
+    "token_count": 708,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_http_get_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": -1.4295605421066284,
+     "bm25_rank": 6,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 708
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:1024-1074",
+    "content": "# tests/requests_tests/tests.py:1024-1074  (tests.requests_tests.tests.HostValidationTests.test_get_host_suggestion_of_allowed_host)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=[])\n    def test_get_host_suggestion_of_allowed_host(self):\n        \"\"\"\n        get_host() makes helpful suggestions if a valid-looking host is not in\n        ALLOWED_HOSTS.\n        \"\"\"\n        msg_invalid_host = \"Invalid HTTP_HOST header: %r.\"\n        msg_suggestion = msg_invalid_host + \" You may need to add %r to ALLOWED_HOSTS.\"\n        msg_suggestion2 = (\n            msg_invalid_host\n            + \" The domain name provided is not valid according to RFC 1034/1035\"\n        )\n\n        for host in [  # Valid-looking hosts\n            \"example.com\",\n            \"12.34.56.78\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"xn--4ca9at.com\",  # Punycode for \u00f6\u00e4\u00fc.com\n        ]:\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": host}\n            with self.assertRaisesMessage(\n                DisallowedHost, msg_suggestion % (host, host)\n            ):\n                request.get_host()\n\n        for domain, port in [  # Valid-looking hosts with a port number\n            (\"example.com\", 80),\n            (\"12.34.56.78\", 443),\n            (\"[2001:19f0:feee::dead:beef:cafe]\", 8080),\n        ]:\n            host = \"%s:%s\" % (domain, port)\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": host}\n            with self.assertRaisesMessage(\n                DisallowedHost, msg_suggestion % (host, domain)\n            ):\n                request.get_host()\n\n        for host in self.poisoned_hosts:\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": host}\n            with self.assertRaisesMessage(DisallowedHost, msg_invalid_host % host):\n                request.get_host()\n\n        request = HttpRequest()\n        request.META = {\"HTTP_HOST\": \"invalid_hostname.com\"}\n        with self.assertRaisesMessage(\n            DisallowedHost, msg_suggestion2 % \"invalid_hostname.com\"\n        ):\n            request.get_host()",
+    "token_count": 516,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_get_host_suggestion_of_allowed_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": -1.5492417812347412,
+     "bm25_rank": 2,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 516
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sites/requests.py:10-11",
+    "content": "# django/contrib/sites/requests.py:10-11  (django.contrib.sites.requests.RequestSite.__init__)\nclass RequestSite:\n    def __init__(self, request):\n        self.domain = self.name = request.get_host()",
+    "token_count": 50,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sites.requests.RequestSite.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 12,
+     "rerank_score": -1.5703418254852295,
+     "bm25_rank": 48,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:57-58",
+    "content": "# django/contrib/auth/views.py:57-58  (django.contrib.auth.views.RedirectURLMixin.get_success_url_allowed_hosts)\nclass RedirectURLMixin:\n    def get_success_url_allowed_hosts(self):\n        return {self.request.get_host(), *self.success_url_allowed_hosts}",
+    "token_count": 57,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin.get_success_url_allowed_hosts"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": -1.5753387212753296,
+     "bm25_rank": 97,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sites/models.py:34-46",
+    "content": "# django/contrib/sites/models.py:34-46  (django.contrib.sites.models.SiteManager._get_site_by_request)\nclass SiteManager(models.Manager):\n    def _get_site_by_request(self, request):\n        host = request.get_host()\n        try:\n            # First attempt to look up the site by host with or without port.\n            if host not in SITE_CACHE:\n                SITE_CACHE[host] = self.get(domain__iexact=host)\n            return SITE_CACHE[host]\n        except Site.DoesNotExist:\n            # Fallback to looking up site after stripping port from the host.\n            domain, port = split_domain_port(host)\n            if domain not in SITE_CACHE:\n                SITE_CACHE[domain] = self.get(domain__iexact=domain)\n            return SITE_CACHE[domain]",
+    "token_count": 163,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sites.models.SiteManager._get_site_by_request"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 42,
+     "rerank_score": -1.7188422679901123,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 163
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:259-286",
+    "content": "# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme)\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    \"\"\"\n    Return ``True`` if the url uses an allowed host and a safe scheme.\n\n    Always return ``False`` on an empty url.\n\n    If ``require_https`` is ``True``, only 'https' will be considered a valid\n    scheme, as opposed to 'http' and 'https' with the default, ``False``.\n\n    Note: \"True\" doesn't entail that a URL is \"safe\". It may still be e.g.\n    quoted incorrectly. Ensure to also use django.utils.encoding.iri_to_uri()\n    on the path component of untrusted URLs.\n    \"\"\"\n    if url is not None:\n        url = url.strip()\n    if not url:\n        return False\n    if allowed_hosts is None:\n        allowed_hosts = set()\n    elif isinstance(allowed_hosts, str):\n        allowed_hosts = {allowed_hosts}\n    # Chrome treats \\ completely as / in paths but it could be part of some\n    # basic auth credentials so we need to check both URLs.\n    return _url_has_allowed_host_and_scheme(\n        url, allowed_hosts, require_https=require_https\n    ) and _url_has_allowed_host_and_scheme(\n        url.replace(\"\\\\\", \"/\"), allowed_hosts, require_https=require_https\n    )",
+    "token_count": 295,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.http.url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 40,
+     "rerank_score": -1.9477143287658691,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 295
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_views.py:203-220",
+    "content": "# tests/auth_tests/test_views.py:203-220  (tests.auth_tests.test_views.PasswordResetTest.test_poisoned_http_host)\nclass PasswordResetTest(AuthViewsTestCase):\n    @override_settings(DEBUG_PROPAGATE_EXCEPTIONS=True)\n    def test_poisoned_http_host(self):\n        \"Poisoned HTTP_HOST headers can't be used for reset emails\"\n        # This attack is based on the way browsers handle URLs. The colon\n        # should be used to separate the port, but if the URL contains an @,\n        # the colon is interpreted as part of a username for login purposes,\n        # making 'evil.com' the request domain. Since HTTP_HOST is used to\n        # produce a meaningful reset URL, we need to be certain that the\n        # HTTP_HOST header isn't poisoned. This is done as a check when get_host()\n        # is invoked, but we check here as a practical consequence.\n        with self.assertLogs(\"django.security.DisallowedHost\", \"ERROR\"):\n            response = self.client.post(\n                \"/password_reset/\",\n                {\"email\": \"staffmember@example.com\"},\n                headers={\"host\": \"www.example:dr.frankenstein@evil.tld\"},\n            )\n        self.assertEqual(response.status_code, 400)\n        self.assertEqual(len(mail.outbox), 0)",
+    "token_count": 274,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_views.PasswordResetTest.test_poisoned_http_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 13,
+     "rerank_score": -1.9629466533660889,
+     "bm25_rank": 15,
+     "dense_rank": 39,
+     "oversized_chunk": false,
+     "engine_token_count": 274
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/__init__.py:1-52",
+    "content": "# django/http/__init__.py:1-52  (django.http)\nfrom django.http.cookie import SimpleCookie, parse_cookie\nfrom django.http.request import (\n    HttpHeaders,\n    HttpRequest,\n    QueryDict,\n    RawPostDataException,\n    UnreadablePostError,\n)\nfrom django.http.response import (\n    BadHeaderError,\n    FileResponse,\n    Http404,\n    HttpResponse,\n    HttpResponseBadRequest,\n    HttpResponseBase,\n    HttpResponseForbidden,\n    HttpResponseGone,\n    HttpResponseNotAllowed,\n    HttpResponseNotFound,\n    HttpResponseNotModified,\n    HttpResponsePermanentRedirect,\n    HttpResponseRedirect,\n    HttpResponseServerError,\n    JsonResponse,\n    StreamingHttpResponse,\n)\n\n__all__ = [\n    \"SimpleCookie\",\n    \"parse_cookie\",\n    \"HttpHeaders\",\n    \"HttpRequest\",\n    \"QueryDict\",\n    \"RawPostDataException\",\n    \"UnreadablePostError\",\n    \"HttpResponse\",\n    \"HttpResponseBase\",\n    \"StreamingHttpResponse\",\n    \"HttpResponseRedirect\",\n    \"HttpResponsePermanentRedirect\",\n    \"HttpResponseNotModified\",\n    \"HttpResponseBadRequest\",\n    \"HttpResponseForbidden\",\n    \"HttpResponseNotFound\",\n    \"HttpResponseNotAllowed\",\n    \"HttpResponseGone\",\n    \"HttpResponseServerError\",\n    \"Http404\",\n    \"BadHeaderError\",\n    \"JsonResponse\",\n    \"FileResponse\",\n]",
+    "token_count": 262,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": -2.0522828102111816,
+     "bm25_rank": 69,
+     "dense_rank": 35,
+     "oversized_chunk": false,
+     "engine_token_count": 262
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/exceptions.py:50-52",
+    "content": "# django/core/exceptions.py:50-52  (django.core.exceptions.DisallowedHost)\nclass DisallowedHost(SuspiciousOperation):\n    \"\"\"HTTP_HOST header contains invalid value\"\"\"\n\n    pass",
+    "token_count": 41,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.exceptions.DisallowedHost"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 34,
+     "rerank_score": -2.072126626968384,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/debug.py:315-324",
+    "content": "# django/views/debug.py:315-324  (django.views.debug.ExceptionReporter._get_raw_insecure_uri)\nclass ExceptionReporter:\n    def _get_raw_insecure_uri(self):\n        \"\"\"\n        Return an absolute URI from variables available in this request. Skip\n        allowed hosts protection, so may return insecure URI.\n        \"\"\"\n        return \"{scheme}://{host}{path}\".format(\n            scheme=self.request.scheme,\n            host=self.request._get_raw_host(),\n            path=self.request.get_full_path(),\n        )",
+    "token_count": 107,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.debug.ExceptionReporter._get_raw_insecure_uri"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 22,
+     "rerank_score": -2.150348424911499,
+     "bm25_rank": 30,
+     "dense_rank": 59,
+     "oversized_chunk": false,
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/exceptions.py:1-1",
+    "content": "# django/contrib/sessions/exceptions.py:1-1  (django.contrib.sessions.exceptions)\nfrom django.core.exceptions import BadRequest, SuspiciousOperation",
+    "token_count": 30,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -2.2019050121307373,
+     "bm25_rank": null,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:276-300",
+    "content": "# django/middleware/csrf.py:276-300  (django.middleware.csrf.CsrfViewMiddleware._origin_verified)\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def _origin_verified(self, request):\n        request_origin = request.META[\"HTTP_ORIGIN\"]\n        try:\n            good_host = request.get_host()\n        except DisallowedHost:\n            pass\n        else:\n            good_origin = \"%s://%s\" % (\n                \"https\" if request.is_secure() else \"http\",\n                good_host,\n            )\n            if request_origin == good_origin:\n                return True\n        if request_origin in self.allowed_origins_exact:\n            return True\n        try:\n            parsed_origin = urlparse(request_origin)\n        except ValueError:\n            return False\n        request_scheme = parsed_origin.scheme\n        request_netloc = parsed_origin.netloc\n        return any(\n            is_same_domain(request_netloc, host)\n            for host in self.allowed_origin_subdomains.get(request_scheme, ())\n        )",
+    "token_count": 205,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.csrf.CsrfViewMiddleware._origin_verified"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 11,
+     "rerank_score": -2.2092835903167725,
+     "bm25_rank": 10,
+     "dense_rank": 34,
+     "oversized_chunk": false,
+     "engine_token_count": 205
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:226-233",
+    "content": "# tests/utils_tests/test_http.py:226-233  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_basic_auth(self):\n        # Valid basic auth credentials are allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                r\"http://user:pass@testserver/\", allowed_hosts={\"user:pass@testserver\"}\n            ),\n            True,\n        )",
+    "token_count": 98,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 31,
+     "rerank_score": -2.214963912963867,
+     "bm25_rank": 42,
+     "dense_rank": 89,
+     "oversized_chunk": false,
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:302-345",
+    "content": "# django/middleware/csrf.py:302-345  (django.middleware.csrf.CsrfViewMiddleware._check_referer)\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def _check_referer(self, request):\n        referer = request.META.get(\"HTTP_REFERER\")\n        if referer is None:\n            raise RejectRequest(REASON_NO_REFERER)\n\n        try:\n            referer = urlparse(referer)\n        except ValueError:\n            raise RejectRequest(REASON_MALFORMED_REFERER)\n\n        # Make sure we have a valid URL for Referer.\n        if \"\" in (referer.scheme, referer.netloc):\n            raise RejectRequest(REASON_MALFORMED_REFERER)\n\n        # Ensure that our Referer is also secure.\n        if referer.scheme != \"https\":\n            raise RejectRequest(REASON_INSECURE_REFERER)\n\n        if any(\n            is_same_domain(referer.netloc, host)\n            for host in self.csrf_trusted_origins_hosts\n        ):\n            return\n        # Allow matching the configured cookie domain.\n        good_referer = (\n            settings.SESSION_COOKIE_DOMAIN\n            if settings.CSRF_USE_SESSIONS\n            else settings.CSRF_COOKIE_DOMAIN\n        )\n        if good_referer is None:\n            # If no cookie domain is configured, allow matching the current\n            # host:port exactly if it's permitted by ALLOWED_HOSTS.\n            try:\n                # request.get_host() includes the port.\n                good_referer = request.get_host()\n            except DisallowedHost:\n                raise RejectRequest(REASON_BAD_REFERER % referer.geturl())\n        else:\n            server_port = request.get_port()\n            if server_port not in (\"443\", \"80\"):\n                good_referer = \"%s:%s\" % (good_referer, server_port)\n\n        if not is_same_domain(referer.netloc, good_referer):\n            raise RejectRequest(REASON_BAD_REFERER % referer.geturl())",
+    "token_count": 405,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.csrf.CsrfViewMiddleware._check_referer"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 43,
+     "rerank_score": -2.353721857070923,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 405
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:721-740",
+    "content": "# django/http/request.py:721-740  (django.http.request.split_domain_port)\ndef split_domain_port(host):\n    \"\"\"\n    Return a (domain, port) tuple from a given host.\n\n    Returned domain is lowercased. If the host is invalid, the domain will be\n    empty.\n    \"\"\"\n    host = host.lower()\n\n    if not host_validation_re.match(host):\n        return \"\", \"\"\n\n    if host[-1] == \"]\":\n        # It's an IPv6 address without a port.\n        return host, \"\"\n    bits = host.rsplit(\":\", 1)\n    domain, port = bits if len(bits) == 2 else (bits[0], \"\")\n    # Remove a trailing dot (if present) from the domain.\n    domain = domain[:-1] if domain.endswith(\".\") else domain\n    return domain, port",
+    "token_count": 176,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.split_domain_port"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 37,
+     "rerank_score": -2.652113676071167,
+     "bm25_rank": 11,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 176
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:819-825",
+    "content": "# tests/requests_tests/tests.py:819-825  (tests.requests_tests.tests.HostValidationTests)\nclass HostValidationTests(SimpleTestCase):\n    poisoned_hosts = [\n        \"example.com@evil.tld\",\n        \"example.com:dr.frankenstein@evil.tld\",\n        \"example.com:dr.frankenstein@evil.tld:80\",\n        \"example.com:80/badpath\",\n        \"example.com: recovermypassword.com\",\n    ]",
+    "token_count": 101,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 44,
+     "rerank_score": -2.757453680038452,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 101
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:251-263",
+    "content": "# tests/utils_tests/test_http.py:251-263  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_allowed_hosts_str(self):\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"http://good.com/good\", allowed_hosts=\"good.com\"\n            ),\n            True,\n        )\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"http://good.co/evil\", allowed_hosts=\"good.com\"\n            ),\n            False,\n        )",
+    "token_count": 121,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 20,
+     "rerank_score": -2.873445987701416,
+     "bm25_rank": 32,
+     "dense_rank": 52,
+     "oversized_chunk": false,
+     "engine_token_count": 121
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sites_tests/tests.py:109-143",
+    "content": "# tests/sites_tests/tests.py:109-143  (tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_no_site_id_and_handle_port_fallback)\nclass SitesFrameworkTests(TestCase):\n    @override_settings(SITE_ID=None, ALLOWED_HOSTS=[\"example.com\", \"example.net\"])\n    def test_get_current_site_no_site_id_and_handle_port_fallback(self):\n        request = HttpRequest()\n        s1 = self.site\n        s2 = Site.objects.create(domain=\"example.com:80\", name=\"example.com:80\")\n\n        # Host header without port\n        request.META = {\"HTTP_HOST\": \"example.com\"}\n        site = get_current_site(request)\n        self.assertEqual(site, s1)\n\n        # Host header with port - match, no fallback without port\n        request.META = {\"HTTP_HOST\": \"example.com:80\"}\n        site = get_current_site(request)\n        self.assertEqual(site, s2)\n\n        # Host header with port - no match, fallback without port\n        request.META = {\"HTTP_HOST\": \"example.com:81\"}\n        site = get_current_site(request)\n        self.assertEqual(site, s1)\n\n        # Host header with non-matching domain\n        request.META = {\"HTTP_HOST\": \"example.net\"}\n        with self.assertRaises(ObjectDoesNotExist):\n            get_current_site(request)\n\n        # Ensure domain for RequestSite always matches host header\n        with self.modify_settings(INSTALLED_APPS={\"remove\": \"django.contrib.sites\"}):\n            request.META = {\"HTTP_HOST\": \"example.com\"}\n            site = get_current_site(request)\n            self.assertEqual(site.name, \"example.com\")\n\n            request.META = {\"HTTP_HOST\": \"example.com:80\"}\n            site = get_current_site(request)\n            self.assertEqual(site.name, \"example.com:80\")",
+    "token_count": 380,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_no_site_id_and_handle_port_fallback"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 16,
+     "rerank_score": -2.8999295234680176,
+     "bm25_rank": 12,
+     "dense_rank": 71,
+     "oversized_chunk": false,
+     "engine_token_count": 380
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/csrf_tests/tests.py:684-692",
+    "content": "# tests/csrf_tests/tests.py:684-692  (tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_origin_malformed_host)\nclass CsrfViewMiddlewareTestMixin(CsrfFunctionTestMixin):\n    def test_origin_malformed_host(self):\n        req = self._get_request(method=\"POST\")\n        req._is_secure_override = True\n        req.META[\"HTTP_HOST\"] = \"@malformed\"\n        req.META[\"HTTP_ORIGIN\"] = \"https://www.evil.org\"\n        mw = CsrfViewMiddleware(token_view)\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, token_view, (), {})\n        self.assertEqual(response.status_code, 403)",
+    "token_count": 157,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_origin_malformed_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 38,
+     "rerank_score": -3.0588810443878174,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 157
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:235-249",
+    "content": "# tests/utils_tests/test_http.py:235-249  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_no_allowed_hosts(self):\n        # A path without host is allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"/confirm/me@example.com\", allowed_hosts=None\n            ),\n            True,\n        )\n        # Basic auth without host is not allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                r\"http://testserver\\@example.com\", allowed_hosts=None\n            ),\n            False,\n        )",
+    "token_count": 136,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": -3.086162805557251,
+     "bm25_rank": 31,
+     "dense_rank": 38,
+     "oversized_chunk": false,
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:202-241",
+    "content": "# django/http/request.py:202-241  (django.http.request.HttpRequest.build_absolute_uri)\nclass HttpRequest:\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)",
+    "token_count": 442,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.build_absolute_uri"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 46,
+     "rerank_score": -3.39090633392334,
+     "bm25_rank": 19,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 442
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/view_tests/tests/test_debug.py:1328-1334",
+    "content": "# tests/view_tests/tests/test_debug.py:1328-1334  (tests.view_tests.tests.test_debug.PlainTextReportTests.test_disallowed_host)\nclass PlainTextReportTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=\"example.com\")\n    def test_disallowed_host(self):\n        \"An exception report can be generated even for a disallowed host.\"\n        request = self.rf.get(\"/\", headers={\"host\": \"evil.com\"})\n        reporter = ExceptionReporter(request, None, None, None)\n        text = reporter.get_traceback_text()\n        self.assertIn(\"http://evil.com/\", text)",
+    "token_count": 129,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.view_tests.tests.test_debug.PlainTextReportTests.test_disallowed_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 21,
+     "rerank_score": -3.523449420928955,
+     "bm25_rank": 37,
+     "dense_rank": 48,
+     "oversized_chunk": false,
+     "engine_token_count": 129
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/csrf_tests/tests.py:664-682",
+    "content": "# tests/csrf_tests/tests.py:664-682  (tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_https_malformed_host)\nclass CsrfViewMiddlewareTestMixin(CsrfFunctionTestMixin):\n    def test_https_malformed_host(self):\n        \"\"\"\n        CsrfViewMiddleware generates a 403 response if it receives an HTTPS\n        request with a bad host.\n        \"\"\"\n        req = self._get_request(method=\"POST\")\n        req._is_secure_override = True\n        req.META[\"HTTP_HOST\"] = \"@malformed\"\n        req.META[\"HTTP_REFERER\"] = \"https://www.evil.org/somepage\"\n        req.META[\"SERVER_PORT\"] = \"443\"\n        mw = CsrfViewMiddleware(token_view)\n        expected = (\n            \"Referer checking failed - https://www.evil.org/somepage does not \"\n            \"match any trusted origins.\"\n        )\n        with self.assertRaisesMessage(RejectRequest, expected):\n            mw._check_referer(req)\n        response = mw.process_view(req, token_view, (), {})\n        self.assertEqual(response.status_code, 403)",
+    "token_count": 240,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_https_malformed_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 32,
+     "rerank_score": -3.5381393432617188,
+     "bm25_rank": 94,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 240
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:1123-1137",
+    "content": "# tests/requests_tests/tests.py:1123-1137  (tests.requests_tests.tests.RequestHeadersTests)\nclass RequestHeadersTests(SimpleTestCase):\n    ENVIRON = {\n        # Non-headers are ignored.\n        \"PATH_INFO\": \"/somepath/\",\n        \"REQUEST_METHOD\": \"get\",\n        \"wsgi.input\": BytesIO(b\"\"),\n        \"SERVER_NAME\": \"internal.com\",\n        \"SERVER_PORT\": 80,\n        # These non-HTTP prefixed headers are included.\n        \"CONTENT_TYPE\": \"text/html\",\n        \"CONTENT_LENGTH\": \"100\",\n        # All HTTP-prefixed headers are included.\n        \"HTTP_ACCEPT\": \"*\",\n        \"HTTP_HOST\": \"example.com\",\n        \"HTTP_USER_AGENT\": \"python-requests/1.2.0\",\n    }",
+    "token_count": 170,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.requests_tests.tests.RequestHeadersTests"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 30,
+     "rerank_score": -3.5604372024536133,
+     "bm25_rank": 72,
+     "dense_rank": 42,
+     "oversized_chunk": false,
+     "engine_token_count": 170
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:82-83",
+    "content": "# django/core/handlers/wsgi.py:82-83  (django.core.handlers.wsgi.WSGIRequest._get_scheme)\nclass WSGIRequest(HttpRequest):\n    def _get_scheme(self):\n        return self.environ.get(\"wsgi.url_scheme\")",
+    "token_count": 56,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIRequest._get_scheme"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 45,
+     "rerank_score": -3.711726188659668,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:161-202",
+    "content": "# tests/utils_tests/test_http.py:161-202  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_bad_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_bad_urls(self):\n        bad_urls = (\n            \"http://example.com\",\n            \"http:///example.com\",\n            \"https://example.com\",\n            \"ftp://example.com\",\n            r\"\\\\example.com\",\n            r\"\\\\\\example.com\",\n            r\"/\\\\/example.com\",\n            r\"\\\\\\example.com\",\n            r\"\\\\example.com\",\n            r\"\\\\//example.com\",\n            r\"/\\/example.com\",\n            r\"\\/example.com\",\n            r\"/\\example.com\",\n            \"http:///example.com\",\n            r\"http:/\\//example.com\",\n            r\"http:\\/example.com\",\n            r\"http:/\\example.com\",\n            'javascript:alert(\"XSS\")',\n            \"\\njavascript:alert(x)\",\n            \"java\\nscript:alert(x)\",\n            \"\\x08//example.com\",\n            r\"http://otherserver\\@example.com\",\n            r\"http:\\\\testserver\\@example.com\",\n            r\"http://testserver\\me:pass@example.com\",\n            r\"http://testserver\\@example.com\",\n            r\"http:\\\\testserver\\confirm\\me@example.com\",\n            \"http:999999999\",\n            \"ftp:9999999999\",\n            \"\\n\",\n            \"http://[2001:cdba:0000:0000:0000:0000:3257:9652/\",\n            \"http://2001:cdba:0000:0000:0000:0000:3257:9652]/\",\n        )\n        for bad_url in bad_urls:\n            with self.subTest(url=bad_url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        bad_url, allowed_hosts={\"testserver\", \"testserver2\"}\n                    ),\n                    False,\n                )",
+    "token_count": 446,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_bad_urls"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 27,
+     "rerank_score": -3.862096071243286,
+     "bm25_rank": 93,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 446
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sites_tests/tests.py:96-107",
+    "content": "# tests/sites_tests/tests.py:96-107  (tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_host_with_trailing_dot)\nclass SitesFrameworkTests(TestCase):\n    @override_settings(SITE_ID=None, ALLOWED_HOSTS=[\"example.com\"])\n    def test_get_current_site_host_with_trailing_dot(self):\n        \"\"\"\n        The site is matched if the name in the request has a trailing dot.\n        \"\"\"\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"example.com.\",\n            \"SERVER_PORT\": \"80\",\n        }\n        site = get_current_site(request)\n        self.assertEqual(site.name, \"example.com\")",
+    "token_count": 139,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_host_with_trailing_dot"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 14,
+     "rerank_score": -3.9254016876220703,
+     "bm25_rank": 18,
+     "dense_rank": 37,
+     "oversized_chunk": false,
+     "engine_token_count": 139
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/view_tests/tests/test_debug.py:1118-1124",
+    "content": "# tests/view_tests/tests/test_debug.py:1118-1124  (tests.view_tests.tests.test_debug.ExceptionReporterTests.test_disallowed_host)\nclass ExceptionReporterTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=\"example.com\")\n    def test_disallowed_host(self):\n        \"An exception report can be generated even for a disallowed host.\"\n        request = self.rf.get(\"/\", headers={\"host\": \"evil.com\"})\n        reporter = ExceptionReporter(request, None, None, None)\n        html = reporter.get_traceback_html()\n        self.assertIn(\"http://evil.com/\", html)",
+    "token_count": 126,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.view_tests.tests.test_debug.ExceptionReporterTests.test_disallowed_host"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 15,
+     "rerank_score": -4.034300804138184,
+     "bm25_rank": 36,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 126
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:204-224",
+    "content": "# tests/utils_tests/test_http.py:204-224  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_good_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_good_urls(self):\n        good_urls = (\n            \"/view/?param=http://example.com\",\n            \"/view/?param=https://example.com\",\n            \"/view?param=ftp://example.com\",\n            \"view/?param=//example.com\",\n            \"https://testserver/\",\n            \"HTTPS://testserver/\",\n            \"//testserver/\",\n            \"http://testserver/confirm?email=me@example.com\",\n            \"/url%20with%20spaces/\",\n            \"path/http:2222222222\",\n        )\n        for good_url in good_urls:\n            with self.subTest(url=good_url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        good_url, allowed_hosts={\"otherserver\", \"testserver\"}\n                    ),\n                    True,\n                )",
+    "token_count": 212,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_good_urls"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 19,
+     "rerank_score": -4.161440372467041,
+     "bm25_rank": 59,
+     "dense_rank": 27,
+     "oversized_chunk": false,
+     "engine_token_count": 212
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/validators.py:1-16",
+    "content": "# django/core/validators.py:1-16  (django.core.validators)\nimport ipaddress\nimport math\nimport re\nfrom pathlib import Path\nfrom urllib.parse import urlsplit, urlunsplit\n\nfrom django.core.exceptions import ValidationError\nfrom django.utils.deconstruct import deconstructible\nfrom django.utils.encoding import punycode\nfrom django.utils.ipv6 import is_valid_ipv6_address\nfrom django.utils.regex_helper import _lazy_re_compile\nfrom django.utils.translation import gettext_lazy as _\nfrom django.utils.translation import ngettext_lazy\n\n# These values, if given to validate(), will trigger the self.required check.\nEMPTY_VALUES = (None, \"\", [], (), {})",
+    "token_count": 136,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -4.37663459777832,
+     "bm25_rank": null,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:19-63",
+    "content": "# django/views/i18n.py:19-63  (django.views.i18n.set_language)\ndef set_language(request):\n    \"\"\"\n    Redirect to a given URL while setting the chosen language in the session\n    (if enabled) and in a cookie. The URL and the language code need to be\n    specified in the request parameters.\n\n    Since this view changes how the user will see the rest of the site, it must\n    only be accessed as a POST request. If called as a GET request, it will\n    redirect to the page in the request (the 'next' parameter) without changing\n    any state.\n    \"\"\"\n    next_url = request.POST.get(\"next\", request.GET.get(\"next\"))\n    if (\n        next_url or request.accepts(\"text/html\")\n    ) and not url_has_allowed_host_and_scheme(\n        url=next_url,\n        allowed_hosts={request.get_host()},\n        require_https=request.is_secure(),\n    ):\n        next_url = request.META.get(\"HTTP_REFERER\")\n        if not url_has_allowed_host_and_scheme(\n            url=next_url,\n            allowed_hosts={request.get_host()},\n            require_https=request.is_secure(),\n        ):\n            next_url = \"/\"\n    response = HttpResponseRedirect(next_url) if next_url else HttpResponse(status=204)\n    if request.method == \"POST\":\n        lang_code = request.POST.get(LANGUAGE_QUERY_PARAMETER)\n        if lang_code and check_for_language(lang_code):\n            if next_url:\n                next_trans = translate_url(next_url, lang_code)\n                if next_trans != next_url:\n                    response = HttpResponseRedirect(next_trans)\n            response.set_cookie(\n                settings.LANGUAGE_COOKIE_NAME,\n                lang_code,\n                max_age=settings.LANGUAGE_COOKIE_AGE,\n                path=settings.LANGUAGE_COOKIE_PATH,\n                domain=settings.LANGUAGE_COOKIE_DOMAIN,\n                secure=settings.LANGUAGE_COOKIE_SECURE,\n                httponly=settings.LANGUAGE_COOKIE_HTTPONLY,\n                samesite=settings.LANGUAGE_COOKIE_SAMESITE,\n            )\n    return response",
+    "token_count": 409,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.i18n.set_language"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 36,
+     "rerank_score": -4.377058506011963,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 409
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/csrf_tests/tests.py:981-996",
+    "content": "# tests/csrf_tests/tests.py:981-996  (tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_bad_origin_cannot_be_parsed)\nclass CsrfViewMiddlewareTestMixin(CsrfFunctionTestMixin):\n    @override_settings(ALLOWED_HOSTS=[\"www.example.com\"])\n    def test_bad_origin_cannot_be_parsed(self):\n        \"\"\"\n        A POST request with an origin that can't be parsed by urlparse() is\n        rejected.\n        \"\"\"\n        req = self._get_POST_request_with_token()\n        req.META[\"HTTP_HOST\"] = \"www.example.com\"\n        req.META[\"HTTP_ORIGIN\"] = \"https://[\"\n        mw = CsrfViewMiddleware(post_form_view)\n        self._check_referer_rejects(mw, req)\n        self.assertIs(mw._origin_verified(req), False)\n        with self.assertLogs(\"django.security.csrf\", \"WARNING\") as cm:\n            response = mw.process_view(req, post_form_view, (), {})\n        msg = REASON_BAD_ORIGIN % req.META[\"HTTP_ORIGIN\"]\n        self.assertForbiddenReason(response, cm, msg)",
+    "token_count": 230,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_bad_origin_cannot_be_parsed"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 28,
+     "rerank_score": -4.935653209686279,
+     "bm25_rank": 57,
+     "dense_rank": 47,
+     "oversized_chunk": false,
+     "engine_token_count": 230
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/logging_tests/views.py:23-24",
+    "content": "# tests/logging_tests/views.py:23-24  (tests.logging_tests.views.suspicious_spec)\ndef suspicious_spec(request):\n    raise DisallowedHost(\"dubious\")",
+    "token_count": 38,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.logging_tests.views.suspicious_spec"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 50,
+     "rerank_score": -7.037351131439209,
+     "bm25_rank": null,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 38
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12537,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are debugging how Django resolves and validates the HTTP Host\nheader in django/http/request.py. Starting from\n`HttpRequest.get_host`, trace the real causal pipeline that\nvalidates the host, in the order each stage is actually reached, up\nto and including the call that checks the parsed domain against\nALLOWED_HOSTS. Assume the parsed host has a non-empty domain\ncomponent, so the validation call is genuinely reached.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.http.request.HttpRequest.get_host\", \"django.http.request.HttpRequest._get_raw_host\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "tests/validators/tests.py:43-609#part2of2"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1235.52557
+    ],
+    "L_embed_query": [
+     296.794713
+    ],
+    "L_dense": [
+     49.315756
+    ],
+    "L_rrf": [
+     0.166924
+    ],
+    "L_rerank": [
+     25253.048741
+    ],
+    "L_retrieve": [
+     26909.790318
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12537,
+   "prompt_tokens": 12853,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 12866,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/http/request.py:131-151  (django.http.request.HttpRequest.get_host)\nclass HttpRequest:\n    def get_host(self):\n        \"\"\"Return the HTTP host using the environment or request headers.\"\"\"\n        host = self._get_raw_host()\n\n        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.\n        allowed_hosts = settings.ALLOWED_HOSTS\n        if settings.DEBUG and not allowed_hosts:\n            allowed_hosts = [\".localhost\", \"127.0.0.1\", \"[::1]\"]\n\n        domain, port = split_domain_port(host)\n        if domain and validate_host(domain, allowed_hosts):\n            return host\n        else:\n            msg = \"Invalid HTTP_HOST header: %r.\" % host\n            if domain:\n                msg += \" You may need to add %r to ALLOWED_HOSTS.\" % domain\n            else:\n                msg += (\n                    \" The domain name provided is not valid according to RFC 1034/1035.\"\n                )\n            raise DisallowedHost(msg)\n\n# django/template/context_processors.py:36-55  (django.template.context_processors.debug)\ndef debug(request):\n    \"\"\"\n    Return context variables helpful for debugging.\n    \"\"\"\n    context_extras = {}\n    if settings.DEBUG and request.META.get(\"REMOTE_ADDR\") in settings.INTERNAL_IPS:\n        context_extras[\"debug\"] = True\n        from django.db import connections\n\n        # Return a lazy reference that computes connection.queries on access,\n        # to ensure it contains queries triggered after this function runs.\n        context_extras[\"sql_queries\"] = lazy(\n            lambda: list(\n                itertools.chain.from_iterable(\n                    connections[x].queries for x in connections\n                )\n            ),\n            list,\n        )\n    return context_extras\n\n# tests/requests_tests/tests.py:1006-1022  (tests.requests_tests.tests.HostValidationTests.test_host_validation_in_debug_mode)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(DEBUG=True, ALLOWED_HOSTS=[])\n    def test_host_validation_in_debug_mode(self):\n        \"\"\"\n        If ALLOWED_HOSTS is empty and DEBUG is True, variants of localhost are\n        allowed.\n        \"\"\"\n        valid_hosts = [\"localhost\", \"subdomain.localhost\", \"127.0.0.1\", \"[::1]\"]\n        for host in valid_hosts:\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": host}\n            self.assertEqual(request.get_host(), host)\n\n        # Other hostnames raise a DisallowedHost.\n        with self.assertRaises(DisallowedHost):\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": \"example.com\"}\n            request.get_host()\n\n# django/http/request.py:247-252  (django.http.request.HttpRequest._get_scheme)\nclass HttpRequest:\n    def _get_scheme(self):\n        \"\"\"\n        Hook for subclasses like WSGIRequest to implement. Return 'http' by\n        default.\n        \"\"\"\n        return \"http\"\n\n# django/http/request.py:153-159  (django.http.request.HttpRequest.get_port)\nclass HttpRequest:\n    def get_port(self):\n        \"\"\"Return the port number for the request as a string.\"\"\"\n        if settings.USE_X_FORWARDED_PORT and \"HTTP_X_FORWARDED_PORT\" in self.META:\n            port = self.META[\"HTTP_X_FORWARDED_PORT\"]\n        else:\n            port = self.META[\"SERVER_PORT\"]\n        return str(port)\n\n# tests/requests_tests/tests.py:990-1004  (tests.requests_tests.tests.HostValidationTests.test_get_port_with_x_forwarded_port)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_PORT=True)\n    def test_get_port_with_x_forwarded_port(self):\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_PORT\": \"8080\",\n            \"HTTP_X_FORWARDED_PORT\": \"80\",\n        }\n        # Should use the X-Forwarded-Port header\n        self.assertEqual(request.get_port(), \"80\")\n\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_PORT\": \"8080\",\n        }\n        self.assertEqual(request.get_port(), \"8080\")\n\n# django/http/request.py:113-129  (django.http.request.HttpRequest._get_raw_host)\nclass HttpRequest:\n    def _get_raw_host(self):\n        \"\"\"\n        Return the HTTP host using the environment or request headers. Skip\n        allowed hosts protection, so may return an insecure host.\n        \"\"\"\n        # We try three options, in order of decreasing preference.\n        if settings.USE_X_FORWARDED_HOST and (\"HTTP_X_FORWARDED_HOST\" in self.META):\n            host = self.META[\"HTTP_X_FORWARDED_HOST\"]\n        elif \"HTTP_HOST\" in self.META:\n            host = self.META[\"HTTP_HOST\"]\n        else:\n            # Reconstruct the host using the algorithm from PEP 333.\n            host = self.META[\"SERVER_NAME\"]\n            server_port = self.get_port()\n            if server_port != (\"443\" if self.is_secure() else \"80\"):\n                host = \"%s:%s\" % (host, server_port)\n        return host\n\n# tests/test_client_regress/views.py:140-144  (tests.test_client_regress.views.check_headers)\ndef check_headers(request):\n    \"A view that responds with value of the X-ARG-CHECK header\"\n    return HttpResponse(\n        \"HTTP_X_ARG_CHECK: %s\" % request.META.get(\"HTTP_X_ARG_CHECK\", \"Undefined\")\n    )\n\n# django/http/request.py:243-245  (django.http.request.HttpRequest._current_scheme_host)\nclass HttpRequest:\n    @cached_property\n    def _current_scheme_host(self):\n        return \"{}://{}\".format(self.scheme, self.get_host())\n\n# tests/requests_tests/tests.py:910-972  (tests.requests_tests.tests.HostValidationTests.test_http_get_host_with_x_forwarded_host)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_HOST=True, ALLOWED_HOSTS=[\"*\"])\n    def test_http_get_host_with_x_forwarded_host(self):\n        # Check if X_FORWARDED_HOST is provided.\n        request = HttpRequest()\n        request.META = {\n            \"HTTP_X_FORWARDED_HOST\": \"forward.com\",\n            \"HTTP_HOST\": \"example.com\",\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        # X_FORWARDED_HOST is obeyed.\n        self.assertEqual(request.get_host(), \"forward.com\")\n\n        # Check if X_FORWARDED_HOST isn't provided.\n        request = HttpRequest()\n        request.META = {\n            \"HTTP_HOST\": \"example.com\",\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        self.assertEqual(request.get_host(), \"example.com\")\n\n        # Check if HTTP_HOST isn't provided.\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        self.assertEqual(request.get_host(), \"internal.com\")\n\n        # Check if HTTP_HOST isn't provided, and we're on a nonstandard port\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 8042,\n        }\n        self.assertEqual(request.get_host(), \"internal.com:8042\")\n\n        # Poisoned host headers are rejected as suspicious\n        legit_hosts = [\n            \"example.com\",\n            \"example.com:80\",\n            \"12.34.56.78\",\n            \"12.34.56.78:443\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"[2001:19f0:feee::dead:beef:cafe]:8080\",\n            \"xn--4ca9at.com\",  # Punycode for \u00f6\u00e4\u00fc.com\n        ]\n\n        for host in legit_hosts:\n            request = HttpRequest()\n            request.META = {\n                \"HTTP_HOST\": host,\n            }\n            request.get_host()\n\n        for host in self.poisoned_hosts:\n            with self.assertRaises(DisallowedHost):\n                request = HttpRequest()\n                request.META = {\n                    \"HTTP_HOST\": host,\n                }\n                request.get_host()\n\n# tests/requests_tests/tests.py:1139-1151  (tests.requests_tests.tests.RequestHeadersTests.test_base_request_headers)\nclass RequestHeadersTests(SimpleTestCase):\n    def test_base_request_headers(self):\n        request = HttpRequest()\n        request.META = self.ENVIRON\n        self.assertEqual(\n            dict(request.headers),\n            {\n                \"Content-Type\": \"text/html\",\n                \"Content-Length\": \"100\",\n                \"Accept\": \"*\",\n                \"Host\": \"example.com\",\n                \"User-Agent\": \"python-requests/1.2.0\",\n            },\n        )\n\n# django/http/request.py:53-428  (django.http.request.HttpRequest)\nclass HttpRequest:\n    \"\"\"A basic HTTP request.\"\"\"\n\n    # The encoding used in GET/POST dicts. None means use default setting.\n    _encoding = None\n    _upload_handlers = []\n\n    def __init__(self):\n        # WARNING: The `WSGIRequest` subclass doesn't call `super`.\n        # Any variable assignment made here should also happen in\n        # `WSGIRequest.__init__()`.\n\n        self.GET = QueryDict(mutable=True)\n        self.POST = QueryDict(mutable=True)\n        self.COOKIES = {}\n        self.META = {}\n        self.FILES = MultiValueDict()\n\n        self.path = \"\"\n        self.path_info = \"\"\n        self.method = None\n        self.resolver_match = None\n        self.content_type = None\n        self.content_params = None\n\n    def __repr__(self):\n        if self.method is None or not self.get_full_path():\n            return \"<%s>\" % self.__class__.__name__\n        return \"<%s: %s %r>\" % (\n            self.__class__.__name__,\n            self.method,\n            self.get_full_path(),\n        )\n\n    @cached_property\n    def headers(self):\n        return HttpHeaders(self.META)\n\n    @cached_property\n    def accepted_types(self):\n        \"\"\"Return a list of MediaType instances.\"\"\"\n        return parse_accept_header(self.headers.get(\"Accept\", \"*/*\"))\n\n    def accepts(self, media_type):\n        return any(\n            accepted_type.match(media_type) for accepted_type in self.accepted_types\n        )\n\n    def _set_content_type_params(self, meta):\n        \"\"\"Set content_type, content_params, and encoding.\"\"\"\n        self.content_type, self.content_params = parse_header_parameters(\n            meta.get(\"CONTENT_TYPE\", \"\")\n        )\n        if \"charset\" in self.content_params:\n            try:\n                codecs.lookup(self.content_params[\"charset\"])\n            except LookupError:\n                pass\n            else:\n                self.encoding = self.content_params[\"charset\"]\n\n    def _get_raw_host(self):\n        \"\"\"\n        Return the HTTP host using the environment or request headers. Skip\n        allowed hosts protection, so may return an insecure host.\n        \"\"\"\n        # We try three options, in order of decreasing preference.\n        if settings.USE_X_FORWARDED_HOST and (\"HTTP_X_FORWARDED_HOST\" in self.META):\n            host = self.META[\"HTTP_X_FORWARDED_HOST\"]\n        elif \"HTTP_HOST\" in self.META:\n            host = self.META[\"HTTP_HOST\"]\n        else:\n            # Reconstruct the host using the algorithm from PEP 333.\n            host = self.META[\"SERVER_NAME\"]\n            server_port = self.get_port()\n            if server_port != (\"443\" if self.is_secure() else \"80\"):\n                host = \"%s:%s\" % (host, server_port)\n        return host\n\n    def get_host(self):\n        \"\"\"Return the HTTP host using the environment or request headers.\"\"\"\n        host = self._get_raw_host()\n\n        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.\n        allowed_hosts = settings.ALLOWED_HOSTS\n        if settings.DEBUG and not allowed_hosts:\n            allowed_hosts = [\".localhost\", \"127.0.0.1\", \"[::1]\"]\n\n        domain, port = split_domain_port(host)\n        if domain and validate_host(domain, allowed_hosts):\n            return host\n        else:\n            msg = \"Invalid HTTP_HOST header: %r.\" % host\n            if domain:\n                msg += \" You may need to add %r to ALLOWED_HOSTS.\" % domain\n            else:\n                msg += (\n                    \" The domain name provided is not valid according to RFC 1034/1035.\"\n                )\n            raise DisallowedHost(msg)\n\n    def get_port(self):\n        \"\"\"Return the port number for the request as a string.\"\"\"\n        if settings.USE_X_FORWARDED_PORT and \"HTTP_X_FORWARDED_PORT\" in self.META:\n            port = self.META[\"HTTP_X_FORWARDED_PORT\"]\n        else:\n            port = self.META[\"SERVER_PORT\"]\n        return str(port)\n\n    def get_full_path(self, force_append_slash=False):\n        return self._get_full_path(self.path, force_append_slash)\n\n    def get_full_path_info(self, force_append_slash=False):\n        return self._get_full_path(self.path_info, force_append_slash)\n\n    def _get_full_path(self, path, force_append_slash):\n        # RFC 3986 requires query string arguments to be in the ASCII range.\n        # Rather than crash if this doesn't happen, we encode defensively.\n        return \"%s%s%s\" % (\n            escape_uri_path(path),\n            \"/\" if force_append_slash and not path.endswith(\"/\") else \"\",\n            (\"?\" + iri_to_uri(self.META.get(\"QUERY_STRING\", \"\")))\n            if self.META.get(\"QUERY_STRING\", \"\")\n            else \"\",\n        )\n\n    def get_signed_cookie(self, key, default=RAISE_ERROR, salt=\"\", max_age=None):\n        \"\"\"\n        Attempt to return a signed cookie. If the signature fails or the\n        cookie has expired, raise an exception, unless the `default` argument\n        is provided,  in which case return that value.\n        \"\"\"\n        try:\n            cookie_value = self.COOKIES[key]\n        except KeyError:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        try:\n            value = signing.get_cookie_signer(salt=key + salt).unsign(\n                cookie_value, max_age=max_age\n            )\n        except signing.BadSignature:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        return value\n\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)\n\n    @cached_property\n    def _current_scheme_host(self):\n        return \"{}://{}\".format(self.scheme, self.get_host())\n\n    def _get_scheme(self):\n        \"\"\"\n        Hook for subclasses like WSGIRequest to implement. Return 'http' by\n        default.\n        \"\"\"\n        return \"http\"\n\n    @property\n    def scheme(self):\n        if settings.SECURE_PROXY_SSL_HEADER:\n            try:\n                header, secure_value = settings.SECURE_PROXY_SSL_HEADER\n            except ValueError:\n                raise ImproperlyConfigured(\n                    \"The SECURE_PROXY_SSL_HEADER setting must be a tuple containing \"\n                    \"two values.\"\n                )\n            header_value = self.META.get(header)\n            if header_value is not None:\n                header_value, *_ = header_value.split(\",\", 1)\n                return \"https\" if header_value.strip() == secure_value else \"http\"\n        return self._get_scheme()\n\n    def is_secure(self):\n        return self.scheme == \"https\"\n\n    @property\n    def encoding(self):\n        return self._encoding\n\n    @encoding.setter\n    def encoding(self, val):\n        \"\"\"\n        Set the encoding used for GET/POST accesses. If the GET or POST\n        dictionary has already been created, remove and recreate it on the\n        next access (so that it is decoded correctly).\n        \"\"\"\n        self._encoding = val\n        if hasattr(self, \"GET\"):\n            del self.GET\n        if hasattr(self, \"_post\"):\n            del self._post\n\n    def _initialize_handlers(self):\n        self._upload_handlers = [\n            uploadhandler.load_handler(handler, self)\n            for handler in settings.FILE_UPLOAD_HANDLERS\n        ]\n\n    @property\n    def upload_handlers(self):\n        if not self._upload_handlers:\n            # If there are no upload handlers defined, initialize them from settings.\n            self._initialize_handlers()\n        return self._upload_handlers\n\n    @upload_handlers.setter\n    def upload_handlers(self, upload_handlers):\n        if hasattr(self, \"_files\"):\n            raise AttributeError(\n                \"You cannot set the upload handlers after the upload has been \"\n                \"processed.\"\n            )\n        self._upload_handlers = upload_handlers\n\n    def parse_file_upload(self, META, post_data):\n        \"\"\"Return a tuple of (POST QueryDict, FILES MultiValueDict).\"\"\"\n        self.upload_handlers = ImmutableList(\n            self.upload_handlers,\n            warning=(\n                \"You cannot alter upload handlers after the upload has been \"\n                \"processed.\"\n            ),\n        )\n        parser = MultiPartParser(META, post_data, self.upload_handlers, self.encoding)\n        return parser.parse()\n\n    @property\n    def body(self):\n        if not hasattr(self, \"_body\"):\n            if self._read_started:\n                raise RawPostDataException(\n                    \"You cannot access body after reading from request's data stream\"\n                )\n\n            # Limit the maximum request data size that will be handled\n            # in-memory. Reject early when Content-Length is present and\n            # already exceeds the limit, avoiding reading the body at all.\n            self._check_data_too_big(int(self.META.get(\"CONTENT_LENGTH\") or 0))\n\n            # Content-Length can be absent or understated (e.g.\n            # `Transfer-Encoding: chunked` on ASGI), so for seekable\n            # streams (e.g. SpooledTemporaryFile on ASGI), check the actual\n            # buffered size before reading it all into memory.\n            if hasattr(self._stream, \"seekable\") and self._stream.seekable():\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n                did_check = True\n            else:\n                did_check = False\n\n            try:\n                if settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None and not did_check:\n                    # Read one byte past the limit to detect an oversize body\n                    # without loading it all into memory first.\n                    self._body = self.read(settings.DATA_UPLOAD_MAX_MEMORY_SIZE + 1)\n                else:\n                    self._body = self.read()\n            except OSError as e:\n                raise UnreadablePostError(*e.args) from e\n            finally:\n                self._stream.close()\n            self._stream = BytesIO(self._body)\n            if not did_check:\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n        return self._body\n\n    def _check_data_too_big(self, length):\n        if (\n            settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None\n            and length > settings.DATA_UPLOAD_MAX_MEMORY_SIZE\n        ):\n            msg = \"Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.\"\n            raise RequestDataTooBig(msg)\n\n    def _mark_post_parse_error(self):\n        self._post = QueryDict()\n        self._files = MultiValueDict()\n\n    def _load_post_and_files(self):\n        \"\"\"Populate self._post and self._files if the content-type is a form type\"\"\"\n        if self.method != \"POST\":\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n            return\n        if self._read_started and not hasattr(self, \"_body\"):\n            self._mark_post_parse_error()\n            return\n\n        if self.content_type == \"multipart/form-data\":\n            if hasattr(self, \"_body\"):\n                # Use already read data\n                data = BytesIO(self._body)\n            else:\n                data = self\n            try:\n                self._post, self._files = self.parse_file_upload(self.META, data)\n            except (MultiPartParserError, TooManyFilesSent):\n                # An error occurred while parsing POST data. Since when\n                # formatting the error the request handler might access\n                # self.POST, set self._post and self._file to prevent\n                # attempts to parse POST data again.\n                self._mark_post_parse_error()\n                raise\n        elif self.content_type == \"application/x-www-form-urlencoded\":\n            self._post, self._files = (\n                QueryDict(self.body, encoding=self._encoding),\n                MultiValueDict(),\n            )\n        else:\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n\n    def close(self):\n        if hasattr(self, \"_files\"):\n            for f in chain.from_iterable(list_[1] for list_ in self._files.lists()):\n                f.close()\n\n    # File-like and iterator interface.\n    #\n    # Expects self._stream to be set to an appropriate source of bytes by\n    # a corresponding request subclass (e.g. WSGIRequest).\n    # Also when request data has already been read by request.POST or\n    # request.body, self._stream points to a BytesIO instance\n    # containing that data.\n\n# tests/requests_tests/tests.py:1090-1097  (tests.requests_tests.tests.BuildAbsoluteURITests.test_host_retrieval)\nclass BuildAbsoluteURITests(SimpleTestCase):\n    def test_host_retrieval(self):\n        request = HttpRequest()\n        request.get_host = lambda: \"www.example.com\"\n        request.path = \"\"\n        self.assertEqual(\n            request.build_absolute_uri(location=\"/path/with:colons\"),\n            \"http://www.example.com/path/with:colons\",\n        )\n\n# django/http/request.py:743-760  (django.http.request.validate_host)\ndef validate_host(host, allowed_hosts):\n    \"\"\"\n    Validate the given host for this site.\n\n    Check that the host looks valid and matches a host or host pattern in the\n    given list of ``allowed_hosts``. Any pattern beginning with a period\n    matches a domain and all its subdomains (e.g. ``.example.com`` matches\n    ``example.com`` and any subdomain), ``*`` matches anything, and anything\n    else must match exactly.\n\n    Note: This function assumes that the given host is lowercased and has\n    already had the port, if any, stripped off.\n\n    Return ``True`` for a valid host, ``False`` otherwise.\n    \"\"\"\n    return any(\n        pattern == \"*\" or is_same_domain(host, pattern) for pattern in allowed_hosts\n    )\n\n# tests/requests_tests/tests.py:974-988  (tests.requests_tests.tests.HostValidationTests.test_get_port)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_PORT=False)\n    def test_get_port(self):\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_PORT\": \"8080\",\n            \"HTTP_X_FORWARDED_PORT\": \"80\",\n        }\n        # Shouldn't use the X-Forwarded-Port header\n        self.assertEqual(request.get_port(), \"8080\")\n\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_PORT\": \"8080\",\n        }\n        self.assertEqual(request.get_port(), \"8080\")\n\n# django/core/handlers/asgi.py:113-114  (django.core.handlers.asgi.ASGIRequest._get_scheme)\nclass ASGIRequest(HttpRequest):\n    def _get_scheme(self):\n        return self.scope.get(\"scheme\") or super()._get_scheme()\n\n# tests/requests_tests/tests.py:827-908  (tests.requests_tests.tests.HostValidationTests.test_http_get_host)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(\n        USE_X_FORWARDED_HOST=False,\n        ALLOWED_HOSTS=[\n            \"forward.com\",\n            \"example.com\",\n            \"internal.com\",\n            \"12.34.56.78\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"xn--4ca9at.com\",\n            \".multitenant.com\",\n            \"INSENSITIVE.com\",\n            \"[::ffff:169.254.169.254]\",\n        ],\n    )\n    def test_http_get_host(self):\n        # Check if X_FORWARDED_HOST is provided.\n        request = HttpRequest()\n        request.META = {\n            \"HTTP_X_FORWARDED_HOST\": \"forward.com\",\n            \"HTTP_HOST\": \"example.com\",\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        # X_FORWARDED_HOST is ignored.\n        self.assertEqual(request.get_host(), \"example.com\")\n\n        # Check if X_FORWARDED_HOST isn't provided.\n        request = HttpRequest()\n        request.META = {\n            \"HTTP_HOST\": \"example.com\",\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        self.assertEqual(request.get_host(), \"example.com\")\n\n        # Check if HTTP_HOST isn't provided.\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 80,\n        }\n        self.assertEqual(request.get_host(), \"internal.com\")\n\n        # Check if HTTP_HOST isn't provided, and we're on a nonstandard port\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"internal.com\",\n            \"SERVER_PORT\": 8042,\n        }\n        self.assertEqual(request.get_host(), \"internal.com:8042\")\n\n        legit_hosts = [\n            \"example.com\",\n            \"example.com:80\",\n            \"12.34.56.78\",\n            \"12.34.56.78:443\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"[2001:19f0:feee::dead:beef:cafe]:8080\",\n            \"xn--4ca9at.com\",  # Punycode for \u00f6\u00e4\u00fc.com\n            \"anything.multitenant.com\",\n            \"multitenant.com\",\n            \"insensitive.com\",\n            \"example.com.\",\n            \"example.com.:80\",\n            \"[::ffff:169.254.169.254]\",\n        ]\n\n        for host in legit_hosts:\n            request = HttpRequest()\n            request.META = {\n                \"HTTP_HOST\": host,\n            }\n            request.get_host()\n\n        # Poisoned host headers are rejected as suspicious\n        for host in chain(self.poisoned_hosts, [\"other.com\", \"example.com..\"]):\n            with self.assertRaises(DisallowedHost):\n                request = HttpRequest()\n                request.META = {\n                    \"HTTP_HOST\": host,\n                }\n                request.get_host()\n\n# tests/requests_tests/tests.py:1024-1074  (tests.requests_tests.tests.HostValidationTests.test_get_host_suggestion_of_allowed_host)\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=[])\n    def test_get_host_suggestion_of_allowed_host(self):\n        \"\"\"\n        get_host() makes helpful suggestions if a valid-looking host is not in\n        ALLOWED_HOSTS.\n        \"\"\"\n        msg_invalid_host = \"Invalid HTTP_HOST header: %r.\"\n        msg_suggestion = msg_invalid_host + \" You may need to add %r to ALLOWED_HOSTS.\"\n        msg_suggestion2 = (\n            msg_invalid_host\n            + \" The domain name provided is not valid according to RFC 1034/1035\"\n        )\n\n        for host in [  # Valid-looking hosts\n            \"example.com\",\n            \"12.34.56.78\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"xn--4ca9at.com\",  # Punycode for \u00f6\u00e4\u00fc.com\n        ]:\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": host}\n            with self.assertRaisesMessage(\n                DisallowedHost, msg_suggestion % (host, host)\n            ):\n                request.get_host()\n\n        for domain, port in [  # Valid-looking hosts with a port number\n            (\"example.com\", 80),\n            (\"12.34.56.78\", 443),\n            (\"[2001:19f0:feee::dead:beef:cafe]\", 8080),\n        ]:\n            host = \"%s:%s\" % (domain, port)\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": host}\n            with self.assertRaisesMessage(\n                DisallowedHost, msg_suggestion % (host, domain)\n            ):\n                request.get_host()\n\n        for host in self.poisoned_hosts:\n            request = HttpRequest()\n            request.META = {\"HTTP_HOST\": host}\n            with self.assertRaisesMessage(DisallowedHost, msg_invalid_host % host):\n                request.get_host()\n\n        request = HttpRequest()\n        request.META = {\"HTTP_HOST\": \"invalid_hostname.com\"}\n        with self.assertRaisesMessage(\n            DisallowedHost, msg_suggestion2 % \"invalid_hostname.com\"\n        ):\n            request.get_host()\n\n# django/contrib/sites/requests.py:10-11  (django.contrib.sites.requests.RequestSite.__init__)\nclass RequestSite:\n    def __init__(self, request):\n        self.domain = self.name = request.get_host()\n\n# django/contrib/auth/views.py:57-58  (django.contrib.auth.views.RedirectURLMixin.get_success_url_allowed_hosts)\nclass RedirectURLMixin:\n    def get_success_url_allowed_hosts(self):\n        return {self.request.get_host(), *self.success_url_allowed_hosts}\n\n# django/contrib/sites/models.py:34-46  (django.contrib.sites.models.SiteManager._get_site_by_request)\nclass SiteManager(models.Manager):\n    def _get_site_by_request(self, request):\n        host = request.get_host()\n        try:\n            # First attempt to look up the site by host with or without port.\n            if host not in SITE_CACHE:\n                SITE_CACHE[host] = self.get(domain__iexact=host)\n            return SITE_CACHE[host]\n        except Site.DoesNotExist:\n            # Fallback to looking up site after stripping port from the host.\n            domain, port = split_domain_port(host)\n            if domain not in SITE_CACHE:\n                SITE_CACHE[domain] = self.get(domain__iexact=domain)\n            return SITE_CACHE[domain]\n\n# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme)\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    \"\"\"\n    Return ``True`` if the url uses an allowed host and a safe scheme.\n\n    Always return ``False`` on an empty url.\n\n    If ``require_https`` is ``True``, only 'https' will be considered a valid\n    scheme, as opposed to 'http' and 'https' with the default, ``False``.\n\n    Note: \"True\" doesn't entail that a URL is \"safe\". It may still be e.g.\n    quoted incorrectly. Ensure to also use django.utils.encoding.iri_to_uri()\n    on the path component of untrusted URLs.\n    \"\"\"\n    if url is not None:\n        url = url.strip()\n    if not url:\n        return False\n    if allowed_hosts is None:\n        allowed_hosts = set()\n    elif isinstance(allowed_hosts, str):\n        allowed_hosts = {allowed_hosts}\n    # Chrome treats \\ completely as / in paths but it could be part of some\n    # basic auth credentials so we need to check both URLs.\n    return _url_has_allowed_host_and_scheme(\n        url, allowed_hosts, require_https=require_https\n    ) and _url_has_allowed_host_and_scheme(\n        url.replace(\"\\\\\", \"/\"), allowed_hosts, require_https=require_https\n    )\n\n# tests/auth_tests/test_views.py:203-220  (tests.auth_tests.test_views.PasswordResetTest.test_poisoned_http_host)\nclass PasswordResetTest(AuthViewsTestCase):\n    @override_settings(DEBUG_PROPAGATE_EXCEPTIONS=True)\n    def test_poisoned_http_host(self):\n        \"Poisoned HTTP_HOST headers can't be used for reset emails\"\n        # This attack is based on the way browsers handle URLs. The colon\n        # should be used to separate the port, but if the URL contains an @,\n        # the colon is interpreted as part of a username for login purposes,\n        # making 'evil.com' the request domain. Since HTTP_HOST is used to\n        # produce a meaningful reset URL, we need to be certain that the\n        # HTTP_HOST header isn't poisoned. This is done as a check when get_host()\n        # is invoked, but we check here as a practical consequence.\n        with self.assertLogs(\"django.security.DisallowedHost\", \"ERROR\"):\n            response = self.client.post(\n                \"/password_reset/\",\n                {\"email\": \"staffmember@example.com\"},\n                headers={\"host\": \"www.example:dr.frankenstein@evil.tld\"},\n            )\n        self.assertEqual(response.status_code, 400)\n        self.assertEqual(len(mail.outbox), 0)\n\n# django/http/__init__.py:1-52  (django.http)\nfrom django.http.cookie import SimpleCookie, parse_cookie\nfrom django.http.request import (\n    HttpHeaders,\n    HttpRequest,\n    QueryDict,\n    RawPostDataException,\n    UnreadablePostError,\n)\nfrom django.http.response import (\n    BadHeaderError,\n    FileResponse,\n    Http404,\n    HttpResponse,\n    HttpResponseBadRequest,\n    HttpResponseBase,\n    HttpResponseForbidden,\n    HttpResponseGone,\n    HttpResponseNotAllowed,\n    HttpResponseNotFound,\n    HttpResponseNotModified,\n    HttpResponsePermanentRedirect,\n    HttpResponseRedirect,\n    HttpResponseServerError,\n    JsonResponse,\n    StreamingHttpResponse,\n)\n\n__all__ = [\n    \"SimpleCookie\",\n    \"parse_cookie\",\n    \"HttpHeaders\",\n    \"HttpRequest\",\n    \"QueryDict\",\n    \"RawPostDataException\",\n    \"UnreadablePostError\",\n    \"HttpResponse\",\n    \"HttpResponseBase\",\n    \"StreamingHttpResponse\",\n    \"HttpResponseRedirect\",\n    \"HttpResponsePermanentRedirect\",\n    \"HttpResponseNotModified\",\n    \"HttpResponseBadRequest\",\n    \"HttpResponseForbidden\",\n    \"HttpResponseNotFound\",\n    \"HttpResponseNotAllowed\",\n    \"HttpResponseGone\",\n    \"HttpResponseServerError\",\n    \"Http404\",\n    \"BadHeaderError\",\n    \"JsonResponse\",\n    \"FileResponse\",\n]\n\n# django/core/exceptions.py:50-52  (django.core.exceptions.DisallowedHost)\nclass DisallowedHost(SuspiciousOperation):\n    \"\"\"HTTP_HOST header contains invalid value\"\"\"\n\n    pass\n\n# django/views/debug.py:315-324  (django.views.debug.ExceptionReporter._get_raw_insecure_uri)\nclass ExceptionReporter:\n    def _get_raw_insecure_uri(self):\n        \"\"\"\n        Return an absolute URI from variables available in this request. Skip\n        allowed hosts protection, so may return insecure URI.\n        \"\"\"\n        return \"{scheme}://{host}{path}\".format(\n            scheme=self.request.scheme,\n            host=self.request._get_raw_host(),\n            path=self.request.get_full_path(),\n        )\n\n# django/contrib/sessions/exceptions.py:1-1  (django.contrib.sessions.exceptions)\nfrom django.core.exceptions import BadRequest, SuspiciousOperation\n\n# django/middleware/csrf.py:276-300  (django.middleware.csrf.CsrfViewMiddleware._origin_verified)\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def _origin_verified(self, request):\n        request_origin = request.META[\"HTTP_ORIGIN\"]\n        try:\n            good_host = request.get_host()\n        except DisallowedHost:\n            pass\n        else:\n            good_origin = \"%s://%s\" % (\n                \"https\" if request.is_secure() else \"http\",\n                good_host,\n            )\n            if request_origin == good_origin:\n                return True\n        if request_origin in self.allowed_origins_exact:\n            return True\n        try:\n            parsed_origin = urlparse(request_origin)\n        except ValueError:\n            return False\n        request_scheme = parsed_origin.scheme\n        request_netloc = parsed_origin.netloc\n        return any(\n            is_same_domain(request_netloc, host)\n            for host in self.allowed_origin_subdomains.get(request_scheme, ())\n        )\n\n# tests/utils_tests/test_http.py:226-233  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_basic_auth(self):\n        # Valid basic auth credentials are allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                r\"http://user:pass@testserver/\", allowed_hosts={\"user:pass@testserver\"}\n            ),\n            True,\n        )\n\n# django/middleware/csrf.py:302-345  (django.middleware.csrf.CsrfViewMiddleware._check_referer)\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def _check_referer(self, request):\n        referer = request.META.get(\"HTTP_REFERER\")\n        if referer is None:\n            raise RejectRequest(REASON_NO_REFERER)\n\n        try:\n            referer = urlparse(referer)\n        except ValueError:\n            raise RejectRequest(REASON_MALFORMED_REFERER)\n\n        # Make sure we have a valid URL for Referer.\n        if \"\" in (referer.scheme, referer.netloc):\n            raise RejectRequest(REASON_MALFORMED_REFERER)\n\n        # Ensure that our Referer is also secure.\n        if referer.scheme != \"https\":\n            raise RejectRequest(REASON_INSECURE_REFERER)\n\n        if any(\n            is_same_domain(referer.netloc, host)\n            for host in self.csrf_trusted_origins_hosts\n        ):\n            return\n        # Allow matching the configured cookie domain.\n        good_referer = (\n            settings.SESSION_COOKIE_DOMAIN\n            if settings.CSRF_USE_SESSIONS\n            else settings.CSRF_COOKIE_DOMAIN\n        )\n        if good_referer is None:\n            # If no cookie domain is configured, allow matching the current\n            # host:port exactly if it's permitted by ALLOWED_HOSTS.\n            try:\n                # request.get_host() includes the port.\n                good_referer = request.get_host()\n            except DisallowedHost:\n                raise RejectRequest(REASON_BAD_REFERER % referer.geturl())\n        else:\n            server_port = request.get_port()\n            if server_port not in (\"443\", \"80\"):\n                good_referer = \"%s:%s\" % (good_referer, server_port)\n\n        if not is_same_domain(referer.netloc, good_referer):\n            raise RejectRequest(REASON_BAD_REFERER % referer.geturl())\n\n# django/http/request.py:721-740  (django.http.request.split_domain_port)\ndef split_domain_port(host):\n    \"\"\"\n    Return a (domain, port) tuple from a given host.\n\n    Returned domain is lowercased. If the host is invalid, the domain will be\n    empty.\n    \"\"\"\n    host = host.lower()\n\n    if not host_validation_re.match(host):\n        return \"\", \"\"\n\n    if host[-1] == \"]\":\n        # It's an IPv6 address without a port.\n        return host, \"\"\n    bits = host.rsplit(\":\", 1)\n    domain, port = bits if len(bits) == 2 else (bits[0], \"\")\n    # Remove a trailing dot (if present) from the domain.\n    domain = domain[:-1] if domain.endswith(\".\") else domain\n    return domain, port\n\n# tests/requests_tests/tests.py:819-825  (tests.requests_tests.tests.HostValidationTests)\nclass HostValidationTests(SimpleTestCase):\n    poisoned_hosts = [\n        \"example.com@evil.tld\",\n        \"example.com:dr.frankenstein@evil.tld\",\n        \"example.com:dr.frankenstein@evil.tld:80\",\n        \"example.com:80/badpath\",\n        \"example.com: recovermypassword.com\",\n    ]\n\n# tests/utils_tests/test_http.py:251-263  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_allowed_hosts_str(self):\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"http://good.com/good\", allowed_hosts=\"good.com\"\n            ),\n            True,\n        )\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"http://good.co/evil\", allowed_hosts=\"good.com\"\n            ),\n            False,\n        )\n\n# tests/sites_tests/tests.py:109-143  (tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_no_site_id_and_handle_port_fallback)\nclass SitesFrameworkTests(TestCase):\n    @override_settings(SITE_ID=None, ALLOWED_HOSTS=[\"example.com\", \"example.net\"])\n    def test_get_current_site_no_site_id_and_handle_port_fallback(self):\n        request = HttpRequest()\n        s1 = self.site\n        s2 = Site.objects.create(domain=\"example.com:80\", name=\"example.com:80\")\n\n        # Host header without port\n        request.META = {\"HTTP_HOST\": \"example.com\"}\n        site = get_current_site(request)\n        self.assertEqual(site, s1)\n\n        # Host header with port - match, no fallback without port\n        request.META = {\"HTTP_HOST\": \"example.com:80\"}\n        site = get_current_site(request)\n        self.assertEqual(site, s2)\n\n        # Host header with port - no match, fallback without port\n        request.META = {\"HTTP_HOST\": \"example.com:81\"}\n        site = get_current_site(request)\n        self.assertEqual(site, s1)\n\n        # Host header with non-matching domain\n        request.META = {\"HTTP_HOST\": \"example.net\"}\n        with self.assertRaises(ObjectDoesNotExist):\n            get_current_site(request)\n\n        # Ensure domain for RequestSite always matches host header\n        with self.modify_settings(INSTALLED_APPS={\"remove\": \"django.contrib.sites\"}):\n            request.META = {\"HTTP_HOST\": \"example.com\"}\n            site = get_current_site(request)\n            self.assertEqual(site.name, \"example.com\")\n\n            request.META = {\"HTTP_HOST\": \"example.com:80\"}\n            site = get_current_site(request)\n            self.assertEqual(site.name, \"example.com:80\")\n\n# tests/csrf_tests/tests.py:684-692  (tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_origin_malformed_host)\nclass CsrfViewMiddlewareTestMixin(CsrfFunctionTestMixin):\n    def test_origin_malformed_host(self):\n        req = self._get_request(method=\"POST\")\n        req._is_secure_override = True\n        req.META[\"HTTP_HOST\"] = \"@malformed\"\n        req.META[\"HTTP_ORIGIN\"] = \"https://www.evil.org\"\n        mw = CsrfViewMiddleware(token_view)\n        self._check_referer_rejects(mw, req)\n        response = mw.process_view(req, token_view, (), {})\n        self.assertEqual(response.status_code, 403)\n\n# tests/utils_tests/test_http.py:235-249  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_no_allowed_hosts(self):\n        # A path without host is allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                \"/confirm/me@example.com\", allowed_hosts=None\n            ),\n            True,\n        )\n        # Basic auth without host is not allowed.\n        self.assertIs(\n            url_has_allowed_host_and_scheme(\n                r\"http://testserver\\@example.com\", allowed_hosts=None\n            ),\n            False,\n        )\n\n# django/http/request.py:202-241  (django.http.request.HttpRequest.build_absolute_uri)\nclass HttpRequest:\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)\n\n# tests/view_tests/tests/test_debug.py:1328-1334  (tests.view_tests.tests.test_debug.PlainTextReportTests.test_disallowed_host)\nclass PlainTextReportTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=\"example.com\")\n    def test_disallowed_host(self):\n        \"An exception report can be generated even for a disallowed host.\"\n        request = self.rf.get(\"/\", headers={\"host\": \"evil.com\"})\n        reporter = ExceptionReporter(request, None, None, None)\n        text = reporter.get_traceback_text()\n        self.assertIn(\"http://evil.com/\", text)\n\n# tests/csrf_tests/tests.py:664-682  (tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_https_malformed_host)\nclass CsrfViewMiddlewareTestMixin(CsrfFunctionTestMixin):\n    def test_https_malformed_host(self):\n        \"\"\"\n        CsrfViewMiddleware generates a 403 response if it receives an HTTPS\n        request with a bad host.\n        \"\"\"\n        req = self._get_request(method=\"POST\")\n        req._is_secure_override = True\n        req.META[\"HTTP_HOST\"] = \"@malformed\"\n        req.META[\"HTTP_REFERER\"] = \"https://www.evil.org/somepage\"\n        req.META[\"SERVER_PORT\"] = \"443\"\n        mw = CsrfViewMiddleware(token_view)\n        expected = (\n            \"Referer checking failed - https://www.evil.org/somepage does not \"\n            \"match any trusted origins.\"\n        )\n        with self.assertRaisesMessage(RejectRequest, expected):\n            mw._check_referer(req)\n        response = mw.process_view(req, token_view, (), {})\n        self.assertEqual(response.status_code, 403)\n\n# tests/requests_tests/tests.py:1123-1137  (tests.requests_tests.tests.RequestHeadersTests)\nclass RequestHeadersTests(SimpleTestCase):\n    ENVIRON = {\n        # Non-headers are ignored.\n        \"PATH_INFO\": \"/somepath/\",\n        \"REQUEST_METHOD\": \"get\",\n        \"wsgi.input\": BytesIO(b\"\"),\n        \"SERVER_NAME\": \"internal.com\",\n        \"SERVER_PORT\": 80,\n        # These non-HTTP prefixed headers are included.\n        \"CONTENT_TYPE\": \"text/html\",\n        \"CONTENT_LENGTH\": \"100\",\n        # All HTTP-prefixed headers are included.\n        \"HTTP_ACCEPT\": \"*\",\n        \"HTTP_HOST\": \"example.com\",\n        \"HTTP_USER_AGENT\": \"python-requests/1.2.0\",\n    }\n\n# django/core/handlers/wsgi.py:82-83  (django.core.handlers.wsgi.WSGIRequest._get_scheme)\nclass WSGIRequest(HttpRequest):\n    def _get_scheme(self):\n        return self.environ.get(\"wsgi.url_scheme\")\n\n# tests/utils_tests/test_http.py:161-202  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_bad_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_bad_urls(self):\n        bad_urls = (\n            \"http://example.com\",\n            \"http:///example.com\",\n            \"https://example.com\",\n            \"ftp://example.com\",\n            r\"\\\\example.com\",\n            r\"\\\\\\example.com\",\n            r\"/\\\\/example.com\",\n            r\"\\\\\\example.com\",\n            r\"\\\\example.com\",\n            r\"\\\\//example.com\",\n            r\"/\\/example.com\",\n            r\"\\/example.com\",\n            r\"/\\example.com\",\n            \"http:///example.com\",\n            r\"http:/\\//example.com\",\n            r\"http:\\/example.com\",\n            r\"http:/\\example.com\",\n            'javascript:alert(\"XSS\")',\n            \"\\njavascript:alert(x)\",\n            \"java\\nscript:alert(x)\",\n            \"\\x08//example.com\",\n            r\"http://otherserver\\@example.com\",\n            r\"http:\\\\testserver\\@example.com\",\n            r\"http://testserver\\me:pass@example.com\",\n            r\"http://testserver\\@example.com\",\n            r\"http:\\\\testserver\\confirm\\me@example.com\",\n            \"http:999999999\",\n            \"ftp:9999999999\",\n            \"\\n\",\n            \"http://[2001:cdba:0000:0000:0000:0000:3257:9652/\",\n            \"http://2001:cdba:0000:0000:0000:0000:3257:9652]/\",\n        )\n        for bad_url in bad_urls:\n            with self.subTest(url=bad_url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        bad_url, allowed_hosts={\"testserver\", \"testserver2\"}\n                    ),\n                    False,\n                )\n\n# tests/sites_tests/tests.py:96-107  (tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_host_with_trailing_dot)\nclass SitesFrameworkTests(TestCase):\n    @override_settings(SITE_ID=None, ALLOWED_HOSTS=[\"example.com\"])\n    def test_get_current_site_host_with_trailing_dot(self):\n        \"\"\"\n        The site is matched if the name in the request has a trailing dot.\n        \"\"\"\n        request = HttpRequest()\n        request.META = {\n            \"SERVER_NAME\": \"example.com.\",\n            \"SERVER_PORT\": \"80\",\n        }\n        site = get_current_site(request)\n        self.assertEqual(site.name, \"example.com\")\n\n# tests/view_tests/tests/test_debug.py:1118-1124  (tests.view_tests.tests.test_debug.ExceptionReporterTests.test_disallowed_host)\nclass ExceptionReporterTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=\"example.com\")\n    def test_disallowed_host(self):\n        \"An exception report can be generated even for a disallowed host.\"\n        request = self.rf.get(\"/\", headers={\"host\": \"evil.com\"})\n        reporter = ExceptionReporter(request, None, None, None)\n        html = reporter.get_traceback_html()\n        self.assertIn(\"http://evil.com/\", html)\n\n# tests/utils_tests/test_http.py:204-224  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_good_urls)\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_good_urls(self):\n        good_urls = (\n            \"/view/?param=http://example.com\",\n            \"/view/?param=https://example.com\",\n            \"/view?param=ftp://example.com\",\n            \"view/?param=//example.com\",\n            \"https://testserver/\",\n            \"HTTPS://testserver/\",\n            \"//testserver/\",\n            \"http://testserver/confirm?email=me@example.com\",\n            \"/url%20with%20spaces/\",\n            \"path/http:2222222222\",\n        )\n        for good_url in good_urls:\n            with self.subTest(url=good_url):\n                self.assertIs(\n                    url_has_allowed_host_and_scheme(\n                        good_url, allowed_hosts={\"otherserver\", \"testserver\"}\n                    ),\n                    True,\n                )\n\n# django/core/validators.py:1-16  (django.core.validators)\nimport ipaddress\nimport math\nimport re\nfrom pathlib import Path\nfrom urllib.parse import urlsplit, urlunsplit\n\nfrom django.core.exceptions import ValidationError\nfrom django.utils.deconstruct import deconstructible\nfrom django.utils.encoding import punycode\nfrom django.utils.ipv6 import is_valid_ipv6_address\nfrom django.utils.regex_helper import _lazy_re_compile\nfrom django.utils.translation import gettext_lazy as _\nfrom django.utils.translation import ngettext_lazy\n\n# These values, if given to validate(), will trigger the self.required check.\nEMPTY_VALUES = (None, \"\", [], (), {})\n\n# django/views/i18n.py:19-63  (django.views.i18n.set_language)\ndef set_language(request):\n    \"\"\"\n    Redirect to a given URL while setting the chosen language in the session\n    (if enabled) and in a cookie. The URL and the language code need to be\n    specified in the request parameters.\n\n    Since this view changes how the user will see the rest of the site, it must\n    only be accessed as a POST request. If called as a GET request, it will\n    redirect to the page in the request (the 'next' parameter) without changing\n    any state.\n    \"\"\"\n    next_url = request.POST.get(\"next\", request.GET.get(\"next\"))\n    if (\n        next_url or request.accepts(\"text/html\")\n    ) and not url_has_allowed_host_and_scheme(\n        url=next_url,\n        allowed_hosts={request.get_host()},\n        require_https=request.is_secure(),\n    ):\n        next_url = request.META.get(\"HTTP_REFERER\")\n        if not url_has_allowed_host_and_scheme(\n            url=next_url,\n            allowed_hosts={request.get_host()},\n            require_https=request.is_secure(),\n        ):\n            next_url = \"/\"\n    response = HttpResponseRedirect(next_url) if next_url else HttpResponse(status=204)\n    if request.method == \"POST\":\n        lang_code = request.POST.get(LANGUAGE_QUERY_PARAMETER)\n        if lang_code and check_for_language(lang_code):\n            if next_url:\n                next_trans = translate_url(next_url, lang_code)\n                if next_trans != next_url:\n                    response = HttpResponseRedirect(next_trans)\n            response.set_cookie(\n                settings.LANGUAGE_COOKIE_NAME,\n                lang_code,\n                max_age=settings.LANGUAGE_COOKIE_AGE,\n                path=settings.LANGUAGE_COOKIE_PATH,\n                domain=settings.LANGUAGE_COOKIE_DOMAIN,\n                secure=settings.LANGUAGE_COOKIE_SECURE,\n                httponly=settings.LANGUAGE_COOKIE_HTTPONLY,\n                samesite=settings.LANGUAGE_COOKIE_SAMESITE,\n            )\n    return response\n\n# tests/csrf_tests/tests.py:981-996  (tests.csrf_tests.tests.CsrfViewMiddlewareTestMixin.test_bad_origin_cannot_be_parsed)\nclass CsrfViewMiddlewareTestMixin(CsrfFunctionTestMixin):\n    @override_settings(ALLOWED_HOSTS=[\"www.example.com\"])\n    def test_bad_origin_cannot_be_parsed(self):\n        \"\"\"\n        A POST request with an origin that can't be parsed by urlparse() is\n        rejected.\n        \"\"\"\n        req = self._get_POST_request_with_token()\n        req.META[\"HTTP_HOST\"] = \"www.example.com\"\n        req.META[\"HTTP_ORIGIN\"] = \"https://[\"\n        mw = CsrfViewMiddleware(post_form_view)\n        self._check_referer_rejects(mw, req)\n        self.assertIs(mw._origin_verified(req), False)\n        with self.assertLogs(\"django.security.csrf\", \"WARNING\") as cm:\n            response = mw.process_view(req, post_form_view, (), {})\n        msg = REASON_BAD_ORIGIN % req.META[\"HTTP_ORIGIN\"]\n        self.assertForbiddenReason(response, cm, msg)\n\n# tests/logging_tests/views.py:23-24  (tests.logging_tests.views.suspicious_spec)\ndef suspicious_spec(request):\n    raise DisallowedHost(\"dubious\")\n\n## Task\n\nYou are debugging how Django resolves and validates the HTTP Host\nheader in django/http/request.py. Starting from\n`HttpRequest.get_host`, trace the real causal pipeline that\nvalidates the host, in the order each stage is actually reached, up\nto and including the call that checks the parsed domain against\nALLOWED_HOSTS. Assume the parsed host has a non-empty domain\ncomponent, so the validation call is genuinely reached.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.http.request.HttpRequest.get_host\", \"django.http.request.HttpRequest._get_raw_host\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

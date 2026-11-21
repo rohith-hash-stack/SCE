@@ -1,0 +1,559 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t13_002_blast_queryset_get",
+  "items": [
+   {
+    "source_id": "django/db/models/query.py:293-1981",
+    "content": "# django/db/models/query.py:293-1981  (django.db.models.query.QuerySet)\nclass QuerySet(AltersData):\n    ...",
+    "token_count": 34,
+    "rank": 1,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.query.QuerySet"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 10,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:615-648",
+    "content": "# django/db/models/query.py:615-648  (django.db.models.query.QuerySet.get)\n    def get(self, *args, **kwargs):\n        \"\"\"\n        Perform the query and return a single object matching the given\n        keyword arguments.\n        \"\"\"\n        if self.query.combinator and (args or kwargs):\n            raise NotSupportedError(\n                \"Calling QuerySet.get(...) with filters after %s() is not \"\n                \"supported.\" % self.query.combinator\n            )\n        clone = self._chain() if self.query.combinator else self.filter(*args, **kwargs)\n        if self.query.can_filter() and not self.query.distinct_fields:\n            clone = clone.order_by()\n        limit = None\n        if (\n            not clone.query.select_for_update\n            or connections[clone.db].features.supports_select_for_update_with_limit\n        ):\n            limit = MAX_GET_RESULTS\n            clone.query.set_limits(high=limit)\n        num = len(clone)\n        if num == 1:\n            return clone._result_cache[0]\n        if not num:\n            raise self.model.DoesNotExist(\n                \"%s matching query does not exist.\" % self.model._meta.object_name\n            )\n        raise self.model.MultipleObjectsReturned(\n            \"get() returned more than one %s -- it returned %s!\"\n            % (\n                self.model._meta.object_name,\n                num if not limit or num < limit else \"more than %s\" % (limit - 1),\n            )\n        )\n\n# Referenced module constants:\nMAX_GET_RESULTS = 21",
+    "token_count": 326,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.get"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 295,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/shortcuts.py:64-89",
+    "content": "# django/shortcuts.py:64-89  (django.shortcuts.get_object_or_404)\ndef get_object_or_404(klass, *args, **kwargs):\n    \"\"\"\n    Use get() to return an object, or raise an Http404 exception if the object\n    does not exist.\n\n    klass may be a Model, Manager, or QuerySet object. All other passed\n    arguments and keyword arguments are used in the get() query.\n\n    Like with QuerySet.get(), MultipleObjectsReturned is raised if more than\n    one object is found.\n    \"\"\"\n    queryset = _get_queryset(klass)\n    if not hasattr(queryset, \"get\"):\n        klass__name = (\n            klass.__name__ if isinstance(klass, type) else klass.__class__.__name__\n        )\n        raise ValueError(\n            \"First argument to get_object_or_404() must be a Model, Manager, \"\n            \"or QuerySet, not '%s'.\" % klass__name\n        )\n    try:\n        return queryset.get(*args, **kwargs)\n    except queryset.model.DoesNotExist:\n        raise Http404(\n            \"No %s matches the given query.\" % queryset.model._meta.object_name\n        )",
+    "token_count": 256,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.shortcuts.get_object_or_404"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 224,
+     "distance": 1.3888888888888888
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:615-2285",
+    "content": "# django/contrib/admin/options.py:615-2285  (django.contrib.admin.options.ModelAdmin)\nclass ModelAdmin(BaseModelAdmin):\n    ...",
+    "token_count": 33,
+    "rank": 4,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 9,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:854-869",
+    "content": "# django/contrib/admin/options.py:854-869  (django.contrib.admin.options.ModelAdmin.get_object)\n    def get_object(self, request, object_id, from_field=None):\n        \"\"\"\n        Return an instance matching the field and value provided, the primary\n        key is used if no field is provided. Return ``None`` if no match is\n        found or the object_id fails validation.\n        \"\"\"\n        queryset = self.get_queryset(request)\n        model = queryset.model\n        field = (\n            model._meta.pk if from_field is None else model._meta.get_field(from_field)\n        )\n        try:\n            object_id = field.to_python(object_id)\n            return queryset.get(**{field.name: object_id})\n        except (model.DoesNotExist, ValidationError, ValueError):\n            return None",
+    "token_count": 163,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.get_object"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 138,
+     "distance": 1.3888888888888888
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1745-1748",
+    "content": "# django/contrib/admin/options.py:1745-1748  (django.contrib.admin.options.ModelAdmin.changeform_view)\n    @csrf_protect_m\n    def changeform_view(self, request, object_id=None, form_url=\"\", extra_context=None):\n        ...",
+    "token_count": 57,
+    "rank": 6,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.changeform_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 29,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:2106-2109",
+    "content": "# django/contrib/admin/options.py:2106-2109  (django.contrib.admin.options.ModelAdmin.delete_view)\n    @csrf_protect_m\n    def delete_view(self, request, object_id, extra_context=None):\n        ...",
+    "token_count": 51,
+    "rank": 7,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.delete_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 24,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:2176-2234",
+    "content": "# django/contrib/admin/options.py:2176-2234  (django.contrib.admin.options.ModelAdmin.history_view)\n    def history_view(self, request, object_id, extra_context=None):\n        ...",
+    "token_count": 44,
+    "rank": 8,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.history_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 17,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:2111-2174",
+    "content": "# django/contrib/admin/options.py:2111-2174  (django.contrib.admin.options.ModelAdmin._delete_view)\n    def _delete_view(self, request, object_id, extra_context):\n        ...",
+    "token_count": 45,
+    "rank": 9,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin._delete_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 17,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1750-1884",
+    "content": "# django/contrib/admin/options.py:1750-1884  (django.contrib.admin.options.ModelAdmin._changeform_view)\n    def _changeform_view(self, request, object_id, form_url, extra_context):\n        ...",
+    "token_count": 50,
+    "rank": 10,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin._changeform_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 21,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1886-1887",
+    "content": "# django/contrib/admin/options.py:1886-1887  (django.contrib.admin.options.ModelAdmin.add_view)\n    def add_view(self, request, form_url=\"\", extra_context=None):\n        ...",
+    "token_count": 44,
+    "rank": 11,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.add_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 17,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1889-1890",
+    "content": "# django/contrib/admin/options.py:1889-1890  (django.contrib.admin.options.ModelAdmin.change_view)\n    def change_view(self, request, object_id, form_url=\"\", extra_context=None):\n        ...",
+    "token_count": 47,
+    "rank": 12,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.change_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 20,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/admin.py:43-230",
+    "content": "# django/contrib/auth/admin.py:43-230  (django.contrib.auth.admin.UserAdmin)\n@admin.register(User)\nclass UserAdmin(admin.ModelAdmin):\n    ...",
+    "token_count": 35,
+    "rank": 13,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.admin.UserAdmin"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 12,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/admin.py:121-147",
+    "content": "# django/contrib/auth/admin.py:121-147  (django.contrib.auth.admin.UserAdmin._add_view)\n    def _add_view(self, request, form_url=\"\", extra_context=None):\n        ...",
+    "token_count": 45,
+    "rank": 14,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.admin.UserAdmin._add_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 18,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/admin.py:115-119",
+    "content": "# django/contrib/auth/admin.py:115-119  (django.contrib.auth.admin.UserAdmin.add_view)\n    @sensitive_post_parameters_m\n    @csrf_protect_m\n    def add_view(self, request, form_url=\"\", extra_context=None):\n        ...",
+    "token_count": 58,
+    "rank": 15,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.admin.UserAdmin.add_view"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 32,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/admin.py:149-214",
+    "content": "# django/contrib/auth/admin.py:149-214  (django.contrib.auth.admin.UserAdmin.user_change_password)\n    @sensitive_post_parameters_m\n    def user_change_password(self, request, id, form_url=\"\"):\n        ...",
+    "token_count": 52,
+    "rank": 16,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.admin.UserAdmin.user_change_password"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 25,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1854-1863",
+    "content": "# django/db/models/query.py:1854-1863  (django.db.models.query.QuerySet._chain)\n    def _chain(self):\n        \"\"\"\n        Return a copy of the current QuerySet that's ready for another\n        operation.\n        \"\"\"\n        obj = self._clone()\n        if obj._sticky_filter:\n            obj.query.filter_is_sticky = True\n            obj._sticky_filter = False\n        return obj",
+    "token_count": 90,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet._chain"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 63,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1432-1438",
+    "content": "# django/db/models/query.py:1432-1438  (django.db.models.query.QuerySet.filter)\n    def filter(self, *args, **kwargs):\n        \"\"\"\n        Return a new QuerySet instance with the args ANDed to the existing\n        set.\n        \"\"\"\n        self._not_support_combined_queries(\"filter\")\n        return self._filter_or_exclude(False, args, kwargs)",
+    "token_count": 83,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.filter"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 57,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1658-1665",
+    "content": "# django/db/models/query.py:1658-1665  (django.db.models.query.QuerySet.order_by)\n    def order_by(self, *field_names):\n        \"\"\"Return a new QuerySet instance with the ordering changed.\"\"\"\n        if self.query.is_sliced:\n            raise TypeError(\"Cannot reorder a query once a slice has been taken.\")\n        obj = self._chain()\n        obj.query.clear_ordering(force=True, clear_default=False)\n        obj.query.add_ordering(*field_names)\n        return obj",
+    "token_count": 106,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.order_by"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 79,
+     "distance": 1.6666666666666667
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:160-2600",
+    "content": "# django/db/models/sql/query.py:160-2600  (django.db.models.sql.query.Query)\nclass Query(BaseExpression):\n    ...",
+    "token_count": 32,
+    "rank": 20,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.sql.query.Query"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 7,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:2117-2123",
+    "content": "# django/db/models/sql/query.py:2117-2123  (django.db.models.sql.query.Query.can_filter)\n    def can_filter(self):\n        \"\"\"\n        Return True if adding filters to this instance is still possible.\n\n        Typically, this means no limits or offsets have been put on the results.\n        \"\"\"\n        return not self.is_sliced",
+    "token_count": 74,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.can_filter"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 46,
+     "distance": 1.6666666666666667
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:2083-2104",
+    "content": "# django/db/models/sql/query.py:2083-2104  (django.db.models.sql.query.Query.set_limits)\n    def set_limits(self, low=None, high=None):\n        \"\"\"\n        Adjust the limits on the rows retrieved. Use low/high to set these,\n        as it makes it more Pythonic to read and write. When the SQL query is\n        created, convert them to the appropriate offset and limit values.\n\n        Apply any limits passed in here to the existing constraints. Add low\n        to the current low value and clamp both to any existing high value.\n        \"\"\"\n        if high is not None:\n            if self.high_mark is not None:\n                self.high_mark = min(self.high_mark, self.low_mark + high)\n            else:\n                self.high_mark = self.low_mark + high\n        if low is not None:\n            if self.high_mark is not None:\n                self.low_mark = min(self.high_mark, self.low_mark + low)\n            else:\n                self.low_mark = self.low_mark + low\n\n        if self.low_mark == self.high_mark:\n            self.set_empty()",
+    "token_count": 229,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.set_limits"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 201,
+     "distance": 1.6666666666666667
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/utils.py:49-50",
+    "content": "# django/db/utils.py:49-50  (django.db.utils.NotSupportedError)\nclass NotSupportedError(DatabaseError):\n    pass",
+    "token_count": 29,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.utils.NotSupportedError"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 9,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1983,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "anchor": "django.db.models.query.QuerySet.get",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "prism_blast_mode": true,
+   "manifest_candidates": 67,
+   "manifest_candidates_unfiltered": 67,
+   "requested_symbols": [
+    "django.db.models.query.QuerySet.get",
+    "django.shortcuts.get_object_or_404",
+    "django.contrib.admin.options.ModelAdmin.get_object",
+    "django.contrib.auth.admin.UserAdmin.get_object",
+    "django.contrib.admin.options.ModelAdmin.changeform_view",
+    "django.contrib.admin.options.ModelAdmin.delete_view",
+    "django.contrib.admin.options.ModelAdmin.history_view",
+    "django.contrib.admin.options.ModelAdmin._delete_view",
+    "django.contrib.admin.options.ModelAdmin._changeform_view",
+    "django.contrib.admin.sites.AdminSite.each_context",
+    "django.contrib.admin.options.ModelAdmin.render_delete_form",
+    "django.contrib.admin.options.ModelAdmin.response_delete",
+    "django.contrib.admin.options.ModelAdmin.log_deletion",
+    "django.contrib.admin.options.ModelAdmin.get_deleted_objects",
+    "django.contrib.admin.options.ModelAdmin.get_preserved_filters",
+    "django.contrib.admin.options.ModelAdmin.paginator.get_elided_page_range",
+    "django.contrib.admin.options.ModelAdmin.paginator.get_page",
+    "django.contrib.admin.options.get_content_type_for_model",
+    "django.contrib.admin.utils.unquote",
+    "django.template.response.TemplateResponse",
+    "django.contrib.admin.models.LogEntry.objects.filter",
+    "django.contrib.admin.options.BaseModelAdmin.has_view_or_change_permission",
+    "django.contrib.admin.options.ModelAdmin._get_obj_does_not_exist_redirect",
+    "django.contrib.admin.options.BaseModelAdmin.get_queryset",
+    "django.contrib.admin.options.InlineModelAdmin.model._meta.get_field",
+    "django.db.models.fields.BinaryField.to_python",
+    "django.db.models.query.QuerySet.get",
+    "tests.admin_views.admin.CustomManagerAdmin.get_queryset",
+    "tests.generic_views.models.DoesNotExistQuerySet.get",
+    "django.contrib.admin.options.BaseModelAdmin.has_add_permission",
+    "django.contrib.admin.options.BaseModelAdmin.has_change_permission",
+    "django.contrib.admin.options.BaseModelAdmin.has_delete_permission",
+    "django.contrib.admin.options.BaseModelAdmin.to_field_allowed",
+    "django.contrib.admin.options.ModelAdmin._create_formsets",
+    "django.db.router.db_for_write",
+    "django.db.transaction.atomic",
+    "django.contrib.admin.options.ModelAdmin.add_view",
+    "django.contrib.admin.options.ModelAdmin.change_view",
+    "django.contrib.auth.admin.UserAdmin._add_view",
+    "django.http.response.Http404",
+    "tests.admin_changelist.admin.EventAdmin.has_add_permission",
+    "tests.admin_views.admin.ArticleAdmin9.has_change_permission",
+    "tests.admin_views.admin.ParentWithUUIDPKAdmin.has_add_permission",
+    "tests.admin_views.admin.PrePopulatedPostReadOnlyAdmin.has_change_permission",
+    "tests.admin_views.admin.ReadOnlyPizzaAdmin.has_add_permission",
+    "tests.admin_views.admin.ReadOnlyPizzaAdmin.has_change_permission",
+    "tests.admin_views.admin.RowLevelChangePermissionModelAdmin.has_change_permission",
+    "django.contrib.auth.admin.UserAdmin.add_view",
+    "django.contrib.auth.admin.UserAdmin.user_change_password",
+    "django.contrib.admin.helpers.AdminForm",
+    "django.contrib.admin.options.BaseModelAdmin.construct_change_message",
+    "django.contrib.admin.options.ModelAdmin.log_change",
+    "django.contrib.auth.admin.UserAdmin.change_password_form",
+    "django.contrib.auth.admin.UserAdmin.form.is_valid",
+    "django.contrib.auth.admin.UserAdmin.form.save",
+    "django.contrib.auth.models.AnonymousUser.get_username",
+    "django.contrib.auth.update_session_auth_hash"
+   ],
+   "turn1_requested_count": 57,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "django.contrib.auth.admin.UserAdmin.get_object",
+    "django.contrib.admin.sites.AdminSite.each_context",
+    "django.contrib.admin.options.ModelAdmin.render_delete_form",
+    "django.contrib.admin.options.ModelAdmin.response_delete",
+    "django.contrib.admin.options.ModelAdmin.log_deletion",
+    "django.contrib.admin.options.ModelAdmin.get_deleted_objects",
+    "django.contrib.admin.options.ModelAdmin.get_preserved_filters",
+    "django.contrib.admin.options.ModelAdmin.paginator.get_elided_page_range",
+    "django.contrib.admin.options.ModelAdmin.paginator.get_page",
+    "django.contrib.admin.options.get_content_type_for_model",
+    "django.contrib.admin.utils.unquote",
+    "django.template.response.TemplateResponse",
+    "django.contrib.admin.models.LogEntry.objects.filter",
+    "django.contrib.admin.options.BaseModelAdmin.has_view_or_change_permission",
+    "django.contrib.admin.options.ModelAdmin._get_obj_does_not_exist_redirect",
+    "django.contrib.admin.options.BaseModelAdmin.get_queryset",
+    "django.contrib.admin.options.InlineModelAdmin.model._meta.get_field",
+    "django.db.models.fields.BinaryField.to_python",
+    "tests.admin_views.admin.CustomManagerAdmin.get_queryset",
+    "tests.generic_views.models.DoesNotExistQuerySet.get",
+    "django.contrib.admin.options.BaseModelAdmin.has_add_permission",
+    "django.contrib.admin.options.BaseModelAdmin.has_change_permission",
+    "django.contrib.admin.options.BaseModelAdmin.has_delete_permission",
+    "django.contrib.admin.options.BaseModelAdmin.to_field_allowed",
+    "django.contrib.admin.options.ModelAdmin._create_formsets",
+    "django.db.router.db_for_write",
+    "django.db.transaction.atomic",
+    "django.http.response.Http404",
+    "tests.admin_changelist.admin.EventAdmin.has_add_permission",
+    "tests.admin_views.admin.ArticleAdmin9.has_change_permission",
+    "tests.admin_views.admin.ParentWithUUIDPKAdmin.has_add_permission",
+    "tests.admin_views.admin.PrePopulatedPostReadOnlyAdmin.has_change_permission",
+    "tests.admin_views.admin.ReadOnlyPizzaAdmin.has_add_permission",
+    "tests.admin_views.admin.ReadOnlyPizzaAdmin.has_change_permission",
+    "tests.admin_views.admin.RowLevelChangePermissionModelAdmin.has_change_permission",
+    "django.contrib.admin.helpers.AdminForm",
+    "django.contrib.admin.options.BaseModelAdmin.construct_change_message",
+    "django.contrib.admin.options.ModelAdmin.log_change",
+    "django.contrib.auth.admin.UserAdmin.change_password_form",
+    "django.contrib.auth.admin.UserAdmin.form.is_valid",
+    "django.contrib.auth.admin.UserAdmin.form.save",
+    "django.contrib.auth.models.AnonymousUser.get_username",
+    "django.contrib.auth.update_session_auth_hash"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The task requires identifying all callers of `QuerySet.get` that bind or unpack its return value. This means we need to trace the call graph starting from `QuerySet.get` and find all symbols that directly or indirectly use its return value in an assignment or further function call.\",\n  \"requested_symbols\": [\n    \"django.db.models.query.QuerySet.get\",\n    \"django.shortcuts.get_object_or_404\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.auth.admin.UserAdmin.get_object\",\n    \"django.contrib.admin.options.ModelAdmin.changeform_view\",\n    \"django.contrib.admin.options.ModelAdmin.delete_view\",\n    \"django.contrib.admin.options.ModelAdmin.history_view\",\n    \"django.contrib.admin.options.ModelAdmin._delete_view\",\n    \"django.contrib.admin.options.ModelAdmin._changeform_view\",\n    \"django.contrib.admin.sites.AdminSite.each_context\",\n    \"django.contrib.admin.options.ModelAdmin.render_delete_form\",\n    \"django.contrib.admin.options.ModelAdmin.response_delete\",\n    \"django.contrib.admin.options.ModelAdmin.log_deletion\",\n    \"django.contrib.admin.options.ModelAdmin.get_deleted_objects\",\n    \"django.contrib.admin.options.ModelAdmin.get_preserved_filters\",\n    \"django.contrib.admin.options.ModelAdmin.paginator.get_elided_page_range\",\n    \"django.contrib.admin.options.ModelAdmin.paginator.get_page\",\n    \"django.contrib.admin.options.get_content_type_for_model\",\n    \"django.contrib.admin.utils.unquote\",\n    \"django.template.response.TemplateResponse\",\n    \"django.contrib.admin.models.LogEntry.objects.filter\",\n    \"django.contrib.admin.options.BaseModelAdmin.has_view_or_change_permission\",\n    \"django.contrib.admin.options.ModelAdmin._get_obj_does_not_exist_redirect\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.InlineModelAdmin.model._meta.get_field\",\n    \"django.db.models.fields.BinaryField.to_python\",\n    \"django.db.models.query.QuerySet.get\",\n    \"tests.admin_views.admin.CustomManagerAdmin.get_queryset\",\n    \"tests.generic_views.models.DoesNotExistQuerySet.get\",\n    \"django.contrib.admin.options.BaseModelAdmin.has_add_permission\",\n    \"django.contrib.admin.options.BaseModelAdmin.has_change_permission\",\n    \"django.contrib.admin.options.BaseModelAdmin.has_delete_permission\",\n    \"django.contrib.admin.options.BaseModelAdmin.to_field_allowed\",\n    \"django.contrib.admin.options.ModelAdmin._create_formsets\",\n    \"django.db.router.db_for_write\",\n    \"django.db.transaction.atomic\",\n    \"django.contrib.admin.options.ModelAdmin.add_view\",\n    \"django.contrib.admin.options.ModelAdmin.change_view\",\n    \"django.contrib.auth.admin.UserAdmin._add_view\",\n    \"django.http.response.Http404\",\n    \"tests.admin_changelist.admin.EventAdmin.has_add_permission\",\n    \"tests.admin_views.admin.ArticleAdmin9.has_change_permission\",\n    \"tests.admin_views.admin.ParentWithUUIDPKAdmin.has_add_permission\",\n    \"tests.admin_views.admin.PrePopulatedPostReadOnlyAdmin.has_change_permission\",\n    \"tests.admin_views.admin.ReadOnlyPizzaAdmin.has_add_permission\",\n    \"tests.admin_views.admin.ReadOnlyPizzaAdmin.has_change_permission\",\n    \"tests.admin_views.admin.RowLevelChangePermissionModelAdmin.has_change_permission\",\n    \"django.contrib.auth.admin.UserAdmin.add_view\",\n    \"django.contrib.auth.admin.UserAdmin.user_change_password\",\n    \"django.contrib.admin.helpers.AdminForm\",\n    \"django.contrib.admin.options.BaseModelAdmin.construct_change_message\",\n    \"django.contrib.admin.options.ModelAdmin.log_change\",\n    \"django.contrib.auth.admin.UserAdmin.change_password_form\",\n    \"django.contrib.auth.admin.UserAdmin.form.is_valid\",\n    \"django.contrib.auth.admin.UserAdmin.form.save\",\n    \"django.contrib.auth.models.AnonymousUser.get_username\",\n    \"django.contrib.auth.update_session_auth_hash\"\n  ]\n}\n```",
+     "prompt_tokens": 4962,
+     "completion_tokens": 743,
+     "latency_seconds": 56.93758320200004,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     269.375693
+    ],
+    "L_turn2_hydrate": [
+     1692.570692
+    ],
+    "L_retrieve": [
+     58907.460568
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1983,
+   "prompt_tokens": 2245,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2258,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/db/models/query.py:293-1981  (django.db.models.query.QuerySet)\nclass QuerySet(AltersData):\n    ...\n\n# django/db/models/query.py:615-648  (django.db.models.query.QuerySet.get)\n    def get(self, *args, **kwargs):\n        \"\"\"\n        Perform the query and return a single object matching the given\n        keyword arguments.\n        \"\"\"\n        if self.query.combinator and (args or kwargs):\n            raise NotSupportedError(\n                \"Calling QuerySet.get(...) with filters after %s() is not \"\n                \"supported.\" % self.query.combinator\n            )\n        clone = self._chain() if self.query.combinator else self.filter(*args, **kwargs)\n        if self.query.can_filter() and not self.query.distinct_fields:\n            clone = clone.order_by()\n        limit = None\n        if (\n            not clone.query.select_for_update\n            or connections[clone.db].features.supports_select_for_update_with_limit\n        ):\n            limit = MAX_GET_RESULTS\n            clone.query.set_limits(high=limit)\n        num = len(clone)\n        if num == 1:\n            return clone._result_cache[0]\n        if not num:\n            raise self.model.DoesNotExist(\n                \"%s matching query does not exist.\" % self.model._meta.object_name\n            )\n        raise self.model.MultipleObjectsReturned(\n            \"get() returned more than one %s -- it returned %s!\"\n            % (\n                self.model._meta.object_name,\n                num if not limit or num < limit else \"more than %s\" % (limit - 1),\n            )\n        )\n\n# Referenced module constants:\nMAX_GET_RESULTS = 21\n\n# django/shortcuts.py:64-89  (django.shortcuts.get_object_or_404)\ndef get_object_or_404(klass, *args, **kwargs):\n    \"\"\"\n    Use get() to return an object, or raise an Http404 exception if the object\n    does not exist.\n\n    klass may be a Model, Manager, or QuerySet object. All other passed\n    arguments and keyword arguments are used in the get() query.\n\n    Like with QuerySet.get(), MultipleObjectsReturned is raised if more than\n    one object is found.\n    \"\"\"\n    queryset = _get_queryset(klass)\n    if not hasattr(queryset, \"get\"):\n        klass__name = (\n            klass.__name__ if isinstance(klass, type) else klass.__class__.__name__\n        )\n        raise ValueError(\n            \"First argument to get_object_or_404() must be a Model, Manager, \"\n            \"or QuerySet, not '%s'.\" % klass__name\n        )\n    try:\n        return queryset.get(*args, **kwargs)\n    except queryset.model.DoesNotExist:\n        raise Http404(\n            \"No %s matches the given query.\" % queryset.model._meta.object_name\n        )\n\n# django/contrib/admin/options.py:615-2285  (django.contrib.admin.options.ModelAdmin)\nclass ModelAdmin(BaseModelAdmin):\n    ...\n\n# django/contrib/admin/options.py:854-869  (django.contrib.admin.options.ModelAdmin.get_object)\n    def get_object(self, request, object_id, from_field=None):\n        \"\"\"\n        Return an instance matching the field and value provided, the primary\n        key is used if no field is provided. Return ``None`` if no match is\n        found or the object_id fails validation.\n        \"\"\"\n        queryset = self.get_queryset(request)\n        model = queryset.model\n        field = (\n            model._meta.pk if from_field is None else model._meta.get_field(from_field)\n        )\n        try:\n            object_id = field.to_python(object_id)\n            return queryset.get(**{field.name: object_id})\n        except (model.DoesNotExist, ValidationError, ValueError):\n            return None\n\n# django/contrib/admin/options.py:1745-1748  (django.contrib.admin.options.ModelAdmin.changeform_view)\n    @csrf_protect_m\n    def changeform_view(self, request, object_id=None, form_url=\"\", extra_context=None):\n        ...\n\n# django/contrib/admin/options.py:2106-2109  (django.contrib.admin.options.ModelAdmin.delete_view)\n    @csrf_protect_m\n    def delete_view(self, request, object_id, extra_context=None):\n        ...\n\n# django/contrib/admin/options.py:2176-2234  (django.contrib.admin.options.ModelAdmin.history_view)\n    def history_view(self, request, object_id, extra_context=None):\n        ...\n\n# django/contrib/admin/options.py:2111-2174  (django.contrib.admin.options.ModelAdmin._delete_view)\n    def _delete_view(self, request, object_id, extra_context):\n        ...\n\n# django/contrib/admin/options.py:1750-1884  (django.contrib.admin.options.ModelAdmin._changeform_view)\n    def _changeform_view(self, request, object_id, form_url, extra_context):\n        ...\n\n# django/contrib/admin/options.py:1886-1887  (django.contrib.admin.options.ModelAdmin.add_view)\n    def add_view(self, request, form_url=\"\", extra_context=None):\n        ...\n\n# django/contrib/admin/options.py:1889-1890  (django.contrib.admin.options.ModelAdmin.change_view)\n    def change_view(self, request, object_id, form_url=\"\", extra_context=None):\n        ...\n\n# django/contrib/auth/admin.py:43-230  (django.contrib.auth.admin.UserAdmin)\n@admin.register(User)\nclass UserAdmin(admin.ModelAdmin):\n    ...\n\n# django/contrib/auth/admin.py:121-147  (django.contrib.auth.admin.UserAdmin._add_view)\n    def _add_view(self, request, form_url=\"\", extra_context=None):\n        ...\n\n# django/contrib/auth/admin.py:115-119  (django.contrib.auth.admin.UserAdmin.add_view)\n    @sensitive_post_parameters_m\n    @csrf_protect_m\n    def add_view(self, request, form_url=\"\", extra_context=None):\n        ...\n\n# django/contrib/auth/admin.py:149-214  (django.contrib.auth.admin.UserAdmin.user_change_password)\n    @sensitive_post_parameters_m\n    def user_change_password(self, request, id, form_url=\"\"):\n        ...\n\n# django/db/models/query.py:1854-1863  (django.db.models.query.QuerySet._chain)\n    def _chain(self):\n        \"\"\"\n        Return a copy of the current QuerySet that's ready for another\n        operation.\n        \"\"\"\n        obj = self._clone()\n        if obj._sticky_filter:\n            obj.query.filter_is_sticky = True\n            obj._sticky_filter = False\n        return obj\n\n# django/db/models/query.py:1432-1438  (django.db.models.query.QuerySet.filter)\n    def filter(self, *args, **kwargs):\n        \"\"\"\n        Return a new QuerySet instance with the args ANDed to the existing\n        set.\n        \"\"\"\n        self._not_support_combined_queries(\"filter\")\n        return self._filter_or_exclude(False, args, kwargs)\n\n# django/db/models/query.py:1658-1665  (django.db.models.query.QuerySet.order_by)\n    def order_by(self, *field_names):\n        \"\"\"Return a new QuerySet instance with the ordering changed.\"\"\"\n        if self.query.is_sliced:\n            raise TypeError(\"Cannot reorder a query once a slice has been taken.\")\n        obj = self._chain()\n        obj.query.clear_ordering(force=True, clear_default=False)\n        obj.query.add_ordering(*field_names)\n        return obj\n\n# django/db/models/sql/query.py:160-2600  (django.db.models.sql.query.Query)\nclass Query(BaseExpression):\n    ...\n\n# django/db/models/sql/query.py:2117-2123  (django.db.models.sql.query.Query.can_filter)\n    def can_filter(self):\n        \"\"\"\n        Return True if adding filters to this instance is still possible.\n\n        Typically, this means no limits or offsets have been put on the results.\n        \"\"\"\n        return not self.is_sliced\n\n# django/db/models/sql/query.py:2083-2104  (django.db.models.sql.query.Query.set_limits)\n    def set_limits(self, low=None, high=None):\n        \"\"\"\n        Adjust the limits on the rows retrieved. Use low/high to set these,\n        as it makes it more Pythonic to read and write. When the SQL query is\n        created, convert them to the appropriate offset and limit values.\n\n        Apply any limits passed in here to the existing constraints. Add low\n        to the current low value and clamp both to any existing high value.\n        \"\"\"\n        if high is not None:\n            if self.high_mark is not None:\n                self.high_mark = min(self.high_mark, self.low_mark + high)\n            else:\n                self.high_mark = self.low_mark + high\n        if low is not None:\n            if self.high_mark is not None:\n                self.low_mark = min(self.high_mark, self.low_mark + low)\n            else:\n                self.low_mark = self.low_mark + low\n\n        if self.low_mark == self.high_mark:\n            self.set_empty()\n\n# django/db/utils.py:49-50  (django.db.utils.NotSupportedError)\nclass NotSupportedError(DatabaseError):\n    pass\n\n## Task\n\nYou are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

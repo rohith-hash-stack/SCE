@@ -1,0 +1,274 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t02_007_locmem_cache_get_eviction",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"django/core/cache/backends/locmem.py\", \"pattern\": \"def get\"})\n34:    def get(self, key, default=None, version=None):",
+    "token_count": 45,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def get",
+      "path": "django/core/cache/backends/locmem.py"
+     },
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"path\": \"django/core/cache/backends/locmem.py\", \"pattern\": \"def _has_expired\"})\n87:    def _has_expired(self, key):",
+    "token_count": 43,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "def _has_expired",
+      "path": "django/core/cache/backends/locmem.py"
+     },
+     "engine_token_count": 43
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.3",
+    "content": "# r1.3  (grep {\"path\": \"django/core/cache/backends/locmem.py\", \"pattern\": \"def _cull\"})\n91:    def _cull(self):",
+    "token_count": 41,
+    "rank": 3,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.3",
+     "tool": "grep",
+     "args": {
+      "pattern": "def _cull",
+      "path": "django/core/cache/backends/locmem.py"
+     },
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 95, \"path\": \"django/core/cache/backends/locmem.py\", \"start_line\": 34})\n34:     def get(self, key, default=None, version=None):\n35:         key = self.make_and_validate_key(key, version=version)\n36:         with self._lock:\n37:             if self._has_expired(key):\n38:                 self._delete(key)\n39:                 return default\n40:             pickled = self._cache[key]\n41:             self._cache.move_to_end(key, last=False)\n42:         return pickle.loads(pickled)\n43: \n44:     def _set(self, key, value, timeout=DEFAULT_TIMEOUT):\n45:         if len(self._cache) >= self._max_entries:\n46:             self._cull()\n47:         self._cache[key] = value\n48:         self._cache.move_to_end(key, last=False)\n49:         self._expire_info[key] = self.get_backend_timeout(timeout)\n50: \n51:     def set(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):\n52:         key = self.make_and_validate_key(key, version=version)\n53:         pickled = pickle.dumps(value, self.pickle_protocol)\n54:         with self._lock:\n55:             self._set(key, pickled, timeout)\n56: \n57:     def touch(self, key, timeout=DEFAULT_TIMEOUT, version=None):\n58:         key = self.make_and_validate_key(key, version=version)\n59:         with self._lock:\n60:             if self._has_expired(key):\n61:                 return False\n62:             self._expire_info[key] = self.get_backend_timeout(timeout)\n63:             return True\n64: \n65:     def incr(self, key, delta=1, version=None):\n66:         key = self.make_and_validate_key(key, version=version)\n67:         with self._lock:\n68:             if self._has_expired(key):\n69:                 self._delete(key)\n70:                 raise ValueError(\"Key '%s' not found\" % key)\n71:             pickled = self._cache[key]\n72:             value = pickle.loads(pickled)\n73:             new_value = value + delta\n74:             pickled = pickle.dumps(new_value, self.pickle_protocol)\n75:             self._cache[key] = pickled\n76:             self._cache.move_to_end(key, last=False)\n77:         return new_value\n78: \n79:     def has_key(self, key, version=None):\n80:         key = self.make_and_validate_key(key, version=version)\n81:         with self._lock:\n82:             if self._has_expired(key):\n83:                 self._delete(key)\n84:                 return False\n85:             return True\n86: \n87:     def _has_expired(self, key):\n88:         exp = self._expire_info.get(key, -1)\n89:         return exp is not None and exp <= time.time()\n90: \n91:     def _cull(self):\n92:         if self._cull_frequency == 0:\n93:             self._cache.clear()\n94:             self._expire_info.clear()\n95:         else:\n[lines 34-95 of 118]",
+    "token_count": 768,
+    "rank": 4,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache",
+     "django.core.cache.backends.locmem.LocMemCache.get",
+     "django.core.cache.backends.locmem.LocMemCache._set",
+     "django.core.cache.backends.locmem.LocMemCache.set",
+     "django.core.cache.backends.locmem.LocMemCache.touch",
+     "django.core.cache.backends.locmem.LocMemCache.incr",
+     "django.core.cache.backends.locmem.LocMemCache.has_key",
+     "django.core.cache.backends.locmem.LocMemCache._has_expired",
+     "django.core.cache.backends.locmem.LocMemCache._cull"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "django/core/cache/backends/locmem.py",
+      "start_line": 34,
+      "end_line": 95
+     },
+     "engine_token_count": 768
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 897,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are debugging a Django local-memory cache read in\ndjango/core/cache/backends/locmem.py. Starting from\n`LocMemCache.get`, trace the real causal pipeline a lookup travels\nthrough, in the order each stage is actually reached, up to and\nincluding the call that evicts a stale entry once it is found to\nhave expired. Assume the entry being looked up has, in fact,\nexpired.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.cache.backends.locmem.LocMemCache.get\", \"django.core.cache.backends.base.BaseCache.make_and_validate_key\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 4,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To understand the causal pipeline of a lookup in `LocMemCache.get` and trace it up to the eviction of a stale entry, we need to follow the execution flow starting from `LocMemCache.get`. This involves identifying the key, checking its expiration, and if expired, evicting it.\n\nLet's start by finding the relevant methods and their call order.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def get\", \"path\": \"django/core/cache/backends/locmem.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def _has_expired\", \"path\": \"django/core/cache/backends/locmem.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def _cull\", \"path\": \"django/core/cache/backends/locmem.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def get",
+        "path": "django/core/cache/backends/locmem.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def _has_expired",
+        "path": "django/core/cache/backends/locmem.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def _cull",
+        "path": "django/core/cache/backends/locmem.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 3,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def get",
+        "path": "django/core/cache/backends/locmem.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def _has_expired",
+        "path": "django/core/cache/backends/locmem.py"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def _cull",
+        "path": "django/core/cache/backends/locmem.py"
+       },
+       "msg_id": "r1.3",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 184,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The causal pipeline for a lookup in `LocMemCache.get` involves the following steps:\n1. `LocMemCache.get` is called to retrieve a value.\n2. `_has_expired` checks if the entry has expired.\n3. If expired, `_cull` is called to evict the stale entry.\n\nNow, let's trace the exact call order by reading the relevant lines of code.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/core/cache/backends/locmem.py\", \"start_line\": 34, \"end_line\": 95}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/core/cache/backends/locmem.py",
+        "start_line": 34,
+        "end_line": 95
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/core/cache/backends/locmem.py",
+        "start_line": 34,
+        "end_line": 95
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 125,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "```json\n[\"django.core.cache.backends.locmem.LocMemCache.get\", \"django.core.cache.backends.locmem.LocMemCache._has_expired\", \"django.core.cache.backends.locmem.LocMemCache._delete\", \"django.core.cache.backends.locmem.LocMemCache._cull\"]\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 62,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     12080.812575,
+     8079.671984,
+     5332.524832
+    ],
+    "L_tool_exec": [
+     3.582908,
+     3.045685,
+     2.842883,
+     0.265187
+    ],
+    "L_retrieve": [
+     25539.58028
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 2010,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"\", \"symbols\": [\"django.core.cache.backends.locmem.LocMemCache.get\", \"django.core.cache.backends.locmem.LocMemCache._has_expired\", \"django.core.cache.backends.locmem.LocMemCache._delete\", \"django.core.cache.backends.locmem.LocMemCache._cull\"]}\n```",
+    "generation_tokens": 62,
+    "latency_seconds": 5.332377563001501,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2043,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 897,
+   "prompt_tokens": 2010,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2043,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

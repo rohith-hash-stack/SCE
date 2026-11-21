@@ -1,0 +1,872 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "trpc_t02_005_router_caller_dispatch",
+  "items": [
+   {
+    "source_id": "core/router.ts:191-277",
+    "content": "# core/router.ts:191-277  (core.router.createRouterFactory)\n/**\n * @internal\n */\nexport function createRouterFactory<TConfig extends AnyRootConfig>(\n  config: TConfig,\n) {\n  return function createRouterInner<\n    TProcRouterRecord extends ProcedureRouterRecord,\n  >(\n    procedures: TProcRouterRecord,\n  ): CreateRouterInner<TConfig, TProcRouterRecord> {\n    const reservedWordsUsed = new Set(\n      Object.keys(procedures).filter((v) => reservedWords.includes(v)),\n    );\n    if (reservedWordsUsed.size > 0) {\n      throw new Error(\n        'Reserved words used in `router({})` call: ' +\n          Array.from(reservedWordsUsed).join(', '),\n      );\n    }\n\n    const routerProcedures: ProcedureRecord = omitPrototype({});\n    function recursiveGetPaths(procedures: ProcedureRouterRecord, path = '') {\n      for (const [key, procedureOrRouter] of Object.entries(procedures ?? {})) {\n        const newPath = `${path}${key}`;\n\n        if (isRouter(procedureOrRouter)) {\n          recursiveGetPaths(procedureOrRouter._def.procedures, `${newPath}.`);\n          continue;\n        }\n\n        if (routerProcedures[newPath]) {\n          throw new Error(`Duplicate key: ${newPath}`);\n        }\n\n        routerProcedures[newPath] = procedureOrRouter;\n      }\n    }\n    recursiveGetPaths(procedures);\n\n    const _def: AnyRouterDef<TConfig> = {\n      _config: config,\n      router: true,\n      procedures: routerProcedures,\n      ...emptyRouter,\n      record: procedures,\n      queries: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.query)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      mutations: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.mutation)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      subscriptions: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.subscription)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n    };\n\n    const router: AnyRouter = {\n      ...procedures,\n      _def,\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n    };\n\n    return router as any;\n  };\n}",
+    "token_count": 688,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.createRouterFactory",
+     "core.router.createRouterFactory.recursiveGetPaths",
+     "core.router.createRouterFactory.createCaller",
+     "core.router.createRouterFactory.getErrorShape"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 688
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:157-189",
+    "content": "# core/router.ts:157-189  (core.router)\nconst emptyRouter = {\n  _ctx: null as any,\n  _errorShape: null as any,\n  _meta: null as any,\n  queries: {},\n  mutations: {},\n  subscriptions: {},\n  errorFormatter: defaultFormatter,\n  transformer: defaultTransformer,\n};\n\n/**\n * Reserved words that can't be used as router or procedure names\n */\nconst reservedWords = [\n  /**\n   * Then is a reserved word because otherwise we can't return a promise that returns a Proxy\n   * since JS will think that `.then` is something that exists\n   */\n  'then',\n];\n\n/**\n * @internal\n */\nexport type CreateRouterInner<\n  TConfig extends AnyRootConfig,\n  TProcRouterRecord extends ProcedureRouterRecord,\n> = Router<RouterDef<TConfig, TProcRouterRecord>> &\n  /**\n   * This should be deleted in v11\n   * @deprecated\n   */ TProcRouterRecord;",
+    "token_count": 208,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 208
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:279-297",
+    "content": "# core/router.ts:279-297  (core.router.callProcedure)\n/**\n * @internal\n */\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}",
+    "token_count": 130,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.callProcedure"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 130
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:151-155",
+    "content": "# core/router.ts:151-155  (core.router.isRouter)\nfunction isRouter(\n  procedureOrRouter: AnyProcedure | AnyRouter,\n): procedureOrRouter is AnyRouter {\n  return 'router' in procedureOrRouter._def;\n}",
+    "token_count": 55,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.isRouter"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:299-342",
+    "content": "# core/router.ts:299-342  (core.router.createCallerFactory)\nexport function createCallerFactory<TConfig extends AnyRootConfig>() {\n  return function createCallerInner<\n    TRouter extends Router<AnyRouterDef<TConfig>>,\n  >(router: TRouter): RouterCaller<TRouter['_def']> {\n    const def = router._def;\n\n    return function createCaller(ctx) {\n      const proxy = createRecursiveProxy(({ path, args }) => {\n        // interop mode\n        if (\n          path.length === 1 &&\n          procedureTypes.includes(path[0] as ProcedureType)\n        ) {\n          return callProcedure({\n            procedures: def.procedures,\n            path: args[0] as string,\n            rawInput: args[1],\n            ctx,\n            type: path[0] as ProcedureType,\n          });\n        }\n\n        const fullPath = path.join('.');\n        const procedure = def.procedures[fullPath] as AnyProcedure;\n\n        let type: ProcedureType = 'query';\n        if (procedure._def.mutation) {\n          type = 'mutation';\n        } else if (procedure._def.subscription) {\n          type = 'subscription';\n        }\n\n        return procedure({\n          path: fullPath,\n          rawInput: args[0],\n          ctx,\n          type,\n        });\n      });\n\n      return proxy as ReturnType<RouterCaller<any>>;\n    };\n  };\n}",
+    "token_count": 285,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.createCallerFactory"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 285
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:128-149#part2of2",
+    "content": "# core/router.ts:128-149#part2of2  (core.router)\nexport interface Router<TDef extends AnyRouterDef> {\n  _def: TDef;\n  /**\n   * @deprecated use `t.createCallerFactory(router)` instead\n   * @see https://trpc.io/docs/server/server-side-calls\n   */\n  createCaller: RouterCaller<TDef>;\n\n  /**\n   * @deprecated\n   * FIXME: use the new standalone `getErrorShape` instead\n   */\n  getErrorShape(opts: {\n    error: TRPCError;\n    type: ProcedureType | 'unknown';\n    path: string | undefined;\n    input: unknown;\n    ctx: TDef['_config']['$types']['ctx'] | undefined;\n  }): TDef['_config']['$types']['errorShape'];\n}\n\nexport type AnyRouter = Router<AnyRouterDef>;",
+    "token_count": 181,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 181
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:1-126#part1of2",
+    "content": "# core/router.ts:1-126#part1of2  (core.router)\nimport type { DefaultErrorShape } from '../error/formatter';\nimport { defaultFormatter } from '../error/formatter';\nimport { TRPCError } from '../error/TRPCError';\nimport { getHTTPStatusCodeFromError } from '../http/getHTTPStatusCode';\nimport { TRPC_ERROR_CODES_BY_KEY } from '../rpc';\nimport { createRecursiveProxy } from '../shared/createProxy';\nimport { defaultTransformer } from '../transformer';\nimport type { AnyRootConfig } from './internals/config';\nimport { omitPrototype } from './internals/omitPrototype';\nimport type { ProcedureCallOptions } from './internals/procedureBuilder';\nimport type {\n  AnyMutationProcedure,\n  AnyProcedure,\n  AnyQueryProcedure,\n  AnySubscriptionProcedure,\n  ProcedureArgs,\n} from './procedure';\nimport type {\n  inferHandlerInput,\n  inferProcedureOutput,\n  ProcedureType,\n} from './types';\nimport { procedureTypes } from './types';\n\n/** @internal **/\nexport type ProcedureRecord = Record<string, AnyProcedure>;\n\nexport interface ProcedureRouterRecord {\n  [key: string]: AnyProcedure | AnyRouter;\n}\n\n/**\n * @deprecated\n */\ninterface DeprecatedProcedureRouterRecord {\n  queries: Record<string, AnyQueryProcedure>;\n  mutations: Record<string, AnyMutationProcedure>;\n  subscriptions: Record<string, AnySubscriptionProcedure>;\n}\n\nexport interface RouterDef<\n  TConfig extends AnyRootConfig,\n  TRecord extends ProcedureRouterRecord,\n  /**\n   * @deprecated\n   */\n  TOld extends DeprecatedProcedureRouterRecord = {\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    queries: {};\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    mutations: {};\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    subscriptions: {};\n  },\n> {\n  _config: TConfig;\n  router: true;\n  procedures: TRecord;\n  record: TRecord;\n  /**\n   * V9 queries\n   * @deprecated\n   */\n  queries: TOld['queries'];\n  /**\n   * V9 mutations\n   * @deprecated\n   */\n  mutations: TOld['mutations'];\n  /**\n   * V9 subscriptions\n   * @deprecated\n   */\n  subscriptions: TOld['subscriptions'];\n}\n\nexport type AnyRouterDef<\n  TConfig extends AnyRootConfig = AnyRootConfig,\n  TOld extends DeprecatedProcedureRouterRecord = any,\n> = RouterDef<TConfig, any, TOld>;\n\n/**\n * @internal\n */\ntype inferHandlerFn<TProcedures extends ProcedureRecord> = <\n  TProcedure extends TProcedures[TPath],\n  TPath extends string & keyof TProcedures,\n>(\n  path: TPath,\n  ...args: inferHandlerInput<TProcedure>\n) => Promise<inferProcedureOutput<TProcedure>>;\n\ntype DecorateProcedure<TProcedure extends AnyProcedure> = (\n  input: ProcedureArgs<TProcedure['_def']>[0],\n) => Promise<TProcedure['_def']['_output_out']>;\n\n/**\n * @internal\n */\ntype DecoratedProcedureRecord<TProcedures extends ProcedureRouterRecord> = {\n  [TKey in keyof TProcedures]: TProcedures[TKey] extends AnyRouter\n    ? DecoratedProcedureRecord<TProcedures[TKey]['_def']['record']>\n    : TProcedures[TKey] extends AnyProcedure\n    ? DecorateProcedure<TProcedures[TKey]>\n    : never;\n};\n\n/**\n * @internal\n */\nexport type RouterCaller<TDef extends AnyRouterDef> = (\n  ctx: TDef['_config']['$types']['ctx'],\n) => DecoratedProcedureRecord<TDef['record']> & {\n  /**\n   * @deprecated\n   */\n  query: inferHandlerFn<TDef['queries']>;\n  /**\n   * @deprecated\n   */\n  mutation: inferHandlerFn<TDef['mutations']>;\n  /**\n   * @deprecated\n   */\n  subscription: inferHandlerFn<TDef['subscriptions']>;\n};",
+    "token_count": 816,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 816
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:755-786#signature",
+    "content": "# deprecated/router.ts:755-786  (deprecated.router.Router.createCaller [signature])\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public createCaller(ctx: TInputContext): {\n    query: inferHandlerFn<TQueries>;\n    mutation: inferHandlerFn<TMutations>;\n    subscription: inferHandlerFn<TSubscriptions>;\n  } {\n    // ...\n  }\n}",
+    "token_count": 235,
+    "rank": 8,
+    "kind": "signature_stub",
+    "symbols": [
+     "deprecated.router.Router.createCaller",
+     "deprecated.router.Router.createCaller.query",
+     "deprecated.router.Router.createCaller.mutation",
+     "deprecated.router.Router.createCaller.subscription"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "stub",
+     "bm25_rank": 17,
+     "chunk_kind": "method",
+     "engine_token_count": 235
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "subscription.ts:5-44#signature",
+    "content": "# subscription.ts:5-44  (subscription.subscriptionPullFactory [signature])\n/** ... */\nexport function subscriptionPullFactory<TOutput>(opts: {\n  /**\n   * The interval of how often the function should run\n   */\n  intervalMs: number;\n  pull(emit: Observer<TOutput, unknown>): Promise<void> | void;\n}): Observable<TOutput, unknown> {\n  // ...\n}",
+    "token_count": 82,
+    "rank": 9,
+    "kind": "signature_stub",
+    "symbols": [
+     "subscription.subscriptionPullFactory",
+     "subscription.subscriptionPullFactory._pull"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "stub",
+     "bm25_rank": 21,
+     "chunk_kind": "function",
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/batchStreamFormatter.ts:1-29#signature",
+    "content": "# http/batchStreamFormatter.ts:1-29  (http.batchStreamFormatter.getBatchStreamFormatter [signature])\n/** ... */\nexport function getBatchStreamFormatter() {\n  // ...\n}",
+    "token_count": 40,
+    "rank": 10,
+    "kind": "signature_stub",
+    "symbols": [
+     "http.batchStreamFormatter.getBatchStreamFormatter",
+     "http.batchStreamFormatter.getBatchStreamFormatter.format"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "stub",
+     "bm25_rank": 23,
+     "chunk_kind": "function",
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/internals/procedure.ts:170-244#signature",
+    "content": "# deprecated/internals/procedure.ts:170-244  (deprecated.internals.procedure.Procedure.call [signature])\nexport class Procedure<\n  TInputContext,\n  TContext,\n  TMeta,\n  TInput,\n  TParsedInput,\n  TOutput,\n  TParsedOutput,\n  TFinalOutput = unknown extends TParsedOutput ? TOutput : TParsedOutput,\n> {\n  /** ... */\n  public async call(\n    opts: ProcedureCallOptions<TInputContext>,\n  ): Promise<TFinalOutput> {\n    // ...\n  }\n}",
+    "token_count": 116,
+    "rank": 11,
+    "kind": "signature_stub",
+    "symbols": [
+     "deprecated.internals.procedure.Procedure.call",
+     "deprecated.internals.procedure.Procedure.call.callRecursive",
+     "deprecated.internals.procedure.Procedure.call.callRecursive.next"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "stub",
+     "bm25_rank": 25,
+     "chunk_kind": "method",
+     "engine_token_count": 116
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/fastify/fastifyTRPCPlugin.ts:21-58#signature",
+    "content": "# adapters/fastify/fastifyTRPCPlugin.ts:21-58  (adapters.fastify.fastifyTRPCPlugin.fastifyTRPCPlugin [signature])\nexport function fastifyTRPCPlugin<TRouter extends AnyRouter>(\n  fastify: FastifyInstance,\n  opts: FastifyTRPCPluginOptions<TRouter>,\n  done: (err?: Error) => void,\n) {\n  // ...\n}",
+    "token_count": 87,
+    "rank": 12,
+    "kind": "signature_stub",
+    "symbols": [
+     "adapters.fastify.fastifyTRPCPlugin.fastifyTRPCPlugin"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "stub",
+     "bm25_rank": 27,
+     "chunk_kind": "function",
+     "engine_token_count": 87
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/next.ts:20-68#signature",
+    "content": "# adapters/next.ts:20-68  (adapters.next.createNextApiHandler [signature])\nexport function createNextApiHandler<TRouter extends AnyRouter>(\n  opts: NodeHTTPHandlerOptions<TRouter, NextApiRequest, NextApiResponse>,\n): NextApiHandler {\n  // ...\n}",
+    "token_count": 63,
+    "rank": 13,
+    "kind": "signature_stub",
+    "symbols": [
+     "adapters.next.createNextApiHandler",
+     "adapters.next.createNextApiHandler.getPath"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "stub",
+     "bm25_rank": 28,
+     "chunk_kind": "function",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/createProxy/index.ts:11-31#signature",
+    "content": "# shared/createProxy/index.ts:11-31  (shared.createProxy.createInnerProxy [signature])\nfunction createInnerProxy(callback: ProxyCallback, path: string[]) {\n  // ...\n}",
+    "token_count": 41,
+    "rank": 14,
+    "kind": "signature_stub",
+    "symbols": [
+     "shared.createProxy.createInnerProxy",
+     "shared.createProxy.createInnerProxy.get",
+     "shared.createProxy.createInnerProxy.apply"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "stub",
+     "bm25_rank": 31,
+     "chunk_kind": "function",
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/content-type/json/getPostBody.ts:5-41#signature",
+    "content": "# adapters/node-http/content-type/json/getPostBody.ts:5-41  (adapters.node-http.content-type.json.getPostBody.getPostBody [signature])\nexport async function getPostBody(opts: {\n  req: NodeHTTPRequest;\n  maxBodySize?: number;\n}): Promise<BodyResult> {\n  // ...\n}",
+    "token_count": 67,
+    "rank": 15,
+    "kind": "signature_stub",
+    "symbols": [
+     "adapters.node-http.content-type.json.getPostBody.getPostBody"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "stub",
+     "bm25_rank": 32,
+     "chunk_kind": "function",
+     "engine_token_count": 67
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/createProxy/index.ts:41-59#signature",
+    "content": "# shared/createProxy/index.ts:41-59  (shared.createProxy.createFlatProxy [signature])\n/** ... */\nexport const createFlatProxy = <TFaux>(\n  callback: (path: string & keyof TFaux) => any,\n): TFaux => {\n  // ...\n};",
+    "token_count": 60,
+    "rank": 16,
+    "kind": "signature_stub",
+    "symbols": [
+     "shared.createProxy.createFlatProxy",
+     "shared.createProxy.createFlatProxy.get"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "stub",
+     "bm25_rank": 34,
+     "chunk_kind": "function",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/contentType.ts:67-99#signature",
+    "content": "# http/contentType.ts:67-99  (http.contentType.getJsonContentTypeInputs [signature])\nexport const getJsonContentTypeInputs: GetInputs = (opts) => {\n  // ...\n};",
+    "token_count": 41,
+    "rank": 17,
+    "kind": "signature_stub",
+    "symbols": [
+     "http.contentType.getJsonContentTypeInputs"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "stub",
+     "bm25_rank": 35,
+     "chunk_kind": "function",
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/nodeHTTPRequestHandler.ts:18-138#signature",
+    "content": "# adapters/node-http/nodeHTTPRequestHandler.ts:18-138  (adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler [signature])\nexport async function nodeHTTPRequestHandler<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n>(opts: NodeHTTPRequestHandlerOptions<TRouter, TRequest, TResponse>) {\n  // ...\n}",
+    "token_count": 81,
+    "rank": 18,
+    "kind": "signature_stub",
+    "symbols": [
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler",
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler.createContext",
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler.unstable_onHead",
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler.unstable_onChunk",
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler.onError"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "stub",
+     "bm25_rank": 36,
+     "chunk_kind": "function",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:27-30#signature",
+    "content": "# error/TRPCError.ts:27-30  (error.TRPCError.TRPCError [signature])\nexport class TRPCError extends Error {\n  // ...\n}",
+    "token_count": 36,
+    "rank": 19,
+    "kind": "signature_stub",
+    "symbols": [
+     "error.TRPCError.TRPCError"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "stub",
+     "bm25_rank": 38,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:74-130#signature",
+    "content": "# http/resolveHTTPResponse.ts:74-130  (http.resolveHTTPResponse.initResponse [signature])\nfunction initResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(initOpts: {\n  ctx: inferRouterContext<TRouter> | undefined;\n  paths: string[] | undefined;\n  type: ProcedureType | 'unknown';\n  responseMeta?: HTTPBaseHandlerOptions<TRouter, TRequest>['responseMeta'];\n  untransformedJSON?:\n    | TRPCResponse<unknown, inferRouterError<TRouter>>\n    | TRPCResponse<unknown, inferRouterError<TRouter>>[]\n    | undefined;\n  errors?: TRPCError[];\n}): HTTPResponse {\n  // ...\n}",
+    "token_count": 154,
+    "rank": 20,
+    "kind": "signature_stub",
+    "symbols": [
+     "http.resolveHTTPResponse.initResponse"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "stub",
+     "bm25_rank": 42,
+     "chunk_kind": "function",
+     "engine_token_count": 154
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/mergeRouters.ts:37-90#signature",
+    "content": "# core/internals/mergeRouters.ts:37-90  (core.internals.mergeRouters.mergeRouters [signature])\nexport function mergeRouters<TRouters extends AnyRouter[]>(\n  ...routerList: [...TRouters]\n): MergeRouters<TRouters> {\n  // ...\n}",
+    "token_count": 64,
+    "rank": 21,
+    "kind": "signature_stub",
+    "symbols": [
+     "core.internals.mergeRouters.mergeRouters"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "stub",
+     "bm25_rank": 43,
+     "chunk_kind": "function",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/mergeWithoutOverrides.ts:1-19#signature",
+    "content": "# core/internals/mergeWithoutOverrides.ts:1-19  (core.internals.mergeWithoutOverrides.mergeWithoutOverrides [signature])\n/** ... */\nexport function mergeWithoutOverrides<TType extends Record<string, unknown>>(\n  obj1: TType,\n  ...objs: Partial<TType>[]\n): TType {\n  // ...\n}",
+    "token_count": 68,
+    "rank": 22,
+    "kind": "signature_stub",
+    "symbols": [
+     "core.internals.mergeWithoutOverrides.mergeWithoutOverrides"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "stub",
+     "bm25_rank": 44,
+     "chunk_kind": "function",
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:177-223#signature",
+    "content": "# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData [signature])\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  // ...\n}",
+    "token_count": 132,
+    "rank": 23,
+    "kind": "signature_stub",
+    "symbols": [
+     "http.resolveHTTPResponse.caughtErrorToData"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "stub",
+     "bm25_rank": 47,
+     "chunk_kind": "function",
+     "engine_token_count": 132
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/getCauseFromUnknown.ts:6-31#signature",
+    "content": "# shared/getCauseFromUnknown.ts:6-31  (shared.getCauseFromUnknown.getCauseFromUnknown [signature])\nexport function getCauseFromUnknown(cause: unknown): Error | undefined {\n  // ...\n}",
+    "token_count": 45,
+    "rank": 24,
+    "kind": "signature_stub",
+    "symbols": [
+     "shared.getCauseFromUnknown.getCauseFromUnknown"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "stub",
+     "bm25_rank": 48,
+     "chunk_kind": "function",
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/interop.ts:200-232#signature",
+    "content": "# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter [signature])\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  // ...\n}",
+    "token_count": 58,
+    "rank": 25,
+    "kind": "signature_stub",
+    "symbols": [
+     "deprecated.interop.migrateRouter"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "stub",
+     "bm25_rank": 49,
+     "chunk_kind": "function",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:207-282#signature",
+    "content": "# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder [signature])\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  // ...\n}",
+    "token_count": 130,
+    "rank": 26,
+    "kind": "signature_stub",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder",
+     "core.internals.procedureBuilder.createBuilder.input",
+     "core.internals.procedureBuilder.createBuilder.output",
+     "core.internals.procedureBuilder.createBuilder.meta",
+     "core.internals.procedureBuilder.createBuilder.unstable_concat",
+     "core.internals.procedureBuilder.createBuilder.use",
+     "core.internals.procedureBuilder.createBuilder.query",
+     "core.internals.procedureBuilder.createBuilder.mutation",
+     "core.internals.procedureBuilder.createBuilder.subscription"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "stub",
+     "bm25_rank": 50,
+     "chunk_kind": "function",
+     "engine_token_count": 130
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/initTRPC.ts:94-187",
+    "content": "# core/initTRPC.ts:94-187  (core.initTRPC.createTRPCInner)\nfunction createTRPCInner<TParams extends PartialRootConfigTypes>() {\n  type $Generics = CreateRootConfigTypesFromPartial<TParams>;\n\n  type $Context = $Generics['ctx'];\n  type $Meta = $Generics['meta'];\n  type $Runtime = Partial<RuntimeConfig<$Generics>>;\n\n  return function initTRPCInner<TOptions extends $Runtime>(\n    runtime?: ValidateShape<TOptions, $Runtime>,\n  ) {\n    type $Formatter = PickFirstDefined<\n      TOptions['errorFormatter'],\n      ErrorFormatter<$Context, DefaultErrorShape>\n    >;\n    type $Transformer = TOptions['transformer'] extends DataTransformerOptions\n      ? TOptions['transformer']\n      : DefaultDataTransformer;\n    type $ErrorShape = ErrorFormatterShape<$Formatter>;\n\n    type $Config = RootConfig<{\n      ctx: $Context;\n      meta: $Meta;\n      errorShape: $ErrorShape;\n      transformer: $Transformer;\n    }>;\n\n    const errorFormatter = runtime?.errorFormatter ?? defaultFormatter;\n    const transformer = getDataTransformer(\n      runtime?.transformer ?? defaultTransformer,\n    ) as $Transformer;\n\n    const config: $Config = {\n      transformer,\n      isDev:\n        runtime?.isDev ?? globalThis.process?.env?.NODE_ENV !== 'production',\n      allowOutsideOfServer: runtime?.allowOutsideOfServer ?? false,\n      errorFormatter,\n      isServer: runtime?.isServer ?? isServerDefault,\n      /**\n       * @internal\n       */\n      $types: createFlatProxy((key) => {\n        throw new Error(\n          `Tried to access \"$types.${key}\" which is not available at runtime`,\n        );\n      }),\n    };\n\n    {\n      // Server check\n      const isServer: boolean = runtime?.isServer ?? isServerDefault;\n\n      if (!isServer && runtime?.allowOutsideOfServer !== true) {\n        throw new Error(\n          `You're trying to use @trpc/server in a non-server environment. This is not supported by default.`,\n        );\n      }\n    }\n    return {\n      /**\n       * These are just types, they can't be used\n       * @internal\n       */\n      _config: config,\n      /**\n       * Builder object for creating procedures\n       * @see https://trpc.io/docs/server/procedures\n       */\n      procedure: createBuilder<$Config>({\n        meta: runtime?.defaultMeta,\n      }),\n      /**\n       * Create reusable middlewares\n       * @see https://trpc.io/docs/server/middlewares\n       */\n      middleware: createMiddlewareFactory<$Config>(),\n      /**\n       * Create a router\n       * @see https://trpc.io/docs/server/routers\n       */\n      router: createRouterFactory<$Config>(config),\n      /**\n       * Merge Routers\n       * @see https://trpc.io/docs/server/merging-routers\n       */\n      mergeRouters,\n      /**\n       * Create a server-side caller for a router\n       * @see https://trpc.io/docs/server/server-side-calls\n       */\n      createCallerFactory: createCallerFactory<$Config>(),\n    };\n  };\n}",
+    "token_count": 672,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.initTRPC.createTRPCInner"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "function",
+     "engine_token_count": 672
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:291-456#part2of2",
+    "content": "# http/resolveHTTPResponse.ts:291-456#part2of2  (http.resolveHTTPResponse.resolveHTTPResponse)\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  opts: PartialBy<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'unstable_onChunk' | 'unstable_onHead'\n  >,\n): Promise<HTTPResponse | void> {\n  try {\n    // we create context first so that (unless `createContext()` throws)\n    // error handler may access context information\n    //\n    // this way even if the client sends malformed input that might cause an exception:\n    //  - `opts.error` has value,\n    //  - batching is not enabled,\n    //  - `type` is unknown,\n    //  - `getInputs` throws because of malformed JSON,\n    // context value is still available to the error handler\n    ctx = await opts.createContext();\n\n    if (opts.error) {\n      throw opts.error;\n    }\n    if (isBatchCall && !batchingEnabled) {\n      throw new Error(`Batching is not enabled on the server`);\n    }\n    /* istanbul ignore if -- @preserve */\n    if (type === 'subscription') {\n      throw new TRPCError({\n        message: 'Subscriptions should use wsLink',\n        code: 'METHOD_NOT_SUPPORTED',\n      });\n    }\n    if (type === 'unknown') {\n      throw new TRPCError({\n        message: `Unexpected request method ${req.method}`,\n        code: 'METHOD_NOT_SUPPORTED',\n      });\n    }\n\n    const inputs = await contentTypeHandler.getInputs({\n      isBatchCall,\n      req,\n      router,\n      preprocessedBody: opts.preprocessedBody ?? false,\n    });\n\n    paths = isBatchCall\n      ? decodeURIComponent(opts.path).split(',')\n      : [opts.path];\n    const promises = paths.map((path, index) =>\n      inputToProcedureCall({ opts, ctx, type, input: inputs[index], path }),\n    );\n\n    if (!isStreamCall) {\n      /**\n       * Non-streaming response:\n       * - await all responses in parallel, blocking on the slowest one\n       * - create headers with known response body\n       * - return a complete HTTPResponse\n       */\n\n      const untransformedJSON = await Promise.all(promises);\n      const errors = untransformedJSON.flatMap((response) =>\n        'error' in response ? [response.error] : [],\n      );\n\n      const headResponse = initResponse({\n        ctx,\n        paths,\n        type,\n        responseMeta: opts.responseMeta,\n        untransformedJSON,\n        errors,\n      });\n      unstable_onHead?.(headResponse, false);\n\n      // return body stuff\n      const result = isBatchCall ? untransformedJSON : untransformedJSON[0]!; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- `untransformedJSON` should be the length of `paths` which should be at least 1 otherwise there wouldn't be a request at all\n      const transformedJSON = transformTRPCResponse(\n        router._def._config,\n        result,\n      );\n      const body = JSON.stringify(transformedJSON);\n      unstable_onChunk?.([-1, body]);\n\n      return {\n        status: headResponse.status,\n        headers: headResponse.headers,\n        body,\n      };\n    }\n\n    /**\n     * Streaming response:\n     * - block on none, call `onChunk` as soon as each response is ready\n     * - create headers with minimal data (cannot know the response body in advance)\n     * - return void\n     */\n    const headResponse = initResponse({\n      ctx,\n      paths,\n      type,\n      responseMeta: opts.responseMeta,\n    });\n    unstable_onHead(headResponse, true);\n\n    const indexedPromises = new Map(\n      promises.map((promise, index) => [\n        index,\n        promise.then((r) => [index, r] as const),\n      ]),\n    );\n    for (const _ of paths) {\n      const [index, untransformedJSON] = await Promise.race(\n        indexedPromises.values(),\n      );\n      indexedPromises.delete(index);\n\n      try {\n        const transformedJSON = transformTRPCResponse(\n          router._def._config,\n          untransformedJSON,\n        );\n        const body = JSON.stringify(transformedJSON);\n\n        unstable_onChunk([index, body]);\n      } catch (cause) {\n        const path = paths[index];\n        const input = inputs[index];\n        const { body } = caughtErrorToData(cause, {\n          opts,\n          ctx,\n          type,\n          path,\n          input,\n        });\n\n        unstable_onChunk([index, body]);\n      }\n    }\n    return;\n  } catch (cause) {\n    // we get here if\n    // - batching is called when it's not enabled\n    // - `createContext()` throws\n    // - `router._def._config.transformer.output.serialize()` throws\n    // - post body is too large\n    // - input deserialization fails\n    // - `errorFormatter` return value is malformed\n    const { error, untransformedJSON, body } = caughtErrorToData(cause, {\n      opts,\n      ctx,\n      type,\n    });\n\n    const headResponse = initResponse({\n      ctx,\n      paths,\n      type,\n      responseMeta: opts.responseMeta,\n      untransformedJSON,\n      errors: [error],\n    });\n    unstable_onHead?.(headResponse, false);\n\n    unstable_onChunk?.([-1, body]);\n\n    return {\n      status: headResponse.status,\n      headers: headResponse.headers,\n      body,\n    };\n  }\n}",
+    "token_count": 1190,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.resolveHTTPResponse"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "function_part",
+     "engine_token_count": 1190
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/internal/serialize.ts:1-88#part1of2",
+    "content": "# shared/internal/serialize.ts:1-88#part1of2  (shared.internal.serialize)\n/* eslint-disable @typescript-eslint/naming-convention */\nimport type { Simplify, WithoutIndexSignature } from '../../types';\n\n/**\n * @link https://github.com/remix-run/remix/blob/2248669ed59fd716e267ea41df5d665d4781f4a9/packages/remix-server-runtime/serialize.ts\n */\ntype JsonPrimitive = boolean | number | string | null;\n// eslint-disable-next-line @typescript-eslint/ban-types\ntype NonJsonPrimitive = Function | symbol | undefined;\n/*\n * `any` is the only type that can let you equate `0` with `1`\n * See https://stackoverflow.com/a/49928360/1490091\n */\ntype IsAny<T> = 0 extends T & 1 ? true : false;\n\n// `undefined` is a weird one that's technically not valid JSON,\n// but the return value of `JSON.parse` can be `undefined` so we\n// support it as both a Primitive and a NonJsonPrimitive\ntype JsonReturnable = JsonPrimitive | undefined;\n\ntype IsRecord<T extends object> = keyof WithoutIndexSignature<T> extends never\n  ? true\n  : false;\n\n/* prettier-ignore */\nexport type Serialize<T> =\n  IsAny<T> extends true ? any :\n  unknown extends T ? unknown :\n  T extends JsonReturnable ? T :\n  T extends Map<any, any> | Set<any> ? object :\n  T extends NonJsonPrimitive ? never :\n  T extends { toJSON(): infer U } ? U :\n  T extends [] ? [] :\n  T extends [unknown, ...unknown[]] ? SerializeTuple<T> :\n  T extends readonly (infer U)[] ? (U extends NonJsonPrimitive ? null : Serialize<U>)[] :\n  T extends object ?\n    IsRecord<T> extends true ? Record<keyof T, Serialize<T[keyof T]>> :\n    Simplify<SerializeObject<UndefinedToOptional<T>>> :\n  never;\n\n/** JSON serialize [tuples](https://www.typescriptlang.org/docs/handbook/2/objects.html#tuple-types) */\ntype SerializeTuple<T extends [unknown, ...unknown[]]> = {\n  [K in keyof T]: T[K] extends NonJsonPrimitive ? null : Serialize<T[K]>;\n};\n\n// prettier-ignore\ntype SerializeObjectKey<T extends Record<any, any>, K> = \n  // never include entries where the key is a symbol\n  K extends symbol ? never : \n  // always include entries where the value is any\n  IsAny<T[K]> extends true ? K :\n  // always include entries where the value is unknown\n  unknown extends T[K] ? K : \n  // never include entries where the value is a non-JSON primitive\n  T[K] extends NonJsonPrimitive ? never : \n  // otherwise serialize the value\n  K;\n/**\n * JSON serialize objects (not including arrays) and classes\n * @internal\n **/\nexport type SerializeObject<T extends object> = {\n  [K in keyof T as SerializeObjectKey<T, K>]: Serialize<T[K]>;\n};\n\n/**\n * Extract keys from T where the value dosen't extend undefined\n * Note: Can't parse IndexSignature or Record types\n */\ntype FilterDefinedKeys<T extends object> = Exclude<\n  {\n    [K in keyof T]: undefined extends T[K] ? never : K;\n  }[keyof T],\n  undefined\n>;\n\n/**\n * Get value of exactOptionalPropertyTypes config\n */\ntype ExactOptionalPropertyTypes = { a?: 0 | undefined } extends {\n  a?: 0;\n}\n  ? false\n  : true;\n\n/**\n * Check if T has an index signature\n */",
+    "token_count": 810,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "module_block",
+     "engine_token_count": 810
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/content-type/form-data/index.ts:1-23",
+    "content": "# adapters/node-http/content-type/form-data/index.ts:1-23  (adapters.node-http.content-type.form-data)\n/**\n * Copyright 2021 Remix Software Inc.\n * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n * THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n */\n\n/**\n * @see https://github.com/remix-run/remix/blob/0bcb4a304dd2f08f6032c3bf0c3aa7eb5b976901/packages/remix-server-runtime/formData.ts\n */\nimport * as fs from 'fs/promises';\nimport { Readable } from 'node:stream';\n// eslint-disable-next-line @typescript-eslint/ban-ts-comment\n// @ts-ignore the type definitions for this package are borked\nimport { streamMultipart } from '@web3-storage/multipart-parser';\nimport type { CombinedDataTransformer } from '../../../../transformer';\nimport { createNodeHTTPContentTypeHandler } from '../../internals/contentType';\nimport type { NodeHTTPRequest } from '../../types';\nimport { NodeOnDiskFile } from './fileUploadHandler';\nimport type { UploadHandler, UploadHandlerPart } from './uploadHandler';\nimport { MaxBodySizeExceededError } from './uploadHandler';\n\nconst utfTextDecoder = new TextDecoder('utf-8');",
+    "token_count": 450,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "module_block",
+     "engine_token_count": 450
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/config.ts:1-89",
+    "content": "# core/internals/config.ts:1-89  (core.internals.config)\nimport type { ErrorFormatter } from '../../error/formatter';\nimport type { TRPCErrorShape } from '../../rpc';\n\n/**\n * The initial generics that are used in the init function\n * @internal\n */\nexport interface RootConfigTypes {\n  ctx: object;\n  meta: object;\n  errorShape: unknown;\n  transformer: unknown;\n}\n\n/**\n * The default check to see if we're in a server\n */\nexport const isServerDefault: boolean =\n  typeof window === 'undefined' ||\n  'Deno' in window ||\n  globalThis.process?.env?.NODE_ENV === 'test' ||\n  !!globalThis.process?.env?.JEST_WORKER_ID ||\n  !!globalThis.process?.env?.VITEST_WORKER_ID;\n\n/**\n * The runtime config that are used and actually represents real values underneath\n * @internal\n */\nexport interface RuntimeConfig<TTypes extends RootConfigTypes> {\n  /**\n   * Use a data transformer\n   * @link https://trpc.io/docs/data-transformers\n   */\n  transformer: TTypes['transformer'];\n  /**\n   * Use custom error formatting\n   * @link https://trpc.io/docs/error-formatting\n   */\n  errorFormatter: ErrorFormatter<\n    TTypes['ctx'],\n    TRPCErrorShape<number> & { [key: string]: any }\n  >;\n  /**\n   * Allow `@trpc/server` to run in non-server environments\n   * @warning **Use with caution**, this should likely mainly be used within testing.\n   * @default false\n   */\n  allowOutsideOfServer: boolean;\n  /**\n   * Is this a server environment?\n   * @warning **Use with caution**, this should likely mainly be used within testing.\n   * @default typeof window === 'undefined' || 'Deno' in window || process.env.NODE_ENV === 'test'\n   */\n  isServer: boolean;\n  /**\n   * Is this development?\n   * Will be used to decide if the API should return stack traces\n   * @default process.env.NODE_ENV !== 'production'\n   */\n  isDev: boolean;\n\n  defaultMeta?: TTypes['meta'] extends object ? TTypes['meta'] : never;\n}\n\n/**\n * @internal\n */\nexport type CreateRootConfigTypes<TGenerics extends RootConfigTypes> =\n  TGenerics;\n\n/**\n * The config that is resolved after `initTRPC.create()` has been called\n * Combination of `InitTOptions` + `InitGenerics`\n * @internal\n */\nexport interface RootConfig<TGenerics extends RootConfigTypes>\n  extends RuntimeConfig<TGenerics> {\n  $types: TGenerics;\n}\n\n/**\n * @internal\n */\nexport type AnyRootConfig = RootConfig<{\n  ctx: any;\n  meta: any;\n  errorShape: any;\n  transformer: any;\n}>;",
+    "token_count": 602,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "module_block",
+     "engine_token_count": 602
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/index.ts:1-29",
+    "content": "# core/index.ts:1-29  (core)\nexport type {\n  AnyRouter,\n  ProcedureRecord,\n  ProcedureRouterRecord,\n  CreateRouterInner,\n  Router,\n  RouterCaller,\n  AnyRouterDef,\n} from './router';\nexport { callProcedure, createCallerFactory } from './router';\nexport type {\n  Procedure,\n  AnyProcedure,\n  AnyQueryProcedure,\n  AnyMutationProcedure,\n  AnySubscriptionProcedure,\n  ProcedureParams,\n  ProcedureArgs,\n  ProcedureOptions,\n} from './procedure';\nexport type { inferParser } from './parser';\nexport {\n  createInputMiddleware,\n  createOutputMiddleware,\n  experimental_standaloneMiddleware,\n} from './middleware';\nexport type { MiddlewareFunction, MiddlewareBuilder } from './middleware';\nexport { initTRPC } from './initTRPC';\nexport * from './types';",
+    "token_count": 170,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "module_block",
+     "engine_token_count": 170
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/initTRPC.ts:1-49",
+    "content": "# core/initTRPC.ts:1-49  (core.initTRPC)\nimport type {\n  DefaultErrorShape,\n  ErrorFormatter,\n  ErrorFormatterShape,\n} from '../error/formatter';\nimport { defaultFormatter } from '../error/formatter';\nimport { createFlatProxy } from '../shared/createProxy';\nimport type {\n  DataTransformerOptions,\n  DefaultDataTransformer,\n} from '../transformer';\nimport { defaultTransformer, getDataTransformer } from '../transformer';\nimport type { Unwrap } from '../types';\nimport type {\n  CreateRootConfigTypes,\n  RootConfig,\n  RootConfigTypes,\n  RuntimeConfig,\n} from './internals/config';\nimport { isServerDefault } from './internals/config';\nimport { mergeRouters } from './internals/mergeRouters';\nimport { createBuilder } from './internals/procedureBuilder';\nimport type {\n  Overwrite,\n  PickFirstDefined,\n  ValidateShape,\n} from './internals/utils';\nimport { createMiddlewareFactory } from './middleware';\nimport { createCallerFactory, createRouterFactory } from './router';\n\ntype PartialRootConfigTypes = Partial<RootConfigTypes>;\n\ntype CreateRootConfigTypesFromPartial<TTypes extends PartialRootConfigTypes> =\n  CreateRootConfigTypes<{\n    ctx: TTypes['ctx'] extends RootConfigTypes['ctx'] ? TTypes['ctx'] : object;\n    meta: TTypes['meta'] extends RootConfigTypes['meta']\n      ? TTypes['meta']\n      : object;\n    errorShape: TTypes['errorShape'];\n    transformer: DataTransformerOptions;\n  }>;\n\ntype ContextCallback = (...args: any[]) => object | Promise<object>;\n/**\n * TODO: This can be improved:\n * - We should be able to chain `.meta()`/`.context()` only once\n * - Simplify typings\n * - Doesn't need to be a class but it doesn't really hurt either\n */",
+    "token_count": 393,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "module_block",
+     "engine_token_count": 393
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "rpc/codes.ts:1-44",
+    "content": "# rpc/codes.ts:1-44  (rpc.codes)\nimport { invert } from '../internals/invert';\n\n// reference: https://www.jsonrpc.org/specification\n\n/**\n * JSON-RPC 2.0 Error codes\n *\n * `-32000` to `-32099` are reserved for implementation-defined server-errors.\n * For tRPC we're copying the last digits of HTTP 4XX errors.\n */\nexport const TRPC_ERROR_CODES_BY_KEY = {\n  /**\n   * Invalid JSON was received by the server.\n   * An error occurred on the server while parsing the JSON text.\n   */\n  PARSE_ERROR: -32700,\n  /**\n   * The JSON sent is not a valid Request object.\n   */\n  BAD_REQUEST: -32600, // 400\n\n  // Internal JSON-RPC error\n  INTERNAL_SERVER_ERROR: -32603,\n  NOT_IMPLEMENTED: -32603,\n\n  // Implementation specific errors\n  UNAUTHORIZED: -32001, // 401\n  FORBIDDEN: -32003, // 403\n  NOT_FOUND: -32004, // 404\n  METHOD_NOT_SUPPORTED: -32005, // 405\n  TIMEOUT: -32008, // 408\n  CONFLICT: -32009, // 409\n  PRECONDITION_FAILED: -32012, // 412\n  PAYLOAD_TOO_LARGE: -32013, // 413\n  UNPROCESSABLE_CONTENT: -32022, // 422\n  TOO_MANY_REQUESTS: -32029, // 429\n  CLIENT_CLOSED_REQUEST: -32099, // 499\n} as const;\n\nexport const TRPC_ERROR_CODES_BY_NUMBER = invert(TRPC_ERROR_CODES_BY_KEY);\ntype ValueOf<TObj> = TObj[keyof TObj];\n\nexport type TRPC_ERROR_CODE_NUMBER = ValueOf<typeof TRPC_ERROR_CODES_BY_KEY>;\nexport type TRPC_ERROR_CODE_KEY = keyof typeof TRPC_ERROR_CODES_BY_KEY;",
+    "token_count": 480,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "module_block",
+     "engine_token_count": 480
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/types.ts:1-103",
+    "content": "# adapters/node-http/types.ts:1-103  (adapters.node-http.types)\nimport type { IncomingMessage, ServerResponse } from 'http';\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPBaseHandlerOptions } from '../../http';\nimport type { MaybePromise } from '../../types';\nimport type { NodeHTTPContentTypeHandler } from './internals/contentType';\n\ninterface ParsedQs {\n  [key: string]: ParsedQs | ParsedQs[] | string[] | string | undefined;\n}\n\nexport type NodeHTTPRequest = IncomingMessage & {\n  query?: ParsedQs;\n  body?: unknown;\n};\nexport type NodeHTTPResponse = ServerResponse & {\n  /**\n   * Force the partially-compressed response to be flushed to the client.\n   *\n   * Added by compression middleware\n   * (depending on the environment,\n   * e.g. Next <= 12,\n   * e.g. Express w/ `compression()`)\n   */\n  flush?: () => void;\n};\n\nexport type NodeHTTPCreateContextOption<\n  TRouter extends AnyRouter,\n  TRequest,\n  TResponse,\n> = object extends inferRouterContext<TRouter>\n  ? {\n      /**\n       * @link https://trpc.io/docs/context\n       **/\n      createContext?: NodeHTTPCreateContextFn<TRouter, TRequest, TResponse>;\n    }\n  : {\n      /**\n       * @link https://trpc.io/docs/context\n       **/\n      createContext: NodeHTTPCreateContextFn<TRouter, TRequest, TResponse>;\n    };\n\n/**\n * @internal\n */\ntype ConnectMiddleware<\n  TRequest extends NodeHTTPRequest = NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse = NodeHTTPResponse,\n> = (req: TRequest, res: TResponse, next: (err?: any) => any) => void;\n\nexport type NodeHTTPHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> = HTTPBaseHandlerOptions<TRouter, TRequest> &\n  NodeHTTPCreateContextOption<TRouter, TRequest, TResponse> & {\n    /**\n     * By default, http `OPTIONS` requests are not handled, and CORS headers are not returned.\n     *\n     * This can be used to handle them manually or via the `cors` npm package: https://www.npmjs.com/package/cors\n     *\n     * ```ts\n     * import cors from 'cors'\n     *\n     * nodeHTTPRequestHandler({\n     *   cors: cors()\n     * })\n     * ```\n     *\n     * You can also use it for other needs which a connect/node.js compatible middleware can solve,\n     *  though you might wish to consider an alternative solution like the Express adapter if your needs are complex.\n     */\n    middleware?: ConnectMiddleware;\n    maxBodySize?: number;\n    experimental_contentTypeHandlers?: NodeHTTPContentTypeHandler<\n      TRequest,\n      TResponse\n    >[];\n  };\n\nexport type NodeHTTPRequestHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> = {\n  req: TRequest;\n  res: TResponse;\n  path: string;\n} & NodeHTTPHandlerOptions<TRouter, TRequest, TResponse>;\n\nexport type NodeHTTPCreateContextFnOptions<TRequest, TResponse> = {\n  req: TRequest;\n  res: TResponse;\n};\nexport type NodeHTTPCreateContextFn<\n  TRouter extends AnyRouter,\n  TRequest,\n  TResponse,\n> = (\n  opts: NodeHTTPCreateContextFnOptions<TRequest, TResponse>,\n) => MaybePromise<inferRouterContext<TRouter>>;",
+    "token_count": 768,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "module_block",
+     "engine_token_count": 768
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:322-407",
+    "content": "# core/internals/procedureBuilder.ts:322-407  (core.internals.procedureBuilder.createProcedureCaller)\nfunction createProcedureCaller(_def: AnyProcedureBuilderDef): AnyProcedure {\n  const procedure = async function resolve(opts: ProcedureCallOptions) {\n    // is direct server-side call\n    if (!opts || !('rawInput' in opts)) {\n      throw new Error(codeblock);\n    }\n\n    // run the middlewares recursively with the resolver as the last one\n    const callRecursive = async (\n      callOpts: {\n        ctx: any;\n        index: number;\n        input?: unknown;\n        rawInput?: unknown;\n      } = {\n        index: 0,\n        ctx: opts.ctx,\n      },\n    ): Promise<MiddlewareResult<any>> => {\n      try {\n        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n        const middleware = _def.middlewares[callOpts.index]!;\n        const result = await middleware({\n          ctx: callOpts.ctx,\n          type: opts.type,\n          path: opts.path,\n          rawInput: callOpts.rawInput ?? opts.rawInput,\n          meta: _def.meta,\n          input: callOpts.input,\n          next(_nextOpts?: any) {\n            const nextOpts = _nextOpts as\n              | {\n                  ctx?: Record<string, unknown>;\n                  input?: unknown;\n                  rawInput?: unknown;\n                }\n              | undefined;\n\n            return callRecursive({\n              index: callOpts.index + 1,\n              ctx:\n                nextOpts && 'ctx' in nextOpts\n                  ? { ...callOpts.ctx, ...nextOpts.ctx }\n                  : callOpts.ctx,\n              input:\n                nextOpts && 'input' in nextOpts\n                  ? nextOpts.input\n                  : callOpts.input,\n              rawInput:\n                nextOpts && 'rawInput' in nextOpts\n                  ? nextOpts.rawInput\n                  : callOpts.rawInput,\n            });\n          },\n        });\n        return result;\n      } catch (cause) {\n        return {\n          ok: false,\n          error: getTRPCErrorFromUnknown(cause),\n          marker: middlewareMarker,\n        };\n      }\n    };\n\n    // there's always at least one \"next\" since we wrap this.resolver in a middleware\n    const result = await callRecursive();\n\n    if (!result) {\n      throw new TRPCError({\n        code: 'INTERNAL_SERVER_ERROR',\n        message:\n          'No result from middlewares - did you forget to `return next()`?',\n      });\n    }\n    if (!result.ok) {\n      // re-throw original error\n      throw result.error;\n    }\n    return result.data;\n  };\n  procedure._def = _def;\n  procedure.meta = _def.meta;\n\n  return procedure as AnyProcedure;\n}",
+    "token_count": 577,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createProcedureCaller",
+     "core.internals.procedureBuilder.createProcedureCaller.procedure",
+     "core.internals.procedureBuilder.createProcedureCaller.procedure.callRecursive",
+     "core.internals.procedureBuilder.createProcedureCaller.procedure.callRecursive.next"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "function",
+     "engine_token_count": 577
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "transformer.ts:1-66",
+    "content": "# transformer.ts:1-66  (transformer)\n/**\n * @public\n */\nexport interface DataTransformer {\n  serialize(object: any): any;\n  deserialize(object: any): any;\n}\n\ninterface InputDataTransformer extends DataTransformer {\n  /**\n   * This function runs **on the client** before sending the data to the server.\n   */\n  serialize(object: any): any;\n  /**\n   * This function runs **on the server** to transform the data before it is passed to the resolver\n   */\n  deserialize(object: any): any;\n}\n\ninterface OutputDataTransformer extends DataTransformer {\n  /**\n   * This function runs **on the server** before sending the data to the client.\n   */\n  serialize(object: any): any;\n  /**\n   * This function runs **only on the client** to transform the data sent from the server.\n   */\n  deserialize(object: any): any;\n}\n\n/**\n * @public\n */\nexport interface CombinedDataTransformer {\n  /**\n   * Specify how the data sent from the client to the server should be transformed.\n   */\n  input: InputDataTransformer;\n  /**\n   * Specify how the data sent from the server to the client should be transformed.\n   */\n  output: OutputDataTransformer;\n}\n\n/**\n * @public\n */\nexport type CombinedDataTransformerClient = {\n  input: Pick<CombinedDataTransformer['input'], 'serialize'>;\n  output: Pick<CombinedDataTransformer['output'], 'deserialize'>;\n};\n\n/**\n * @public\n */\nexport type DataTransformerOptions = CombinedDataTransformer | DataTransformer;\n\n/**\n * @public\n * @deprecated\n * Deprecated in favor of `CombinedDataTransformerOptions` as this causes issues when doing SSR\n * - https://github.com/trpc/trpc/issues/4130\n */\nexport type ClientDataTransformerOptions =\n  | CombinedDataTransformerClient\n  | DataTransformer;",
+    "token_count": 383,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "module_block",
+     "engine_token_count": 383
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/content-type/form-data/index.ts:25-106",
+    "content": "# adapters/node-http/content-type/form-data/index.ts:25-106  (adapters.node-http.content-type.form-data.parseMultipartFormData)\n/**\n * Allows you to handle multipart forms (file uploads) for your app.\n * Request body parts with a 'filename' property will be treated as files.\n * The rest will be treated as text.\n * @param request The incoming Node HTTP request\n * @param uploadHandler A function that handles file uploads and returns a value to be used in the request body. If uploaded to disk, the returned value is a NodeOnDiskFile. If uploaded to memory, the returned value is a File.\n * @param maxBodySize The maximum size of the request body in bytes. Defaults to Infinity.\n *\n * @see https://remix.run/utils/parse-multipart-form-data\n */\nasync function parseMultipartFormData(\n  request: NodeHTTPRequest,\n  uploadHandler: UploadHandler,\n  maxBodySize = Infinity,\n) {\n  const contentType = request.headers['content-type'] ?? '';\n  const [type, boundary] = contentType.split(/\\s*;\\s*boundary=/);\n\n  if (!boundary || type !== 'multipart/form-data') {\n    throw new TypeError('Could not parse content as FormData.');\n  }\n\n  const formData = new FormData();\n  const parts: AsyncIterable<UploadHandlerPart & { done?: true }> =\n    streamMultipart(Readable.toWeb(request), boundary);\n\n  let currentBodySize = 0;\n\n  const nodeOnDiskFiles: NodeOnDiskFile[] = [];\n\n  try {\n    for await (const part of parts) {\n      if (part.done) break;\n\n      if (typeof part.filename === 'string') {\n        // This is a file, so the uploadHandler function will be called\n\n        // only pass basename as the multipart/form-data spec recommends\n        // https://datatracker.ietf.org/doc/html/rfc7578#section-4.2\n        part.filename = part.filename.split(/[/\\\\]/).pop();\n        const value = await uploadHandler(part as Required<typeof part>);\n\n        if (typeof value === 'undefined' || value === null) {\n          continue;\n        }\n        // add to cleanup array in case of error\n        if (value instanceof NodeOnDiskFile) {\n          nodeOnDiskFiles.push(value);\n        }\n\n        // if the combined size of the body exceeds the max size, throw an error\n        currentBodySize += value.size;\n        if (currentBodySize > maxBodySize) {\n          throw new MaxBodySizeExceededError(maxBodySize);\n        }\n        // add the file to the form data\n        formData.append(part.name, value as any);\n      } else {\n        // This is text, so we'll decode it and add it to the form data\n        let textualPart = '';\n        for await (const chunk of part.data) {\n          // if the combined size of the body exceeds the max size, throw an error\n          currentBodySize += chunk.length;\n          if (currentBodySize > maxBodySize) {\n            throw new MaxBodySizeExceededError(maxBodySize);\n          }\n          textualPart += utfTextDecoder.decode(chunk);\n        }\n        // add the text to the form data\n        formData.append(part.name, textualPart);\n      }\n    }\n\n    return formData;\n  } catch (e) {\n    // clean up any files that were uploaded to disk if an error occurs\n    await Promise.all(\n      nodeOnDiskFiles.map((file) => fs.unlink(file.getFilePath())),\n    );\n    throw e;\n  }\n}",
+    "token_count": 740,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.node-http.content-type.form-data.parseMultipartFormData"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "function",
+     "engine_token_count": 740
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:306-320",
+    "content": "# core/internals/procedureBuilder.ts:306-320  (core.internals.procedureBuilder)\n/**\n * @internal\n */\nexport interface ProcedureCallOptions {\n  ctx: unknown;\n  rawInput: unknown;\n  input?: unknown;\n  path: string;\n  type: ProcedureType;\n}\n\nconst codeblock = `\nThis is a client-only function.\nIf you want to call this function on the server, see https://trpc.io/docs/server/server-side-calls\n`.trim();",
+    "token_count": 104,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "module_block",
+     "engine_token_count": 104
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/content-type/form-data/memoryUploadHandler.ts:1-33",
+    "content": "# adapters/node-http/content-type/form-data/memoryUploadHandler.ts:1-33  (adapters.node-http.content-type.form-data.memoryUploadHandler)\n/**\n * Copyright 2021 Remix Software Inc.\n * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n * THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n */\n\n/**\n * @see https://github.com/remix-run/remix/blob/0bcb4a304dd2f08f6032c3bf0c3aa7eb5b976901/packages/remix-server-runtime/upload/memoryUploadHandler.ts\n */\nimport type { UploadHandler } from './uploadHandler';\nimport { MaxPartSizeExceededError } from './uploadHandler';\n\nexport type MemoryUploadHandlerFilterArgs = {\n  filename?: string;\n  contentType: string;\n  name: string;\n};\n\nexport type MemoryUploadHandlerOptions = {\n  /**\n   * The maximum upload size allowed. If the size is exceeded an error will be thrown.\n   * Defaults to 3000000B (3MB).\n   */\n  maxPartSize?: number;\n  /**\n   *\n   * @param filename\n   * @param mimetype\n   * @param encoding\n   */\n  filter?(args: MemoryUploadHandlerFilterArgs): Promise<boolean> | boolean;\n};",
+    "token_count": 448,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "module_block",
+     "engine_token_count": 448
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/content-type/form-data/fileUploadHandler.ts:1-22",
+    "content": "# adapters/node-http/content-type/form-data/fileUploadHandler.ts:1-22  (adapters.node-http.content-type.form-data.fileUploadHandler)\n/* eslint-disable @typescript-eslint/no-empty-function */\n\n/**\n * Copyright 2021 Remix Software Inc.\n * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n * THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n */\n\n/**\n * @see https://github.com/remix-run/remix/blob/0bcb4a304dd2f08f6032c3bf0c3aa7eb5b976901/packages/remix-node/upload/fileUploadHandler.ts\n */\nimport { randomBytes } from 'node:crypto';\nimport { createReadStream, createWriteStream, statSync } from 'node:fs';\nimport { mkdir, rm, stat as statAsync, unlink } from 'node:fs/promises';\nimport { tmpdir } from 'node:os';\nimport { basename, dirname, extname, resolve as resolvePath } from 'node:path';\nimport { finished, Readable } from 'node:stream';\nimport { promisify } from 'node:util';\nimport { streamSlice } from './streamSlice';\nimport type { UploadHandler } from './uploadHandler';\nimport { MaxPartSizeExceededError } from './uploadHandler';",
+    "token_count": 449,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "module_block",
+     "engine_token_count": 449
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12199,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are investigating how tRPC dispatches a server-side call made through `router.createCaller(ctx)`, starting from `createCaller` on the router object built by `createRouterFactory` in core/router.ts. Trace the real causal pipeline it runs through, including how a mismatched procedure type is turned into a real error.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.router.createRouterInner.createCaller\", \"core.router.createCallerFactory\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "core/router.ts",
+   "cutoff": 350,
+   "n_components": 57,
+   "n_full": 22,
+   "n_stub": 19,
+   "n_dropped": 16,
+   "packed_tokens": 12199,
+   "latency_ms": {
+    "L_priority_sort": [
+     7.929742
+    ],
+    "L_binary_search_tokenize": [
+     0.262141
+    ],
+    "L_retrieve": [
+     8.468796
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12199,
+   "prompt_tokens": 12480,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 12493,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/router.ts:191-277  (core.router.createRouterFactory)\n/**\n * @internal\n */\nexport function createRouterFactory<TConfig extends AnyRootConfig>(\n  config: TConfig,\n) {\n  return function createRouterInner<\n    TProcRouterRecord extends ProcedureRouterRecord,\n  >(\n    procedures: TProcRouterRecord,\n  ): CreateRouterInner<TConfig, TProcRouterRecord> {\n    const reservedWordsUsed = new Set(\n      Object.keys(procedures).filter((v) => reservedWords.includes(v)),\n    );\n    if (reservedWordsUsed.size > 0) {\n      throw new Error(\n        'Reserved words used in `router({})` call: ' +\n          Array.from(reservedWordsUsed).join(', '),\n      );\n    }\n\n    const routerProcedures: ProcedureRecord = omitPrototype({});\n    function recursiveGetPaths(procedures: ProcedureRouterRecord, path = '') {\n      for (const [key, procedureOrRouter] of Object.entries(procedures ?? {})) {\n        const newPath = `${path}${key}`;\n\n        if (isRouter(procedureOrRouter)) {\n          recursiveGetPaths(procedureOrRouter._def.procedures, `${newPath}.`);\n          continue;\n        }\n\n        if (routerProcedures[newPath]) {\n          throw new Error(`Duplicate key: ${newPath}`);\n        }\n\n        routerProcedures[newPath] = procedureOrRouter;\n      }\n    }\n    recursiveGetPaths(procedures);\n\n    const _def: AnyRouterDef<TConfig> = {\n      _config: config,\n      router: true,\n      procedures: routerProcedures,\n      ...emptyRouter,\n      record: procedures,\n      queries: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.query)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      mutations: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.mutation)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      subscriptions: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.subscription)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n    };\n\n    const router: AnyRouter = {\n      ...procedures,\n      _def,\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n    };\n\n    return router as any;\n  };\n}\n\n# core/router.ts:157-189  (core.router)\nconst emptyRouter = {\n  _ctx: null as any,\n  _errorShape: null as any,\n  _meta: null as any,\n  queries: {},\n  mutations: {},\n  subscriptions: {},\n  errorFormatter: defaultFormatter,\n  transformer: defaultTransformer,\n};\n\n/**\n * Reserved words that can't be used as router or procedure names\n */\nconst reservedWords = [\n  /**\n   * Then is a reserved word because otherwise we can't return a promise that returns a Proxy\n   * since JS will think that `.then` is something that exists\n   */\n  'then',\n];\n\n/**\n * @internal\n */\nexport type CreateRouterInner<\n  TConfig extends AnyRootConfig,\n  TProcRouterRecord extends ProcedureRouterRecord,\n> = Router<RouterDef<TConfig, TProcRouterRecord>> &\n  /**\n   * This should be deleted in v11\n   * @deprecated\n   */ TProcRouterRecord;\n\n# core/router.ts:279-297  (core.router.callProcedure)\n/**\n * @internal\n */\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}\n\n# core/router.ts:151-155  (core.router.isRouter)\nfunction isRouter(\n  procedureOrRouter: AnyProcedure | AnyRouter,\n): procedureOrRouter is AnyRouter {\n  return 'router' in procedureOrRouter._def;\n}\n\n# core/router.ts:299-342  (core.router.createCallerFactory)\nexport function createCallerFactory<TConfig extends AnyRootConfig>() {\n  return function createCallerInner<\n    TRouter extends Router<AnyRouterDef<TConfig>>,\n  >(router: TRouter): RouterCaller<TRouter['_def']> {\n    const def = router._def;\n\n    return function createCaller(ctx) {\n      const proxy = createRecursiveProxy(({ path, args }) => {\n        // interop mode\n        if (\n          path.length === 1 &&\n          procedureTypes.includes(path[0] as ProcedureType)\n        ) {\n          return callProcedure({\n            procedures: def.procedures,\n            path: args[0] as string,\n            rawInput: args[1],\n            ctx,\n            type: path[0] as ProcedureType,\n          });\n        }\n\n        const fullPath = path.join('.');\n        const procedure = def.procedures[fullPath] as AnyProcedure;\n\n        let type: ProcedureType = 'query';\n        if (procedure._def.mutation) {\n          type = 'mutation';\n        } else if (procedure._def.subscription) {\n          type = 'subscription';\n        }\n\n        return procedure({\n          path: fullPath,\n          rawInput: args[0],\n          ctx,\n          type,\n        });\n      });\n\n      return proxy as ReturnType<RouterCaller<any>>;\n    };\n  };\n}\n\n# core/router.ts:128-149#part2of2  (core.router)\nexport interface Router<TDef extends AnyRouterDef> {\n  _def: TDef;\n  /**\n   * @deprecated use `t.createCallerFactory(router)` instead\n   * @see https://trpc.io/docs/server/server-side-calls\n   */\n  createCaller: RouterCaller<TDef>;\n\n  /**\n   * @deprecated\n   * FIXME: use the new standalone `getErrorShape` instead\n   */\n  getErrorShape(opts: {\n    error: TRPCError;\n    type: ProcedureType | 'unknown';\n    path: string | undefined;\n    input: unknown;\n    ctx: TDef['_config']['$types']['ctx'] | undefined;\n  }): TDef['_config']['$types']['errorShape'];\n}\n\nexport type AnyRouter = Router<AnyRouterDef>;\n\n# core/router.ts:1-126#part1of2  (core.router)\nimport type { DefaultErrorShape } from '../error/formatter';\nimport { defaultFormatter } from '../error/formatter';\nimport { TRPCError } from '../error/TRPCError';\nimport { getHTTPStatusCodeFromError } from '../http/getHTTPStatusCode';\nimport { TRPC_ERROR_CODES_BY_KEY } from '../rpc';\nimport { createRecursiveProxy } from '../shared/createProxy';\nimport { defaultTransformer } from '../transformer';\nimport type { AnyRootConfig } from './internals/config';\nimport { omitPrototype } from './internals/omitPrototype';\nimport type { ProcedureCallOptions } from './internals/procedureBuilder';\nimport type {\n  AnyMutationProcedure,\n  AnyProcedure,\n  AnyQueryProcedure,\n  AnySubscriptionProcedure,\n  ProcedureArgs,\n} from './procedure';\nimport type {\n  inferHandlerInput,\n  inferProcedureOutput,\n  ProcedureType,\n} from './types';\nimport { procedureTypes } from './types';\n\n/** @internal **/\nexport type ProcedureRecord = Record<string, AnyProcedure>;\n\nexport interface ProcedureRouterRecord {\n  [key: string]: AnyProcedure | AnyRouter;\n}\n\n/**\n * @deprecated\n */\ninterface DeprecatedProcedureRouterRecord {\n  queries: Record<string, AnyQueryProcedure>;\n  mutations: Record<string, AnyMutationProcedure>;\n  subscriptions: Record<string, AnySubscriptionProcedure>;\n}\n\nexport interface RouterDef<\n  TConfig extends AnyRootConfig,\n  TRecord extends ProcedureRouterRecord,\n  /**\n   * @deprecated\n   */\n  TOld extends DeprecatedProcedureRouterRecord = {\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    queries: {};\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    mutations: {};\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    subscriptions: {};\n  },\n> {\n  _config: TConfig;\n  router: true;\n  procedures: TRecord;\n  record: TRecord;\n  /**\n   * V9 queries\n   * @deprecated\n   */\n  queries: TOld['queries'];\n  /**\n   * V9 mutations\n   * @deprecated\n   */\n  mutations: TOld['mutations'];\n  /**\n   * V9 subscriptions\n   * @deprecated\n   */\n  subscriptions: TOld['subscriptions'];\n}\n\nexport type AnyRouterDef<\n  TConfig extends AnyRootConfig = AnyRootConfig,\n  TOld extends DeprecatedProcedureRouterRecord = any,\n> = RouterDef<TConfig, any, TOld>;\n\n/**\n * @internal\n */\ntype inferHandlerFn<TProcedures extends ProcedureRecord> = <\n  TProcedure extends TProcedures[TPath],\n  TPath extends string & keyof TProcedures,\n>(\n  path: TPath,\n  ...args: inferHandlerInput<TProcedure>\n) => Promise<inferProcedureOutput<TProcedure>>;\n\ntype DecorateProcedure<TProcedure extends AnyProcedure> = (\n  input: ProcedureArgs<TProcedure['_def']>[0],\n) => Promise<TProcedure['_def']['_output_out']>;\n\n/**\n * @internal\n */\ntype DecoratedProcedureRecord<TProcedures extends ProcedureRouterRecord> = {\n  [TKey in keyof TProcedures]: TProcedures[TKey] extends AnyRouter\n    ? DecoratedProcedureRecord<TProcedures[TKey]['_def']['record']>\n    : TProcedures[TKey] extends AnyProcedure\n    ? DecorateProcedure<TProcedures[TKey]>\n    : never;\n};\n\n/**\n * @internal\n */\nexport type RouterCaller<TDef extends AnyRouterDef> = (\n  ctx: TDef['_config']['$types']['ctx'],\n) => DecoratedProcedureRecord<TDef['record']> & {\n  /**\n   * @deprecated\n   */\n  query: inferHandlerFn<TDef['queries']>;\n  /**\n   * @deprecated\n   */\n  mutation: inferHandlerFn<TDef['mutations']>;\n  /**\n   * @deprecated\n   */\n  subscription: inferHandlerFn<TDef['subscriptions']>;\n};\n\n# deprecated/router.ts:755-786  (deprecated.router.Router.createCaller [signature])\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public createCaller(ctx: TInputContext): {\n    query: inferHandlerFn<TQueries>;\n    mutation: inferHandlerFn<TMutations>;\n    subscription: inferHandlerFn<TSubscriptions>;\n  } {\n    // ...\n  }\n}\n\n# subscription.ts:5-44  (subscription.subscriptionPullFactory [signature])\n/** ... */\nexport function subscriptionPullFactory<TOutput>(opts: {\n  /**\n   * The interval of how often the function should run\n   */\n  intervalMs: number;\n  pull(emit: Observer<TOutput, unknown>): Promise<void> | void;\n}): Observable<TOutput, unknown> {\n  // ...\n}\n\n# http/batchStreamFormatter.ts:1-29  (http.batchStreamFormatter.getBatchStreamFormatter [signature])\n/** ... */\nexport function getBatchStreamFormatter() {\n  // ...\n}\n\n# deprecated/internals/procedure.ts:170-244  (deprecated.internals.procedure.Procedure.call [signature])\nexport class Procedure<\n  TInputContext,\n  TContext,\n  TMeta,\n  TInput,\n  TParsedInput,\n  TOutput,\n  TParsedOutput,\n  TFinalOutput = unknown extends TParsedOutput ? TOutput : TParsedOutput,\n> {\n  /** ... */\n  public async call(\n    opts: ProcedureCallOptions<TInputContext>,\n  ): Promise<TFinalOutput> {\n    // ...\n  }\n}\n\n# adapters/fastify/fastifyTRPCPlugin.ts:21-58  (adapters.fastify.fastifyTRPCPlugin.fastifyTRPCPlugin [signature])\nexport function fastifyTRPCPlugin<TRouter extends AnyRouter>(\n  fastify: FastifyInstance,\n  opts: FastifyTRPCPluginOptions<TRouter>,\n  done: (err?: Error) => void,\n) {\n  // ...\n}\n\n# adapters/next.ts:20-68  (adapters.next.createNextApiHandler [signature])\nexport function createNextApiHandler<TRouter extends AnyRouter>(\n  opts: NodeHTTPHandlerOptions<TRouter, NextApiRequest, NextApiResponse>,\n): NextApiHandler {\n  // ...\n}\n\n# shared/createProxy/index.ts:11-31  (shared.createProxy.createInnerProxy [signature])\nfunction createInnerProxy(callback: ProxyCallback, path: string[]) {\n  // ...\n}\n\n# adapters/node-http/content-type/json/getPostBody.ts:5-41  (adapters.node-http.content-type.json.getPostBody.getPostBody [signature])\nexport async function getPostBody(opts: {\n  req: NodeHTTPRequest;\n  maxBodySize?: number;\n}): Promise<BodyResult> {\n  // ...\n}\n\n# shared/createProxy/index.ts:41-59  (shared.createProxy.createFlatProxy [signature])\n/** ... */\nexport const createFlatProxy = <TFaux>(\n  callback: (path: string & keyof TFaux) => any,\n): TFaux => {\n  // ...\n};\n\n# http/contentType.ts:67-99  (http.contentType.getJsonContentTypeInputs [signature])\nexport const getJsonContentTypeInputs: GetInputs = (opts) => {\n  // ...\n};\n\n# adapters/node-http/nodeHTTPRequestHandler.ts:18-138  (adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler [signature])\nexport async function nodeHTTPRequestHandler<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n>(opts: NodeHTTPRequestHandlerOptions<TRouter, TRequest, TResponse>) {\n  // ...\n}\n\n# error/TRPCError.ts:27-30  (error.TRPCError.TRPCError [signature])\nexport class TRPCError extends Error {\n  // ...\n}\n\n# http/resolveHTTPResponse.ts:74-130  (http.resolveHTTPResponse.initResponse [signature])\nfunction initResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(initOpts: {\n  ctx: inferRouterContext<TRouter> | undefined;\n  paths: string[] | undefined;\n  type: ProcedureType | 'unknown';\n  responseMeta?: HTTPBaseHandlerOptions<TRouter, TRequest>['responseMeta'];\n  untransformedJSON?:\n    | TRPCResponse<unknown, inferRouterError<TRouter>>\n    | TRPCResponse<unknown, inferRouterError<TRouter>>[]\n    | undefined;\n  errors?: TRPCError[];\n}): HTTPResponse {\n  // ...\n}\n\n# core/internals/mergeRouters.ts:37-90  (core.internals.mergeRouters.mergeRouters [signature])\nexport function mergeRouters<TRouters extends AnyRouter[]>(\n  ...routerList: [...TRouters]\n): MergeRouters<TRouters> {\n  // ...\n}\n\n# core/internals/mergeWithoutOverrides.ts:1-19  (core.internals.mergeWithoutOverrides.mergeWithoutOverrides [signature])\n/** ... */\nexport function mergeWithoutOverrides<TType extends Record<string, unknown>>(\n  obj1: TType,\n  ...objs: Partial<TType>[]\n): TType {\n  // ...\n}\n\n# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData [signature])\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  // ...\n}\n\n# shared/getCauseFromUnknown.ts:6-31  (shared.getCauseFromUnknown.getCauseFromUnknown [signature])\nexport function getCauseFromUnknown(cause: unknown): Error | undefined {\n  // ...\n}\n\n# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter [signature])\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  // ...\n}\n\n# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder [signature])\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  // ...\n}\n\n# core/initTRPC.ts:94-187  (core.initTRPC.createTRPCInner)\nfunction createTRPCInner<TParams extends PartialRootConfigTypes>() {\n  type $Generics = CreateRootConfigTypesFromPartial<TParams>;\n\n  type $Context = $Generics['ctx'];\n  type $Meta = $Generics['meta'];\n  type $Runtime = Partial<RuntimeConfig<$Generics>>;\n\n  return function initTRPCInner<TOptions extends $Runtime>(\n    runtime?: ValidateShape<TOptions, $Runtime>,\n  ) {\n    type $Formatter = PickFirstDefined<\n      TOptions['errorFormatter'],\n      ErrorFormatter<$Context, DefaultErrorShape>\n    >;\n    type $Transformer = TOptions['transformer'] extends DataTransformerOptions\n      ? TOptions['transformer']\n      : DefaultDataTransformer;\n    type $ErrorShape = ErrorFormatterShape<$Formatter>;\n\n    type $Config = RootConfig<{\n      ctx: $Context;\n      meta: $Meta;\n      errorShape: $ErrorShape;\n      transformer: $Transformer;\n    }>;\n\n    const errorFormatter = runtime?.errorFormatter ?? defaultFormatter;\n    const transformer = getDataTransformer(\n      runtime?.transformer ?? defaultTransformer,\n    ) as $Transformer;\n\n    const config: $Config = {\n      transformer,\n      isDev:\n        runtime?.isDev ?? globalThis.process?.env?.NODE_ENV !== 'production',\n      allowOutsideOfServer: runtime?.allowOutsideOfServer ?? false,\n      errorFormatter,\n      isServer: runtime?.isServer ?? isServerDefault,\n      /**\n       * @internal\n       */\n      $types: createFlatProxy((key) => {\n        throw new Error(\n          `Tried to access \"$types.${key}\" which is not available at runtime`,\n        );\n      }),\n    };\n\n    {\n      // Server check\n      const isServer: boolean = runtime?.isServer ?? isServerDefault;\n\n      if (!isServer && runtime?.allowOutsideOfServer !== true) {\n        throw new Error(\n          `You're trying to use @trpc/server in a non-server environment. This is not supported by default.`,\n        );\n      }\n    }\n    return {\n      /**\n       * These are just types, they can't be used\n       * @internal\n       */\n      _config: config,\n      /**\n       * Builder object for creating procedures\n       * @see https://trpc.io/docs/server/procedures\n       */\n      procedure: createBuilder<$Config>({\n        meta: runtime?.defaultMeta,\n      }),\n      /**\n       * Create reusable middlewares\n       * @see https://trpc.io/docs/server/middlewares\n       */\n      middleware: createMiddlewareFactory<$Config>(),\n      /**\n       * Create a router\n       * @see https://trpc.io/docs/server/routers\n       */\n      router: createRouterFactory<$Config>(config),\n      /**\n       * Merge Routers\n       * @see https://trpc.io/docs/server/merging-routers\n       */\n      mergeRouters,\n      /**\n       * Create a server-side caller for a router\n       * @see https://trpc.io/docs/server/server-side-calls\n       */\n      createCallerFactory: createCallerFactory<$Config>(),\n    };\n  };\n}\n\n# http/resolveHTTPResponse.ts:291-456#part2of2  (http.resolveHTTPResponse.resolveHTTPResponse)\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  opts: PartialBy<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'unstable_onChunk' | 'unstable_onHead'\n  >,\n): Promise<HTTPResponse | void> {\n  try {\n    // we create context first so that (unless `createContext()` throws)\n    // error handler may access context information\n    //\n    // this way even if the client sends malformed input that might cause an exception:\n    //  - `opts.error` has value,\n    //  - batching is not enabled,\n    //  - `type` is unknown,\n    //  - `getInputs` throws because of malformed JSON,\n    // context value is still available to the error handler\n    ctx = await opts.createContext();\n\n    if (opts.error) {\n      throw opts.error;\n    }\n    if (isBatchCall && !batchingEnabled) {\n      throw new Error(`Batching is not enabled on the server`);\n    }\n    /* istanbul ignore if -- @preserve */\n    if (type === 'subscription') {\n      throw new TRPCError({\n        message: 'Subscriptions should use wsLink',\n        code: 'METHOD_NOT_SUPPORTED',\n      });\n    }\n    if (type === 'unknown') {\n      throw new TRPCError({\n        message: `Unexpected request method ${req.method}`,\n        code: 'METHOD_NOT_SUPPORTED',\n      });\n    }\n\n    const inputs = await contentTypeHandler.getInputs({\n      isBatchCall,\n      req,\n      router,\n      preprocessedBody: opts.preprocessedBody ?? false,\n    });\n\n    paths = isBatchCall\n      ? decodeURIComponent(opts.path).split(',')\n      : [opts.path];\n    const promises = paths.map((path, index) =>\n      inputToProcedureCall({ opts, ctx, type, input: inputs[index], path }),\n    );\n\n    if (!isStreamCall) {\n      /**\n       * Non-streaming response:\n       * - await all responses in parallel, blocking on the slowest one\n       * - create headers with known response body\n       * - return a complete HTTPResponse\n       */\n\n      const untransformedJSON = await Promise.all(promises);\n      const errors = untransformedJSON.flatMap((response) =>\n        'error' in response ? [response.error] : [],\n      );\n\n      const headResponse = initResponse({\n        ctx,\n        paths,\n        type,\n        responseMeta: opts.responseMeta,\n        untransformedJSON,\n        errors,\n      });\n      unstable_onHead?.(headResponse, false);\n\n      // return body stuff\n      const result = isBatchCall ? untransformedJSON : untransformedJSON[0]!; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- `untransformedJSON` should be the length of `paths` which should be at least 1 otherwise there wouldn't be a request at all\n      const transformedJSON = transformTRPCResponse(\n        router._def._config,\n        result,\n      );\n      const body = JSON.stringify(transformedJSON);\n      unstable_onChunk?.([-1, body]);\n\n      return {\n        status: headResponse.status,\n        headers: headResponse.headers,\n        body,\n      };\n    }\n\n    /**\n     * Streaming response:\n     * - block on none, call `onChunk` as soon as each response is ready\n     * - create headers with minimal data (cannot know the response body in advance)\n     * - return void\n     */\n    const headResponse = initResponse({\n      ctx,\n      paths,\n      type,\n      responseMeta: opts.responseMeta,\n    });\n    unstable_onHead(headResponse, true);\n\n    const indexedPromises = new Map(\n      promises.map((promise, index) => [\n        index,\n        promise.then((r) => [index, r] as const),\n      ]),\n    );\n    for (const _ of paths) {\n      const [index, untransformedJSON] = await Promise.race(\n        indexedPromises.values(),\n      );\n      indexedPromises.delete(index);\n\n      try {\n        const transformedJSON = transformTRPCResponse(\n          router._def._config,\n          untransformedJSON,\n        );\n        const body = JSON.stringify(transformedJSON);\n\n        unstable_onChunk([index, body]);\n      } catch (cause) {\n        const path = paths[index];\n        const input = inputs[index];\n        const { body } = caughtErrorToData(cause, {\n          opts,\n          ctx,\n          type,\n          path,\n          input,\n        });\n\n        unstable_onChunk([index, body]);\n      }\n    }\n    return;\n  } catch (cause) {\n    // we get here if\n    // - batching is called when it's not enabled\n    // - `createContext()` throws\n    // - `router._def._config.transformer.output.serialize()` throws\n    // - post body is too large\n    // - input deserialization fails\n    // - `errorFormatter` return value is malformed\n    const { error, untransformedJSON, body } = caughtErrorToData(cause, {\n      opts,\n      ctx,\n      type,\n    });\n\n    const headResponse = initResponse({\n      ctx,\n      paths,\n      type,\n      responseMeta: opts.responseMeta,\n      untransformedJSON,\n      errors: [error],\n    });\n    unstable_onHead?.(headResponse, false);\n\n    unstable_onChunk?.([-1, body]);\n\n    return {\n      status: headResponse.status,\n      headers: headResponse.headers,\n      body,\n    };\n  }\n}\n\n# shared/internal/serialize.ts:1-88#part1of2  (shared.internal.serialize)\n/* eslint-disable @typescript-eslint/naming-convention */\nimport type { Simplify, WithoutIndexSignature } from '../../types';\n\n/**\n * @link https://github.com/remix-run/remix/blob/2248669ed59fd716e267ea41df5d665d4781f4a9/packages/remix-server-runtime/serialize.ts\n */\ntype JsonPrimitive = boolean | number | string | null;\n// eslint-disable-next-line @typescript-eslint/ban-types\ntype NonJsonPrimitive = Function | symbol | undefined;\n/*\n * `any` is the only type that can let you equate `0` with `1`\n * See https://stackoverflow.com/a/49928360/1490091\n */\ntype IsAny<T> = 0 extends T & 1 ? true : false;\n\n// `undefined` is a weird one that's technically not valid JSON,\n// but the return value of `JSON.parse` can be `undefined` so we\n// support it as both a Primitive and a NonJsonPrimitive\ntype JsonReturnable = JsonPrimitive | undefined;\n\ntype IsRecord<T extends object> = keyof WithoutIndexSignature<T> extends never\n  ? true\n  : false;\n\n/* prettier-ignore */\nexport type Serialize<T> =\n  IsAny<T> extends true ? any :\n  unknown extends T ? unknown :\n  T extends JsonReturnable ? T :\n  T extends Map<any, any> | Set<any> ? object :\n  T extends NonJsonPrimitive ? never :\n  T extends { toJSON(): infer U } ? U :\n  T extends [] ? [] :\n  T extends [unknown, ...unknown[]] ? SerializeTuple<T> :\n  T extends readonly (infer U)[] ? (U extends NonJsonPrimitive ? null : Serialize<U>)[] :\n  T extends object ?\n    IsRecord<T> extends true ? Record<keyof T, Serialize<T[keyof T]>> :\n    Simplify<SerializeObject<UndefinedToOptional<T>>> :\n  never;\n\n/** JSON serialize [tuples](https://www.typescriptlang.org/docs/handbook/2/objects.html#tuple-types) */\ntype SerializeTuple<T extends [unknown, ...unknown[]]> = {\n  [K in keyof T]: T[K] extends NonJsonPrimitive ? null : Serialize<T[K]>;\n};\n\n// prettier-ignore\ntype SerializeObjectKey<T extends Record<any, any>, K> = \n  // never include entries where the key is a symbol\n  K extends symbol ? never : \n  // always include entries where the value is any\n  IsAny<T[K]> extends true ? K :\n  // always include entries where the value is unknown\n  unknown extends T[K] ? K : \n  // never include entries where the value is a non-JSON primitive\n  T[K] extends NonJsonPrimitive ? never : \n  // otherwise serialize the value\n  K;\n/**\n * JSON serialize objects (not including arrays) and classes\n * @internal\n **/\nexport type SerializeObject<T extends object> = {\n  [K in keyof T as SerializeObjectKey<T, K>]: Serialize<T[K]>;\n};\n\n/**\n * Extract keys from T where the value dosen't extend undefined\n * Note: Can't parse IndexSignature or Record types\n */\ntype FilterDefinedKeys<T extends object> = Exclude<\n  {\n    [K in keyof T]: undefined extends T[K] ? never : K;\n  }[keyof T],\n  undefined\n>;\n\n/**\n * Get value of exactOptionalPropertyTypes config\n */\ntype ExactOptionalPropertyTypes = { a?: 0 | undefined } extends {\n  a?: 0;\n}\n  ? false\n  : true;\n\n/**\n * Check if T has an index signature\n */\n\n# adapters/node-http/content-type/form-data/index.ts:1-23  (adapters.node-http.content-type.form-data)\n/**\n * Copyright 2021 Remix Software Inc.\n * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n * THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n */\n\n/**\n * @see https://github.com/remix-run/remix/blob/0bcb4a304dd2f08f6032c3bf0c3aa7eb5b976901/packages/remix-server-runtime/formData.ts\n */\nimport * as fs from 'fs/promises';\nimport { Readable } from 'node:stream';\n// eslint-disable-next-line @typescript-eslint/ban-ts-comment\n// @ts-ignore the type definitions for this package are borked\nimport { streamMultipart } from '@web3-storage/multipart-parser';\nimport type { CombinedDataTransformer } from '../../../../transformer';\nimport { createNodeHTTPContentTypeHandler } from '../../internals/contentType';\nimport type { NodeHTTPRequest } from '../../types';\nimport { NodeOnDiskFile } from './fileUploadHandler';\nimport type { UploadHandler, UploadHandlerPart } from './uploadHandler';\nimport { MaxBodySizeExceededError } from './uploadHandler';\n\nconst utfTextDecoder = new TextDecoder('utf-8');\n\n# core/internals/config.ts:1-89  (core.internals.config)\nimport type { ErrorFormatter } from '../../error/formatter';\nimport type { TRPCErrorShape } from '../../rpc';\n\n/**\n * The initial generics that are used in the init function\n * @internal\n */\nexport interface RootConfigTypes {\n  ctx: object;\n  meta: object;\n  errorShape: unknown;\n  transformer: unknown;\n}\n\n/**\n * The default check to see if we're in a server\n */\nexport const isServerDefault: boolean =\n  typeof window === 'undefined' ||\n  'Deno' in window ||\n  globalThis.process?.env?.NODE_ENV === 'test' ||\n  !!globalThis.process?.env?.JEST_WORKER_ID ||\n  !!globalThis.process?.env?.VITEST_WORKER_ID;\n\n/**\n * The runtime config that are used and actually represents real values underneath\n * @internal\n */\nexport interface RuntimeConfig<TTypes extends RootConfigTypes> {\n  /**\n   * Use a data transformer\n   * @link https://trpc.io/docs/data-transformers\n   */\n  transformer: TTypes['transformer'];\n  /**\n   * Use custom error formatting\n   * @link https://trpc.io/docs/error-formatting\n   */\n  errorFormatter: ErrorFormatter<\n    TTypes['ctx'],\n    TRPCErrorShape<number> & { [key: string]: any }\n  >;\n  /**\n   * Allow `@trpc/server` to run in non-server environments\n   * @warning **Use with caution**, this should likely mainly be used within testing.\n   * @default false\n   */\n  allowOutsideOfServer: boolean;\n  /**\n   * Is this a server environment?\n   * @warning **Use with caution**, this should likely mainly be used within testing.\n   * @default typeof window === 'undefined' || 'Deno' in window || process.env.NODE_ENV === 'test'\n   */\n  isServer: boolean;\n  /**\n   * Is this development?\n   * Will be used to decide if the API should return stack traces\n   * @default process.env.NODE_ENV !== 'production'\n   */\n  isDev: boolean;\n\n  defaultMeta?: TTypes['meta'] extends object ? TTypes['meta'] : never;\n}\n\n/**\n * @internal\n */\nexport type CreateRootConfigTypes<TGenerics extends RootConfigTypes> =\n  TGenerics;\n\n/**\n * The config that is resolved after `initTRPC.create()` has been called\n * Combination of `InitTOptions` + `InitGenerics`\n * @internal\n */\nexport interface RootConfig<TGenerics extends RootConfigTypes>\n  extends RuntimeConfig<TGenerics> {\n  $types: TGenerics;\n}\n\n/**\n * @internal\n */\nexport type AnyRootConfig = RootConfig<{\n  ctx: any;\n  meta: any;\n  errorShape: any;\n  transformer: any;\n}>;\n\n# core/index.ts:1-29  (core)\nexport type {\n  AnyRouter,\n  ProcedureRecord,\n  ProcedureRouterRecord,\n  CreateRouterInner,\n  Router,\n  RouterCaller,\n  AnyRouterDef,\n} from './router';\nexport { callProcedure, createCallerFactory } from './router';\nexport type {\n  Procedure,\n  AnyProcedure,\n  AnyQueryProcedure,\n  AnyMutationProcedure,\n  AnySubscriptionProcedure,\n  ProcedureParams,\n  ProcedureArgs,\n  ProcedureOptions,\n} from './procedure';\nexport type { inferParser } from './parser';\nexport {\n  createInputMiddleware,\n  createOutputMiddleware,\n  experimental_standaloneMiddleware,\n} from './middleware';\nexport type { MiddlewareFunction, MiddlewareBuilder } from './middleware';\nexport { initTRPC } from './initTRPC';\nexport * from './types';\n\n# core/initTRPC.ts:1-49  (core.initTRPC)\nimport type {\n  DefaultErrorShape,\n  ErrorFormatter,\n  ErrorFormatterShape,\n} from '../error/formatter';\nimport { defaultFormatter } from '../error/formatter';\nimport { createFlatProxy } from '../shared/createProxy';\nimport type {\n  DataTransformerOptions,\n  DefaultDataTransformer,\n} from '../transformer';\nimport { defaultTransformer, getDataTransformer } from '../transformer';\nimport type { Unwrap } from '../types';\nimport type {\n  CreateRootConfigTypes,\n  RootConfig,\n  RootConfigTypes,\n  RuntimeConfig,\n} from './internals/config';\nimport { isServerDefault } from './internals/config';\nimport { mergeRouters } from './internals/mergeRouters';\nimport { createBuilder } from './internals/procedureBuilder';\nimport type {\n  Overwrite,\n  PickFirstDefined,\n  ValidateShape,\n} from './internals/utils';\nimport { createMiddlewareFactory } from './middleware';\nimport { createCallerFactory, createRouterFactory } from './router';\n\ntype PartialRootConfigTypes = Partial<RootConfigTypes>;\n\ntype CreateRootConfigTypesFromPartial<TTypes extends PartialRootConfigTypes> =\n  CreateRootConfigTypes<{\n    ctx: TTypes['ctx'] extends RootConfigTypes['ctx'] ? TTypes['ctx'] : object;\n    meta: TTypes['meta'] extends RootConfigTypes['meta']\n      ? TTypes['meta']\n      : object;\n    errorShape: TTypes['errorShape'];\n    transformer: DataTransformerOptions;\n  }>;\n\ntype ContextCallback = (...args: any[]) => object | Promise<object>;\n/**\n * TODO: This can be improved:\n * - We should be able to chain `.meta()`/`.context()` only once\n * - Simplify typings\n * - Doesn't need to be a class but it doesn't really hurt either\n */\n\n# rpc/codes.ts:1-44  (rpc.codes)\nimport { invert } from '../internals/invert';\n\n// reference: https://www.jsonrpc.org/specification\n\n/**\n * JSON-RPC 2.0 Error codes\n *\n * `-32000` to `-32099` are reserved for implementation-defined server-errors.\n * For tRPC we're copying the last digits of HTTP 4XX errors.\n */\nexport const TRPC_ERROR_CODES_BY_KEY = {\n  /**\n   * Invalid JSON was received by the server.\n   * An error occurred on the server while parsing the JSON text.\n   */\n  PARSE_ERROR: -32700,\n  /**\n   * The JSON sent is not a valid Request object.\n   */\n  BAD_REQUEST: -32600, // 400\n\n  // Internal JSON-RPC error\n  INTERNAL_SERVER_ERROR: -32603,\n  NOT_IMPLEMENTED: -32603,\n\n  // Implementation specific errors\n  UNAUTHORIZED: -32001, // 401\n  FORBIDDEN: -32003, // 403\n  NOT_FOUND: -32004, // 404\n  METHOD_NOT_SUPPORTED: -32005, // 405\n  TIMEOUT: -32008, // 408\n  CONFLICT: -32009, // 409\n  PRECONDITION_FAILED: -32012, // 412\n  PAYLOAD_TOO_LARGE: -32013, // 413\n  UNPROCESSABLE_CONTENT: -32022, // 422\n  TOO_MANY_REQUESTS: -32029, // 429\n  CLIENT_CLOSED_REQUEST: -32099, // 499\n} as const;\n\nexport const TRPC_ERROR_CODES_BY_NUMBER = invert(TRPC_ERROR_CODES_BY_KEY);\ntype ValueOf<TObj> = TObj[keyof TObj];\n\nexport type TRPC_ERROR_CODE_NUMBER = ValueOf<typeof TRPC_ERROR_CODES_BY_KEY>;\nexport type TRPC_ERROR_CODE_KEY = keyof typeof TRPC_ERROR_CODES_BY_KEY;\n\n# adapters/node-http/types.ts:1-103  (adapters.node-http.types)\nimport type { IncomingMessage, ServerResponse } from 'http';\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPBaseHandlerOptions } from '../../http';\nimport type { MaybePromise } from '../../types';\nimport type { NodeHTTPContentTypeHandler } from './internals/contentType';\n\ninterface ParsedQs {\n  [key: string]: ParsedQs | ParsedQs[] | string[] | string | undefined;\n}\n\nexport type NodeHTTPRequest = IncomingMessage & {\n  query?: ParsedQs;\n  body?: unknown;\n};\nexport type NodeHTTPResponse = ServerResponse & {\n  /**\n   * Force the partially-compressed response to be flushed to the client.\n   *\n   * Added by compression middleware\n   * (depending on the environment,\n   * e.g. Next <= 12,\n   * e.g. Express w/ `compression()`)\n   */\n  flush?: () => void;\n};\n\nexport type NodeHTTPCreateContextOption<\n  TRouter extends AnyRouter,\n  TRequest,\n  TResponse,\n> = object extends inferRouterContext<TRouter>\n  ? {\n      /**\n       * @link https://trpc.io/docs/context\n       **/\n      createContext?: NodeHTTPCreateContextFn<TRouter, TRequest, TResponse>;\n    }\n  : {\n      /**\n       * @link https://trpc.io/docs/context\n       **/\n      createContext: NodeHTTPCreateContextFn<TRouter, TRequest, TResponse>;\n    };\n\n/**\n * @internal\n */\ntype ConnectMiddleware<\n  TRequest extends NodeHTTPRequest = NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse = NodeHTTPResponse,\n> = (req: TRequest, res: TResponse, next: (err?: any) => any) => void;\n\nexport type NodeHTTPHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> = HTTPBaseHandlerOptions<TRouter, TRequest> &\n  NodeHTTPCreateContextOption<TRouter, TRequest, TResponse> & {\n    /**\n     * By default, http `OPTIONS` requests are not handled, and CORS headers are not returned.\n     *\n     * This can be used to handle them manually or via the `cors` npm package: https://www.npmjs.com/package/cors\n     *\n     * ```ts\n     * import cors from 'cors'\n     *\n     * nodeHTTPRequestHandler({\n     *   cors: cors()\n     * })\n     * ```\n     *\n     * You can also use it for other needs which a connect/node.js compatible middleware can solve,\n     *  though you might wish to consider an alternative solution like the Express adapter if your needs are complex.\n     */\n    middleware?: ConnectMiddleware;\n    maxBodySize?: number;\n    experimental_contentTypeHandlers?: NodeHTTPContentTypeHandler<\n      TRequest,\n      TResponse\n    >[];\n  };\n\nexport type NodeHTTPRequestHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> = {\n  req: TRequest;\n  res: TResponse;\n  path: string;\n} & NodeHTTPHandlerOptions<TRouter, TRequest, TResponse>;\n\nexport type NodeHTTPCreateContextFnOptions<TRequest, TResponse> = {\n  req: TRequest;\n  res: TResponse;\n};\nexport type NodeHTTPCreateContextFn<\n  TRouter extends AnyRouter,\n  TRequest,\n  TResponse,\n> = (\n  opts: NodeHTTPCreateContextFnOptions<TRequest, TResponse>,\n) => MaybePromise<inferRouterContext<TRouter>>;\n\n# core/internals/procedureBuilder.ts:322-407  (core.internals.procedureBuilder.createProcedureCaller)\nfunction createProcedureCaller(_def: AnyProcedureBuilderDef): AnyProcedure {\n  const procedure = async function resolve(opts: ProcedureCallOptions) {\n    // is direct server-side call\n    if (!opts || !('rawInput' in opts)) {\n      throw new Error(codeblock);\n    }\n\n    // run the middlewares recursively with the resolver as the last one\n    const callRecursive = async (\n      callOpts: {\n        ctx: any;\n        index: number;\n        input?: unknown;\n        rawInput?: unknown;\n      } = {\n        index: 0,\n        ctx: opts.ctx,\n      },\n    ): Promise<MiddlewareResult<any>> => {\n      try {\n        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n        const middleware = _def.middlewares[callOpts.index]!;\n        const result = await middleware({\n          ctx: callOpts.ctx,\n          type: opts.type,\n          path: opts.path,\n          rawInput: callOpts.rawInput ?? opts.rawInput,\n          meta: _def.meta,\n          input: callOpts.input,\n          next(_nextOpts?: any) {\n            const nextOpts = _nextOpts as\n              | {\n                  ctx?: Record<string, unknown>;\n                  input?: unknown;\n                  rawInput?: unknown;\n                }\n              | undefined;\n\n            return callRecursive({\n              index: callOpts.index + 1,\n              ctx:\n                nextOpts && 'ctx' in nextOpts\n                  ? { ...callOpts.ctx, ...nextOpts.ctx }\n                  : callOpts.ctx,\n              input:\n                nextOpts && 'input' in nextOpts\n                  ? nextOpts.input\n                  : callOpts.input,\n              rawInput:\n                nextOpts && 'rawInput' in nextOpts\n                  ? nextOpts.rawInput\n                  : callOpts.rawInput,\n            });\n          },\n        });\n        return result;\n      } catch (cause) {\n        return {\n          ok: false,\n          error: getTRPCErrorFromUnknown(cause),\n          marker: middlewareMarker,\n        };\n      }\n    };\n\n    // there's always at least one \"next\" since we wrap this.resolver in a middleware\n    const result = await callRecursive();\n\n    if (!result) {\n      throw new TRPCError({\n        code: 'INTERNAL_SERVER_ERROR',\n        message:\n          'No result from middlewares - did you forget to `return next()`?',\n      });\n    }\n    if (!result.ok) {\n      // re-throw original error\n      throw result.error;\n    }\n    return result.data;\n  };\n  procedure._def = _def;\n  procedure.meta = _def.meta;\n\n  return procedure as AnyProcedure;\n}\n\n# transformer.ts:1-66  (transformer)\n/**\n * @public\n */\nexport interface DataTransformer {\n  serialize(object: any): any;\n  deserialize(object: any): any;\n}\n\ninterface InputDataTransformer extends DataTransformer {\n  /**\n   * This function runs **on the client** before sending the data to the server.\n   */\n  serialize(object: any): any;\n  /**\n   * This function runs **on the server** to transform the data before it is passed to the resolver\n   */\n  deserialize(object: any): any;\n}\n\ninterface OutputDataTransformer extends DataTransformer {\n  /**\n   * This function runs **on the server** before sending the data to the client.\n   */\n  serialize(object: any): any;\n  /**\n   * This function runs **only on the client** to transform the data sent from the server.\n   */\n  deserialize(object: any): any;\n}\n\n/**\n * @public\n */\nexport interface CombinedDataTransformer {\n  /**\n   * Specify how the data sent from the client to the server should be transformed.\n   */\n  input: InputDataTransformer;\n  /**\n   * Specify how the data sent from the server to the client should be transformed.\n   */\n  output: OutputDataTransformer;\n}\n\n/**\n * @public\n */\nexport type CombinedDataTransformerClient = {\n  input: Pick<CombinedDataTransformer['input'], 'serialize'>;\n  output: Pick<CombinedDataTransformer['output'], 'deserialize'>;\n};\n\n/**\n * @public\n */\nexport type DataTransformerOptions = CombinedDataTransformer | DataTransformer;\n\n/**\n * @public\n * @deprecated\n * Deprecated in favor of `CombinedDataTransformerOptions` as this causes issues when doing SSR\n * - https://github.com/trpc/trpc/issues/4130\n */\nexport type ClientDataTransformerOptions =\n  | CombinedDataTransformerClient\n  | DataTransformer;\n\n# adapters/node-http/content-type/form-data/index.ts:25-106  (adapters.node-http.content-type.form-data.parseMultipartFormData)\n/**\n * Allows you to handle multipart forms (file uploads) for your app.\n * Request body parts with a 'filename' property will be treated as files.\n * The rest will be treated as text.\n * @param request The incoming Node HTTP request\n * @param uploadHandler A function that handles file uploads and returns a value to be used in the request body. If uploaded to disk, the returned value is a NodeOnDiskFile. If uploaded to memory, the returned value is a File.\n * @param maxBodySize The maximum size of the request body in bytes. Defaults to Infinity.\n *\n * @see https://remix.run/utils/parse-multipart-form-data\n */\nasync function parseMultipartFormData(\n  request: NodeHTTPRequest,\n  uploadHandler: UploadHandler,\n  maxBodySize = Infinity,\n) {\n  const contentType = request.headers['content-type'] ?? '';\n  const [type, boundary] = contentType.split(/\\s*;\\s*boundary=/);\n\n  if (!boundary || type !== 'multipart/form-data') {\n    throw new TypeError('Could not parse content as FormData.');\n  }\n\n  const formData = new FormData();\n  const parts: AsyncIterable<UploadHandlerPart & { done?: true }> =\n    streamMultipart(Readable.toWeb(request), boundary);\n\n  let currentBodySize = 0;\n\n  const nodeOnDiskFiles: NodeOnDiskFile[] = [];\n\n  try {\n    for await (const part of parts) {\n      if (part.done) break;\n\n      if (typeof part.filename === 'string') {\n        // This is a file, so the uploadHandler function will be called\n\n        // only pass basename as the multipart/form-data spec recommends\n        // https://datatracker.ietf.org/doc/html/rfc7578#section-4.2\n        part.filename = part.filename.split(/[/\\\\]/).pop();\n        const value = await uploadHandler(part as Required<typeof part>);\n\n        if (typeof value === 'undefined' || value === null) {\n          continue;\n        }\n        // add to cleanup array in case of error\n        if (value instanceof NodeOnDiskFile) {\n          nodeOnDiskFiles.push(value);\n        }\n\n        // if the combined size of the body exceeds the max size, throw an error\n        currentBodySize += value.size;\n        if (currentBodySize > maxBodySize) {\n          throw new MaxBodySizeExceededError(maxBodySize);\n        }\n        // add the file to the form data\n        formData.append(part.name, value as any);\n      } else {\n        // This is text, so we'll decode it and add it to the form data\n        let textualPart = '';\n        for await (const chunk of part.data) {\n          // if the combined size of the body exceeds the max size, throw an error\n          currentBodySize += chunk.length;\n          if (currentBodySize > maxBodySize) {\n            throw new MaxBodySizeExceededError(maxBodySize);\n          }\n          textualPart += utfTextDecoder.decode(chunk);\n        }\n        // add the text to the form data\n        formData.append(part.name, textualPart);\n      }\n    }\n\n    return formData;\n  } catch (e) {\n    // clean up any files that were uploaded to disk if an error occurs\n    await Promise.all(\n      nodeOnDiskFiles.map((file) => fs.unlink(file.getFilePath())),\n    );\n    throw e;\n  }\n}\n\n# core/internals/procedureBuilder.ts:306-320  (core.internals.procedureBuilder)\n/**\n * @internal\n */\nexport interface ProcedureCallOptions {\n  ctx: unknown;\n  rawInput: unknown;\n  input?: unknown;\n  path: string;\n  type: ProcedureType;\n}\n\nconst codeblock = `\nThis is a client-only function.\nIf you want to call this function on the server, see https://trpc.io/docs/server/server-side-calls\n`.trim();\n\n# adapters/node-http/content-type/form-data/memoryUploadHandler.ts:1-33  (adapters.node-http.content-type.form-data.memoryUploadHandler)\n/**\n * Copyright 2021 Remix Software Inc.\n * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n * THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n */\n\n/**\n * @see https://github.com/remix-run/remix/blob/0bcb4a304dd2f08f6032c3bf0c3aa7eb5b976901/packages/remix-server-runtime/upload/memoryUploadHandler.ts\n */\nimport type { UploadHandler } from './uploadHandler';\nimport { MaxPartSizeExceededError } from './uploadHandler';\n\nexport type MemoryUploadHandlerFilterArgs = {\n  filename?: string;\n  contentType: string;\n  name: string;\n};\n\nexport type MemoryUploadHandlerOptions = {\n  /**\n   * The maximum upload size allowed. If the size is exceeded an error will be thrown.\n   * Defaults to 3000000B (3MB).\n   */\n  maxPartSize?: number;\n  /**\n   *\n   * @param filename\n   * @param mimetype\n   * @param encoding\n   */\n  filter?(args: MemoryUploadHandlerFilterArgs): Promise<boolean> | boolean;\n};\n\n# adapters/node-http/content-type/form-data/fileUploadHandler.ts:1-22  (adapters.node-http.content-type.form-data.fileUploadHandler)\n/* eslint-disable @typescript-eslint/no-empty-function */\n\n/**\n * Copyright 2021 Remix Software Inc.\n * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n * THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n */\n\n/**\n * @see https://github.com/remix-run/remix/blob/0bcb4a304dd2f08f6032c3bf0c3aa7eb5b976901/packages/remix-node/upload/fileUploadHandler.ts\n */\nimport { randomBytes } from 'node:crypto';\nimport { createReadStream, createWriteStream, statSync } from 'node:fs';\nimport { mkdir, rm, stat as statAsync, unlink } from 'node:fs/promises';\nimport { tmpdir } from 'node:os';\nimport { basename, dirname, extname, resolve as resolvePath } from 'node:path';\nimport { finished, Readable } from 'node:stream';\nimport { promisify } from 'node:util';\nimport { streamSlice } from './streamSlice';\nimport type { UploadHandler } from './uploadHandler';\nimport { MaxPartSizeExceededError } from './uploadHandler';\n\n## Task\n\nYou are investigating how tRPC dispatches a server-side call made through `router.createCaller(ctx)`, starting from `createCaller` on the router object built by `createRouterFactory` in core/router.ts. Trace the real causal pipeline it runs through, including how a mismatched procedure type is turned into a real error.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.router.createRouterInner.createCaller\", \"core.router.createCallerFactory\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -1,0 +1,101 @@
+diff --git a/pydantic_ai_slim/pydantic_ai/_function_schema.py b/pydantic_ai_slim/pydantic_ai/_function_schema.py
+index b49170063..2588ee5bb 100644
+--- a/pydantic_ai_slim/pydantic_ai/_function_schema.py
++++ b/pydantic_ai_slim/pydantic_ai/_function_schema.py
+@@ -215,7 +215,7 @@ def function_schema(  # noqa: C901
+     return FunctionSchema(
+         description=description,
+         validator=schema_validator,
+-        json_schema=check_object_json_schema(json_schema),
++        json_schema=check_object_json_schema(schema=json_schema),
+         single_arg_name=single_arg_name,
+         positional_fields=positional_fields,
+         var_positional_field=var_positional_field,
+diff --git a/pydantic_ai_slim/pydantic_ai/_output.py b/pydantic_ai_slim/pydantic_ai/_output.py
+index 6d70471bd..a89f874ec 100644
+--- a/pydantic_ai_slim/pydantic_ai/_output.py
++++ b/pydantic_ai_slim/pydantic_ai/_output.py
+@@ -638,7 +638,7 @@ class ObjectOutputProcessor(BaseOutputProcessor[OutputDataT]):
+             # Really a PluggableSchemaValidator, but it's API-compatible
+             self.validator = cast(SchemaValidator, type_adapter.validator)
+             json_schema = _utils.check_object_json_schema(
+-                type_adapter.json_schema(schema_generator=GenerateToolJsonSchema)
++                schema=type_adapter.json_schema(schema_generator=GenerateToolJsonSchema)
+             )
+ 
+             if self.outer_typed_dict_key:
+diff --git a/pydantic_ai_slim/pydantic_ai/_utils.py b/pydantic_ai_slim/pydantic_ai/_utils.py
+index 024a568f2..01bcb1ac6 100644
+--- a/pydantic_ai_slim/pydantic_ai/_utils.py
++++ b/pydantic_ai_slim/pydantic_ai/_utils.py
+@@ -65,7 +65,7 @@ def is_model_like(type_: Any) -> bool:
+     )
+ 
+ 
+-def check_object_json_schema(schema: JsonSchemaValue) -> ObjectJsonSchema:
++def check_object_json_schema(*, schema: JsonSchemaValue) -> ObjectJsonSchema:
+     from .exceptions import UserError
+ 
+     if schema.get('type') == 'object':
+diff --git a/pydantic_ai_slim/pydantic_ai/output.py b/pydantic_ai_slim/pydantic_ai/output.py
+index 19cbafc8d..e9f8ff6a3 100644
+--- a/pydantic_ai_slim/pydantic_ai/output.py
++++ b/pydantic_ai_slim/pydantic_ai/output.py
+@@ -298,7 +298,7 @@ def StructuredDict(
+     #> {'name': 'John Doe', 'age': 30}
+     ```
+     """
+-    json_schema = _utils.check_object_json_schema(json_schema)
++    json_schema = _utils.check_object_json_schema(schema=json_schema)
+ 
+     if name:
+         json_schema['title'] = name
+diff --git a/tests/test_phase2_signature_check_object_json_schema.py b/tests/test_phase2_signature_check_object_json_schema.py
+new file mode 100644
+index 000000000..16fe21be9
+--- /dev/null
++++ b/tests/test_phase2_signature_check_object_json_schema.py
+@@ -0,0 +1,8 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_schema():
++    owner = importlib.import_module('pydantic_ai._utils')
++    p = inspect.signature(getattr(owner, 'check_object_json_schema')).parameters['schema']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY
+diff --git a/tests/test_utils.py b/tests/test_utils.py
+index 4ffbb6483..5b0d029c6 100644
+--- a/tests/test_utils.py
++++ b/tests/test_utils.py
+@@ -54,10 +54,10 @@ async def test_group_by_temporal(interval: float | None, expected: list[list[int
+ 
+ def test_check_object_json_schema():
+     object_schema = {'type': 'object', 'properties': {'a': {'type': 'string'}}}
+-    assert check_object_json_schema(object_schema) == object_schema
++    assert check_object_json_schema(schema=object_schema) == object_schema
+ 
+     assert check_object_json_schema(
+-        {
++        schema={
+             '$defs': {
+                 'JsonModel': {
+                     'properties': {
+@@ -83,7 +83,7 @@ def test_check_object_json_schema():
+ 
+     # Can't remove the recursive ref here:
+     assert check_object_json_schema(
+-        {
++        schema={
+             '$defs': {
+                 'JsonModel': {
+                     'properties': {
+@@ -114,7 +114,7 @@ def test_check_object_json_schema():
+ 
+     array_schema = {'type': 'array', 'items': {'type': 'string'}}
+     with pytest.raises(UserError, match='^Schema must be an object$'):
+-        check_object_json_schema(array_schema)
++        check_object_json_schema(schema=array_schema)
+ 
+ 
+ @pytest.mark.parametrize('peek_first', [True, False])

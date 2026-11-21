@@ -1,0 +1,69 @@
+Blast radius of `src.cache.Cache.setEntry`: 1 transitive callers, nearest first:
+- hop 1: `src.warm.warm` (src/warm.ts:2)
+
+<prism_context budget_consumed="877" budget_total="4000" schema_version="3" task_type="blast">
+  <metadata>
+    <engine commit="*" name="prism-causal_two_pass" version="0.2.0"/>
+    <seed file="src/cache.ts" line="5" symbol="src.cache.Cache.setEntry"/>
+    <budget exact="true" tokenizer="tiktoken:cl100k_base_offline" tokens="4000"/>
+    <language files="2" primary="typescript" tier="2"/>
+    <options>
+      <option key="engine" value="prism-causal_two_pass"/>
+      <option key="max_hops" value="6.0"/>
+    </options>
+  </metadata>
+  <manifest considered_nodes="1" packed_nodes="3" reachable_nodes="1">
+    <compression count="3" level="L0_full"/>
+    <distance_metric dist_max="6.0" lambda_data_flow="0.25" lambda_guard="0.15" name="causal_dijkstra"/>
+  </manifest>
+  <coverage covered_features="2" omitted_features="0" total_features="2">
+    <feature count="2" id="FORM_LINEAR" present="true"/>
+    <feature count="2" id="OUTPUT_COMMAND" present="true"/>
+  </coverage>
+  <warnings>
+    <warning code="LANGUAGE_TIER_2" severity="low">
+      <message>typescript is Tier 2 (structural/lexical linking only)</message>
+    </warning>
+  </warnings>
+  <nodes>
+    <node compression="L0_full" cost="23" distance="0.0" end_line="7" file="src/cache.ts" id="src.cache.Cache.setEntry" language="typescript" line="5" role="seed" symbol_kind="method" symbol_name="setEntry">
+      <signature>
+        <param name="key" optional="false" type="string"/>
+        <param name="value" optional="false" type="unknown"/>
+        <returns kind="Command" type="void"/>
+      </signature>
+      <features form="LINEAR" output="COMMAND" role="NONE" substance="NONE"/>
+      <body><![CDATA[  setEntry(key: string, value: unknown): void {
+    this.entries.set(key, value);
+  }]]></body>
+    </node>
+    <node compression="L0_full" cost="37" distance="0.0" end_line="8" file="src/cache.ts" id="src.cache.Cache" language="typescript" line="2" role="transitive" symbol_kind="class" symbol_name="Cache">
+      <signature>
+        <returns kind="Unknown"/>
+      </signature>
+      <features form="NONE" output="NONE" role="NONE" substance="NONE"/>
+      <body><![CDATA[export class Cache {
+  entries = new Map<string, unknown>();
+
+  setEntry(key: string, value: unknown): void {
+    this.entries.set(key, value);
+  }
+}]]></body>
+    </node>
+    <node compression="L0_full" cost="27" distance="1.6666" end_line="5" file="src/warm.ts" id="src.warm.warm" language="typescript" line="2" role="caller" symbol_kind="function" symbol_name="warm">
+      <signature>
+        <returns kind="Command" type="void"/>
+        <docstring><![CDATA[The D1 trap in JS, part 2: a bare call to setEntry, nothing imported (a ReferenceError at runtime).]]></docstring>
+      </signature>
+      <features form="LINEAR" output="COMMAND" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[export function warm(): void {
+  // @ts-expect-error: deliberately undefined here
+  setEntry("ready", true);
+}]]></body>
+    </node>
+  </nodes>
+  <edges>
+    <edge back_edge="true" data_flow="false" from="src.warm.warm" guard="false" to="src.cache.Cache.setEntry" type="CALLS" weight="0.6"/>
+  </edges>
+  <trailer edge_count="1" node_count="3" sha256="d14529c5284fce8f7644a0d03f9d2afc40bea8e26cf46a5dc479303a3cde290f" token_count="877"/>
+</prism_context>

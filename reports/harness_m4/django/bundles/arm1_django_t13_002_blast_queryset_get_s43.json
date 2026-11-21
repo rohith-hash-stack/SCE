@@ -1,0 +1,801 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t13_002_blast_queryset_get",
+  "items": [
+   {
+    "source_id": "django/template/base.py:1-91",
+    "content": "# django/template/base.py:1-91  (django.template.base)\n\"\"\"\nThis is the Django template system.\n\nHow it works:\n\nThe Lexer.tokenize() method converts a template string (i.e., a string\ncontaining markup with custom template tags) to tokens, which can be either\nplain text (TokenType.TEXT), variables (TokenType.VAR), or block statements\n(TokenType.BLOCK).\n\nThe Parser() class takes a list of tokens in its constructor, and its parse()\nmethod returns a compiled template -- which is, under the hood, a list of\nNode objects.\n\nEach Node is responsible for creating some sort of output -- e.g. simple text\n(TextNode), variable values in a given context (VariableNode), results of basic\nlogic (IfNode), results of looping (ForNode), or anything else. The core Node\ntypes are TextNode, VariableNode, IfNode and ForNode, but plugin modules can\ndefine their own custom node types.\n\nEach Node has a render() method, which takes a Context and returns a string of\nthe rendered node. For example, the render() method of a Variable Node returns\nthe variable's value as a string. The render() method of a ForNode returns the\nrendered output of whatever was inside the loop, recursively.\n\nThe Template class is a convenient wrapper that takes care of template\ncompilation and rendering.\n\nUsage:\n\nThe only thing you should ever use directly in this file is the Template class.\nCreate a compiled template object with a template_string, then call render()\nwith a context. In the compilation stage, the TemplateSyntaxError exception\nwill be raised if the template doesn't have proper syntax.\n\nSample code:\n\n>>> from django import template\n>>> s = '<html>{% if test %}<h1>{{ varvalue }}</h1>{% endif %}</html>'\n>>> t = template.Template(s)\n\n(t is now a compiled template, and its render() method can be called multiple\ntimes with multiple contexts)\n\n>>> c = template.Context({'test':True, 'varvalue': 'Hello'})\n>>> t.render(c)\n'<html><h1>Hello</h1></html>'\n>>> c = template.Context({'test':False, 'varvalue': 'Hello'})\n>>> t.render(c)\n'<html></html>'\n\"\"\"\n\nimport inspect\nimport logging\nimport re\nfrom enum import Enum\n\nfrom django.template.context import BaseContext\nfrom django.utils.formats import localize\nfrom django.utils.html import conditional_escape, escape\nfrom django.utils.regex_helper import _lazy_re_compile\nfrom django.utils.safestring import SafeData, SafeString, mark_safe\nfrom django.utils.text import get_text_list, smart_split, unescape_string_literal\nfrom django.utils.timezone import template_localtime\nfrom django.utils.translation import gettext_lazy, pgettext_lazy\n\nfrom .exceptions import TemplateSyntaxError\n\n# template syntax constants\nFILTER_SEPARATOR = \"|\"\nFILTER_ARGUMENT_SEPARATOR = \":\"\nVARIABLE_ATTRIBUTE_SEPARATOR = \".\"\nBLOCK_TAG_START = \"{%\"\nBLOCK_TAG_END = \"%}\"\nVARIABLE_TAG_START = \"{{\"\nVARIABLE_TAG_END = \"}}\"\nCOMMENT_TAG_START = \"{#\"\nCOMMENT_TAG_END = \"#}\"\nSINGLE_BRACE_START = \"{\"\nSINGLE_BRACE_END = \"}\"\n\n# what to report as the origin for templates that come from non-loader sources\n# (e.g. strings)\nUNKNOWN_SOURCE = \"<unknown source>\"\n\n# Match BLOCK_TAG_*, VARIABLE_TAG_*, and COMMENT_TAG_* tags and capture the\n# entire tag, including start/end delimiters. Using re.compile() is faster\n# than instantiating SimpleLazyObject with _lazy_re_compile().\ntag_re = re.compile(r\"({%.*?%}|{{.*?}}|{#.*?#})\")\n\nlogger = logging.getLogger(\"django.template\")",
+    "token_count": 770,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": -2.4858665466308594,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 770
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context_processors.py:1-14",
+    "content": "# django/template/context_processors.py:1-14  (django.template.context_processors)\n\"\"\"\nA set of request processors that return dictionaries to be merged into a\ntemplate context. Each function takes the request object as its only parameter\nand returns a dictionary to add to the context.\n\nThese are referenced from the 'context_processors' option of the configuration\nof a DjangoTemplates backend and used by RequestContext.\n\"\"\"\n\nimport itertools\n\nfrom django.conf import settings\nfrom django.middleware.csrf import get_token\nfrom django.utils.functional import SimpleLazyObject, lazy",
+    "token_count": 109,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 7,
+     "rerank_score": -2.663332223892212,
+     "bm25_rank": 2,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1425-1430",
+    "content": "# django/db/models/query.py:1425-1430  (django.db.models.query.QuerySet.all)\nclass QuerySet(AltersData):\n    def all(self):\n        \"\"\"\n        Return a new QuerySet that is a copy of the current one. This allows a\n        QuerySet to proxy for a model manager in some cases.\n        \"\"\"\n        return self._chain()",
+    "token_count": 81,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.all"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": -2.9901669025421143,
+     "bm25_rank": 33,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/custom_managers/models.py:1-13",
+    "content": "# tests/custom_managers/models.py:1-13  (tests.custom_managers.models)\n\"\"\"\nGiving models a custom manager\n\nYou can use a custom ``Manager`` in a particular model by extending the base\n``Manager`` class and instantiating your custom ``Manager`` in your model.\n\nThere are two reasons you might want to customize a ``Manager``: to add extra\n``Manager`` methods, and/or to modify the initial ``QuerySet`` the ``Manager``\nreturns.\n\"\"\"\n\nfrom django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation\nfrom django.db import models",
+    "token_count": 118,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -3.0458953380584717,
+     "bm25_rank": 23,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 118
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/operations.py:16-500",
+    "content": "# django/db/backends/base/operations.py:16-500  (django.db.backends.base.operations.BaseDatabaseOperations)\nclass BaseDatabaseOperations:\n    \"\"\"\n    Encapsulate backend-specific differences, such as the way a backend\n    performs ordering or calculates the ID of a recently-inserted row.\n    \"\"\"\n\n    compiler_module = \"django.db.models.sql.compiler\"\n\n    # Integer field safe ranges by `internal_type` as documented\n    # in docs/ref/models/fields.txt.\n    integer_field_ranges = {\n        \"SmallIntegerField\": (-32768, 32767),\n        \"IntegerField\": (-2147483648, 2147483647),\n        \"BigIntegerField\": (-9223372036854775808, 9223372036854775807),\n        \"PositiveBigIntegerField\": (0, 9223372036854775807),\n        \"PositiveSmallIntegerField\": (0, 32767),\n        \"PositiveIntegerField\": (0, 2147483647),\n        \"SmallAutoField\": (-32768, 32767),\n        \"AutoField\": (-2147483648, 2147483647),\n        \"BigAutoField\": (-9223372036854775808, 9223372036854775807),\n    }\n    set_operators = {\n        \"union\": \"UNION\",\n        \"intersection\": \"INTERSECT\",\n        \"difference\": \"EXCEPT\",\n    }\n    # Mapping of Field.get_internal_type() (typically the model field's class\n    # name) to the data type to use for the Cast() function, if different from\n    # DatabaseWrapper.data_types.\n    cast_data_types = {}\n    # CharField data type if the max_length argument isn't provided.\n    cast_char_field_without_max_length = None\n\n    # Start and end points for window expressions.\n    PRECEDING = \"PRECEDING\"\n    FOLLOWING = \"FOLLOWING\"\n    UNBOUNDED_PRECEDING = \"UNBOUNDED \" + PRECEDING\n    UNBOUNDED_FOLLOWING = \"UNBOUNDED \" + FOLLOWING\n    CURRENT_ROW = \"CURRENT ROW\"\n\n    # Prefix for EXPLAIN queries, or None EXPLAIN isn't supported.\n    explain_prefix = None\n\n    def __init__(self, connection):\n        self.connection = connection\n        self._cache = None\n\n    def autoinc_sql(self, table, column):\n        \"\"\"\n        Return any SQL needed to support auto-incrementing primary keys, or\n        None if no SQL is necessary.\n\n        This SQL is executed when a table is created.\n        \"\"\"\n        return None\n\n    def bulk_batch_size(self, fields, objs):\n        \"\"\"\n        Return the maximum allowed batch size for the backend. The fields\n        are the fields going to be inserted in the batch, the objs contains\n        all the objects to be inserted.\n        \"\"\"\n        return len(objs)\n\n    def format_for_duration_arithmetic(self, sql):\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"format_for_duration_arithmetic() method.\"\n        )\n\n    def cache_key_culling_sql(self):\n        \"\"\"\n        Return an SQL query that retrieves the first cache key greater than the\n        n smallest.\n\n        This is used by the 'db' cache backend to determine where to start\n        culling.\n        \"\"\"\n        cache_key = self.quote_name(\"cache_key\")\n        return f\"SELECT {cache_key} FROM %s ORDER BY {cache_key} LIMIT 1 OFFSET %%s\"\n\n    def unification_cast_sql(self, output_field):\n        \"\"\"\n        Given a field instance, return the SQL that casts the result of a union\n        to that type. The resulting string should contain a '%s' placeholder\n        for the expression being cast.\n        \"\"\"\n        return \"%s\"\n\n    def date_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        extracts a value from the given date field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_extract_sql() \"\n            \"method\"\n        )\n\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        truncates the given date or datetime field field_name to a date object\n        with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_trunc_sql() \"\n            \"method.\"\n        )\n\n    def datetime_cast_date_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to date value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_date_sql() method.\"\n        )\n\n    def datetime_cast_time_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to time value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_time_sql() method\"\n        )\n\n    def datetime_extract_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that extracts a value from the given\n        datetime field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_extract_sql() \"\n            \"method\"\n        )\n\n    def datetime_trunc_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that truncates the given datetime field\n        field_name to a datetime object with only the given specificity.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_trunc_sql() \"\n            \"method\"\n        )\n\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\n        that truncates the given time or datetime field field_name to a time\n        object with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a time_trunc_sql() method\"\n        )\n\n    def time_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute', or 'second', return the SQL\n        that extracts a value from the given time field field_name.\n        \"\"\"\n        return self.date_extract_sql(lookup_type, sql, params)\n\n    def deferrable_sql(self):\n        \"\"\"\n        Return the SQL to make a constraint \"initially deferred\" during a\n        CREATE TABLE statement.\n        \"\"\"\n        return \"\"\n\n    def distinct_sql(self, fields, params):\n        \"\"\"\n        Return an SQL DISTINCT clause which removes duplicate rows from the\n        result set. If any fields are given, only check the given fields for\n        duplicates.\n        \"\"\"\n        if fields:\n            raise NotSupportedError(\n                \"DISTINCT ON fields is not supported by this database backend\"\n            )\n        else:\n            return [\"DISTINCT\"], []\n\n    def fetch_returned_insert_columns(self, cursor, returning_params):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT...RETURNING\n        statement into a table, return the newly created data.\n        \"\"\"\n        return cursor.fetchone()\n\n    def field_cast_sql(self, db_type, internal_type):\n        \"\"\"\n        Given a column type (e.g. 'BLOB', 'VARCHAR') and an internal type\n        (e.g. 'GenericIPAddressField'), return the SQL to cast it before using\n        it in a WHERE statement. The resulting string should contain a '%s'\n        placeholder for the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def force_no_ordering(self):\n        \"\"\"\n        Return a list used in the \"ORDER BY\" clause to force no ordering at\n        all. Return an empty list to include nothing in the ordering.\n        \"\"\"\n        return []\n\n    def for_update_sql(self, nowait=False, skip_locked=False, of=(), no_key=False):\n        \"\"\"\n        Return the FOR UPDATE SQL clause to lock rows for an update operation.\n        \"\"\"\n        return \"FOR%s UPDATE%s%s%s\" % (\n            \" NO KEY\" if no_key else \"\",\n            \" OF %s\" % \", \".join(of) if of else \"\",\n            \" NOWAIT\" if nowait else \"\",\n            \" SKIP LOCKED\" if skip_locked else \"\",\n        )\n\n    def _get_limit_offset_params(self, low_mark, high_mark):\n        offset = low_mark or 0\n        if high_mark is not None:\n            return (high_mark - offset), offset\n        elif offset:\n            return self.connection.ops.no_limit_value(), offset\n        return None, offset\n\n    def limit_offset_sql(self, low_mark, high_mark):\n        \"\"\"Return LIMIT/OFFSET SQL clause.\"\"\"\n        limit, offset = self._get_limit_offset_params(low_mark, high_mark)\n        return \" \".join(\n            sql\n            for sql in (\n                (\"LIMIT %d\" % limit) if limit else None,\n                (\"OFFSET %d\" % offset) if offset else None,\n            )\n            if sql\n        )\n\n    def last_executed_query(self, cursor, sql, params):\n        \"\"\"\n        Return a string of the query last executed by the given cursor, with\n        placeholders replaced with actual values.\n\n        `sql` is the raw query containing placeholders and `params` is the\n        sequence of parameters. These are used by default, but this method\n        exists for database backends to provide a better implementation\n        according to their own quoting schemes.\n        \"\"\"\n\n        # Convert params to contain string values.\n        def to_string(s):\n            return force_str(s, strings_only=True, errors=\"replace\")\n\n        if isinstance(params, (list, tuple)):\n            u_params = tuple(to_string(val) for val in params)\n        elif params is None:\n            u_params = ()\n        else:\n            u_params = {to_string(k): to_string(v) for k, v in params.items()}\n\n        return \"QUERY = %r - PARAMS = %r\" % (sql, u_params)\n\n    def last_insert_id(self, cursor, table_name, pk_name):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT statement into\n        a table that has an auto-incrementing ID, return the newly created ID.\n\n        `pk_name` is the name of the primary-key column.\n        \"\"\"\n        return cursor.lastrowid\n\n    def lookup_cast(self, lookup_type, internal_type=None):\n        \"\"\"\n        Return the string to use in a query when performing lookups\n        (\"contains\", \"like\", etc.). It should contain a '%s' placeholder for\n        the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def max_in_list_size(self):\n        \"\"\"\n        Return the maximum number of items that can be passed in a single 'IN'\n        list condition, or None if the backend does not impose a limit.\n        \"\"\"\n        return None\n\n    def max_name_length(self):\n        \"\"\"\n        Return the maximum length of table and column names, or None if there\n        is no limit.\n        \"\"\"\n        return None\n\n    def no_limit_value(self):\n        \"\"\"\n        Return the value to use for the LIMIT when we are wanting \"LIMIT\n        infinity\". Return None if the limit clause can be omitted in this case.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a no_limit_value() method\"\n        )\n\n    def pk_default_value(self):\n        \"\"\"\n        Return the value to use during an INSERT statement to specify that\n        the field should use its default value.\n        \"\"\"\n        return \"DEFAULT\"\n\n    def prepare_sql_script(self, sql):\n        \"\"\"\n        Take an SQL script that may contain multiple lines and return a list\n        of statements to feed to successive cursor.execute() calls.\n\n        Since few databases are able to process raw SQL scripts in a single\n        cursor.execute() call and PEP 249 doesn't talk about this use case,\n        the default implementation is conservative.\n        \"\"\"\n        return [\n            sqlparse.format(statement, strip_comments=True)\n            for statement in sqlparse.split(sql)\n            if statement\n        ]\n\n    def process_clob(self, value):\n        \"\"\"\n        Return the value of a CLOB column, for backends that return a locator\n        object that requires additional processing.\n        \"\"\"\n        return value\n\n    def return_insert_columns(self, fields):\n        \"\"\"\n        For backends that support returning columns as part of an insert query,\n        return the SQL and params to append to the INSERT query. The returned\n        fragment should contain a format string to hold the appropriate column.\n        \"\"\"\n        pass\n\n    def compiler(self, compiler_name):\n        \"\"\"\n        Return the SQLCompiler class corresponding to the given name,\n        in the namespace corresponding to the `compiler_module` attribute\n        on this backend.\n        \"\"\"\n        if self._cache is None:\n            self._cache = import_module(self.compiler_module)\n        return getattr(self._cache, compiler_name)\n\n    def quote_name(self, name):\n        \"\"\"\n        Return a quoted version of the given table, index, or column name. Do\n        not quote the given name if it's already been quoted.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a quote_name() method\"\n        )\n\n    def regex_lookup(self, lookup_type):\n        \"\"\"\n        Return the string to use in a query when performing regular expression\n        lookups (using \"regex\" or \"iregex\"). It should contain a '%s'\n        placeholder for the column being searched against.\n\n        If the feature is not supported (or part of it is not supported), raise\n        NotImplementedError.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a regex_lookup() method\"\n        )\n\n    def savepoint_create_sql(self, sid):\n        \"\"\"\n        Return the SQL for starting a new savepoint. Only required if the\n        \"uses_savepoints\" feature is True. The \"sid\" parameter is a string\n        for the savepoint id.\n        \"\"\"\n        return \"SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_commit_sql(self, sid):\n        \"\"\"\n        Return the SQL for committing the given savepoint.\n        \"\"\"\n        return \"RELEASE SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_rollback_sql(self, sid):\n        \"\"\"\n        Return the SQL for rolling back the given savepoint.\n        \"\"\"\n        return \"ROLLBACK TO SAVEPOINT %s\" % self.quote_name(sid)\n\n    def set_time_zone_sql(self):\n        \"\"\"\n        Return the SQL that will set the connection's time zone.\n\n        Return '' if the backend doesn't support time zones.\n        \"\"\"\n        return \"\"\n\n    def sql_flush(self, style, tables, *, reset_sequences=False, allow_cascade=False):\n        \"\"\"\n        Return a list of SQL statements required to remove all data from\n        the given database tables (without actually removing the tables\n        themselves).\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n\n        If `reset_sequences` is True, the list includes SQL statements required\n        to reset the sequences.\n\n        The `allow_cascade` argument determines whether truncation may cascade\n        to tables with foreign keys pointing the tables being truncated.\n        PostgreSQL requires a cascade even if these tables are empty.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations must provide an sql_flush() method\"\n        )\n\n    def execute_sql_flush(self, sql_list):\n        \"\"\"Execute a list of SQL statements to flush the database.\"\"\"\n        with transaction.atomic(\n            using=self.connection.alias,\n            savepoint=self.connection.features.can_rollback_ddl,\n        ):\n            with self.connection.cursor() as cursor:\n                for sql in sql_list:\n                    cursor.execute(sql)\n\n    def sequence_reset_by_name_sql(self, style, sequences):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences\n        passed in `sequences`.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []\n\n    def sequence_reset_sql(self, style, model_list):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences for\n        the given models.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []  # No sequence reset required by default.\n\n    def start_transaction_sql(self):\n        \"\"\"Return the SQL statement required to start a transaction.\"\"\"\n        return \"BEGIN;\"\n\n    def end_transaction_sql(self, success=True):\n        \"\"\"Return the SQL statement required to end a transaction.\"\"\"\n        if not success:\n            return \"ROLLBACK;\"\n        return \"COMMIT;\"\n\n    def tablespace_sql(self, tablespace, inline=False):\n        \"\"\"\n        Return the SQL that will be used in a query to define the tablespace.\n\n        Return '' if the backend doesn't support tablespaces.\n\n        If `inline` is True, append the SQL to a row; otherwise append it to\n        the entire CREATE TABLE or CREATE INDEX statement.\n        \"\"\"\n        return \"\"\n\n    def prep_for_like_query(self, x):\n        \"\"\"Prepare a value for use in a LIKE query.\"\"\"\n        return str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(\"%\", r\"\\%\").replace(\"_\", r\"\\_\")\n\n    # Same as prep_for_like_query(), but called for \"iexact\" matches, which\n    # need not necessarily be implemented using \"LIKE\" in the backend.\n    prep_for_iexact_query = prep_for_like_query",
+    "token_count": 3912,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.operations.BaseDatabaseOperations"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 36,
+     "rerank_score": -3.8855910301208496,
+     "bm25_rank": 18,
+     "dense_rank": null,
+     "oversized_chunk": true,
+     "engine_token_count": 3912
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1078-1118",
+    "content": "# django/db/models/query.py:1078-1118  (django.db.models.query.QuerySet.in_bulk)\nclass QuerySet(AltersData):\n    def in_bulk(self, id_list=None, *, field_name=\"pk\"):\n        \"\"\"\n        Return a dictionary mapping each of the given IDs to the object with\n        that ID. If `id_list` isn't provided, evaluate the entire QuerySet.\n        \"\"\"\n        if self.query.is_sliced:\n            raise TypeError(\"Cannot use 'limit' or 'offset' with in_bulk().\")\n        opts = self.model._meta\n        unique_fields = [\n            constraint.fields[0]\n            for constraint in opts.total_unique_constraints\n            if len(constraint.fields) == 1\n        ]\n        if (\n            field_name != \"pk\"\n            and not opts.get_field(field_name).unique\n            and field_name not in unique_fields\n            and self.query.distinct_fields != (field_name,)\n        ):\n            raise ValueError(\n                \"in_bulk()'s field_name must be a unique field but %r isn't.\"\n                % field_name\n            )\n        if id_list is not None:\n            if not id_list:\n                return {}\n            filter_key = \"{}__in\".format(field_name)\n            batch_size = connections[self.db].features.max_query_params\n            id_list = tuple(id_list)\n            # If the database has a limit on the number of query parameters\n            # (e.g. SQLite), retrieve objects in batches if necessary.\n            if batch_size and batch_size < len(id_list):\n                qs = ()\n                for offset in range(0, len(id_list), batch_size):\n                    batch = id_list[offset : offset + batch_size]\n                    qs += tuple(self.filter(**{filter_key: batch}).order_by())\n            else:\n                qs = self.filter(**{filter_key: id_list}).order_by()\n        else:\n            qs = self._chain()\n        return {getattr(obj, field_name): obj for obj in qs}",
+    "token_count": 413,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.in_bulk"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 50,
+     "rerank_score": -3.9960782527923584,
+     "bm25_rank": 25,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 413
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:599-610",
+    "content": "# django/db/models/query.py:599-610  (django.db.models.query.QuerySet.count)\nclass QuerySet(AltersData):\n    def count(self):\n        \"\"\"\n        Perform a SELECT COUNT() and return the number of records as an\n        integer.\n\n        If the QuerySet is already fully cached, return the length of the\n        cached results set to avoid multiple SELECT COUNT(*) calls.\n        \"\"\"\n        if self._result_cache is not None:\n            return len(self._result_cache)\n\n        return self.query.get_count(using=self.db)",
+    "token_count": 115,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.count"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 48,
+     "rerank_score": -4.862124443054199,
+     "bm25_rank": 24,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 115
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:736-784#part1of2",
+    "content": "# django/db/models/query.py:736-784#part1of2  (django.db.models.query.QuerySet.bulk_create)\nclass QuerySet(AltersData):\n    def bulk_create(\n        self,\n        objs,\n        batch_size=None,\n        ignore_conflicts=False,\n        update_conflicts=False,\n        update_fields=None,\n        unique_fields=None,\n    ):\n        \"\"\"\n        Insert each of the instances into the database. Do *not* call\n        save() on each of the instances, do not send any pre/post_save\n        signals, and do not set the primary key attribute if it is an\n        autoincrement field (except if features.can_return_rows_from_bulk_insert=True).\n        Multi-table models are not supported.\n        \"\"\"\n        # When you bulk insert you don't get the primary keys back (if it's an\n        # autoincrement, except if can_return_rows_from_bulk_insert=True), so\n        # you can't insert into the child tables which references this. There\n        # are two workarounds:\n        # 1) This could be implemented if you didn't have an autoincrement pk\n        # 2) You could do it by doing O(n) normal inserts into the parent\n        #    tables to get the primary keys back and then doing a single bulk\n        #    insert into the childmost table.\n        # We currently set the primary keys on the objects when using\n        # PostgreSQL via the RETURNING ID clause. It should be possible for\n        # Oracle as well, but the semantics for extracting the primary keys is\n        # trickier so it's not done yet.\n        if batch_size is not None and batch_size <= 0:\n            raise ValueError(\"Batch size must be a positive integer.\")\n        # Check that the parents share the same concrete model with the our\n        # model to detect the inheritance pattern ConcreteGrandParent ->\n        # MultiTableParent -> ProxyChild. Simply checking self.model._meta.proxy\n        # would not identify that case as involving multiple tables.\n        for parent in self.model._meta.get_parent_list():\n            if parent._meta.concrete_model is not self.model._meta.concrete_model:\n                raise ValueError(\"Can't bulk create a multi-table inherited model\")\n        if not objs:\n            return objs\n        opts = self.model._meta\n        if unique_fields:\n            # Primary key is allowed in unique_fields.\n            unique_fields = [\n                self.model._meta.get_field(opts.pk.name if name == \"pk\" else name)\n                for name in unique_fields\n            ]\n        if update_fields:\n            update_fields = [self.model._meta.get_field(name) for name in update_fields]\n        on_conflict = self._check_bulk_create_options(\n            ignore_conflicts,\n            update_conflicts,\n            update_fields,\n            unique_fields,\n        )\n        self._for_write = True\n        fields = opts.concrete_fields\n        objs = list(objs)\n        self._prepare_for_bulk_create(objs)",
+    "token_count": 619,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.bulk_create"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 31,
+     "rerank_score": -5.064261436462402,
+     "bm25_rank": 15,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 619
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:307-314",
+    "content": "# django/db/models/sql/query.py:307-314  (django.db.models.sql.query.Query.get_meta)\nclass Query(BaseExpression):\n    def get_meta(self):\n        \"\"\"\n        Return the Options instance (the model._meta) from which to start\n        processing. Normally, this is self.model._meta, but it can be changed\n        by subclasses.\n        \"\"\"\n        if self.model:\n            return self.model._meta",
+    "token_count": 90,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.get_meta"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 37,
+     "rerank_score": -5.569911003112793,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 90
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/get_earliest_or_latest/models.py:24-24",
+    "content": "# tests/get_earliest_or_latest/models.py:24-24  (tests.get_earliest_or_latest.models)\n# Ticket #23555 - model with an intentionally broken QuerySet.__iter__ method.",
+    "token_count": 48,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -5.691956043243408,
+     "bm25_rank": null,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1890-1902",
+    "content": "# django/db/models/query.py:1890-1902  (django.db.models.query.QuerySet._next_is_sticky)\nclass QuerySet(AltersData):\n    def _next_is_sticky(self):\n        \"\"\"\n        Indicate that the next filter call and the one following that should\n        be treated as a single filter. This is only important when it comes to\n        determining when to reuse tables for many-to-many filters. Required so\n        that we can filter naturally on the results of related managers.\n\n        This doesn't return a clone of the current QuerySet (it returns\n        \"self\"). The method is only used internally and should be immediately\n        followed by a filter() that does create a clone.\n        \"\"\"\n        self._sticky_filter = True\n        return self",
+    "token_count": 165,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet._next_is_sticky"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 18,
+     "rerank_score": -5.7547221183776855,
+     "bm25_rank": 8,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 165
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/defer/tests.py:113-117",
+    "content": "# tests/defer/tests.py:113-117  (tests.defer.tests.DeferTests.test_get)\nclass DeferTests(AssertionMixin, TestCase):\n    def test_get(self):\n        # Using defer() and only() with get() is also valid.\n        qs = Primary.objects.all()\n        self.assert_delayed(qs.defer(\"name\").get(pk=self.p1.pk), 1)\n        self.assert_delayed(qs.only(\"name\").get(pk=self.p1.pk), 2)",
+    "token_count": 107,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.defer.tests.DeferTests.test_get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 30,
+     "rerank_score": -5.9238996505737305,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/features.py:1-2",
+    "content": "# django/db/backends/base/features.py:1-2  (django.db.backends.base.features)\nfrom django.db import ProgrammingError\nfrom django.utils.functional import cached_property",
+    "token_count": 34,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 14,
+     "rerank_score": -5.98481559753418,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 34
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/compiler.py:950-998",
+    "content": "# django/db/models/sql/compiler.py:950-998  (django.db.models.sql.compiler.SQLCompiler.get_default_columns)\nclass SQLCompiler:\n    # Multiline ordering SQL clause may appear from RawSQL.\n    def get_default_columns(\n        self, select_mask, start_alias=None, opts=None, from_parent=None\n    ):\n        \"\"\"\n        Compute the default columns for selecting every field in the base\n        model. Will sometimes be called to pull in related models (e.g. via\n        select_related), in which case \"opts\" and \"start_alias\" will be given\n        to provide a starting point for the traversal.\n\n        Return a list of strings, quoted appropriately for use in SQL\n        directly, as well as a set of aliases used in the select statement (if\n        'as_pairs' is True, return a list of (alias, col_name) pairs instead\n        of strings as the first component and None as the second component).\n        \"\"\"\n        result = []\n        if opts is None:\n            if (opts := self.query.get_meta()) is None:\n                return result\n        start_alias = start_alias or self.query.get_initial_alias()\n        # The 'seen_models' is used to optimize checking the needed parent\n        # alias for a given field. This also includes None -> start_alias to\n        # be used by local fields.\n        seen_models = {None: start_alias}\n\n        for field in opts.concrete_fields:\n            model = field.model._meta.concrete_model\n            # A proxy model will have a different model and concrete_model. We\n            # will assign None if the field belongs to this model.\n            if model == opts.model:\n                model = None\n            if (\n                from_parent\n                and model is not None\n                and issubclass(\n                    from_parent._meta.concrete_model, model._meta.concrete_model\n                )\n            ):\n                # Avoid loading data for already loaded parents.\n                # We end up here in the case select_related() resolution\n                # proceeds from parent model to child model. In that case the\n                # parent model data is already present in the SELECT clause,\n                # and we want to avoid reloading the same data again.\n                continue\n            if select_mask and field not in select_mask:\n                continue\n            alias = self.query.join_parent_model(opts, model, start_alias, seen_models)\n            column = field.get_col(alias)\n            result.append(column)\n        return result",
+    "token_count": 508,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.compiler.SQLCompiler.get_default_columns"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 34,
+     "rerank_score": -6.028214454650879,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 508
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/custom_lookups/tests.py:632-634",
+    "content": "# tests/custom_lookups/tests.py:632-634  (tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_lookup)\nclass CustomisedMethodsTests(SimpleTestCase):\n    def test_overridden_get_lookup(self):\n        q = CustomModel.objects.filter(field__lookupfunc_monkeys=3)\n        self.assertIn(\"monkeys()\", str(q.query))",
+    "token_count": 77,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_lookup"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 8,
+     "rerank_score": -6.2070231437683105,
+     "bm25_rank": null,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 77
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/related_descriptors.py:1-82",
+    "content": "# django/db/models/fields/related_descriptors.py:1-82  (django.db.models.fields.related_descriptors)\n\"\"\"\nAccessors for related objects.\n\nWhen a field defines a relation between two models, each model class provides\nan attribute to access related instances of the other model class (unless the\nreverse accessor has been disabled with related_name='+').\n\nAccessors are implemented as descriptors in order to customize access and\nassignment. This module defines the descriptor classes.\n\nForward accessors follow foreign keys. Reverse accessors trace them back. For\nexample, with the following models::\n\n    class Parent(Model):\n        pass\n\n    class Child(Model):\n        parent = ForeignKey(Parent, related_name='children')\n\n ``child.parent`` is a forward many-to-one relation. ``parent.children`` is a\nreverse many-to-one relation.\n\nThere are three types of relations (many-to-one, one-to-one, and many-to-many)\nand two directions (forward and reverse) for a total of six combinations.\n\n1. Related instance on the forward side of a many-to-one relation:\n   ``ForwardManyToOneDescriptor``.\n\n   Uniqueness of foreign key values is irrelevant to accessing the related\n   instance, making the many-to-one and one-to-one cases identical as far as\n   the descriptor is concerned. The constraint is checked upstream (unicity\n   validation in forms) or downstream (unique indexes in the database).\n\n2. Related instance on the forward side of a one-to-one\n   relation: ``ForwardOneToOneDescriptor``.\n\n   It avoids querying the database when accessing the parent link field in\n   a multi-table inheritance scenario.\n\n3. Related instance on the reverse side of a one-to-one relation:\n   ``ReverseOneToOneDescriptor``.\n\n   One-to-one relations are asymmetrical, despite the apparent symmetry of the\n   name, because they're implemented in the database with a foreign key from\n   one table to another. As a consequence ``ReverseOneToOneDescriptor`` is\n   slightly different from ``ForwardManyToOneDescriptor``.\n\n4. Related objects manager for related instances on the reverse side of a\n   many-to-one relation: ``ReverseManyToOneDescriptor``.\n\n   Unlike the previous two classes, this one provides access to a collection\n   of objects. It returns a manager rather than an instance.\n\n5. Related objects manager for related instances on the forward or reverse\n   sides of a many-to-many relation: ``ManyToManyDescriptor``.\n\n   Many-to-many relations are symmetrical. The syntax of Django models\n   requires declaring them on one side but that's an implementation detail.\n   They could be declared on the other side without any change in behavior.\n   Therefore the forward and reverse descriptors can be the same.\n\n   If you're looking for ``ForwardManyToManyDescriptor`` or\n   ``ReverseManyToManyDescriptor``, use ``ManyToManyDescriptor`` instead.\n\"\"\"\n\nfrom asgiref.sync import sync_to_async\n\nfrom django.core.exceptions import FieldError\nfrom django.db import (\n    DEFAULT_DB_ALIAS,\n    NotSupportedError,\n    connections,\n    router,\n    transaction,\n)\nfrom django.db.models import Q, Window, signals\nfrom django.db.models.functions import RowNumber\nfrom django.db.models.lookups import GreaterThan, LessThanOrEqual\nfrom django.db.models.query import QuerySet\nfrom django.db.models.query_utils import DeferredAttribute\nfrom django.db.models.utils import AltersData, resolve_callables\nfrom django.utils.functional import cached_property",
+    "token_count": 703,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -6.350152015686035,
+     "bm25_rank": 14,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 703
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/multiple_database/tests.py:534-605",
+    "content": "# tests/multiple_database/tests.py:534-605  (tests.multiple_database.tests.QueryTestCase.test_foreign_key_separation)\nclass QueryTestCase(TestCase):\n    def test_foreign_key_separation(self):\n        \"FK fields are constrained to a single database\"\n        # Create a book and author on the default database\n        pro = Book.objects.create(\n            title=\"Pro Django\", published=datetime.date(2008, 12, 16)\n        )\n\n        george = Person.objects.create(name=\"George Vilches\")\n\n        # Create a book and author on the other database\n        dive = Book.objects.using(\"other\").create(\n            title=\"Dive into Python\", published=datetime.date(2009, 5, 4)\n        )\n        chris = Person.objects.using(\"other\").create(name=\"Chris Mills\")\n\n        # Save the author's favorite books\n        pro.editor = george\n        pro.save()\n\n        dive.editor = chris\n        dive.save()\n\n        pro = Book.objects.using(\"default\").get(title=\"Pro Django\")\n        self.assertEqual(pro.editor.name, \"George Vilches\")\n\n        dive = Book.objects.using(\"other\").get(title=\"Dive into Python\")\n        self.assertEqual(dive.editor.name, \"Chris Mills\")\n\n        # Queries work across foreign key joins\n        self.assertEqual(\n            list(\n                Person.objects.using(\"default\")\n                .filter(edited__title=\"Pro Django\")\n                .values_list(\"name\", flat=True)\n            ),\n            [\"George Vilches\"],\n        )\n        self.assertEqual(\n            list(\n                Person.objects.using(\"other\")\n                .filter(edited__title=\"Pro Django\")\n                .values_list(\"name\", flat=True)\n            ),\n            [],\n        )\n\n        self.assertEqual(\n            list(\n                Person.objects.using(\"default\")\n                .filter(edited__title=\"Dive into Python\")\n                .values_list(\"name\", flat=True)\n            ),\n            [],\n        )\n        self.assertEqual(\n            list(\n                Person.objects.using(\"other\")\n                .filter(edited__title=\"Dive into Python\")\n                .values_list(\"name\", flat=True)\n            ),\n            [\"Chris Mills\"],\n        )\n\n        # Reget the objects to clear caches\n        chris = Person.objects.using(\"other\").get(name=\"Chris Mills\")\n        dive = Book.objects.using(\"other\").get(title=\"Dive into Python\")\n\n        # Retrieve related object by descriptor. Related objects should be\n        # database-bound.\n        self.assertEqual(\n            list(chris.edited.values_list(\"title\", flat=True)), [\"Dive into Python\"]\n        )",
+    "token_count": 544,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.multiple_database.tests.QueryTestCase.test_foreign_key_separation"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 23,
+     "rerank_score": -6.4881744384765625,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 544
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:1028-1054",
+    "content": "# django/db/models/base.py:1028-1054  (django.db.models.base.Model._do_update)\nclass Model(AltersData, metaclass=ModelBase):\n    def _do_update(self, base_qs, using, pk_val, values, update_fields, forced_update):\n        \"\"\"\n        Try to update the model. Return True if the model was updated (if an\n        update query was done and a matching row was found in the DB).\n        \"\"\"\n        filtered = base_qs.filter(pk=pk_val)\n        if not values:\n            # We can end up here when saving a model in inheritance chain where\n            # update_fields doesn't target any field in current model. In that\n            # case we just say the update succeeded. Another case ending up here\n            # is a model with just PK - in that case check that the PK still\n            # exists.\n            return update_fields is not None or filtered.exists()\n        if self._meta.select_on_save and not forced_update:\n            return (\n                filtered.exists()\n                and\n                # It may happen that the object is deleted from the DB right after\n                # this check, causing the subsequent UPDATE to return zero matching\n                # rows. The same result can occur in some rare cases when the\n                # database returns zero despite the UPDATE being executed\n                # successfully (a row is matched and updated). In order to\n                # distinguish these two cases, the object's existence in the\n                # database is again checked for if the UPDATE query returns 0.\n                (filtered._update(values) > 0 or filtered.exists())\n            )\n        return filtered._update(values) > 0",
+    "token_count": 346,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model._do_update"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 41,
+     "rerank_score": -6.508321762084961,
+     "bm25_rank": 20,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 346
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/multiple_database/tests.py:959-989",
+    "content": "# tests/multiple_database/tests.py:959-989  (tests.multiple_database.tests.QueryTestCase.test_generic_key_separation)\nclass QueryTestCase(TestCase):\n    def test_generic_key_separation(self):\n        \"Generic fields are constrained to a single database\"\n        # Create a book and author on the default database\n        pro = Book.objects.create(\n            title=\"Pro Django\", published=datetime.date(2008, 12, 16)\n        )\n        review1 = Review.objects.create(source=\"Python Monthly\", content_object=pro)\n\n        # Create a book and author on the other database\n        dive = Book.objects.using(\"other\").create(\n            title=\"Dive into Python\", published=datetime.date(2009, 5, 4)\n        )\n\n        review2 = Review.objects.using(\"other\").create(\n            source=\"Python Weekly\", content_object=dive\n        )\n\n        review1 = Review.objects.using(\"default\").get(source=\"Python Monthly\")\n        self.assertEqual(review1.content_object.title, \"Pro Django\")\n\n        review2 = Review.objects.using(\"other\").get(source=\"Python Weekly\")\n        self.assertEqual(review2.content_object.title, \"Dive into Python\")\n\n        # Reget the objects to clear caches\n        dive = Book.objects.using(\"other\").get(title=\"Dive into Python\")\n\n        # Retrieve related object by descriptor. Related objects should be\n        # database-bound.\n        self.assertEqual(\n            list(dive.reviews.values_list(\"source\", flat=True)), [\"Python Weekly\"]\n        )",
+    "token_count": 323,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.multiple_database.tests.QueryTestCase.test_generic_key_separation"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 43,
+     "rerank_score": -6.565173149108887,
+     "bm25_rank": null,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 323
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/custom_lookups/tests.py:640-644",
+    "content": "# tests/custom_lookups/tests.py:640-644  (tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_lookup_chain)\nclass CustomisedMethodsTests(SimpleTestCase):\n    def test_overridden_get_lookup_chain(self):\n        q = CustomModel.objects.filter(\n            field__transformfunc_banana__lookupfunc_elephants=3\n        )\n        self.assertIn(\"elephants()\", str(q.query))",
+    "token_count": 89,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_lookup_chain"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 6,
+     "rerank_score": -6.671635627746582,
+     "bm25_rank": null,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:1296-1340",
+    "content": "# django/db/models/sql/query.py:1296-1340  (django.db.models.sql.query.Query.build_lookup)\nclass Query(BaseExpression):\n    def build_lookup(self, lookups, lhs, rhs):\n        \"\"\"\n        Try to extract transforms and lookup from given lhs.\n\n        The lhs value is something that works like SQLExpression.\n        The rhs value is what the lookup is going to compare against.\n        The lookups is a list of names to extract using get_lookup()\n        and get_transform().\n        \"\"\"\n        # __exact is the default lookup if one isn't given.\n        *transforms, lookup_name = lookups or [\"exact\"]\n        for name in transforms:\n            lhs = self.try_transform(lhs, name)\n        # First try get_lookup() so that the lookup takes precedence if the lhs\n        # supports both transform and lookup for the name.\n        lookup_class = lhs.get_lookup(lookup_name)\n        if not lookup_class:\n            # A lookup wasn't found. Try to interpret the name as a transform\n            # and do an Exact lookup against it.\n            lhs = self.try_transform(lhs, lookup_name)\n            lookup_name = \"exact\"\n            lookup_class = lhs.get_lookup(lookup_name)\n            if not lookup_class:\n                return\n\n        lookup = lookup_class(lhs, rhs)\n        # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all\n        # uses of None as a query value unless the lookup supports it.\n        if lookup.rhs is None and not lookup.can_use_none_as_rhs:\n            if lookup_name not in (\"exact\", \"iexact\"):\n                raise ValueError(\"Cannot use None as a query value\")\n            return lhs.get_lookup(\"isnull\")(lhs, True)\n\n        # For Oracle '' is equivalent to null. The check must be done at this\n        # stage because join promotion can't be done in the compiler. Using\n        # DEFAULT_DB_ALIAS isn't nice but it's the best that can be done here.\n        # A similar thing is done in is_nullable(), too.\n        if (\n            lookup_name == \"exact\"\n            and lookup.rhs == \"\"\n            and connections[DEFAULT_DB_ALIAS].features.interprets_empty_strings_as_nulls\n        ):\n            return lhs.get_lookup(\"isnull\")(lhs, True)\n\n        return lookup",
+    "token_count": 476,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.build_lookup"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": -6.707435607910156,
+     "bm25_rank": 3,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 476
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_docs/models.py:80-84",
+    "content": "# tests/admin_docs/models.py:80-84  (tests.admin_docs.models.Person.get_full_name)\nclass Person(models.Model):\n    def get_full_name(self):\n        \"\"\"\n        Get the full name of the person\n        \"\"\"\n        return self._get_full_name()",
+    "token_count": 56,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_docs.models.Person.get_full_name"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 39,
+     "rerank_score": -6.902130126953125,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/views/main.py:495-552",
+    "content": "# django/contrib/admin/views/main.py:495-552  (django.contrib.admin.views.main.ChangeList.get_queryset)\nclass ChangeList:\n    def get_queryset(self, request):\n        # First, we collect all the declared list filters.\n        (\n            self.filter_specs,\n            self.has_filters,\n            remaining_lookup_params,\n            filters_may_have_duplicates,\n            self.has_active_filters,\n        ) = self.get_filters(request)\n        # Then, we let every list filter modify the queryset to its liking.\n        qs = self.root_queryset\n        for filter_spec in self.filter_specs:\n            new_qs = filter_spec.queryset(request, qs)\n            if new_qs is not None:\n                qs = new_qs\n\n        try:\n            # Finally, we apply the remaining lookup parameters from the query\n            # string (i.e. those that haven't already been processed by the\n            # filters).\n            qs = qs.filter(**remaining_lookup_params)\n        except (SuspiciousOperation, ImproperlyConfigured):\n            # Allow certain types of errors to be re-raised as-is so that the\n            # caller can treat them in a special way.\n            raise\n        except Exception as e:\n            # Every other error is caught with a naked except, because we don't\n            # have any other way of validating lookup parameters. They might be\n            # invalid if the keyword arguments are incorrect, or if the values\n            # are not in the correct type, so we might get FieldError,\n            # ValueError, ValidationError, or ?.\n            raise IncorrectLookupParameters(e)\n\n        # Apply search results\n        qs, search_may_have_duplicates = self.model_admin.get_search_results(\n            request,\n            qs,\n            self.query,\n        )\n\n        # Set query string for clearing all filters.\n        self.clear_all_filters_qs = self.get_query_string(\n            new_params=remaining_lookup_params,\n            remove=self.get_filters_params(),\n        )\n        # Remove duplicates from results, if necessary\n        if filters_may_have_duplicates | search_may_have_duplicates:\n            qs = qs.filter(pk=OuterRef(\"pk\"))\n            qs = self.root_queryset.filter(Exists(qs))\n\n        # Set ordering.\n        ordering = self.get_ordering(request, qs)\n        qs = qs.order_by(*ordering)\n\n        if not qs.query.select_related:\n            qs = self.apply_select_related(qs)\n\n        return qs",
+    "token_count": 493,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.views.main.ChangeList.get_queryset"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 5,
+     "rerank_score": -6.959953308105469,
+     "bm25_rank": 1,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 493
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/custom_lookups/tests.py:646-650",
+    "content": "# tests/custom_lookups/tests.py:646-650  (tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_transform_chain)\nclass CustomisedMethodsTests(SimpleTestCase):\n    def test_overridden_get_transform_chain(self):\n        q = CustomModel.objects.filter(\n            field__transformfunc_banana__transformfunc_pear=3\n        )\n        self.assertIn(\"pear()\", str(q.query))",
+    "token_count": 88,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_transform_chain"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -6.984593391418457,
+     "bm25_rank": null,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 88
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query_utils.py:201-204",
+    "content": "# django/db/models/query_utils.py:201-204  (django.db.models.query_utils.class_or_instance_method)\nclass class_or_instance_method:\n    \"\"\"\n    Hook used in RegisterLookupMixin to return partial functions depending on\n    the caller type (instance or class of models.Field).\n    \"\"\"",
+    "token_count": 63,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query_utils.class_or_instance_method"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 32,
+     "rerank_score": -7.077112197875977,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/shortcuts.py:92-114",
+    "content": "# django/shortcuts.py:92-114  (django.shortcuts.get_list_or_404)\ndef get_list_or_404(klass, *args, **kwargs):\n    \"\"\"\n    Use filter() to return a list of objects, or raise an Http404 exception if\n    the list is empty.\n\n    klass may be a Model, Manager, or QuerySet object. All other passed\n    arguments and keyword arguments are used in the filter() query.\n    \"\"\"\n    queryset = _get_queryset(klass)\n    if not hasattr(queryset, \"filter\"):\n        klass__name = (\n            klass.__name__ if isinstance(klass, type) else klass.__class__.__name__\n        )\n        raise ValueError(\n            \"First argument to get_list_or_404() must be a Model, Manager, or \"\n            \"QuerySet, not '%s'.\" % klass__name\n        )\n    obj_list = list(queryset.filter(*args, **kwargs))\n    if not obj_list:\n        raise Http404(\n            \"No %s matches the given query.\" % queryset.model._meta.object_name\n        )\n    return obj_list",
+    "token_count": 241,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.shortcuts.get_list_or_404"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 44,
+     "rerank_score": -7.139847755432129,
+     "bm25_rank": 22,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 241
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:503-520",
+    "content": "# django/http/request.py:503-520  (django.http.request.QueryDict)\nclass QueryDict(MultiValueDict):\n    \"\"\"\n    A specialized MultiValueDict which represents a query string.\n\n    A QueryDict can be used to represent GET or POST data. It subclasses\n    MultiValueDict since keys in such data can be repeated, for instance\n    in the data from a form with a <select multiple> field.\n\n    By default QueryDicts are immutable, though the copy() method\n    will always return a mutable copy.\n\n    Both keys and values set on this class are converted from the given encoding\n    (DEFAULT_CHARSET by default) to str.\n    \"\"\"\n\n    # These are both reset in __init__, but is specified here at the class\n    # level so that unpickling will have valid values\n    _mutable = True\n    _encoding = None",
+    "token_count": 184,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 38,
+     "rerank_score": -7.193041801452637,
+     "bm25_rank": 19,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 184
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context.py:78-83",
+    "content": "# django/template/context.py:78-83  (django.template.context.BaseContext.__getitem__)\nclass BaseContext:\n    def __getitem__(self, key):\n        \"Get a variable's value, starting at the current context and going upward\"\n        for d in reversed(self.dicts):\n            if key in d:\n                return d[key]\n        raise KeyError(key)",
+    "token_count": 76,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.context.BaseContext.__getitem__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 28,
+     "rerank_score": -7.2322187423706055,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/manager.py:157-164",
+    "content": "# django/db/models/manager.py:157-164  (django.db.models.manager.BaseManager.all)\nclass BaseManager:\n    # To retain order, track each time a Manager instance is created.\n    def all(self):\n        # We can't proxy this method through the `QuerySet` like we do for the\n        # rest of the `QuerySet` methods. This is because `QuerySet.all()`\n        # works by creating a \"copy\" of the current queryset and in making said\n        # copy, all the cached `prefetch_related` lookups are lost. See the\n        # implementation of `RelatedManager.get_queryset()` for a better\n        # understanding of how this comes into play.\n        return self.get_queryset()",
+    "token_count": 157,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.manager.BaseManager.all"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 27,
+     "rerank_score": -7.262645244598389,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 157
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/queries/tests.py:437-443",
+    "content": "# tests/queries/tests.py:437-443  (tests.queries.tests.Queries1Tests.test_get_clears_ordering)\nclass Queries1Tests(TestCase):\n    def test_get_clears_ordering(self):\n        \"\"\"\n        get() should clear ordering for optimization purposes.\n        \"\"\"\n        with CaptureQueriesContext(connection) as captured_queries:\n            Author.objects.order_by(\"name\").get(pk=self.a1.pk)\n        self.assertNotIn(\"order by\", captured_queries[0][\"sql\"].lower())",
+    "token_count": 104,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.queries.tests.Queries1Tests.test_get_clears_ordering"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 26,
+     "rerank_score": -7.264495372772217,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 104
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/compiler.py:1532-1596",
+    "content": "# django/db/models/sql/compiler.py:1532-1596  (django.db.models.sql.compiler.SQLCompiler.execute_sql)\nclass SQLCompiler:\n    # Multiline ordering SQL clause may appear from RawSQL.\n    def execute_sql(\n        self, result_type=MULTI, chunked_fetch=False, chunk_size=GET_ITERATOR_CHUNK_SIZE\n    ):\n        \"\"\"\n        Run the query against the database and return the result(s). The\n        return value is a single data item if result_type is SINGLE, or an\n        iterator over the results if the result_type is MULTI.\n\n        result_type is either MULTI (use fetchmany() to retrieve all rows),\n        SINGLE (only retrieve a single row), or None. In this last case, the\n        cursor is returned if any query is executed, since it's used by\n        subclasses such as InsertQuery). It's possible, however, that no query\n        is needed, as the filters describe an empty set. In that case, None is\n        returned, to avoid any unnecessary database interaction.\n        \"\"\"\n        result_type = result_type or NO_RESULTS\n        try:\n            sql, params = self.as_sql()\n            if not sql:\n                raise EmptyResultSet\n        except EmptyResultSet:\n            if result_type == MULTI:\n                return iter([])\n            else:\n                return\n        if chunked_fetch:\n            cursor = self.connection.chunked_cursor()\n        else:\n            cursor = self.connection.cursor()\n        try:\n            cursor.execute(sql, params)\n        except Exception:\n            # Might fail for server-side cursors (e.g. connection closed)\n            cursor.close()\n            raise\n\n        if result_type == CURSOR:\n            # Give the caller the cursor to process and close.\n            return cursor\n        if result_type == SINGLE:\n            try:\n                val = cursor.fetchone()\n                if val:\n                    return val[0 : self.col_count]\n                return val\n            finally:\n                # done with the cursor\n                cursor.close()\n        if result_type == NO_RESULTS:\n            cursor.close()\n            return\n\n        result = cursor_iter(\n            cursor,\n            self.connection.features.empty_fetchmany_value,\n            self.col_count if self.has_extra_select else None,\n            chunk_size,\n        )\n        if not chunked_fetch or not self.connection.features.can_use_chunked_reads:\n            # If we are using non-chunked reads, we return the same data\n            # structure as normally, but ensure it is all read into memory\n            # before going any further. Use chunked_fetch if requested,\n            # unless the database doesn't support it.\n            return list(result)\n        return result",
+    "token_count": 542,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.compiler.SQLCompiler.execute_sql"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 20,
+     "rerank_score": -7.294552326202393,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 542
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context.py:92-96",
+    "content": "# django/template/context.py:92-96  (django.template.context.BaseContext.get)\nclass BaseContext:\n    def get(self, key, otherwise=None):\n        for d in reversed(self.dicts):\n            if key in d:\n                return d[key]\n        return otherwise",
+    "token_count": 57,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.context.BaseContext.get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 13,
+     "rerank_score": -7.323592185974121,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/compiler.py:1106-1141",
+    "content": "# django/db/models/sql/compiler.py:1106-1141  (django.db.models.sql.compiler.SQLCompiler.get_from_clause)\nclass SQLCompiler:\n    # Multiline ordering SQL clause may appear from RawSQL.\n    def get_from_clause(self):\n        \"\"\"\n        Return a list of strings that are joined together to go after the\n        \"FROM\" part of the query, as well as a list any extra parameters that\n        need to be included. Subclasses, can override this to create a\n        from-clause via a \"select\".\n\n        This should only be called after any SQL construction methods that\n        might change the tables that are needed. This means the select columns,\n        ordering, and distinct must be done first.\n        \"\"\"\n        result = []\n        params = []\n        for alias in tuple(self.query.alias_map):\n            if not self.query.alias_refcount[alias]:\n                continue\n            try:\n                from_clause = self.query.alias_map[alias]\n            except KeyError:\n                # Extra tables can end up in self.tables, but not in the\n                # alias_map if they aren't in a join. That's OK. We skip them.\n                continue\n            clause_sql, clause_params = self.compile(from_clause)\n            result.append(clause_sql)\n            params.extend(clause_params)\n        for t in self.query.extra_tables:\n            alias, _ = self.query.table_alias(t)\n            # Only add the alias if it's not already present (the table_alias()\n            # call increments the refcount, so an alias refcount of one means\n            # this is the only reference).\n            if (\n                alias not in self.query.alias_map\n                or self.query.alias_refcount[alias] == 1\n            ):\n                result.append(\", %s\" % self.quote_name_unless_alias(alias))\n        return result, params",
+    "token_count": 381,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.compiler.SQLCompiler.get_from_clause"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 25,
+     "rerank_score": -7.383577823638916,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 381
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:2439-2507#part1of2",
+    "content": "# django/db/models/query.py:2439-2507#part1of2  (django.db.models.query.prefetch_one_level)\ndef prefetch_one_level(instances, prefetcher, lookup, level):\n    \"\"\"\n    Helper function for prefetch_related_objects().\n\n    Run prefetches on all instances using the prefetcher object,\n    assigning results to relevant caches in instance.\n\n    Return the prefetched objects along with any additional prefetches that\n    must be done due to prefetch_related lookups found from default managers.\n    \"\"\"\n    # prefetcher must have a method get_prefetch_queryset() which takes a list\n    # of instances, and returns a tuple:\n\n    # (queryset of instances of self.model that are related to passed in instances,\n    #  callable that gets value to be matched for returned instances,\n    #  callable that gets value to be matched for passed in instances,\n    #  boolean that is True for singly related objects,\n    #  cache or field name to assign to,\n    #  boolean that is True when the previous argument is a cache name vs a field name).\n\n    # The 'values to be matched' must be hashable as they will be used\n    # in a dictionary.\n\n    (\n        rel_qs,\n        rel_obj_attr,\n        instance_attr,\n        single,\n        cache_name,\n        is_descriptor,\n    ) = prefetcher.get_prefetch_queryset(instances, lookup.get_current_queryset(level))\n    # We have to handle the possibility that the QuerySet we just got back\n    # contains some prefetch_related lookups. We don't want to trigger the\n    # prefetch_related functionality by evaluating the query. Rather, we need\n    # to merge in the prefetch_related lookups.\n    # Copy the lookups in case it is a Prefetch object which could be reused\n    # later (happens in nested prefetch_related).\n    additional_lookups = [\n        copy.copy(additional_lookup)\n        for additional_lookup in getattr(rel_qs, \"_prefetch_related_lookups\", ())\n    ]\n    if additional_lookups:\n        # Don't need to clone because the manager should have given us a fresh\n        # instance, so we access an internal instead of using public interface\n        # for performance reasons.\n        rel_qs._prefetch_related_lookups = ()\n\n    all_related_objects = list(rel_qs)\n\n    rel_obj_cache = {}\n    for rel_obj in all_related_objects:\n        rel_attr_val = rel_obj_attr(rel_obj)\n        rel_obj_cache.setdefault(rel_attr_val, []).append(rel_obj)\n\n    to_attr, as_attr = lookup.get_current_to_attr(level)\n    # Make sure `to_attr` does not conflict with a field.\n    if as_attr and instances:\n        # We assume that objects retrieved are homogeneous (which is the premise\n        # of prefetch_related), so what applies to first object applies to all.\n        model = instances[0].__class__\n        try:\n            model._meta.get_field(to_attr)\n        except exceptions.FieldDoesNotExist:\n            pass\n        else:\n            msg = \"to_attr={} conflicts with a field on the {} model.\"\n            raise ValueError(msg.format(to_attr, model.__name__))\n\n    # Whether or not we're prefetching the last part of the lookup.\n    leaf = len(lookup.prefetch_through.split(LOOKUP_SEP)) - 1 == level",
+    "token_count": 691,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.prefetch_one_level"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 15,
+     "rerank_score": -7.461355209350586,
+     "bm25_rank": 6,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 691
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_utils/tests.py:412-416",
+    "content": "# tests/test_utils/tests.py:412-416  (tests.test_utils.tests.CaptureQueriesContextManagerTests.test_within)\nclass CaptureQueriesContextManagerTests(TestCase):\n    def test_within(self):\n        with CaptureQueriesContext(connection) as captured_queries:\n            Person.objects.get(pk=self.person_pk)\n            self.assertEqual(len(captured_queries), 1)\n            self.assertIn(self.person_pk, captured_queries[0][\"sql\"])",
+    "token_count": 88,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_utils.tests.CaptureQueriesContextManagerTests.test_within"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 45,
+     "rerank_score": -7.610953330993652,
+     "bm25_rank": null,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 88
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/utils.py:719-720",
+    "content": "# django/test/utils.py:719-720  (django.test.utils.CaptureQueriesContext.__getitem__)\nclass CaptureQueriesContext:\n    def __getitem__(self, index):\n        return self.captured_queries[index]",
+    "token_count": 47,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.utils.CaptureQueriesContext.__getitem__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 11,
+     "rerank_score": -7.689583778381348,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/utils.py:100-102",
+    "content": "# django/db/backends/utils.py:100-102  (django.db.backends.utils.CursorDebugWrapper.execute)\nclass CursorDebugWrapper(CursorWrapper):\n    # XXX callproc isn't instrumented at this time.\n\n    def execute(self, sql, params=None):\n        with self.debug_sql(sql, params, use_last_executed_query=True):\n            return super().execute(sql, params)",
+    "token_count": 82,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.utils.CursorDebugWrapper.execute"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 40,
+     "rerank_score": -7.724950790405273,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12997,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "django/db/models/query.py:294-1932",
+    "django/db/models/sql/compiler.py:95-162#part1of2",
+    "django/test/utils.py:716-717",
+    "django/test/utils.py:725-727",
+    "django/template/base.py:867-942",
+    "tests/test_utils/tests.py:402-410",
+    "tests/expressions/tests.py:1202-1217",
+    "tests/foreign_object/tests.py:592-605",
+    "django/db/transaction.py:143-174",
+    "django/db/backends/utils.py:108-143",
+    "django/templatetags/i18n.py:358-453",
+    "tests/expressions/tests.py:404-411",
+    "django/template/context_processors.py:17-33"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     850.634823
+    ],
+    "L_embed_query": [
+     220.053668
+    ],
+    "L_dense": [
+     57.847678
+    ],
+    "L_rrf": [
+     0.180691
+    ],
+    "L_rerank": [
+     25758.363369
+    ],
+    "L_retrieve": [
+     27000.414098
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12997,
+   "prompt_tokens": 13270,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13283,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/template/base.py:1-91  (django.template.base)\n\"\"\"\nThis is the Django template system.\n\nHow it works:\n\nThe Lexer.tokenize() method converts a template string (i.e., a string\ncontaining markup with custom template tags) to tokens, which can be either\nplain text (TokenType.TEXT), variables (TokenType.VAR), or block statements\n(TokenType.BLOCK).\n\nThe Parser() class takes a list of tokens in its constructor, and its parse()\nmethod returns a compiled template -- which is, under the hood, a list of\nNode objects.\n\nEach Node is responsible for creating some sort of output -- e.g. simple text\n(TextNode), variable values in a given context (VariableNode), results of basic\nlogic (IfNode), results of looping (ForNode), or anything else. The core Node\ntypes are TextNode, VariableNode, IfNode and ForNode, but plugin modules can\ndefine their own custom node types.\n\nEach Node has a render() method, which takes a Context and returns a string of\nthe rendered node. For example, the render() method of a Variable Node returns\nthe variable's value as a string. The render() method of a ForNode returns the\nrendered output of whatever was inside the loop, recursively.\n\nThe Template class is a convenient wrapper that takes care of template\ncompilation and rendering.\n\nUsage:\n\nThe only thing you should ever use directly in this file is the Template class.\nCreate a compiled template object with a template_string, then call render()\nwith a context. In the compilation stage, the TemplateSyntaxError exception\nwill be raised if the template doesn't have proper syntax.\n\nSample code:\n\n>>> from django import template\n>>> s = '<html>{% if test %}<h1>{{ varvalue }}</h1>{% endif %}</html>'\n>>> t = template.Template(s)\n\n(t is now a compiled template, and its render() method can be called multiple\ntimes with multiple contexts)\n\n>>> c = template.Context({'test':True, 'varvalue': 'Hello'})\n>>> t.render(c)\n'<html><h1>Hello</h1></html>'\n>>> c = template.Context({'test':False, 'varvalue': 'Hello'})\n>>> t.render(c)\n'<html></html>'\n\"\"\"\n\nimport inspect\nimport logging\nimport re\nfrom enum import Enum\n\nfrom django.template.context import BaseContext\nfrom django.utils.formats import localize\nfrom django.utils.html import conditional_escape, escape\nfrom django.utils.regex_helper import _lazy_re_compile\nfrom django.utils.safestring import SafeData, SafeString, mark_safe\nfrom django.utils.text import get_text_list, smart_split, unescape_string_literal\nfrom django.utils.timezone import template_localtime\nfrom django.utils.translation import gettext_lazy, pgettext_lazy\n\nfrom .exceptions import TemplateSyntaxError\n\n# template syntax constants\nFILTER_SEPARATOR = \"|\"\nFILTER_ARGUMENT_SEPARATOR = \":\"\nVARIABLE_ATTRIBUTE_SEPARATOR = \".\"\nBLOCK_TAG_START = \"{%\"\nBLOCK_TAG_END = \"%}\"\nVARIABLE_TAG_START = \"{{\"\nVARIABLE_TAG_END = \"}}\"\nCOMMENT_TAG_START = \"{#\"\nCOMMENT_TAG_END = \"#}\"\nSINGLE_BRACE_START = \"{\"\nSINGLE_BRACE_END = \"}\"\n\n# what to report as the origin for templates that come from non-loader sources\n# (e.g. strings)\nUNKNOWN_SOURCE = \"<unknown source>\"\n\n# Match BLOCK_TAG_*, VARIABLE_TAG_*, and COMMENT_TAG_* tags and capture the\n# entire tag, including start/end delimiters. Using re.compile() is faster\n# than instantiating SimpleLazyObject with _lazy_re_compile().\ntag_re = re.compile(r\"({%.*?%}|{{.*?}}|{#.*?#})\")\n\nlogger = logging.getLogger(\"django.template\")\n\n# django/template/context_processors.py:1-14  (django.template.context_processors)\n\"\"\"\nA set of request processors that return dictionaries to be merged into a\ntemplate context. Each function takes the request object as its only parameter\nand returns a dictionary to add to the context.\n\nThese are referenced from the 'context_processors' option of the configuration\nof a DjangoTemplates backend and used by RequestContext.\n\"\"\"\n\nimport itertools\n\nfrom django.conf import settings\nfrom django.middleware.csrf import get_token\nfrom django.utils.functional import SimpleLazyObject, lazy\n\n# django/db/models/query.py:1425-1430  (django.db.models.query.QuerySet.all)\nclass QuerySet(AltersData):\n    def all(self):\n        \"\"\"\n        Return a new QuerySet that is a copy of the current one. This allows a\n        QuerySet to proxy for a model manager in some cases.\n        \"\"\"\n        return self._chain()\n\n# tests/custom_managers/models.py:1-13  (tests.custom_managers.models)\n\"\"\"\nGiving models a custom manager\n\nYou can use a custom ``Manager`` in a particular model by extending the base\n``Manager`` class and instantiating your custom ``Manager`` in your model.\n\nThere are two reasons you might want to customize a ``Manager``: to add extra\n``Manager`` methods, and/or to modify the initial ``QuerySet`` the ``Manager``\nreturns.\n\"\"\"\n\nfrom django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation\nfrom django.db import models\n\n# django/db/backends/base/operations.py:16-500  (django.db.backends.base.operations.BaseDatabaseOperations)\nclass BaseDatabaseOperations:\n    \"\"\"\n    Encapsulate backend-specific differences, such as the way a backend\n    performs ordering or calculates the ID of a recently-inserted row.\n    \"\"\"\n\n    compiler_module = \"django.db.models.sql.compiler\"\n\n    # Integer field safe ranges by `internal_type` as documented\n    # in docs/ref/models/fields.txt.\n    integer_field_ranges = {\n        \"SmallIntegerField\": (-32768, 32767),\n        \"IntegerField\": (-2147483648, 2147483647),\n        \"BigIntegerField\": (-9223372036854775808, 9223372036854775807),\n        \"PositiveBigIntegerField\": (0, 9223372036854775807),\n        \"PositiveSmallIntegerField\": (0, 32767),\n        \"PositiveIntegerField\": (0, 2147483647),\n        \"SmallAutoField\": (-32768, 32767),\n        \"AutoField\": (-2147483648, 2147483647),\n        \"BigAutoField\": (-9223372036854775808, 9223372036854775807),\n    }\n    set_operators = {\n        \"union\": \"UNION\",\n        \"intersection\": \"INTERSECT\",\n        \"difference\": \"EXCEPT\",\n    }\n    # Mapping of Field.get_internal_type() (typically the model field's class\n    # name) to the data type to use for the Cast() function, if different from\n    # DatabaseWrapper.data_types.\n    cast_data_types = {}\n    # CharField data type if the max_length argument isn't provided.\n    cast_char_field_without_max_length = None\n\n    # Start and end points for window expressions.\n    PRECEDING = \"PRECEDING\"\n    FOLLOWING = \"FOLLOWING\"\n    UNBOUNDED_PRECEDING = \"UNBOUNDED \" + PRECEDING\n    UNBOUNDED_FOLLOWING = \"UNBOUNDED \" + FOLLOWING\n    CURRENT_ROW = \"CURRENT ROW\"\n\n    # Prefix for EXPLAIN queries, or None EXPLAIN isn't supported.\n    explain_prefix = None\n\n    def __init__(self, connection):\n        self.connection = connection\n        self._cache = None\n\n    def autoinc_sql(self, table, column):\n        \"\"\"\n        Return any SQL needed to support auto-incrementing primary keys, or\n        None if no SQL is necessary.\n\n        This SQL is executed when a table is created.\n        \"\"\"\n        return None\n\n    def bulk_batch_size(self, fields, objs):\n        \"\"\"\n        Return the maximum allowed batch size for the backend. The fields\n        are the fields going to be inserted in the batch, the objs contains\n        all the objects to be inserted.\n        \"\"\"\n        return len(objs)\n\n    def format_for_duration_arithmetic(self, sql):\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"format_for_duration_arithmetic() method.\"\n        )\n\n    def cache_key_culling_sql(self):\n        \"\"\"\n        Return an SQL query that retrieves the first cache key greater than the\n        n smallest.\n\n        This is used by the 'db' cache backend to determine where to start\n        culling.\n        \"\"\"\n        cache_key = self.quote_name(\"cache_key\")\n        return f\"SELECT {cache_key} FROM %s ORDER BY {cache_key} LIMIT 1 OFFSET %%s\"\n\n    def unification_cast_sql(self, output_field):\n        \"\"\"\n        Given a field instance, return the SQL that casts the result of a union\n        to that type. The resulting string should contain a '%s' placeholder\n        for the expression being cast.\n        \"\"\"\n        return \"%s\"\n\n    def date_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        extracts a value from the given date field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_extract_sql() \"\n            \"method\"\n        )\n\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        truncates the given date or datetime field field_name to a date object\n        with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_trunc_sql() \"\n            \"method.\"\n        )\n\n    def datetime_cast_date_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to date value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_date_sql() method.\"\n        )\n\n    def datetime_cast_time_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to time value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_time_sql() method\"\n        )\n\n    def datetime_extract_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that extracts a value from the given\n        datetime field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_extract_sql() \"\n            \"method\"\n        )\n\n    def datetime_trunc_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that truncates the given datetime field\n        field_name to a datetime object with only the given specificity.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_trunc_sql() \"\n            \"method\"\n        )\n\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\n        that truncates the given time or datetime field field_name to a time\n        object with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a time_trunc_sql() method\"\n        )\n\n    def time_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute', or 'second', return the SQL\n        that extracts a value from the given time field field_name.\n        \"\"\"\n        return self.date_extract_sql(lookup_type, sql, params)\n\n    def deferrable_sql(self):\n        \"\"\"\n        Return the SQL to make a constraint \"initially deferred\" during a\n        CREATE TABLE statement.\n        \"\"\"\n        return \"\"\n\n    def distinct_sql(self, fields, params):\n        \"\"\"\n        Return an SQL DISTINCT clause which removes duplicate rows from the\n        result set. If any fields are given, only check the given fields for\n        duplicates.\n        \"\"\"\n        if fields:\n            raise NotSupportedError(\n                \"DISTINCT ON fields is not supported by this database backend\"\n            )\n        else:\n            return [\"DISTINCT\"], []\n\n    def fetch_returned_insert_columns(self, cursor, returning_params):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT...RETURNING\n        statement into a table, return the newly created data.\n        \"\"\"\n        return cursor.fetchone()\n\n    def field_cast_sql(self, db_type, internal_type):\n        \"\"\"\n        Given a column type (e.g. 'BLOB', 'VARCHAR') and an internal type\n        (e.g. 'GenericIPAddressField'), return the SQL to cast it before using\n        it in a WHERE statement. The resulting string should contain a '%s'\n        placeholder for the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def force_no_ordering(self):\n        \"\"\"\n        Return a list used in the \"ORDER BY\" clause to force no ordering at\n        all. Return an empty list to include nothing in the ordering.\n        \"\"\"\n        return []\n\n    def for_update_sql(self, nowait=False, skip_locked=False, of=(), no_key=False):\n        \"\"\"\n        Return the FOR UPDATE SQL clause to lock rows for an update operation.\n        \"\"\"\n        return \"FOR%s UPDATE%s%s%s\" % (\n            \" NO KEY\" if no_key else \"\",\n            \" OF %s\" % \", \".join(of) if of else \"\",\n            \" NOWAIT\" if nowait else \"\",\n            \" SKIP LOCKED\" if skip_locked else \"\",\n        )\n\n    def _get_limit_offset_params(self, low_mark, high_mark):\n        offset = low_mark or 0\n        if high_mark is not None:\n            return (high_mark - offset), offset\n        elif offset:\n            return self.connection.ops.no_limit_value(), offset\n        return None, offset\n\n    def limit_offset_sql(self, low_mark, high_mark):\n        \"\"\"Return LIMIT/OFFSET SQL clause.\"\"\"\n        limit, offset = self._get_limit_offset_params(low_mark, high_mark)\n        return \" \".join(\n            sql\n            for sql in (\n                (\"LIMIT %d\" % limit) if limit else None,\n                (\"OFFSET %d\" % offset) if offset else None,\n            )\n            if sql\n        )\n\n    def last_executed_query(self, cursor, sql, params):\n        \"\"\"\n        Return a string of the query last executed by the given cursor, with\n        placeholders replaced with actual values.\n\n        `sql` is the raw query containing placeholders and `params` is the\n        sequence of parameters. These are used by default, but this method\n        exists for database backends to provide a better implementation\n        according to their own quoting schemes.\n        \"\"\"\n\n        # Convert params to contain string values.\n        def to_string(s):\n            return force_str(s, strings_only=True, errors=\"replace\")\n\n        if isinstance(params, (list, tuple)):\n            u_params = tuple(to_string(val) for val in params)\n        elif params is None:\n            u_params = ()\n        else:\n            u_params = {to_string(k): to_string(v) for k, v in params.items()}\n\n        return \"QUERY = %r - PARAMS = %r\" % (sql, u_params)\n\n    def last_insert_id(self, cursor, table_name, pk_name):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT statement into\n        a table that has an auto-incrementing ID, return the newly created ID.\n\n        `pk_name` is the name of the primary-key column.\n        \"\"\"\n        return cursor.lastrowid\n\n    def lookup_cast(self, lookup_type, internal_type=None):\n        \"\"\"\n        Return the string to use in a query when performing lookups\n        (\"contains\", \"like\", etc.). It should contain a '%s' placeholder for\n        the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def max_in_list_size(self):\n        \"\"\"\n        Return the maximum number of items that can be passed in a single 'IN'\n        list condition, or None if the backend does not impose a limit.\n        \"\"\"\n        return None\n\n    def max_name_length(self):\n        \"\"\"\n        Return the maximum length of table and column names, or None if there\n        is no limit.\n        \"\"\"\n        return None\n\n    def no_limit_value(self):\n        \"\"\"\n        Return the value to use for the LIMIT when we are wanting \"LIMIT\n        infinity\". Return None if the limit clause can be omitted in this case.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a no_limit_value() method\"\n        )\n\n    def pk_default_value(self):\n        \"\"\"\n        Return the value to use during an INSERT statement to specify that\n        the field should use its default value.\n        \"\"\"\n        return \"DEFAULT\"\n\n    def prepare_sql_script(self, sql):\n        \"\"\"\n        Take an SQL script that may contain multiple lines and return a list\n        of statements to feed to successive cursor.execute() calls.\n\n        Since few databases are able to process raw SQL scripts in a single\n        cursor.execute() call and PEP 249 doesn't talk about this use case,\n        the default implementation is conservative.\n        \"\"\"\n        return [\n            sqlparse.format(statement, strip_comments=True)\n            for statement in sqlparse.split(sql)\n            if statement\n        ]\n\n    def process_clob(self, value):\n        \"\"\"\n        Return the value of a CLOB column, for backends that return a locator\n        object that requires additional processing.\n        \"\"\"\n        return value\n\n    def return_insert_columns(self, fields):\n        \"\"\"\n        For backends that support returning columns as part of an insert query,\n        return the SQL and params to append to the INSERT query. The returned\n        fragment should contain a format string to hold the appropriate column.\n        \"\"\"\n        pass\n\n    def compiler(self, compiler_name):\n        \"\"\"\n        Return the SQLCompiler class corresponding to the given name,\n        in the namespace corresponding to the `compiler_module` attribute\n        on this backend.\n        \"\"\"\n        if self._cache is None:\n            self._cache = import_module(self.compiler_module)\n        return getattr(self._cache, compiler_name)\n\n    def quote_name(self, name):\n        \"\"\"\n        Return a quoted version of the given table, index, or column name. Do\n        not quote the given name if it's already been quoted.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a quote_name() method\"\n        )\n\n    def regex_lookup(self, lookup_type):\n        \"\"\"\n        Return the string to use in a query when performing regular expression\n        lookups (using \"regex\" or \"iregex\"). It should contain a '%s'\n        placeholder for the column being searched against.\n\n        If the feature is not supported (or part of it is not supported), raise\n        NotImplementedError.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a regex_lookup() method\"\n        )\n\n    def savepoint_create_sql(self, sid):\n        \"\"\"\n        Return the SQL for starting a new savepoint. Only required if the\n        \"uses_savepoints\" feature is True. The \"sid\" parameter is a string\n        for the savepoint id.\n        \"\"\"\n        return \"SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_commit_sql(self, sid):\n        \"\"\"\n        Return the SQL for committing the given savepoint.\n        \"\"\"\n        return \"RELEASE SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_rollback_sql(self, sid):\n        \"\"\"\n        Return the SQL for rolling back the given savepoint.\n        \"\"\"\n        return \"ROLLBACK TO SAVEPOINT %s\" % self.quote_name(sid)\n\n    def set_time_zone_sql(self):\n        \"\"\"\n        Return the SQL that will set the connection's time zone.\n\n        Return '' if the backend doesn't support time zones.\n        \"\"\"\n        return \"\"\n\n    def sql_flush(self, style, tables, *, reset_sequences=False, allow_cascade=False):\n        \"\"\"\n        Return a list of SQL statements required to remove all data from\n        the given database tables (without actually removing the tables\n        themselves).\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n\n        If `reset_sequences` is True, the list includes SQL statements required\n        to reset the sequences.\n\n        The `allow_cascade` argument determines whether truncation may cascade\n        to tables with foreign keys pointing the tables being truncated.\n        PostgreSQL requires a cascade even if these tables are empty.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations must provide an sql_flush() method\"\n        )\n\n    def execute_sql_flush(self, sql_list):\n        \"\"\"Execute a list of SQL statements to flush the database.\"\"\"\n        with transaction.atomic(\n            using=self.connection.alias,\n            savepoint=self.connection.features.can_rollback_ddl,\n        ):\n            with self.connection.cursor() as cursor:\n                for sql in sql_list:\n                    cursor.execute(sql)\n\n    def sequence_reset_by_name_sql(self, style, sequences):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences\n        passed in `sequences`.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []\n\n    def sequence_reset_sql(self, style, model_list):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences for\n        the given models.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []  # No sequence reset required by default.\n\n    def start_transaction_sql(self):\n        \"\"\"Return the SQL statement required to start a transaction.\"\"\"\n        return \"BEGIN;\"\n\n    def end_transaction_sql(self, success=True):\n        \"\"\"Return the SQL statement required to end a transaction.\"\"\"\n        if not success:\n            return \"ROLLBACK;\"\n        return \"COMMIT;\"\n\n    def tablespace_sql(self, tablespace, inline=False):\n        \"\"\"\n        Return the SQL that will be used in a query to define the tablespace.\n\n        Return '' if the backend doesn't support tablespaces.\n\n        If `inline` is True, append the SQL to a row; otherwise append it to\n        the entire CREATE TABLE or CREATE INDEX statement.\n        \"\"\"\n        return \"\"\n\n    def prep_for_like_query(self, x):\n        \"\"\"Prepare a value for use in a LIKE query.\"\"\"\n        return str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(\"%\", r\"\\%\").replace(\"_\", r\"\\_\")\n\n    # Same as prep_for_like_query(), but called for \"iexact\" matches, which\n    # need not necessarily be implemented using \"LIKE\" in the backend.\n    prep_for_iexact_query = prep_for_like_query\n\n# django/db/models/query.py:1078-1118  (django.db.models.query.QuerySet.in_bulk)\nclass QuerySet(AltersData):\n    def in_bulk(self, id_list=None, *, field_name=\"pk\"):\n        \"\"\"\n        Return a dictionary mapping each of the given IDs to the object with\n        that ID. If `id_list` isn't provided, evaluate the entire QuerySet.\n        \"\"\"\n        if self.query.is_sliced:\n            raise TypeError(\"Cannot use 'limit' or 'offset' with in_bulk().\")\n        opts = self.model._meta\n        unique_fields = [\n            constraint.fields[0]\n            for constraint in opts.total_unique_constraints\n            if len(constraint.fields) == 1\n        ]\n        if (\n            field_name != \"pk\"\n            and not opts.get_field(field_name).unique\n            and field_name not in unique_fields\n            and self.query.distinct_fields != (field_name,)\n        ):\n            raise ValueError(\n                \"in_bulk()'s field_name must be a unique field but %r isn't.\"\n                % field_name\n            )\n        if id_list is not None:\n            if not id_list:\n                return {}\n            filter_key = \"{}__in\".format(field_name)\n            batch_size = connections[self.db].features.max_query_params\n            id_list = tuple(id_list)\n            # If the database has a limit on the number of query parameters\n            # (e.g. SQLite), retrieve objects in batches if necessary.\n            if batch_size and batch_size < len(id_list):\n                qs = ()\n                for offset in range(0, len(id_list), batch_size):\n                    batch = id_list[offset : offset + batch_size]\n                    qs += tuple(self.filter(**{filter_key: batch}).order_by())\n            else:\n                qs = self.filter(**{filter_key: id_list}).order_by()\n        else:\n            qs = self._chain()\n        return {getattr(obj, field_name): obj for obj in qs}\n\n# django/db/models/query.py:599-610  (django.db.models.query.QuerySet.count)\nclass QuerySet(AltersData):\n    def count(self):\n        \"\"\"\n        Perform a SELECT COUNT() and return the number of records as an\n        integer.\n\n        If the QuerySet is already fully cached, return the length of the\n        cached results set to avoid multiple SELECT COUNT(*) calls.\n        \"\"\"\n        if self._result_cache is not None:\n            return len(self._result_cache)\n\n        return self.query.get_count(using=self.db)\n\n# django/db/models/query.py:736-784#part1of2  (django.db.models.query.QuerySet.bulk_create)\nclass QuerySet(AltersData):\n    def bulk_create(\n        self,\n        objs,\n        batch_size=None,\n        ignore_conflicts=False,\n        update_conflicts=False,\n        update_fields=None,\n        unique_fields=None,\n    ):\n        \"\"\"\n        Insert each of the instances into the database. Do *not* call\n        save() on each of the instances, do not send any pre/post_save\n        signals, and do not set the primary key attribute if it is an\n        autoincrement field (except if features.can_return_rows_from_bulk_insert=True).\n        Multi-table models are not supported.\n        \"\"\"\n        # When you bulk insert you don't get the primary keys back (if it's an\n        # autoincrement, except if can_return_rows_from_bulk_insert=True), so\n        # you can't insert into the child tables which references this. There\n        # are two workarounds:\n        # 1) This could be implemented if you didn't have an autoincrement pk\n        # 2) You could do it by doing O(n) normal inserts into the parent\n        #    tables to get the primary keys back and then doing a single bulk\n        #    insert into the childmost table.\n        # We currently set the primary keys on the objects when using\n        # PostgreSQL via the RETURNING ID clause. It should be possible for\n        # Oracle as well, but the semantics for extracting the primary keys is\n        # trickier so it's not done yet.\n        if batch_size is not None and batch_size <= 0:\n            raise ValueError(\"Batch size must be a positive integer.\")\n        # Check that the parents share the same concrete model with the our\n        # model to detect the inheritance pattern ConcreteGrandParent ->\n        # MultiTableParent -> ProxyChild. Simply checking self.model._meta.proxy\n        # would not identify that case as involving multiple tables.\n        for parent in self.model._meta.get_parent_list():\n            if parent._meta.concrete_model is not self.model._meta.concrete_model:\n                raise ValueError(\"Can't bulk create a multi-table inherited model\")\n        if not objs:\n            return objs\n        opts = self.model._meta\n        if unique_fields:\n            # Primary key is allowed in unique_fields.\n            unique_fields = [\n                self.model._meta.get_field(opts.pk.name if name == \"pk\" else name)\n                for name in unique_fields\n            ]\n        if update_fields:\n            update_fields = [self.model._meta.get_field(name) for name in update_fields]\n        on_conflict = self._check_bulk_create_options(\n            ignore_conflicts,\n            update_conflicts,\n            update_fields,\n            unique_fields,\n        )\n        self._for_write = True\n        fields = opts.concrete_fields\n        objs = list(objs)\n        self._prepare_for_bulk_create(objs)\n\n# django/db/models/sql/query.py:307-314  (django.db.models.sql.query.Query.get_meta)\nclass Query(BaseExpression):\n    def get_meta(self):\n        \"\"\"\n        Return the Options instance (the model._meta) from which to start\n        processing. Normally, this is self.model._meta, but it can be changed\n        by subclasses.\n        \"\"\"\n        if self.model:\n            return self.model._meta\n\n# tests/get_earliest_or_latest/models.py:24-24  (tests.get_earliest_or_latest.models)\n# Ticket #23555 - model with an intentionally broken QuerySet.__iter__ method.\n\n# django/db/models/query.py:1890-1902  (django.db.models.query.QuerySet._next_is_sticky)\nclass QuerySet(AltersData):\n    def _next_is_sticky(self):\n        \"\"\"\n        Indicate that the next filter call and the one following that should\n        be treated as a single filter. This is only important when it comes to\n        determining when to reuse tables for many-to-many filters. Required so\n        that we can filter naturally on the results of related managers.\n\n        This doesn't return a clone of the current QuerySet (it returns\n        \"self\"). The method is only used internally and should be immediately\n        followed by a filter() that does create a clone.\n        \"\"\"\n        self._sticky_filter = True\n        return self\n\n# tests/defer/tests.py:113-117  (tests.defer.tests.DeferTests.test_get)\nclass DeferTests(AssertionMixin, TestCase):\n    def test_get(self):\n        # Using defer() and only() with get() is also valid.\n        qs = Primary.objects.all()\n        self.assert_delayed(qs.defer(\"name\").get(pk=self.p1.pk), 1)\n        self.assert_delayed(qs.only(\"name\").get(pk=self.p1.pk), 2)\n\n# django/db/backends/base/features.py:1-2  (django.db.backends.base.features)\nfrom django.db import ProgrammingError\nfrom django.utils.functional import cached_property\n\n# django/db/models/sql/compiler.py:950-998  (django.db.models.sql.compiler.SQLCompiler.get_default_columns)\nclass SQLCompiler:\n    # Multiline ordering SQL clause may appear from RawSQL.\n    def get_default_columns(\n        self, select_mask, start_alias=None, opts=None, from_parent=None\n    ):\n        \"\"\"\n        Compute the default columns for selecting every field in the base\n        model. Will sometimes be called to pull in related models (e.g. via\n        select_related), in which case \"opts\" and \"start_alias\" will be given\n        to provide a starting point for the traversal.\n\n        Return a list of strings, quoted appropriately for use in SQL\n        directly, as well as a set of aliases used in the select statement (if\n        'as_pairs' is True, return a list of (alias, col_name) pairs instead\n        of strings as the first component and None as the second component).\n        \"\"\"\n        result = []\n        if opts is None:\n            if (opts := self.query.get_meta()) is None:\n                return result\n        start_alias = start_alias or self.query.get_initial_alias()\n        # The 'seen_models' is used to optimize checking the needed parent\n        # alias for a given field. This also includes None -> start_alias to\n        # be used by local fields.\n        seen_models = {None: start_alias}\n\n        for field in opts.concrete_fields:\n            model = field.model._meta.concrete_model\n            # A proxy model will have a different model and concrete_model. We\n            # will assign None if the field belongs to this model.\n            if model == opts.model:\n                model = None\n            if (\n                from_parent\n                and model is not None\n                and issubclass(\n                    from_parent._meta.concrete_model, model._meta.concrete_model\n                )\n            ):\n                # Avoid loading data for already loaded parents.\n                # We end up here in the case select_related() resolution\n                # proceeds from parent model to child model. In that case the\n                # parent model data is already present in the SELECT clause,\n                # and we want to avoid reloading the same data again.\n                continue\n            if select_mask and field not in select_mask:\n                continue\n            alias = self.query.join_parent_model(opts, model, start_alias, seen_models)\n            column = field.get_col(alias)\n            result.append(column)\n        return result\n\n# tests/custom_lookups/tests.py:632-634  (tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_lookup)\nclass CustomisedMethodsTests(SimpleTestCase):\n    def test_overridden_get_lookup(self):\n        q = CustomModel.objects.filter(field__lookupfunc_monkeys=3)\n        self.assertIn(\"monkeys()\", str(q.query))\n\n# django/db/models/fields/related_descriptors.py:1-82  (django.db.models.fields.related_descriptors)\n\"\"\"\nAccessors for related objects.\n\nWhen a field defines a relation between two models, each model class provides\nan attribute to access related instances of the other model class (unless the\nreverse accessor has been disabled with related_name='+').\n\nAccessors are implemented as descriptors in order to customize access and\nassignment. This module defines the descriptor classes.\n\nForward accessors follow foreign keys. Reverse accessors trace them back. For\nexample, with the following models::\n\n    class Parent(Model):\n        pass\n\n    class Child(Model):\n        parent = ForeignKey(Parent, related_name='children')\n\n ``child.parent`` is a forward many-to-one relation. ``parent.children`` is a\nreverse many-to-one relation.\n\nThere are three types of relations (many-to-one, one-to-one, and many-to-many)\nand two directions (forward and reverse) for a total of six combinations.\n\n1. Related instance on the forward side of a many-to-one relation:\n   ``ForwardManyToOneDescriptor``.\n\n   Uniqueness of foreign key values is irrelevant to accessing the related\n   instance, making the many-to-one and one-to-one cases identical as far as\n   the descriptor is concerned. The constraint is checked upstream (unicity\n   validation in forms) or downstream (unique indexes in the database).\n\n2. Related instance on the forward side of a one-to-one\n   relation: ``ForwardOneToOneDescriptor``.\n\n   It avoids querying the database when accessing the parent link field in\n   a multi-table inheritance scenario.\n\n3. Related instance on the reverse side of a one-to-one relation:\n   ``ReverseOneToOneDescriptor``.\n\n   One-to-one relations are asymmetrical, despite the apparent symmetry of the\n   name, because they're implemented in the database with a foreign key from\n   one table to another. As a consequence ``ReverseOneToOneDescriptor`` is\n   slightly different from ``ForwardManyToOneDescriptor``.\n\n4. Related objects manager for related instances on the reverse side of a\n   many-to-one relation: ``ReverseManyToOneDescriptor``.\n\n   Unlike the previous two classes, this one provides access to a collection\n   of objects. It returns a manager rather than an instance.\n\n5. Related objects manager for related instances on the forward or reverse\n   sides of a many-to-many relation: ``ManyToManyDescriptor``.\n\n   Many-to-many relations are symmetrical. The syntax of Django models\n   requires declaring them on one side but that's an implementation detail.\n   They could be declared on the other side without any change in behavior.\n   Therefore the forward and reverse descriptors can be the same.\n\n   If you're looking for ``ForwardManyToManyDescriptor`` or\n   ``ReverseManyToManyDescriptor``, use ``ManyToManyDescriptor`` instead.\n\"\"\"\n\nfrom asgiref.sync import sync_to_async\n\nfrom django.core.exceptions import FieldError\nfrom django.db import (\n    DEFAULT_DB_ALIAS,\n    NotSupportedError,\n    connections,\n    router,\n    transaction,\n)\nfrom django.db.models import Q, Window, signals\nfrom django.db.models.functions import RowNumber\nfrom django.db.models.lookups import GreaterThan, LessThanOrEqual\nfrom django.db.models.query import QuerySet\nfrom django.db.models.query_utils import DeferredAttribute\nfrom django.db.models.utils import AltersData, resolve_callables\nfrom django.utils.functional import cached_property\n\n# tests/multiple_database/tests.py:534-605  (tests.multiple_database.tests.QueryTestCase.test_foreign_key_separation)\nclass QueryTestCase(TestCase):\n    def test_foreign_key_separation(self):\n        \"FK fields are constrained to a single database\"\n        # Create a book and author on the default database\n        pro = Book.objects.create(\n            title=\"Pro Django\", published=datetime.date(2008, 12, 16)\n        )\n\n        george = Person.objects.create(name=\"George Vilches\")\n\n        # Create a book and author on the other database\n        dive = Book.objects.using(\"other\").create(\n            title=\"Dive into Python\", published=datetime.date(2009, 5, 4)\n        )\n        chris = Person.objects.using(\"other\").create(name=\"Chris Mills\")\n\n        # Save the author's favorite books\n        pro.editor = george\n        pro.save()\n\n        dive.editor = chris\n        dive.save()\n\n        pro = Book.objects.using(\"default\").get(title=\"Pro Django\")\n        self.assertEqual(pro.editor.name, \"George Vilches\")\n\n        dive = Book.objects.using(\"other\").get(title=\"Dive into Python\")\n        self.assertEqual(dive.editor.name, \"Chris Mills\")\n\n        # Queries work across foreign key joins\n        self.assertEqual(\n            list(\n                Person.objects.using(\"default\")\n                .filter(edited__title=\"Pro Django\")\n                .values_list(\"name\", flat=True)\n            ),\n            [\"George Vilches\"],\n        )\n        self.assertEqual(\n            list(\n                Person.objects.using(\"other\")\n                .filter(edited__title=\"Pro Django\")\n                .values_list(\"name\", flat=True)\n            ),\n            [],\n        )\n\n        self.assertEqual(\n            list(\n                Person.objects.using(\"default\")\n                .filter(edited__title=\"Dive into Python\")\n                .values_list(\"name\", flat=True)\n            ),\n            [],\n        )\n        self.assertEqual(\n            list(\n                Person.objects.using(\"other\")\n                .filter(edited__title=\"Dive into Python\")\n                .values_list(\"name\", flat=True)\n            ),\n            [\"Chris Mills\"],\n        )\n\n        # Reget the objects to clear caches\n        chris = Person.objects.using(\"other\").get(name=\"Chris Mills\")\n        dive = Book.objects.using(\"other\").get(title=\"Dive into Python\")\n\n        # Retrieve related object by descriptor. Related objects should be\n        # database-bound.\n        self.assertEqual(\n            list(chris.edited.values_list(\"title\", flat=True)), [\"Dive into Python\"]\n        )\n\n# django/db/models/base.py:1028-1054  (django.db.models.base.Model._do_update)\nclass Model(AltersData, metaclass=ModelBase):\n    def _do_update(self, base_qs, using, pk_val, values, update_fields, forced_update):\n        \"\"\"\n        Try to update the model. Return True if the model was updated (if an\n        update query was done and a matching row was found in the DB).\n        \"\"\"\n        filtered = base_qs.filter(pk=pk_val)\n        if not values:\n            # We can end up here when saving a model in inheritance chain where\n            # update_fields doesn't target any field in current model. In that\n            # case we just say the update succeeded. Another case ending up here\n            # is a model with just PK - in that case check that the PK still\n            # exists.\n            return update_fields is not None or filtered.exists()\n        if self._meta.select_on_save and not forced_update:\n            return (\n                filtered.exists()\n                and\n                # It may happen that the object is deleted from the DB right after\n                # this check, causing the subsequent UPDATE to return zero matching\n                # rows. The same result can occur in some rare cases when the\n                # database returns zero despite the UPDATE being executed\n                # successfully (a row is matched and updated). In order to\n                # distinguish these two cases, the object's existence in the\n                # database is again checked for if the UPDATE query returns 0.\n                (filtered._update(values) > 0 or filtered.exists())\n            )\n        return filtered._update(values) > 0\n\n# tests/multiple_database/tests.py:959-989  (tests.multiple_database.tests.QueryTestCase.test_generic_key_separation)\nclass QueryTestCase(TestCase):\n    def test_generic_key_separation(self):\n        \"Generic fields are constrained to a single database\"\n        # Create a book and author on the default database\n        pro = Book.objects.create(\n            title=\"Pro Django\", published=datetime.date(2008, 12, 16)\n        )\n        review1 = Review.objects.create(source=\"Python Monthly\", content_object=pro)\n\n        # Create a book and author on the other database\n        dive = Book.objects.using(\"other\").create(\n            title=\"Dive into Python\", published=datetime.date(2009, 5, 4)\n        )\n\n        review2 = Review.objects.using(\"other\").create(\n            source=\"Python Weekly\", content_object=dive\n        )\n\n        review1 = Review.objects.using(\"default\").get(source=\"Python Monthly\")\n        self.assertEqual(review1.content_object.title, \"Pro Django\")\n\n        review2 = Review.objects.using(\"other\").get(source=\"Python Weekly\")\n        self.assertEqual(review2.content_object.title, \"Dive into Python\")\n\n        # Reget the objects to clear caches\n        dive = Book.objects.using(\"other\").get(title=\"Dive into Python\")\n\n        # Retrieve related object by descriptor. Related objects should be\n        # database-bound.\n        self.assertEqual(\n            list(dive.reviews.values_list(\"source\", flat=True)), [\"Python Weekly\"]\n        )\n\n# tests/custom_lookups/tests.py:640-644  (tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_lookup_chain)\nclass CustomisedMethodsTests(SimpleTestCase):\n    def test_overridden_get_lookup_chain(self):\n        q = CustomModel.objects.filter(\n            field__transformfunc_banana__lookupfunc_elephants=3\n        )\n        self.assertIn(\"elephants()\", str(q.query))\n\n# django/db/models/sql/query.py:1296-1340  (django.db.models.sql.query.Query.build_lookup)\nclass Query(BaseExpression):\n    def build_lookup(self, lookups, lhs, rhs):\n        \"\"\"\n        Try to extract transforms and lookup from given lhs.\n\n        The lhs value is something that works like SQLExpression.\n        The rhs value is what the lookup is going to compare against.\n        The lookups is a list of names to extract using get_lookup()\n        and get_transform().\n        \"\"\"\n        # __exact is the default lookup if one isn't given.\n        *transforms, lookup_name = lookups or [\"exact\"]\n        for name in transforms:\n            lhs = self.try_transform(lhs, name)\n        # First try get_lookup() so that the lookup takes precedence if the lhs\n        # supports both transform and lookup for the name.\n        lookup_class = lhs.get_lookup(lookup_name)\n        if not lookup_class:\n            # A lookup wasn't found. Try to interpret the name as a transform\n            # and do an Exact lookup against it.\n            lhs = self.try_transform(lhs, lookup_name)\n            lookup_name = \"exact\"\n            lookup_class = lhs.get_lookup(lookup_name)\n            if not lookup_class:\n                return\n\n        lookup = lookup_class(lhs, rhs)\n        # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all\n        # uses of None as a query value unless the lookup supports it.\n        if lookup.rhs is None and not lookup.can_use_none_as_rhs:\n            if lookup_name not in (\"exact\", \"iexact\"):\n                raise ValueError(\"Cannot use None as a query value\")\n            return lhs.get_lookup(\"isnull\")(lhs, True)\n\n        # For Oracle '' is equivalent to null. The check must be done at this\n        # stage because join promotion can't be done in the compiler. Using\n        # DEFAULT_DB_ALIAS isn't nice but it's the best that can be done here.\n        # A similar thing is done in is_nullable(), too.\n        if (\n            lookup_name == \"exact\"\n            and lookup.rhs == \"\"\n            and connections[DEFAULT_DB_ALIAS].features.interprets_empty_strings_as_nulls\n        ):\n            return lhs.get_lookup(\"isnull\")(lhs, True)\n\n        return lookup\n\n# tests/admin_docs/models.py:80-84  (tests.admin_docs.models.Person.get_full_name)\nclass Person(models.Model):\n    def get_full_name(self):\n        \"\"\"\n        Get the full name of the person\n        \"\"\"\n        return self._get_full_name()\n\n# django/contrib/admin/views/main.py:495-552  (django.contrib.admin.views.main.ChangeList.get_queryset)\nclass ChangeList:\n    def get_queryset(self, request):\n        # First, we collect all the declared list filters.\n        (\n            self.filter_specs,\n            self.has_filters,\n            remaining_lookup_params,\n            filters_may_have_duplicates,\n            self.has_active_filters,\n        ) = self.get_filters(request)\n        # Then, we let every list filter modify the queryset to its liking.\n        qs = self.root_queryset\n        for filter_spec in self.filter_specs:\n            new_qs = filter_spec.queryset(request, qs)\n            if new_qs is not None:\n                qs = new_qs\n\n        try:\n            # Finally, we apply the remaining lookup parameters from the query\n            # string (i.e. those that haven't already been processed by the\n            # filters).\n            qs = qs.filter(**remaining_lookup_params)\n        except (SuspiciousOperation, ImproperlyConfigured):\n            # Allow certain types of errors to be re-raised as-is so that the\n            # caller can treat them in a special way.\n            raise\n        except Exception as e:\n            # Every other error is caught with a naked except, because we don't\n            # have any other way of validating lookup parameters. They might be\n            # invalid if the keyword arguments are incorrect, or if the values\n            # are not in the correct type, so we might get FieldError,\n            # ValueError, ValidationError, or ?.\n            raise IncorrectLookupParameters(e)\n\n        # Apply search results\n        qs, search_may_have_duplicates = self.model_admin.get_search_results(\n            request,\n            qs,\n            self.query,\n        )\n\n        # Set query string for clearing all filters.\n        self.clear_all_filters_qs = self.get_query_string(\n            new_params=remaining_lookup_params,\n            remove=self.get_filters_params(),\n        )\n        # Remove duplicates from results, if necessary\n        if filters_may_have_duplicates | search_may_have_duplicates:\n            qs = qs.filter(pk=OuterRef(\"pk\"))\n            qs = self.root_queryset.filter(Exists(qs))\n\n        # Set ordering.\n        ordering = self.get_ordering(request, qs)\n        qs = qs.order_by(*ordering)\n\n        if not qs.query.select_related:\n            qs = self.apply_select_related(qs)\n\n        return qs\n\n# tests/custom_lookups/tests.py:646-650  (tests.custom_lookups.tests.CustomisedMethodsTests.test_overridden_get_transform_chain)\nclass CustomisedMethodsTests(SimpleTestCase):\n    def test_overridden_get_transform_chain(self):\n        q = CustomModel.objects.filter(\n            field__transformfunc_banana__transformfunc_pear=3\n        )\n        self.assertIn(\"pear()\", str(q.query))\n\n# django/db/models/query_utils.py:201-204  (django.db.models.query_utils.class_or_instance_method)\nclass class_or_instance_method:\n    \"\"\"\n    Hook used in RegisterLookupMixin to return partial functions depending on\n    the caller type (instance or class of models.Field).\n    \"\"\"\n\n# django/shortcuts.py:92-114  (django.shortcuts.get_list_or_404)\ndef get_list_or_404(klass, *args, **kwargs):\n    \"\"\"\n    Use filter() to return a list of objects, or raise an Http404 exception if\n    the list is empty.\n\n    klass may be a Model, Manager, or QuerySet object. All other passed\n    arguments and keyword arguments are used in the filter() query.\n    \"\"\"\n    queryset = _get_queryset(klass)\n    if not hasattr(queryset, \"filter\"):\n        klass__name = (\n            klass.__name__ if isinstance(klass, type) else klass.__class__.__name__\n        )\n        raise ValueError(\n            \"First argument to get_list_or_404() must be a Model, Manager, or \"\n            \"QuerySet, not '%s'.\" % klass__name\n        )\n    obj_list = list(queryset.filter(*args, **kwargs))\n    if not obj_list:\n        raise Http404(\n            \"No %s matches the given query.\" % queryset.model._meta.object_name\n        )\n    return obj_list\n\n# django/http/request.py:503-520  (django.http.request.QueryDict)\nclass QueryDict(MultiValueDict):\n    \"\"\"\n    A specialized MultiValueDict which represents a query string.\n\n    A QueryDict can be used to represent GET or POST data. It subclasses\n    MultiValueDict since keys in such data can be repeated, for instance\n    in the data from a form with a <select multiple> field.\n\n    By default QueryDicts are immutable, though the copy() method\n    will always return a mutable copy.\n\n    Both keys and values set on this class are converted from the given encoding\n    (DEFAULT_CHARSET by default) to str.\n    \"\"\"\n\n    # These are both reset in __init__, but is specified here at the class\n    # level so that unpickling will have valid values\n    _mutable = True\n    _encoding = None\n\n# django/template/context.py:78-83  (django.template.context.BaseContext.__getitem__)\nclass BaseContext:\n    def __getitem__(self, key):\n        \"Get a variable's value, starting at the current context and going upward\"\n        for d in reversed(self.dicts):\n            if key in d:\n                return d[key]\n        raise KeyError(key)\n\n# django/db/models/manager.py:157-164  (django.db.models.manager.BaseManager.all)\nclass BaseManager:\n    # To retain order, track each time a Manager instance is created.\n    def all(self):\n        # We can't proxy this method through the `QuerySet` like we do for the\n        # rest of the `QuerySet` methods. This is because `QuerySet.all()`\n        # works by creating a \"copy\" of the current queryset and in making said\n        # copy, all the cached `prefetch_related` lookups are lost. See the\n        # implementation of `RelatedManager.get_queryset()` for a better\n        # understanding of how this comes into play.\n        return self.get_queryset()\n\n# tests/queries/tests.py:437-443  (tests.queries.tests.Queries1Tests.test_get_clears_ordering)\nclass Queries1Tests(TestCase):\n    def test_get_clears_ordering(self):\n        \"\"\"\n        get() should clear ordering for optimization purposes.\n        \"\"\"\n        with CaptureQueriesContext(connection) as captured_queries:\n            Author.objects.order_by(\"name\").get(pk=self.a1.pk)\n        self.assertNotIn(\"order by\", captured_queries[0][\"sql\"].lower())\n\n# django/db/models/sql/compiler.py:1532-1596  (django.db.models.sql.compiler.SQLCompiler.execute_sql)\nclass SQLCompiler:\n    # Multiline ordering SQL clause may appear from RawSQL.\n    def execute_sql(\n        self, result_type=MULTI, chunked_fetch=False, chunk_size=GET_ITERATOR_CHUNK_SIZE\n    ):\n        \"\"\"\n        Run the query against the database and return the result(s). The\n        return value is a single data item if result_type is SINGLE, or an\n        iterator over the results if the result_type is MULTI.\n\n        result_type is either MULTI (use fetchmany() to retrieve all rows),\n        SINGLE (only retrieve a single row), or None. In this last case, the\n        cursor is returned if any query is executed, since it's used by\n        subclasses such as InsertQuery). It's possible, however, that no query\n        is needed, as the filters describe an empty set. In that case, None is\n        returned, to avoid any unnecessary database interaction.\n        \"\"\"\n        result_type = result_type or NO_RESULTS\n        try:\n            sql, params = self.as_sql()\n            if not sql:\n                raise EmptyResultSet\n        except EmptyResultSet:\n            if result_type == MULTI:\n                return iter([])\n            else:\n                return\n        if chunked_fetch:\n            cursor = self.connection.chunked_cursor()\n        else:\n            cursor = self.connection.cursor()\n        try:\n            cursor.execute(sql, params)\n        except Exception:\n            # Might fail for server-side cursors (e.g. connection closed)\n            cursor.close()\n            raise\n\n        if result_type == CURSOR:\n            # Give the caller the cursor to process and close.\n            return cursor\n        if result_type == SINGLE:\n            try:\n                val = cursor.fetchone()\n                if val:\n                    return val[0 : self.col_count]\n                return val\n            finally:\n                # done with the cursor\n                cursor.close()\n        if result_type == NO_RESULTS:\n            cursor.close()\n            return\n\n        result = cursor_iter(\n            cursor,\n            self.connection.features.empty_fetchmany_value,\n            self.col_count if self.has_extra_select else None,\n            chunk_size,\n        )\n        if not chunked_fetch or not self.connection.features.can_use_chunked_reads:\n            # If we are using non-chunked reads, we return the same data\n            # structure as normally, but ensure it is all read into memory\n            # before going any further. Use chunked_fetch if requested,\n            # unless the database doesn't support it.\n            return list(result)\n        return result\n\n# django/template/context.py:92-96  (django.template.context.BaseContext.get)\nclass BaseContext:\n    def get(self, key, otherwise=None):\n        for d in reversed(self.dicts):\n            if key in d:\n                return d[key]\n        return otherwise\n\n# django/db/models/sql/compiler.py:1106-1141  (django.db.models.sql.compiler.SQLCompiler.get_from_clause)\nclass SQLCompiler:\n    # Multiline ordering SQL clause may appear from RawSQL.\n    def get_from_clause(self):\n        \"\"\"\n        Return a list of strings that are joined together to go after the\n        \"FROM\" part of the query, as well as a list any extra parameters that\n        need to be included. Subclasses, can override this to create a\n        from-clause via a \"select\".\n\n        This should only be called after any SQL construction methods that\n        might change the tables that are needed. This means the select columns,\n        ordering, and distinct must be done first.\n        \"\"\"\n        result = []\n        params = []\n        for alias in tuple(self.query.alias_map):\n            if not self.query.alias_refcount[alias]:\n                continue\n            try:\n                from_clause = self.query.alias_map[alias]\n            except KeyError:\n                # Extra tables can end up in self.tables, but not in the\n                # alias_map if they aren't in a join. That's OK. We skip them.\n                continue\n            clause_sql, clause_params = self.compile(from_clause)\n            result.append(clause_sql)\n            params.extend(clause_params)\n        for t in self.query.extra_tables:\n            alias, _ = self.query.table_alias(t)\n            # Only add the alias if it's not already present (the table_alias()\n            # call increments the refcount, so an alias refcount of one means\n            # this is the only reference).\n            if (\n                alias not in self.query.alias_map\n                or self.query.alias_refcount[alias] == 1\n            ):\n                result.append(\", %s\" % self.quote_name_unless_alias(alias))\n        return result, params\n\n# django/db/models/query.py:2439-2507#part1of2  (django.db.models.query.prefetch_one_level)\ndef prefetch_one_level(instances, prefetcher, lookup, level):\n    \"\"\"\n    Helper function for prefetch_related_objects().\n\n    Run prefetches on all instances using the prefetcher object,\n    assigning results to relevant caches in instance.\n\n    Return the prefetched objects along with any additional prefetches that\n    must be done due to prefetch_related lookups found from default managers.\n    \"\"\"\n    # prefetcher must have a method get_prefetch_queryset() which takes a list\n    # of instances, and returns a tuple:\n\n    # (queryset of instances of self.model that are related to passed in instances,\n    #  callable that gets value to be matched for returned instances,\n    #  callable that gets value to be matched for passed in instances,\n    #  boolean that is True for singly related objects,\n    #  cache or field name to assign to,\n    #  boolean that is True when the previous argument is a cache name vs a field name).\n\n    # The 'values to be matched' must be hashable as they will be used\n    # in a dictionary.\n\n    (\n        rel_qs,\n        rel_obj_attr,\n        instance_attr,\n        single,\n        cache_name,\n        is_descriptor,\n    ) = prefetcher.get_prefetch_queryset(instances, lookup.get_current_queryset(level))\n    # We have to handle the possibility that the QuerySet we just got back\n    # contains some prefetch_related lookups. We don't want to trigger the\n    # prefetch_related functionality by evaluating the query. Rather, we need\n    # to merge in the prefetch_related lookups.\n    # Copy the lookups in case it is a Prefetch object which could be reused\n    # later (happens in nested prefetch_related).\n    additional_lookups = [\n        copy.copy(additional_lookup)\n        for additional_lookup in getattr(rel_qs, \"_prefetch_related_lookups\", ())\n    ]\n    if additional_lookups:\n        # Don't need to clone because the manager should have given us a fresh\n        # instance, so we access an internal instead of using public interface\n        # for performance reasons.\n        rel_qs._prefetch_related_lookups = ()\n\n    all_related_objects = list(rel_qs)\n\n    rel_obj_cache = {}\n    for rel_obj in all_related_objects:\n        rel_attr_val = rel_obj_attr(rel_obj)\n        rel_obj_cache.setdefault(rel_attr_val, []).append(rel_obj)\n\n    to_attr, as_attr = lookup.get_current_to_attr(level)\n    # Make sure `to_attr` does not conflict with a field.\n    if as_attr and instances:\n        # We assume that objects retrieved are homogeneous (which is the premise\n        # of prefetch_related), so what applies to first object applies to all.\n        model = instances[0].__class__\n        try:\n            model._meta.get_field(to_attr)\n        except exceptions.FieldDoesNotExist:\n            pass\n        else:\n            msg = \"to_attr={} conflicts with a field on the {} model.\"\n            raise ValueError(msg.format(to_attr, model.__name__))\n\n    # Whether or not we're prefetching the last part of the lookup.\n    leaf = len(lookup.prefetch_through.split(LOOKUP_SEP)) - 1 == level\n\n# tests/test_utils/tests.py:412-416  (tests.test_utils.tests.CaptureQueriesContextManagerTests.test_within)\nclass CaptureQueriesContextManagerTests(TestCase):\n    def test_within(self):\n        with CaptureQueriesContext(connection) as captured_queries:\n            Person.objects.get(pk=self.person_pk)\n            self.assertEqual(len(captured_queries), 1)\n            self.assertIn(self.person_pk, captured_queries[0][\"sql\"])\n\n# django/test/utils.py:719-720  (django.test.utils.CaptureQueriesContext.__getitem__)\nclass CaptureQueriesContext:\n    def __getitem__(self, index):\n        return self.captured_queries[index]\n\n# django/db/backends/utils.py:100-102  (django.db.backends.utils.CursorDebugWrapper.execute)\nclass CursorDebugWrapper(CursorWrapper):\n    # XXX callproc isn't instrumented at this time.\n\n    def execute(self, sql, params=None):\n        with self.debug_sql(sql, params, use_last_executed_query=True):\n            return super().execute(sql, params)\n\n## Task\n\nYou are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

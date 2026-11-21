@@ -1,0 +1,91 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "django_t02_017_redirect_url_safety_check",
+  "items": [
+   {
+    "source_id": "django/utils/http.py:259-286",
+    "content": "# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme)\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    \"\"\"\n    Return ``True`` if the url uses an allowed host and a safe scheme.\n\n    Always return ``False`` on an empty url.\n\n    If ``require_https`` is ``True``, only 'https' will be considered a valid\n    scheme, as opposed to 'http' and 'https' with the default, ``False``.\n\n    Note: \"True\" doesn't entail that a URL is \"safe\". It may still be e.g.\n    quoted incorrectly. Ensure to also use django.utils.encoding.iri_to_uri()\n    on the path component of untrusted URLs.\n    \"\"\"\n    if url is not None:\n        url = url.strip()\n    if not url:\n        return False\n    if allowed_hosts is None:\n        allowed_hosts = set()\n    elif isinstance(allowed_hosts, str):\n        allowed_hosts = {allowed_hosts}\n    # Chrome treats \\ completely as / in paths but it could be part of some\n    # basic auth credentials so we need to check both URLs.\n    return _url_has_allowed_host_and_scheme(\n        url, allowed_hosts, require_https=require_https\n    ) and _url_has_allowed_host_and_scheme(\n        url.replace(\"\\\\\", \"/\"), allowed_hosts, require_https=require_https\n    )",
+    "token_count": 295,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.utils.http.url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 295
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:368-395",
+    "content": "# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme)\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    if url.startswith(\"///\"):\n        return False\n    try:\n        url_info = _urlparse(url)\n    except ValueError:  # e.g. invalid IPv6 addresses\n        return False\n    # Forbid URLs like http:///example.com - with a scheme, but without a hostname.\n    # In that URL, example.com is not the hostname but, a path component. However,\n    # Chrome will still consider example.com to be the hostname, so we must not\n    # allow this syntax.\n    if not url_info.netloc and url_info.scheme:\n        return False\n    # Forbid URLs that start with control characters. Some browsers (like\n    # Chrome) ignore quite a few control characters at the start of a\n    # URL and might consider the URL as scheme relative.\n    if unicodedata.category(url[0])[0] == \"C\":\n        return False\n    scheme = url_info.scheme\n    # Consider URLs without a scheme (e.g. //example.com/p) to be http.\n    if not url_info.scheme and url_info.netloc:\n        scheme = \"http\"\n    valid_schemes = [\"https\"] if require_https else [\"http\", \"https\"]\n    return (not url_info.netloc or url_info.netloc in allowed_hosts) and (\n        not scheme or scheme in valid_schemes\n    )",
+    "token_count": 356,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.utils.http._url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 356
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:291-305",
+    "content": "# django/utils/http.py:291-305  (django.utils.http._urlparse)\ndef _urlparse(url, scheme=\"\", allow_fragments=True):\n    \"\"\"Parse a URL into 6 components:\n    <scheme>://<netloc>/<path>;<params>?<query>#<fragment>\n    Return a 6-tuple: (scheme, netloc, path, params, query, fragment).\n    Note that we don't break the components up in smaller bits\n    (e.g. netloc is a single string) and we don't expand % escapes.\"\"\"\n    url, scheme, _coerce_result = _coerce_args(url, scheme)\n    splitresult = _urlsplit(url, scheme, allow_fragments)\n    scheme, netloc, url, query, fragment = splitresult\n    if scheme in uses_params and \";\" in url:\n        url, params = _splitparams(url)\n    else:\n        params = \"\"\n    result = ParseResult(scheme, netloc, url, params, query, fragment)\n    return _coerce_result(result)",
+    "token_count": 224,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.utils.http._urlparse"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 224
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:398-406",
+    "content": "# django/utils/http.py:398-406  (django.utils.http.escape_leading_slashes)\ndef escape_leading_slashes(url):\n    \"\"\"\n    If redirecting to an absolute path (two leading slashes), a slash must be\n    escaped to prevent browsers from handling the path as schemaless and\n    redirecting to another host.\n    \"\"\"\n    if url.startswith(\"//\"):\n        url = \"/%2F{}\".format(url[2:])\n    return url",
+    "token_count": 97,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.utils.http.escape_leading_slashes"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 972,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are debugging why a redirect URL is rejected as unsafe in\ndjango/utils/http.py. Starting from\n`url_has_allowed_host_and_scheme`, trace the real causal pipeline\nthat validates the URL, in the order each stage is actually reached,\nup to and including the call that parses the URL into its components.\nAssume the URL does not begin with three slashes (`///`) - the one\nguard clause before parsing is reached.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.utils.http.url_has_allowed_host_and_scheme\", \"django.utils.http._url_has_allowed_host_and_scheme\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 4,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 972,
+   "prompt_tokens": 1285,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1298,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme)\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    \"\"\"\n    Return ``True`` if the url uses an allowed host and a safe scheme.\n\n    Always return ``False`` on an empty url.\n\n    If ``require_https`` is ``True``, only 'https' will be considered a valid\n    scheme, as opposed to 'http' and 'https' with the default, ``False``.\n\n    Note: \"True\" doesn't entail that a URL is \"safe\". It may still be e.g.\n    quoted incorrectly. Ensure to also use django.utils.encoding.iri_to_uri()\n    on the path component of untrusted URLs.\n    \"\"\"\n    if url is not None:\n        url = url.strip()\n    if not url:\n        return False\n    if allowed_hosts is None:\n        allowed_hosts = set()\n    elif isinstance(allowed_hosts, str):\n        allowed_hosts = {allowed_hosts}\n    # Chrome treats \\ completely as / in paths but it could be part of some\n    # basic auth credentials so we need to check both URLs.\n    return _url_has_allowed_host_and_scheme(\n        url, allowed_hosts, require_https=require_https\n    ) and _url_has_allowed_host_and_scheme(\n        url.replace(\"\\\\\", \"/\"), allowed_hosts, require_https=require_https\n    )\n\n# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme)\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    if url.startswith(\"///\"):\n        return False\n    try:\n        url_info = _urlparse(url)\n    except ValueError:  # e.g. invalid IPv6 addresses\n        return False\n    # Forbid URLs like http:///example.com - with a scheme, but without a hostname.\n    # In that URL, example.com is not the hostname but, a path component. However,\n    # Chrome will still consider example.com to be the hostname, so we must not\n    # allow this syntax.\n    if not url_info.netloc and url_info.scheme:\n        return False\n    # Forbid URLs that start with control characters. Some browsers (like\n    # Chrome) ignore quite a few control characters at the start of a\n    # URL and might consider the URL as scheme relative.\n    if unicodedata.category(url[0])[0] == \"C\":\n        return False\n    scheme = url_info.scheme\n    # Consider URLs without a scheme (e.g. //example.com/p) to be http.\n    if not url_info.scheme and url_info.netloc:\n        scheme = \"http\"\n    valid_schemes = [\"https\"] if require_https else [\"http\", \"https\"]\n    return (not url_info.netloc or url_info.netloc in allowed_hosts) and (\n        not scheme or scheme in valid_schemes\n    )\n\n# django/utils/http.py:291-305  (django.utils.http._urlparse)\ndef _urlparse(url, scheme=\"\", allow_fragments=True):\n    \"\"\"Parse a URL into 6 components:\n    <scheme>://<netloc>/<path>;<params>?<query>#<fragment>\n    Return a 6-tuple: (scheme, netloc, path, params, query, fragment).\n    Note that we don't break the components up in smaller bits\n    (e.g. netloc is a single string) and we don't expand % escapes.\"\"\"\n    url, scheme, _coerce_result = _coerce_args(url, scheme)\n    splitresult = _urlsplit(url, scheme, allow_fragments)\n    scheme, netloc, url, query, fragment = splitresult\n    if scheme in uses_params and \";\" in url:\n        url, params = _splitparams(url)\n    else:\n        params = \"\"\n    result = ParseResult(scheme, netloc, url, params, query, fragment)\n    return _coerce_result(result)\n\n# django/utils/http.py:398-406  (django.utils.http.escape_leading_slashes)\ndef escape_leading_slashes(url):\n    \"\"\"\n    If redirecting to an absolute path (two leading slashes), a slash must be\n    escaped to prevent browsers from handling the path as schemaless and\n    redirecting to another host.\n    \"\"\"\n    if url.startswith(\"//\"):\n        url = \"/%2F{}\".format(url[2:])\n    return url\n\n## Task\n\nYou are debugging why a redirect URL is rejected as unsafe in\ndjango/utils/http.py. Starting from\n`url_has_allowed_host_and_scheme`, trace the real causal pipeline\nthat validates the URL, in the order each stage is actually reached,\nup to and including the call that parses the URL into its components.\nAssume the URL does not begin with three slashes (`///`) - the one\nguard clause before parsing is reached.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.utils.http.url_has_allowed_host_and_scheme\", \"django.utils.http._url_has_allowed_host_and_scheme\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -1,0 +1,93 @@
+{
+ "schema_version": "layer4.task.v1",
+ "task_id": "l4_fwd_fastapi_02",
+ "family": "forward_blast",
+ "corpus": "fastapi",
+ "pinned_commit": "313723494be79d4b24ccaa60e4f6d1f96c150fed",
+ "focal": {
+  "qname": "fastapi.openapi.utils.get_openapi_path",
+  "file": "fastapi/openapi/utils.py",
+  "line": 254,
+  "index_file": "fastapi/openapi/utils.py",
+  "language": "python",
+  "signature": "def get_openapi_path( *, route: routing.APIRoute, operation_ids: Set[str], schema_generator: GenerateJsonSchema, model_name_map: ModelNameMap, field_mapping: Dict[ Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue ], separate_input_output_schemas: bool = True, ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:",
+  "is_async": false,
+  "definition_sha256": "f4acebafb7beb5e5cd1c6927d8af8882677cea5303a7dd0862564e4383583327"
+ },
+ "prompt": "In the fastapi repository, `fastapi.openapi.utils.get_openapi_path` (in `fastapi/openapi/utils.py`) is about to change: get_openapi_path() returns only the path item dict instead of the (path, security_schemes, definitions) tuple, so security schemes and definitions must be collected elsewhere. Which functions and methods of the repository are affected - the code that calls `get_openapi_path` at runtime, directly or through at most 4 calls in between counting the direct call as one, and would have to be reviewed or adapted?",
+ "provenance": {
+  "tracer": "trace_py",
+  "sce_commit": "0bd9b82",
+  "authored_at": "2026-10-17"
+ },
+ "change": {
+  "kind": "return_contract",
+  "description": "get_openapi_path() returns only the path item dict instead of the (path, security_schemes, definitions) tuple, so security schemes and definitions must be collected elsewhere."
+ },
+ "answer_contract": "forward_json_v1",
+ "arm_view": {
+  "seed_symbol": "fastapi.openapi.utils.get_openapi_path",
+  "task_type": "blast",
+  "oracle_symbols": [
+   "fastapi.openapi.utils.get_openapi_path",
+   "fastapi.applications.FastAPI.setup",
+   "fastapi.openapi.utils.get_openapi",
+   "fastapi.applications.FastAPI.openapi"
+  ],
+  "oracle_required_context": [],
+  "root_imports": [],
+  "mask": {
+   "symbols": [],
+   "mode": "none"
+  },
+  "exclude_paths": []
+ },
+ "gold": {
+  "source": "runtime_trace",
+  "direction": "upstream",
+  "affected_symbols": [
+   "fastapi.applications.FastAPI.setup",
+   "fastapi.openapi.utils.get_openapi",
+   "fastapi.applications.FastAPI.openapi"
+  ],
+  "side_effects": null,
+  "tables": null,
+  "trace_manifest": "benchmarks/layer4/manifests/l4_fwd_fastapi_02.json",
+  "trace_command": [
+   "{python}",
+   "-m",
+   "pytest",
+   "-q",
+   "-p",
+   "no:cacheprovider",
+   "tests",
+   "--deselect",
+   "tests/test_fastapi_cli.py::test_fastapi_cli",
+   "--deselect",
+   "tests/test_tutorial/test_custom_request_and_route/test_tutorial002.py::test_exception_handler_body_access",
+   "--ignore",
+   "tests/test_tutorial/test_websockets/test_tutorial003.py",
+   "--ignore",
+   "tests/test_http_connection_injection.py",
+   "--ignore",
+   "tests/test_route_scope.py",
+   "--ignore",
+   "tests/test_ws_dependencies.py",
+   "--ignore",
+   "tests/test_ws_router.py",
+   "--ignore",
+   "tests/test_tutorial/test_websockets"
+  ],
+  "min_count": 1,
+  "max_depth": 4
+ },
+ "validity": {
+  "trace_exit_code": 0,
+  "async_window": false,
+  "contamination": {
+   "arm0_score": null,
+   "flagged": null,
+   "seeds": []
+  }
+ }
+}

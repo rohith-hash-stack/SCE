@@ -1,0 +1,61 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "django_t5_002_send_mail_pipeline",
+  "items": [
+   {
+    "source_id": "django/contrib/auth/models.py:400-402",
+    "content": "# django/contrib/auth/models.py:400-402  (django.contrib.auth.models.AbstractUser.email_user)\n    def email_user(self, subject, message, from_email=None, **kwargs):\n        \"\"\"Send an email to this user.\"\"\"\n        send_mail(subject, message, from_email, [self.email], **kwargs)",
+    "token_count": 69,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.models.AbstractUser.email_user"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/commands/sendtestemail.py:32-46",
+    "content": "# django/core/management/commands/sendtestemail.py:32-46  (django.core.management.commands.sendtestemail.Command.handle)\n    def handle(self, *args, **kwargs):\n        subject = \"Test email from %s on %s\" % (socket.gethostname(), timezone.now())\n\n        send_mail(\n            subject=subject,\n            message=\"If you're reading this, it was successful.\",\n            from_email=None,\n            recipient_list=kwargs[\"email\"],\n        )\n\n        if kwargs[\"managers\"]:\n            mail_managers(subject, \"This email was sent to the site managers.\")\n\n        if kwargs[\"admins\"]:\n            mail_admins(subject, \"This email was sent to the site admins.\")",
+    "token_count": 144,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.core.management.commands.sendtestemail.Command.handle"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 144
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 213,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "What breaks if `django.core.mail.send_mail` changes?",
+   "task_type": "T5_blast_radius",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 2,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 213,
+   "prompt_tokens": 349,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 362,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/auth/models.py:400-402  (django.contrib.auth.models.AbstractUser.email_user)\n    def email_user(self, subject, message, from_email=None, **kwargs):\n        \"\"\"Send an email to this user.\"\"\"\n        send_mail(subject, message, from_email, [self.email], **kwargs)\n\n# django/core/management/commands/sendtestemail.py:32-46  (django.core.management.commands.sendtestemail.Command.handle)\n    def handle(self, *args, **kwargs):\n        subject = \"Test email from %s on %s\" % (socket.gethostname(), timezone.now())\n\n        send_mail(\n            subject=subject,\n            message=\"If you're reading this, it was successful.\",\n            from_email=None,\n            recipient_list=kwargs[\"email\"],\n        )\n\n        if kwargs[\"managers\"]:\n            mail_managers(subject, \"This email was sent to the site managers.\")\n\n        if kwargs[\"admins\"]:\n            mail_admins(subject, \"This email was sent to the site admins.\")\n\n## Task\n\nWhat breaks if `django.core.mail.send_mail` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}
