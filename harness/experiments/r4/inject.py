@@ -6,6 +6,8 @@ answer key.
 - **delete:** the target the prompt names (`must_be_absent`, `path::Qual.name`), as PRISM's dotted symbol (the path
   without its extension, `/` -> `.`, then the qualified name), through `prism_change_context`. If PRISM cannot resolve
   that symbol (an error), `prism_ask` with the target's name and file instead.
+- **rename, signature, move** (Phase E's derived tasks): the target the prompt names, as PRISM's own qualified name
+  (`anchor_qname`, the name the scout read from PRISM's index), through `prism_change_context`; the same fallback.
 - **feature:** the feature's description from the prompt (the text between "Implement the following feature." and
   "Tests for the feature must pass"), first 400 characters, through `prism_ask`.
 
@@ -37,12 +39,12 @@ def feature_question(prompt: str) -> str:
 
 def injected_context(task: dict, layer) -> tuple[str, dict]:
     """(the block to prepend, a record of what was retrieved)."""
-    if task.get("family") == "delete" and task.get("must_be_absent"):
-        sym = dotted(task["must_be_absent"])
+    if (task.get("family") == "delete" and task.get("must_be_absent")) or task.get("derived"):
+        sym = task.get("anchor_qname") or dotted(task["must_be_absent"])
         out = layer.call("prism_change_context", symbol=sym)
         info = {"tool": "prism_change_context", "query": sym}
         if out.lstrip().startswith("error"):
-            f, _, q = task["must_be_absent"].partition("::")
+            f, _, q = (task.get("must_be_absent") or task["anchor"]).partition("::")
             question = f"{q} in {f}"
             info.update(fallback_from=out[:200], tool="prism_ask", query=question)
             out = layer.call("prism_ask", question=question)

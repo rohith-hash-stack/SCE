@@ -168,6 +168,13 @@ def score(task: dict, work: str, env, start_tree: str | None = None) -> dict:
         still = os.path.isfile(path) and q in functions(f, open(path, "rb").read())
         res["target_absent"] = not still
         res["resolved"] = res["resolved"] and not still
+    # Phase E's derived tasks (`r4/derive_tasks.py`): the stated change must also be complete (`r4/derived_checks.py`,
+    # against the gold tree's own counts). Other tasks never carry this key, so their scoring is unchanged.
+    if task.get("derived"):
+        from harness.experiments.r4.derived_checks import check
+        chk = check(task["derived"], work)
+        res["derived_check"] = {"ok": chk["ok"], "remaining": chk["remaining"], "problems": chk["problems"]}
+        res["resolved"] = res["resolved"] and chk["ok"]
     res["fail_to_pass_passed"] = sum(1 for g, s in outcomes.values() if g == "fail_to_pass" and s == "passed")
     res["pass_to_pass_broken"] = sum(1 for g, s in outcomes.values() if g == "pass_to_pass" and s != "passed")
     return res

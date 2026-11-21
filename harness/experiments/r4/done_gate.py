@@ -13,6 +13,7 @@ sites).
 | delete | the target is no longer defined in its file (the scorer's own `must_be_absent` check), and no visible test that passed at the start (3 runs, flaky dropped: `visible_start_pass`) now fails. A test or test file the model deleted does not count |
 | feature | the listed fail-to-pass tests pass and the pass-to-pass tests still pass, with the test files restored to their start version for the check (the model's own versions are put back after) |
 | B | no visible test that passed at the start now fails |
+| rename, signature, move (Phase E, derived) | the stated change is complete (`derived_checks.py`: what is unmet and how many places, never where), and no visible test that passed at the start now fails |
 """
 from __future__ import annotations
 
@@ -198,6 +199,13 @@ class DoneGate:
                     os.makedirs(os.path.dirname(p), exist_ok=True)
                     open(p, "wb").write(data)
 
+    def _derived(self) -> list[str]:
+        """Phase E's derived tasks: the stated change is complete (`derived_checks.py`: what is unmet and how many
+        places, never where), and no visible test that passed at the start now fails."""
+        from harness.experiments.r4.derived_checks import check
+        return check(self.task["derived"], self.work)["problems"] + \
+            self.regressions(self.task.get("visible_start_pass") or {})
+
     # ------------------------------------------------------------------ the check
     def check(self) -> tuple[bool, str]:
         if not self.changed_files():
@@ -214,6 +222,8 @@ class DoneGate:
                 problems = [f"the project does not build: {err}"]
             elif fam == "delete":
                 problems = self._delete()
+            elif self.task.get("derived"):                  # Phase E: rename, signature, move
+                problems = self._derived()
             else:
                 problems = self.regressions(self.task.get("visible_start_pass") or {})
         if not problems:
