@@ -1422,3 +1422,17 @@ arm; sharded by seed; a smoke test first.
   - equal argument values are recorded (`args_match`), not required;
   - the token-count check is unchanged.
 - **The runs are unchanged** (temperature 0.2).
+
+**Smoke test, second attempt (2026-11-21): the full cell ran instead.**
+- **What ran:** shard 1 (seed 42, 80 runs, `reports/r4/phase2_seed42`), started instead of the smoke cell. Same code
+  commit (`ecdf23e0`), tasks and settings: it is a shard of the pre-registered design, not a different experiment.
+- **Its first runs stand in for the smoke test.** The smoke criteria are checked on them before any other shard
+  starts. At 54 of 80 runs (read from its checkpoints, outcomes not analysed):
+  - no infrastructure death;
+  - parse errors 5 of 1,287 turns (0.4%);
+  - INJECTED's retrieval: no error;
+  - every derived run's score records the static check;
+  - the pre-flight passed.
+- **One observation, recorded before any analysis:** the control `r4s-delete-09` (litestar) reached the turn cap in
+  all four arms, where the re-baseline solved it 28 times in 30. The turn logs show steady progress (edits to the
+  tests that use the removed function), not a crash. It is examined after the shard, before shards 2–10.
