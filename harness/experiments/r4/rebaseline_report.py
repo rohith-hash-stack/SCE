@@ -79,6 +79,8 @@ def run_score(task: dict, score: dict, aside: set[str] = frozenset()) -> float:
     share = lambda s: sum(tests.get(k) == "passed" for k in s) / len(s) if s else 1.0
     if task.get("family") == "delete":
         return 0.0 if not score.get("target_absent") else share(p2p)
+    if task.get("derived"):                 # Phase 2's derived tasks: the stated change complete, then the tests
+        return 0.0 if not (score.get("derived_check") or {}).get("ok") else share(f2p) * share(p2p)
     return share(f2p) * share(p2p)
 
 
@@ -184,7 +186,8 @@ def result_dirs(results: str) -> list[str]:
 
 def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
     rows, seen = [], {}
-    paths = sorted(p for d in result_dirs(results) for p in glob.glob(os.path.join(d, "r4s-*__*__*.score.json")))
+    # every run file; only the task file's tasks are kept (Phase 2's derived tasks are `p2-*`, not `r4s-*`)
+    paths = sorted(p for d in result_dirs(results) for p in glob.glob(os.path.join(d, "*__*__*.score.json")))
     for path in paths:
         s = json.load(open(path))
         if s["task"] not in tasks or (seeds and s["seed"] not in seeds):
@@ -219,6 +222,17 @@ ARMS = ("BASELINE", "PRISM", "INJECTED")
 # Holm-corrected over the two. INJECTED against PRISM is reported descriptively.
 COMPARISONS = (("PRISM", "BASELINE"), ("INJECTED", "BASELINE"))
 DESCRIPTIVE = (("INJECTED", "PRISM"),)
+# The designs, chosen by the task file's `design` key (absent: the re-baseline). Phase 2 (AMENDMENTS "Phase 2, 4 arms",
+# pre-registered 2026-11-21): 4 arms, each with PRISM's tools against BASELINE, Holm-corrected over the three; INJECTED
+# and PRISM_ONLY against PRISM descriptively; the same comparisons on the derived tasks and on the controls alone,
+# descriptively.
+DESIGNS = {
+    "rebaseline": {"arms": ARMS, "comparisons": COMPARISONS, "descriptive": DESCRIPTIVE, "subsets": {}},
+    "phase2": {"arms": ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY"),
+               "comparisons": (("PRISM", "BASELINE"), ("INJECTED", "BASELINE"), ("PRISM_ONLY", "BASELINE")),
+               "descriptive": (("INJECTED", "PRISM"), ("PRISM_ONLY", "PRISM")),
+               "subsets": {"derived": lambda t: bool(t.get("derived")), "controls": lambda t: bool(t.get("control"))}},
+}
 
 
 def compare(rows: list[dict], per_task: dict, arm: str, ref: str) -> dict | None:
@@ -263,6 +277,7 @@ def holm(pvalues: dict) -> dict:
 def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root: str = ".") -> dict:
     doc = json.load(open(tasks_path))
     tasks = {t["id"]: t for t in doc["tasks"]}
+    design = DESIGNS[doc.get("design", "rebaseline")]
     aside = set_aside(root, tasks)
     rows = load_runs(results, tasks, seeds)
     for r in rows:
@@ -270,7 +285,7 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
         r["score"] = run_score(t, r["score_doc"])
         r["score_setaside"] = run_score(t, r["score_doc"], aside.get(r["task"], set()))
         r["solved"] = bool(r["score_doc"].get("resolved"))
-    arms = [a for a in ARMS if any(r["arm"] == a for r in rows)]
+    arms = [a for a in design["arms"] if any(r["arm"] == a for r in rows)]
     per_task = {}
     for tid in sorted(tasks):
         cell = {}
@@ -281,15 +296,25 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
                              "score_setaside": st.mean(r["score_setaside"] for r in rs),
                              "solves": sum(r["solved"] for r in rs)}
         per_task[tid] = cell
-    rep = {"runs": len(rows), "arms": arms, "seeds": sorted({r["seed"] for r in rows}), "per_task": per_task}
-    comps = {f"{a} vs {b}": compare(rows, per_task, a, b) for a, b in COMPARISONS if a in arms and b in arms}
+    rep = {"design": doc.get("design", "rebaseline"), "runs": len(rows), "arms": arms,
+           "seeds": sorted({r["seed"] for r in rows}), "per_task": per_task}
+    comps = {f"{a} vs {b}": compare(rows, per_task, a, b) for a, b in design["comparisons"] if a in arms and b in arms}
     adj = holm({k: (v or {}).get("wilcoxon_p") for k, v in comps.items()})
     for k, v in comps.items():
         if v:
             v["wilcoxon_p_holm"] = adj[k]
     rep["primary"] = comps
-    rep["descriptive"] = {f"{a} vs {b}": compare(rows, per_task, a, b) for a, b in DESCRIPTIVE
+    rep["descriptive"] = {f"{a} vs {b}": compare(rows, per_task, a, b) for a, b in design["descriptive"]
                           if a in arms and b in arms}
+    if design["subsets"]:                   # descriptive: the same comparisons on a subset of the tasks
+        rep["subsets"] = {}
+        for name, keep in design["subsets"].items():
+            ids_ = {tid for tid, t in tasks.items() if keep(t)}
+            sub_rows = [r for r in rows if r["task"] in ids_]
+            sub_tasks = {tid: c for tid, c in per_task.items() if tid in ids_}
+            rep["subsets"][name] = {"tasks": len(ids_), **{
+                f"{a} vs {b}": compare(sub_rows, sub_tasks, a, b)
+                for a, b in design["comparisons"] + design["descriptive"] if a in arms and b in arms}}
     rep["solve_rates"] = {arm: {"runs_solved": sum(r["solved"] for r in rows if r["arm"] == arm),
                                 "runs": sum(1 for r in rows if r["arm"] == arm),
                                 "tasks_solved_once": sum(1 for c in per_task.values() if c.get(arm, {}).get("solves"))}
@@ -299,8 +324,8 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
                         for fam in sorted({r["family"] for r in rows})}
     rep["injection"] = injection_summary(results, rows)
     rep["process"] = process(rows, arms)
-    rep["turn_efficiency"] = turn_efficiency(rows, per_task, arms)
-    rep["code_review"] = code_review(rows, arms)
+    rep["turn_efficiency"] = turn_efficiency(rows, per_task, arms, design["comparisons"])
+    rep["code_review"] = code_review(rows, arms, design["comparisons"] + design["descriptive"])
     return rep
 
 
@@ -320,7 +345,7 @@ def injection_summary(results: str, rows: list[dict]) -> dict | None:
             "mean_tokens": st.mean(x.get("tokens") or 0 for x in recs)}
 
 
-def turn_efficiency(rows: list[dict], per_task: dict, arms) -> dict:
+def turn_efficiency(rows: list[dict], per_task: dict, arms, comparisons=COMPARISONS) -> dict:
     """Descriptive (no test): where the turns and the model time go, per arm, per task, and in solved runs."""
     def summary(rs):
         if not rs:
@@ -337,7 +362,7 @@ def turn_efficiency(rows: list[dict], per_task: dict, arms) -> dict:
     out = {"per_arm": {arm: summary([r for r in rows if r["arm"] == arm]) for arm in arms},
            "solved_runs": {arm: summary([r for r in rows if r["arm"] == arm and r["solved"]]) for arm in arms}}
     paired = {}
-    for arm, ref in COMPARISONS:
+    for arm, ref in comparisons:
         if arm not in arms or ref not in arms:
             continue
         per = {}
@@ -353,7 +378,7 @@ def turn_efficiency(rows: list[dict], per_task: dict, arms) -> dict:
                                          "mean_turns_diff": st.mean(v["turns_diff"] for v in per.values()),
                                          "mean_model_seconds_diff": st.mean(v["model_seconds_diff"] for v in per.values())}
     out["paired"] = paired
-    for arm in ("PRISM", "INJECTED"):                     # both arms have the PRISM tools
+    for arm in ("PRISM", "INJECTED", "PRISM_ONLY"):       # the arms with the PRISM tools
         s = _post_prism_summary([r["post_prism"] for r in rows if r["arm"] == arm])
         if s:
             out.setdefault("post_prism_by_arm", {})[arm] = s
@@ -378,7 +403,7 @@ def _post_prism_summary(pr: list[dict]) -> dict | None:
     return None
 
 
-def code_review(rows: list[dict], arms=ARMS) -> dict:
+def code_review(rows: list[dict], arms=ARMS, pairs=COMPARISONS + DESCRIPTIVE) -> dict:
     """The code-review score (`r4/code_review.py`; user, 2026-11-18; descriptive, no test, not part of the primary
     analysis). Per arm, over the runs that changed a source file: the mean of each check where it applies, and of the
     run's review score; the same for solved runs only; and per task, paired arm differences of the mean review score."""
@@ -400,7 +425,7 @@ def code_review(rows: list[dict], arms=ARMS) -> dict:
     out = {"by_arm": {a: summary([r for r in rows if r["arm"] == a]) for a in arms},
            "solved_runs_by_arm": {a: summary([r for r in rows if r["arm"] == a and r.get("solved")]) for a in arms}}
     paired = {}
-    for a, b in COMPARISONS + DESCRIPTIVE:
+    for a, b in pairs:
         per = {}
         for tid in sorted({r["task"] for r in rows}):
             va = [r["_review"]["review_score"] for r in rows if r["task"] == tid and r["arm"] == a and r["_review"]

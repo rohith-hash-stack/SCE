@@ -1322,3 +1322,88 @@ what that run would inherit.
      (`runner.py`/`pilot_run.py`) and runs only under its own pre-registration.
    - **Known wording:** the shared tools' edit-error messages refer to "the line numbers read_file shows". In
      PRISM_ONLY those are `prism_read`'s, which are numbered the same way.
+
+## Phase 2, 4 arms (pre-registered 2026-11-21, before any run of this design)
+
+The user's decisions (2026-11-21): derived tasks; 20 tasks × 10 seeds × 4 arms = 800 runs; PRISM_ONLY as the fourth
+arm; sharded by seed; a smoke test first.
+
+**What is in force for this design:** every change in "Phase 2 changes to what the arms see" above (items 1–7).
+- The C1–C3 harness feedback, for every arm (`--feedback`).
+- PRISM's reference graph, with variable-type tracking and the test-file rule fix.
+- The tools' labelled other uses and the grouped listing.
+- `prism_search` and `prism_read` in every PRISM arm.
+- Otherwise the Phase 1 harness as in the 3-arm re-baseline: native tool calls read by the harness (`--raw-tools`),
+  hygiene and compaction (`--phase1`), the progress ledger, the done gate, turn cap 28, budget 300,000 tokens,
+  devstral-small-2 (`devstral-small-2:24b-instruct-2512-q4_K_M`, Ollama 0.34.0).
+
+**Arms:**
+
+| Arm | Tools | Context |
+|---|---|---|
+| BASELINE | shared tools (`read_file`, `list_dir`, `grep`, `edit_file`, `run_tests`, `done`) + `related_code` | none |
+| PRISM | shared tools + PRISM's 8 tools (`prism_search`, `prism_read` among them) | none |
+| INJECTED | as PRISM | PRISM's change context for the target (derived and delete tasks) or `prism_ask` on the feature description, retrieved before the first turn (`r4/inject.py`) |
+| PRISM_ONLY | as PRISM, without `grep` and `read_file` | none |
+
+**Tasks** (`harness/experiments/r4/phase2/tasks.json`; `TASKS.md`; sha256 `62c83aea7f26…`, in the file):
+- **15 derived:** 5 rename, 5 signature change (a parameter made keyword-only), 5 module move.
+  - Each target is used from 3–10 other files (PRISM's graphs ∪ the graph-coverage benchmark's reading).
+  - Each task was validated in its repository's environment and scored end to end (`derive_scoring_check.py`): the
+    answer key is resolved and accepted by the done gate; the unchanged start is neither.
+- **5 controls:** the 5 tasks of the re-baseline every arm solved most often (`r4s-delete-10`, `-08`, `-09`,
+  `r4s-feature-02`, `r4s-delete-05`), unchanged.
+
+**Seeds:** 42–51, one shard each (`SHARD_ID` 1–10 → seed 41 + `SHARD_ID`), 80 runs per shard, in
+`reports/r4/phase2_seed<SEED>`.
+
+**Primary metric:** each run's score in [0, 1], 1 exactly when the run is resolved.
+- derived task: 0 if the static completeness check fails (`r4/derived_checks.py`), else (fail-to-pass passing /
+  fail-to-pass) × (pass-to-pass passing / pass-to-pass);
+- delete and feature (the controls): as in the re-baseline.
+
+**Primary analysis** (`rebaseline_report`, design `phase2`, chosen by the task file):
+- Per task, the mean score over its 10 seeds in each arm.
+- Three paired comparisons over the 20 tasks, each against BASELINE: PRISM − BASELINE, INJECTED − BASELINE,
+  PRISM_ONLY − BASELINE.
+- The pre-registered test: the Wilcoxon signed-rank test, two-sided, zero differences dropped, at α 0.05,
+  Holm-corrected over the three.
+- Also reported: the mean difference with a 95% bootstrap interval (tasks resampled, 10,000 draws, fixed seed), the
+  paired t-test, the tasks favouring each arm.
+
+**Descriptive (no test):**
+- INJECTED − PRISM and PRISM_ONLY − PRISM.
+- The same comparisons on the 15 derived tasks alone and on the 5 controls alone (`subsets`).
+- Per family.
+- Solve rates and McNemar's exact test on task-seed pairs.
+- Process: infrastructure deaths, parse errors, endings, tokens, PRISM output share, compaction, failed edits.
+- Turn efficiency: `prism_search` and `prism_read` count as PRISM calls.
+- Post-PRISM behaviour, for the three PRISM arms.
+- The code review. Its checks against the developer's change do not apply to derived tasks: the answer key is
+  mechanical, not a commit.
+
+**Readings fixed now:**
+- **What a significant effect means:** a positive PRISM_ONLY − BASELINE means PRISM's tools can stand in for `grep`
+  and `read_file` on these tasks; a negative one, that they cannot (yet).
+- **What the subsets mean:** a positive effect on the derived tasks with none on the controls is the hypothesis
+  Phase 2 was built for. A negative effect on the controls means PRISM costs something on easy tasks.
+
+**Health check, per shard** (as the re-baseline's):
+- **The limits:** at most 2 infrastructure deaths of its 80 runs, and parse errors below 2% of its turns.
+- **On failure:** the cell pushes, reports the shard as failed, and stops.
+
+**Smoke test first** (`kaggle/r4_phase2_smoke_cell.py`):
+- **What runs:** 4 tasks (`p2-rename-02`, `p2-signature-02`, `p2-move-05`, `r4s-delete-05`) × 4 arms × seed 42 =
+  16 runs, in `reports/r4/phase2_smoke`.
+- **What it checks:** that the 4th arm, the new tasks, the generated tests and the static check work on Kaggle.
+- **Its results are not part of the 800 runs.**
+- **It passes when:**
+  - all 16 runs end and are scored;
+  - no infrastructure death;
+  - parse errors below 2% of turns;
+  - every derived run's score records the static check;
+  - INJECTED's retrieval returns no error;
+  - each derived task's environment sets up.
+- **Before any shard:** the results are reported back to the user.
+
+**Fixed for the run:** the code commit and its `src`/`harness` trees are pinned in both cells (`r4/phase2_cell.py`).
