@@ -29,8 +29,9 @@ No model calls. A task states one change and is scored by:
 - the start tree fails the static check and at least one scored test (the generated one at least);
 - no scored test is flaky.
 
-Candidates are tried in a fixed order: the most dependent files first, grep's precision (the share of files with the
-name that use it) lowest first. Per repository, at most `--per-repo` tasks per family.
+Candidates have 3-10 dependent files and at most 30 uses to update (one run of 28 turns can make the whole change),
+and are tried in a fixed order: grep's precision (the share of files with the name that use it) lowest first, then the
+most dependent files. Per repository, at most `--per-repo` tasks per family.
 """
 from __future__ import annotations
 
@@ -49,6 +50,8 @@ from harness.experiments.r4 import derived_checks as DC
 
 FAMILIES = ("rename", "signature", "move")
 MAX_TEST_FILES = 4
+#: the change's size: 3+ dependent files (the decision), at most 10 files and 30 uses to update (28 turns)
+MIN_FILES, MAX_FILES, MAX_USES = 3, 10, 30
 VERBS = {"get": "fetch", "fetch": "retrieve", "make": "build", "build": "construct", "create": "build", "parse": "decode",
          "load": "read", "read": "load", "write": "emit", "check": "verify", "validate": "verify", "is": "check_is",
          "has": "check_has", "to": "convert_to", "from": "build_from", "set": "assign", "add": "append", "remove": "drop",
@@ -169,6 +172,24 @@ def gold_signature(work, c) -> tuple[dict, dict] | None:
                 src = src[:o] + f"{p.arg}=" + src[o:]
             changed[f] = src
     return changed, {"param": p.arg, "max_positional": limit, "required": required}
+
+
+def _outside_bases(work: str, rel: str, qual: str) -> list[str]:
+    """The base classes of a method's class that no repository file defines (a library's `BaseModel`): the method may
+    override one of theirs, which a rename or a signature change would break."""
+    cls = DC.find_def(ast.parse(_read(work, rel)), qual.rsplit(".", 1)[0])
+    out = []
+    for b in getattr(cls, "bases", []):
+        name = b.attr if isinstance(b, ast.Attribute) else b.id if isinstance(b, ast.Name) else \
+            b.value.id if isinstance(b, ast.Subscript) and isinstance(b.value, ast.Name) else None
+        if name in (None, "object"):
+            continue
+        if not _git(work, "grep", "-l", "-E", rf"^\s*class\s+{name}\b", "--", "*.py").stdout.strip():
+            out.append(name)
+    return out
+
+
+NOT_PRODUCT = re.compile(r"(^|/)(examples?|docs?|scripts?|benchmarks?|bench|tools)/")
 
 
 def _qual(c) -> str:
@@ -311,6 +332,10 @@ def build(c: dict, family: str, work: str, env, rev: str) -> dict:
         return {"rejected": "no runnable test file uses it"}
     qual = _qual(c)
     taken = lambda name: bool(_git(work, "grep", "-l", "-w", name, "--").stdout.strip())
+    if c["kind"] == "method":
+        outside = _outside_bases(work, c["file"], qual)
+        if outside:
+            return {"rejected": f"method of a class with an outside base (may override it): {outside}"}
     details: dict = {}
     if family == "rename":
         nn = new_name(c["leaf"], taken)
@@ -435,6 +460,10 @@ def ranked(scout: dict, family: str) -> list[dict]:
         for c in rep["candidates"]:
             if not c["test_dependents"] or len(c["dependents"]) - len(c["test_dependents"]) < 1:
                 continue
+            if NOT_PRODUCT.search(c["file"]):
+                continue                                            # examples, docs, scripts: not the product
+            if not MIN_FILES <= len(c["dependents"]) <= MAX_FILES or sum(c["use_kinds"].values()) > MAX_USES:
+                continue                                            # one run can make the whole change
             if family == "signature" and not (c.get("params") and c.get("positional_calls")):
                 continue
             if family == "signature":
@@ -449,7 +478,8 @@ def ranked(scout: dict, family: str) -> list[dict]:
             if family in ("rename", "move") and "." in _qual(c) and c["kind"] == "function":
                 continue                                            # nested functions
             out.append(c)
-    return sorted(out, key=lambda c: (-len(c["dependents"]), c["grep_precision"] or 1.0, c["repo"], c["qname"]))
+    return sorted(out, key=lambda c: (c["grep_precision"] if c["grep_precision"] is not None else 1.0,
+                                      -len(c["dependents"]), c["repo"], c["qname"]))
 
 
 def main(argv=None) -> int:
@@ -462,7 +492,8 @@ def main(argv=None) -> int:
     p.add_argument("--per-repo", type=int, default=2)
     p.add_argument("--max-attempts", type=int, default=12, help="per family and repository")
     p.add_argument("--turns", type=int, default=28)
-    p.add_argument("--repos", nargs="*", default=None)
+    p.add_argument("--repos", default=None, help="comma-separated, in this order")
+    p.add_argument("--cleanup", action="store_true", help="remove each repository's worktree when done with it")
     p.add_argument("clones", nargs="+")
     a = p.parse_args(argv)
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
@@ -471,7 +502,7 @@ def main(argv=None) -> int:
     want = {k: int(v) for k, v in (w.split("=") for w in a.want)}
     state = json.load(open(a.out)) if os.path.exists(a.out) else {"tasks": [], "attempts": []}
     from harness.experiments.r3.shared_tools import make_env
-    for repo in a.repos or sorted(scout):
+    for repo in (a.repos.split(",") if a.repos else sorted(scout)):
         rev = scout[repo]["rev"]
         need = {f: n for f, n in want.items()
                 if sum(1 for t in state["tasks"] if t["family"] == f) < n
@@ -537,6 +568,9 @@ def main(argv=None) -> int:
                            r["gold_patch"])
                 json.dump(state, open(a.out, "w"), indent=1)
                 print(repo, family, c["qname"], r.get("rejected", "OK"), flush=True)
+        if a.cleanup:
+            _git(clones[repo], "worktree", "remove", "--force", work)
+            shutil.rmtree(work, ignore_errors=True)
     return 0
 
 
