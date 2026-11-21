@@ -134,8 +134,8 @@ def gold_signature(work, c) -> tuple[dict, dict] | None:
     tree = ast.parse(_read(work, c["file"]))
     qual = _qual(c)
     node = DC.find_def(tree, qual)
-    if node is None or node.args.vararg or node.args.posonlyargs:
-        return None
+    if node is None or node.args.vararg or node.args.posonlyargs or node.args.kwonlyargs:
+        return None                                                 # a `*` already there: nothing to insert
     args = node.args.args
     is_method = c["kind"] == "method" and args and args[0].arg in ("self", "cls")
     first = 1 if is_method else 0
