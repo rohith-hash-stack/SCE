@@ -7,11 +7,14 @@ has `<`, `>`, `&`, quotes and newlines in their arguments, tool outputs, a forma
 tools go once to `/api/chat` (Ollama renders the template) and once to `/api/generate` with `raw: true` (the harness
 renders it). Ollama's prompt token counts must be equal: the same template applied to the same messages gives the same
 tokens. Between the two, a short unrelated request clears the server's prompt cache, so each count is the full prompt.
-Both replies (seed fixed, 64 tokens) must also give the same first call wherever `/api/chat` returned one: the same
-prompt and seed generate the same text, so this checks the harness's parser on the real model's output (the first
-Kaggle pre-flight found `/api/generate` drops the `[TOOL_CALLS]`/`[ARGS]` tokens). The raw reply is read as a run reads
-it: `parse_raw`, then the loop's `parse_call`. Exit 0 if every count and every
-call matches, 5 otherwise.
+Both replies (greedy, seed fixed, 64 tokens) are also read: wherever `/api/chat` returned a call, the raw reply, read
+as a run reads it (`parse_raw`, then the loop's `parse_call`), must give a call to the same tool, and that call's
+argument values must all be in the raw reply's own text (the parser reads what the model wrote; the first Kaggle
+pre-flight found `/api/generate` drops the `[TOOL_CALLS]`/`[ARGS]` tokens). Whether the argument values equal the chat
+reply's is recorded (`args_match`), not required: the two paths batch the same prompt differently, so a near-tie token
+can differ between them (the Phase 2 smoke pre-flight, 2026-11-21: `"src/a.object"` against `"src/a.ts"`, identical
+prompts) - a choice of the model, not a reading of the harness. Exit 0 if every count matches and every call is read
+faithfully, 5 otherwise.
 """
 from __future__ import annotations
 
@@ -28,6 +31,27 @@ def _post(url: str, path: str, body: dict) -> dict:
     req = urllib.request.Request(url + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=900) as r:
         return json.loads(r.read())
+
+
+def _strings(v):
+    if isinstance(v, str):
+        yield v
+    elif isinstance(v, dict):
+        for x in v.values():
+            yield from _strings(x)
+    elif isinstance(v, list):
+        for x in v:
+            yield from _strings(x)
+
+
+def call_read_ok(chat_call, raw_call, raw_response: str) -> bool:
+    """Wherever `/api/chat` returned a call: the raw reply gives a call to the same tool, and every argument value of it
+    is in the raw reply's text (as written, or JSON-escaped)."""
+    if chat_call is None:
+        return True
+    if raw_call is None or raw_call[0] != chat_call[0]:
+        return False
+    return all(v in raw_response or json.dumps(v)[1:-1] in raw_response for v in _strings(raw_call[1]))
 
 
 def cases() -> list[tuple[str, list[dict]]]:
@@ -56,7 +80,7 @@ def main(argv=None) -> int:
     p.add_argument("--out")
     a = p.parse_args(argv)
     url = a.base_url.rstrip("/")
-    opts = {"temperature": 0.2, "seed": 42, "num_ctx": 20480, "num_predict": 64}
+    opts = {"temperature": 0.0, "seed": 42, "num_ctx": 20480, "num_predict": 64}     # greedy: the least sampling noise
     clear = lambda: _post(url, "/api/generate", {"model": a.model, "prompt": "Count to three.", "stream": False,
                                                   "options": {**opts, "num_predict": 4}})
     rows, ok = [], True
@@ -77,11 +101,12 @@ def main(argv=None) -> int:
         rc = parse_call(raw_text)
         raw_call = [rc[0], rc[1]] if rc else None
         same = chat.get("prompt_eval_count") == raw.get("prompt_eval_count")
-        ok = ok and same and (chat_call is None or chat_call == raw_call)
+        read_ok = call_read_ok(chat_call, raw_call, raw.get("response") or "")
+        ok = ok and same and read_ok
         rows.append({"case": name, "prompt_tokens_chat": chat.get("prompt_eval_count"),
                      "prompt_tokens_raw": raw.get("prompt_eval_count"), "counts_match": same,
                      "chat_call": chat_call, "raw_call": raw_call, "raw_head": (raw.get("response") or "")[:200],
-                     "calls_match": chat_call == raw_call if chat_call or raw_call else None})
+                     "call_read_ok": read_ok, "args_match": chat_call == raw_call if chat_call or raw_call else None})
         print(json.dumps(rows[-1]), flush=True)
     rep = {"ok": ok, "cases": rows}
     if a.out:

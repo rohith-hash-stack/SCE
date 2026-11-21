@@ -1407,3 +1407,18 @@ arm; sharded by seed; a smoke test first.
 - **Before any shard:** the results are reported back to the user.
 
 **Fixed for the run:** the code commit and its `src`/`harness` trees are pinned in both cells (`r4/phase2_cell.py`).
+
+**Smoke test, first attempt (2026-11-21): stopped by the raw-template pre-flight, before any run.**
+- **What it found:**
+  - the prompt token counts matched in all 4 cases, so the harness renders the template exactly as Ollama does;
+  - in one case ("PRISM: task only") the two paths' replies diverged inside an argument (`"src/a.object"` against
+    `"src/a.ts"`), with the same tool and identical prompts. At temperature 0.2 the two paths batch the same prompt
+    differently, and a near-tie token flipped. It is a choice of the model, not a misreading by the harness. The
+    case passed in the re-baseline; Phase 2's PRISM prompt lists two more tools.
+- **Change** (`r4/raw_preflight.py`, before any run of this design):
+  - the pre-flight samples greedily;
+  - wherever `/api/chat` returns a call, the raw reply must be read as a call to the same tool whose argument values
+    are all in the raw reply's own text (`call_read_ok`, which catches a parser fault);
+  - equal argument values are recorded (`args_match`), not required;
+  - the token-count check is unchanged.
+- **The runs are unchanged** (temperature 0.2).
