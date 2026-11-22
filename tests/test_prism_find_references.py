@@ -102,3 +102,17 @@ def test_position_requests_and_the_edited_tree(layer):
     shared.call("edit_file", path="pkg/svc.py", old="return self.conn.close()", new="return None")
     after = lay.call("prism_find_references", symbol="pkg.conn.Conn.close")
     assert "\npkg/svc.py\n" not in after and after.splitlines()[0].split(": ", 1)[1].startswith("2 reference(s)")
+
+
+def test_multiline_import_and_all_cite_the_names_line(tmp_path):
+    """A reference in a statement spanning several lines keeps the line of the name itself (Phase 3: before, the
+    statement's first line `from x import (` was kept)."""
+    from prism.cli import LANGUAGE_TIER_PERMISSIVE, build_pipeline
+    from prism.graph.references import references_to
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "core.py").write_text("def alpha():\n    pass\n\n\ndef beta():\n    pass\n")
+    (tmp_path / "pkg" / "__init__.py").write_text("from .core import (\n    alpha,\n    beta,\n)\n\n"
+                                                  "__all__ = [\n    \"alpha\",\n    \"beta\",\n]\n")
+    b, _ = build_pipeline(str(tmp_path), LANGUAGE_TIER_PERMISSIVE, use_cache=False)
+    rows = [r for r in references_to(b, "pkg.core.beta") if r["file"].endswith("__init__.py")]
+    assert rows and sorted(rows[0]["lines"]) == [3, 8]

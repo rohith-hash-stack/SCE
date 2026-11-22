@@ -316,13 +316,16 @@ class _PythonFile:
                 return r, segments[k:]
         return None
 
-    def add(self, node, tgt: str, kind: str) -> None:
+    def add(self, node, tgt: str, kind: str, at=None) -> None:
+        """`at`: the node whose line is recorded (the imported name or the `__all__` string, not the first line of
+        a statement that spans several lines); `node` decides the source."""
         src = self.source_of(node)
         if kind == "call" and self.b.graph.has_edge(src, tgt):
             return                                            # the main graph already holds this call
         if kind == "base" and self.b.graph.has_edge(src, tgt):
             return
-        add_reference(self.g, src, tgt, kind, self.module_node, line=node.start_point[0] + 1, file=self.parsed.path)
+        add_reference(self.g, src, tgt, kind, self.module_node, line=(at or node).start_point[0] + 1,
+                      file=self.parsed.path)
 
     # -------------------------------------------------------------- the walk
     def run(self) -> None:
@@ -386,7 +389,7 @@ class _PythonFile:
             else:
                 hit = self.target(_text(name_node, self.src).split("."))
             if hit is not None and not hit[1]:
-                self.add(n, hit[0], "import")
+                self.add(n, hit[0], "import", at=c)
 
     def all_entries(self, stmt) -> bool:
         """`__all__ = [...]` / `__all__ += [...]` at module level: each name an `export`."""
@@ -403,7 +406,7 @@ class _PythonFile:
                 content = "".join(_text(c, self.src) for c in s.named_children if c.type == "string_content")
                 hit = self.target([content]) if content.isidentifier() else None
                 if hit is not None and not hit[1]:
-                    self.add(stmt, hit[0], "export")
+                    self.add(stmt, hit[0], "export", at=s)
         return True
 
     def use(self, n) -> None:
