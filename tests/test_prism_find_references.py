@@ -86,8 +86,8 @@ def test_method_references_exact_and_labelled(layer):
 def test_class_references_kinds(layer):
     lay, _ = layer
     out = lay.call("prism_find_references", symbol="pkg.conn.Conn")
-    assert "  1:19 [import/export] in `<module>`: from .conn import Conn" in out          # re-exported
-    assert "  3:13 [import/export] in `<module>`: __all__ = [\"Conn\"]" in out
+    assert "  1:19 [import] in `<module>`: from .conn import Conn" in out                 # re-exported
+    assert "  3:13 [__all__] in `<module>`: __all__ = [\"Conn\"]" in out
     assert "  1:22 [import] in `<module>`: from pkg.conn import Conn" in out
     assert "[type annotation] in `pkg.user.finish`: def finish(c: Conn, o: Other):" in out
     assert "[subclass] in `pkg.svc.Pooled`" in out

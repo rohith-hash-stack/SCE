@@ -225,6 +225,30 @@ class ToolLayer:
                    "callref": "used in a call",
                    "definition": "definition"}
 
+    def _line_kinds(self, kinds: list[str], rel: str, line: int) -> list[str]:
+        """An edge's kinds are per source, not per line: the kinds this line's own text shows (an import statement:
+        `import`; an `__all__` line: `export`), else the edge's other kinds."""
+        lines = self._lines(os.path.join(self.wi.shadow, rel))
+        text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+        stmt = text
+        for i in range(line - 1, max(0, line - 40), -1):         # the statement a continuation line belongs to
+            prev = lines[i - 1].strip()
+            if prev.startswith(("from ", "import ", "__all__")):
+                stmt = prev
+                break
+            if not prev.endswith((",", "(", "[")) and not text.startswith((")", "]")):
+                break
+        if stmt.startswith(("from ", "import ")) and "import" in kinds:
+            return ["import"]
+        if stmt.startswith("__all__") and "export" in kinds:
+            return ["export"]
+        other = [k for k in kinds if k not in ("import", "export")]
+        return other or kinds
+
+    def _ref_label(self, kind: str) -> str:
+        """A kind's label; several kinds of one use (`import/export`) each by its own label."""
+        return "/".join(self._REF_LABELS.get(k, k) for k in kind.split("/"))
+
     def _find_target(self, symbol: str) -> str:
         """A qualified name (as `prism_read_code` resolves it), or `path:line`: the definition starting on that line,
         else the one thing PRISM resolves a use on that line to (a recorded call site or a reference line)."""
@@ -340,8 +364,9 @@ class ToolLayer:
             f = rel_of(r["file"])
             for line in r["lines"]:
                 kinds = ["callref" if k == "call" else k for k in r["kinds"]]   # the reference pass's "call": a
-                add(f, line, None, kinds[0] if len(kinds) == 1 else "/".join(kinds),  # name inside a call expression
-                    r["source"] if not r["is_module"] else "<module>")
+                if len(kinds) > 1:                                    # name inside a call expression
+                    kinds = self._line_kinds(kinds, f, line)
+                add(f, line, None, "/".join(kinds), r["source"] if not r["is_module"] else "<module>")
             truncated += max(0, r["count"] - len(r["lines"]))
         possible = {k: v for k, v in rows.items() if v[0].startswith("possible")}
         rows = {k: v for k, v in rows.items() if k not in possible}
@@ -353,7 +378,7 @@ class ToolLayer:
         counts: dict[str, int] = {}
         for (label, _w) in rows.values():
             if label != "definition":
-                k = self._REF_LABELS.get(label.split(" ")[0], label)
+                k = self._ref_label(label.split(" ")[0])
                 counts[k] = counts.get(k, 0) + 1
         tests = sum(len(by_file[f]) for f in files if self._is_test(f))
         out = [f"`{q}` ({sym.kind}, {own}:{self._def_line(q)}): {n} reference(s) in "
@@ -368,7 +393,7 @@ class ToolLayer:
                 if shown >= SEARCH_MAX_LINES:
                     break
                 text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
-                lab = self._REF_LABELS.get(label.split(" ")[0], label) + label[len(label.split(" ")[0]):]
+                lab = self._ref_label(label.split(" ")[0]) + label[len(label.split(" ")[0]):]
                 out.append(f"  {line}:{col + 1} [{lab}] in `{where}`: {text}")
                 shown += 1
         if shown < n + 1:
