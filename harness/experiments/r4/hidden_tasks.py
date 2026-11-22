@@ -32,6 +32,7 @@ from harness.experiments.r4 import derive_tasks as D
 from harness.experiments.r4 import derived_checks as DC
 
 MAX_TEST_FILES = 4
+INERT_BASES = {"ABC", "Generic", "Protocol"}
 
 
 def _imports(tree) -> set[str]:
@@ -134,7 +135,8 @@ def build(c: dict, work: str, env, rev: str) -> dict:
     if not tests:
         return {"rejected": "no runnable test file"}
     qual = D._qual(c)
-    outside = D._outside_bases(work, c["file"], qual)
+    # `ABC`, `Generic` and `Protocol` define no method a rename could stop overriding
+    outside = [b for b in D._outside_bases(work, c["file"], qual) if b not in INERT_BASES]
     if outside:
         return {"rejected": f"method of a class with an outside base (may override it): {outside}"}
     taken = lambda name: bool(D._git(work, "grep", "-l", "-w", name, "--").stdout.strip())

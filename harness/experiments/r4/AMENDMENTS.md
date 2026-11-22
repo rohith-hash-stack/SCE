@@ -1493,6 +1493,9 @@ Turn cap 28, budget 300,000 tokens, devstral-small-2, as in Phase 2.
   - the start fails the check and at least one test;
   - **new:** renaming the definition alone fails at least one scored test, so the places are live code;
   - end to end through the runner's scorer and the done gate (`derive_scoring_check.py`).
+- **Methods of classes with a base from outside the repository** are dropped (a rename may stop overriding the
+  library's method), as in Phase 2, except for `ABC`, `Generic` and `Protocol`, which define no such method (added
+  2026-11-22 during mining, before any run).
 - **A known bias, stated now:** a candidate whose answer key fails the tests (PRISM missed a place the tests
   exercise) is rejected. The task set therefore holds only targets PRISM resolves completely enough for the tests.
   The rejections are counted and reported as a measurement of PRISM's recall, never hidden.
