@@ -1451,3 +1451,9 @@ arm; sharded by seed; a smoke test first.
 
 **Shards 2–10 may start.** Shard 1's own `report.json` is a progress view only; the pre-registered analysis runs on
 all 10 shards merged.
+
+**Phase 2 analysed (2026-11-22): `PHASE2_RESULTS.md`.**
+- **Pre-registered primary result:** no arm differs from BASELINE (Holm p = 1.0 for all three).
+- **A task-construction error found after the analysis:** `p2-rename-04`'s answer key also renamed unrelated `find`
+  calls, so the task scores 0 in every arm. It is a tie, and leaving it out changes no primary p-value.
+  `PHASE2_RESULTS.md` reports it; the pre-registered analysis is not altered.
