@@ -1457,3 +1457,103 @@ all 10 shards merged.
 - **A task-construction error found after the analysis:** `p2-rename-04`'s answer key also renamed unrelated `find`
   calls, so the task scores 0 in every arm. It is a tie, and leaving it out changes no primary p-value.
   `PHASE2_RESULTS.md` reports it; the pre-registered analysis is not altered.
+
+## Phase 3, hidden dependencies, two stages (pre-registered 2026-11-22, before any run of this design)
+
+The user's decisions (2026-11-22): a proof of concept of 45 runs whose only output is a go/no-go verdict, then a
+confirmatory stage of 225 runs; 3 arms (INJECTED dropped); 2-3 easy controls, `r4s-delete-05` among them; real code
+only, at most 12 places to fix per task, answer keys from PRISM's resolved uses rather than token matching. This
+section, the go/no-go rule above all, is fixed before any Phase 3 run, POC included.
+
+**Why Phase 3:** in Phase 2, every place a derived task had to change contained the target's unique name, so `grep`
+found all of them (recall 100%), and no arm differed from BASELINE. Phase 3's tasks rename a method whose name other
+objects share, so that grep cannot tell the places from the look-alikes.
+
+**What is in force:** everything in force for "Phase 2, 4 arms", plus one tool change made since (commit `c208936c`,
+the delete-05 fix): `prism_read_code` and `prism_change_context` show a definition's enclosing `if`/`else`, `try`,
+`with`, loop or `match` block (up to 40 lines), and say which branch it is in and whether it is that branch's only
+statement. Phase 2's runs of `r4s-delete-05` deleted the two lines `prism_read_code` showed and left an empty `else:`.
+Turn cap 28, budget 300,000 tokens, devstral-small-2, as in Phase 2.
+
+**Arms:** BASELINE, PRISM, PRISM_ONLY, exactly as in Phase 2.
+
+**Tasks: hidden-dependency renames** (`r4/hidden_scout.py`, `r4/hidden_tasks.py`; family `rename_hidden`):
+- **The target:** a production method whose simple name other code also uses (other classes' methods, attributes,
+  keywords), in the repositories and at the revisions of Phase 2.
+- **The places:** the calls PRISM resolves to it, recorded site by site while PRISM builds its graph, plus the
+  non-call uses in PRISM's reference graph. A candidate is dropped when PRISM's reading is not unambiguous:
+  - a guessed (tentative) call into it, an override in either direction, or an edge no recorded place explains;
+  - a reference-graph line with more or fewer uses of the name than the edge counts;
+  - the name in any string literal (a `getattr` PRISM does not read).
+  2-12 places outside the definition, in 2+ files besides its own, at least one in production code.
+- **The answer key** renames the definition and each place at its line and column, and nothing else.
+- **Validated in the repository's environment, as Phase 2's derived tasks were:**
+  - the scored tests pass at the start, 3 runs;
+  - the answer key passes them, a generated hidden test and the static check, 3 runs, nothing flaky;
+  - the start fails the check and at least one test;
+  - **new:** renaming the definition alone fails at least one scored test, so the places are live code;
+  - end to end through the runner's scorer and the done gate (`derive_scoring_check.py`).
+- **A known bias, stated now:** a candidate whose answer key fails the tests (PRISM missed a place the tests
+  exercise) is rejected. The task set therefore holds only targets PRISM resolves completely enough for the tests.
+  The rejections are counted and reported as a measurement of PRISM's recall, never hidden.
+- **The static check** (`derived_checks.py`, kind `rename_sites`): in every file, every scope (the enclosing
+  definitions) and every receiver (`self.conn` in `self.conn.close`), the uses of the old name must be exactly as
+  many as in the answer key. More is a place still to rename; fewer is a look-alike renamed or removed. The done gate
+  gives counts only, never where.
+- **The prompt** names the method, its file and line and the new name. It says that other functions, methods and
+  attributes with the same name belong to other objects and must stay unchanged.
+- **Recorded per task** (`probes`): what the definition-only rename and the grep-and-replace rename (every token of the
+  name in every file that has it) do to the scored tests and to the static check.
+
+**Controls:** `r4s-delete-05` (the check on the fix above), `r4s-delete-08` and `r4s-delete-10`. Every arm solved the
+last two in all 10 of Phase 2's seeds. All three are unchanged.
+
+**Task selection, fixed now:** the validated hidden tasks are ranked by grep's precision (files with a place / files
+`git grep -w` finds the name in), lowest first; ties go to the most look-alikes, then the repository, then the name.
+- **POC (5 tasks):** the top 4, at most one per repository, plus `r4s-delete-05`.
+- **Confirmatory (15 tasks):** the POC's 4, then the next 8 in the same ranking with at most 2 per repository (3 if
+  fewer than 12 qualify), plus the 3 controls.
+
+**Seeds:**
+- POC: 42, 43, 44 (5 tasks × 3 arms × 3 seeds = 45 runs), one shard per seed, in `reports/r4/phase3_poc_seed<SEED>`.
+- Confirmatory: 101-105 (15 × 3 × 5 = 225 runs), one shard per seed, in `reports/r4/phase3_seed<SEED>`.
+- The POC's runs never enter the confirmatory analysis.
+
+**Primary metric:** each run's score in [0, 1], as in Phase 2: a hidden task scores 0 if the static check fails,
+else (fail-to-pass passing / fail-to-pass) × (pass-to-pass passing / pass-to-pass). A run is solved when it is resolved.
+
+**POC go/no-go rule** (`rebaseline_report.go_no_go`; task file `"stage": "poc"`; constants `GO_MIN_EXTRA_SOLVES = 3`,
+`GO_MAX_TASKS_LOST = 1`, `GO_MAX_DEAD = 2`). On the 4 hidden tasks, 12 runs per arm:
+- **GO** when both hold:
+  1. at most 2 of the 45 runs are missing or died on infrastructure;
+  2. PRISM or PRISM_ONLY solves at least 3 more of its 12 hidden runs than BASELINE solves of its 12, and BASELINE's
+     mean score is higher than that arm's on at most 1 of the 4 hidden tasks.
+- **NO-GO** otherwise: the confirmatory stage is not run as registered here. The POC is reported, and any redesign
+  is a new amendment.
+- **Not a test, and nothing else is read:** no p-value is computed for the decision. `r4s-delete-05`'s result is
+  reported (did the fix work?) but does not enter the verdict. Neither does the verdict rest on any other number.
+
+**Confirmatory analysis** (`rebaseline_report`, design `phase3`):
+- **The data:** per task, the mean score over its 5 seeds in each arm.
+- **Primary, on the 12 hidden tasks:** PRISM − BASELINE and PRISM_ONLY − BASELINE, the Wilcoxon signed-rank test,
+  two-sided, zero differences dropped, α 0.05, Holm-corrected over the two.
+- **Also reported:** the mean difference with a 95% bootstrap interval, the paired t-test, the tasks favouring each
+  arm, and McNemar's exact test on task-seed solves.
+- **Descriptive:**
+  - PRISM_ONLY − PRISM;
+  - the same comparisons on the 3 controls (`subsets`);
+  - process, turn efficiency and post-PRISM behaviour, as in Phase 2;
+  - per task, whether a failed run missed places or renamed look-alikes (the check's two counts).
+
+**Readings fixed now:**
+- **A significant positive PRISM − BASELINE on the hidden tasks:** PRISM's resolved uses help where grep's matches
+  mislead.
+- **Neither arm significant:** on these tasks devstral-small-2 does as well with grep and reading. The task-set bias
+  above makes that the stronger negative result.
+- **A negative effect on the controls:** PRISM costs something on easy tasks.
+
+**Health check, per shard:** at most 2 infrastructure deaths of the shard's runs, and parse errors below 2% of its
+turns. If a shard fails, the cell pushes, reports it as failed, and stops.
+
+**Fixed for the runs:** the code commit and its `src`/`harness` trees, and the sha256 of the task list, pinned in the
+cells.

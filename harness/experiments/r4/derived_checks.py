@@ -9,6 +9,7 @@ A task's `derived` record says what to check:
 | rename | the definition is under its new name where it was (`file`, `qualname` within it) and not under the old one, and no Python file has more uses of the old name (identifiers, and string literals equal to it, as in `__all__`) than the gold tree has (`baseline`: the same name used for other objects) |
 | signature | the definition still has the parameter, now keyword-only (still required if it was), and no Python file has more calls to the name passing it positionally (more than `max_positional` positional arguments) than the gold tree has |
 | move | the function is defined at the top level of `new_file` and not in `file`, and no Python file imports it from its old module (`from <old> import <name>`, or `<old>.<name>` through `import <old>`) more often than the gold tree does |
+| rename_sites (Phase 3) | as rename, but the old name is shared with other objects: in every file, every scope (the enclosing function or class) and every receiver (`self.conn` in `self.conn.close`), the uses of the old name are exactly as many as in the gold tree. More is a place still to rename; fewer is a use that belongs to another object, renamed or removed |
 
 Every count is per file against the gold tree's own count, so a name another object also uses (a library's `send`)
 never counts against the run; a run's new file starts from 0.
@@ -140,6 +141,47 @@ def old_imports(tree, rel: str, old_module_names: set, name: str) -> int:
     return n
 
 
+def scoped_uses(text: str, name: str) -> dict[str, int]:
+    """`{"scope|receiver": count}` for the uses of `name` in a module: `x.name` (receiver `x`, as written), a bare
+    `name`, a `name=` keyword, a definition, an import. The scope is the enclosing definitions' dotted names, so the
+    count survives edits that move lines."""
+    tree = _parse(text)
+    out: dict[str, int] = {}
+    if tree is None:
+        return {"<unparsed>|": 1}
+
+    def add(scope, recv):
+        k = f"{'.'.join(scope) or '<module>'}|{recv}"
+        out[k] = out.get(k, 0) + 1
+
+    def visit(node, scope):
+        for ch in ast.iter_child_nodes(node):
+            if isinstance(ch, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if ch.name == name:
+                    add(scope, "<def>")
+                visit(ch, scope + [ch.name])                    # its decorators and bases count inside it
+                continue
+            visit_expr(ch, scope)
+            visit(ch, scope)
+
+    def visit_expr(x, scope):
+        if isinstance(x, ast.Attribute) and x.attr == name:
+            try:
+                recv = ast.unparse(x.value)
+            except Exception:
+                recv = "?"
+            add(scope, recv)
+        elif isinstance(x, ast.Name) and x.id == name:
+            add(scope, "<name>")
+        elif isinstance(x, ast.keyword) and x.arg == name:
+            add(scope, "<keyword>")
+        elif isinstance(x, ast.alias) and name in (x.name.rsplit(".", 1)[-1], x.asname):
+            add(scope, "<import>")
+
+    visit(tree, [])
+    return out
+
+
 def measure(derived: dict, work: str) -> dict:
     """Per-file counts of what the check counts, and the definition facts, for this tree."""
     kind = derived["kind"]
@@ -148,12 +190,16 @@ def measure(derived: dict, work: str) -> dict:
     files = python_files(work)
     own = derived["file"]
     own_tree = _parse(_read(work, own)) if os.path.isfile(os.path.join(work, own)) else None
-    if kind == "rename":
+    if kind in ("rename", "rename_sites"):
         parent, _, _leaf = derived["qualname"].rpartition(".")
         new_q = f"{parent}.{derived['new']}" if parent else derived["new"]
         facts["new_defined"] = find_def(own_tree, new_q) is not None
         facts["old_defined"] = find_def(own_tree, derived["qualname"]) is not None
         for f in files:
+            if kind == "rename_sites":
+                for k, c in scoped_uses(_read(work, f), derived["old"]).items():
+                    counts[f"{f}|{k}"] = c
+                continue
             c = name_uses(_read(work, f), derived["old"])
             if c:
                 counts[f] = c
@@ -198,6 +244,20 @@ def check(derived: dict, work: str) -> dict:
     remaining = sum(max(0, c - base.get(f, 0)) for f, c in m["counts"].items())
     facts, problems = m["facts"], []
     kind = derived["kind"]
+    if kind == "rename_sites":
+        # the gold tree's own definition line is the renamed one: never counted as a use of the old name
+        wrong = sum(max(0, c - m["counts"].get(k, 0)) for k, c in base.items())
+        if not facts["new_defined"]:
+            problems.append(f"`{derived['new']}` is not defined where `{derived['old']}` was")
+        if facts["old_defined"]:
+            problems.append(f"`{derived['old']}` is still defined")
+        if remaining:
+            problems.append(f"{remaining} use(s) of `{derived['old']}` that refer to `{derived['qualname']}` still use "
+                            f"the old name")
+        if wrong:
+            problems.append(f"{wrong} use(s) of the name `{derived['old']}` that belong to other objects (not "
+                            f"`{derived['qualname']}`) were renamed or removed")
+        return {"ok": not problems, "problems": problems, "remaining": remaining + wrong, "facts": facts}
     if kind == "rename":
         if not facts["new_defined"]:
             problems.append(f"`{derived['new']}` is not defined where `{derived['old']}` was")

@@ -323,8 +323,7 @@ def _run_states(env, files):
 
 def build(c: dict, family: str, work: str, env, rev: str) -> dict:
     """One candidate, validated: a task record, or `{"rejected": reason}`."""
-    from harness.experiments.r3.gate import classify, reset_to
-    from harness.experiments.r3.runner import changed_functions, snapshot_tree
+    from harness.experiments.r3.gate import reset_to
     reset_to(work, rev)
     known = set(env.test_files())
     tests = [f for f in c["test_dependents"] if f in known][:MAX_TEST_FILES]
@@ -360,13 +359,22 @@ def build(c: dict, family: str, work: str, env, rev: str) -> dict:
             return {"rejected": "not movable"}
         details = {"new_file": new_file, "new_module": importable(work, new_file)}
         derived = {"kind": "move", "file": c["file"], "name": c["leaf"], "new_file": new_file}
+    gen_rel = os.path.join(os.path.dirname(tests[0]), f"test_phase2_{family}_{c['leaf']}.py")
+    gen = generated_test(family, importable(work, c["file"]), qual, details)
+    return validate(changed, derived, details, tests, gen_rel, gen, work, env, rev)
+
+
+def validate(changed: dict, derived: dict, details: dict, tests: list, gen_rel: str, gen: str, work: str, env,
+             rev: str) -> dict:
+    """A gold change, validated in the repository's environment (the checks in this module's docstring): a task's
+    record, or `{"rejected": reason}`. Phase 3 (`hidden_tasks.py`) uses it too."""
+    from harness.experiments.r3.gate import classify, reset_to
+    from harness.experiments.r3.runner import changed_functions, snapshot_tree
     for f, text in changed.items():
         try:
             ast.parse(text)
         except SyntaxError as exc:
             return {"rejected": f"gold does not parse: {f}: {exc}"}
-    gen_rel = os.path.join(os.path.dirname(tests[0]), f"test_phase2_{family}_{c['leaf']}.py")
-    gen = generated_test(family, importable(work, c["file"]), qual, details)
     scored = tests + [gen_rel]
     # 1. the start: the scored test files pass, and the start tree fails the static check
     start = _run_states(env, tests)

@@ -232,7 +232,40 @@ DESIGNS = {
                "comparisons": (("PRISM", "BASELINE"), ("INJECTED", "BASELINE"), ("PRISM_ONLY", "BASELINE")),
                "descriptive": (("INJECTED", "PRISM"), ("PRISM_ONLY", "PRISM")),
                "subsets": {"derived": lambda t: bool(t.get("derived")), "controls": lambda t: bool(t.get("control"))}},
+    # Phase 3 (AMENDMENTS "Phase 3, hidden dependencies, two stages", pre-registered 2026-11-22): 3 arms, PRISM and
+    # PRISM_ONLY against BASELINE (Holm over the two), PRISM_ONLY against PRISM descriptively; the hidden-dependency
+    # tasks and the controls apart, descriptively. The proof of concept (`"stage": "poc"`) adds the go/no-go verdict.
+    "phase3": {"arms": ("BASELINE", "PRISM", "PRISM_ONLY"),
+               "comparisons": (("PRISM", "BASELINE"), ("PRISM_ONLY", "BASELINE")),
+               "descriptive": (("PRISM_ONLY", "PRISM"),),
+               "primary_on": lambda t: bool(t.get("derived")),         # the primary tests: the hidden tasks only
+               "subsets": {"hidden": lambda t: bool(t.get("derived")), "controls": lambda t: bool(t.get("control"))}},
 }
+
+#: The proof of concept's go/no-go rule (AMENDMENTS "Phase 3", fixed before any Phase 3 run): on the hidden tasks
+#: only, GO when a PRISM arm (PRISM or PRISM_ONLY) solves at least `GO_MIN_EXTRA_SOLVES` more runs than BASELINE and
+#: BASELINE's mean score is higher on at most `GO_MAX_TASKS_LOST` hidden task; and at most `GO_MAX_DEAD` runs died
+#: on infrastructure. Anything else is NO-GO.
+GO_MIN_EXTRA_SOLVES, GO_MAX_TASKS_LOST, GO_MAX_DEAD = 3, 1, 2
+
+
+def go_no_go(rows: list[dict], per_task: dict, tasks: dict, expected_runs: int) -> dict:
+    hidden = {tid for tid, t in tasks.items() if t.get("derived")}
+    solved = {arm: sum(1 for r in rows if r["task"] in hidden and r["arm"] == arm and r["solved"])
+              for arm in ("BASELINE", "PRISM", "PRISM_ONLY")}
+    dead = max(0, expected_runs - len(rows)) + sum(1 for r in rows if r["infra"])   # missing runs count as dead
+    arms = {}
+    for arm in ("PRISM", "PRISM_ONLY"):
+        lost = sum(1 for tid in hidden if arm in per_task.get(tid, {}) and "BASELINE" in per_task[tid]
+                   and per_task[tid]["BASELINE"]["score"] > per_task[tid][arm]["score"] + 1e-12)
+        extra = solved[arm] - solved["BASELINE"]
+        arms[arm] = {"extra_solves": extra, "hidden_tasks_lost": lost,
+                     "go": extra >= GO_MIN_EXTRA_SOLVES and lost <= GO_MAX_TASKS_LOST}
+    ok_runs = dead <= GO_MAX_DEAD
+    return {"rule": {"min_extra_solves": GO_MIN_EXTRA_SOLVES, "max_hidden_tasks_lost": GO_MAX_TASKS_LOST,
+                     "max_infrastructure_deaths": GO_MAX_DEAD},
+            "hidden_tasks": len(hidden), "hidden_solved_runs": solved, "infrastructure_deaths": dead,
+            "arms": arms, "verdict": "GO" if ok_runs and any(a["go"] for a in arms.values()) else "NO-GO"}
 
 
 def compare(rows: list[dict], per_task: dict, arm: str, ref: str) -> dict | None:
@@ -298,13 +331,17 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
         per_task[tid] = cell
     rep = {"design": doc.get("design", "rebaseline"), "runs": len(rows), "arms": arms,
            "seeds": sorted({r["seed"] for r in rows}), "per_task": per_task}
-    comps = {f"{a} vs {b}": compare(rows, per_task, a, b) for a, b in design["comparisons"] if a in arms and b in arms}
+    keep = design.get("primary_on")
+    p_rows = [r for r in rows if keep(tasks[r["task"]])] if keep else rows
+    p_tasks = {tid: c for tid, c in per_task.items() if keep(tasks[tid])} if keep else per_task
+    comps = {f"{a} vs {b}": compare(p_rows, p_tasks, a, b) for a, b in design["comparisons"] if a in arms and b in arms}
     adj = holm({k: (v or {}).get("wilcoxon_p") for k, v in comps.items()})
     for k, v in comps.items():
         if v:
             v["wilcoxon_p_holm"] = adj[k]
     rep["primary"] = comps
-    rep["descriptive"] = {f"{a} vs {b}": compare(rows, per_task, a, b) for a, b in design["descriptive"]
+    rep["primary_tasks"] = len(p_tasks)
+    rep["descriptive"] = {f"{a} vs {b}": compare(p_rows, p_tasks, a, b) for a, b in design["descriptive"]
                           if a in arms and b in arms}
     if design["subsets"]:                   # descriptive: the same comparisons on a subset of the tasks
         rep["subsets"] = {}
@@ -324,6 +361,8 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
                         for fam in sorted({r["family"] for r in rows})}
     rep["injection"] = injection_summary(results, rows)
     rep["process"] = process(rows, arms)
+    if doc.get("stage") == "poc":
+        rep["go_no_go"] = go_no_go(rows, per_task, tasks, doc.get("expected_runs", 0))
     rep["turn_efficiency"] = turn_efficiency(rows, per_task, arms, design["comparisons"])
     rep["code_review"] = code_review(rows, arms, design["comparisons"] + design["descriptive"])
     return rep
