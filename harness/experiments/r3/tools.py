@@ -329,7 +329,19 @@ class ToolLayer:
         lines = self._lines(s.file)
         lo, hi = s.line_range
         rel = os.path.relpath(s.file, self.wi.shadow).replace(os.sep, "/")
-        return self._numbered(rel, lines, lo, min(hi, len(lines)), f"`{qname}`, {s.kind}")
+        what = f"`{qname}`, {s.kind}"
+        if rel.endswith(".py"):
+            # Phase 3 (the delete-05 fix): a definition nested in an `if`/`else`, `try`, ... block is shown with that
+            # block, and where it sits in it, so a change sees the branch it would leave behind
+            from prism.impact.enclosing import MAX_BLOCK_LINES, describe, enclosing_block
+            block = enclosing_block("\n".join(lines) + "\n", lo)
+            if block is not None:
+                note = describe(block, qname.rsplit(".", 1)[-1])
+                if block["hi"] - block["lo"] + 1 <= MAX_BLOCK_LINES:
+                    return self._numbered(rel, lines, block["lo"], min(block["hi"], len(lines)),
+                                          f"{what} at lines {lo}-{hi}, with its enclosing block. {note}")
+                what += f". {note}"
+        return self._numbered(rel, lines, lo, min(hi, len(lines)), what)
 
     @staticmethod
     def _lines(path: str) -> list[str]:

@@ -73,6 +73,9 @@ class ChangeContext:
     dependents_grouped: list | None = None
     #: the anchor's code given as an outline (over its budget share): its full length in lines
     anchor_outlined_lines: int = 0
+    #: an anchor nested in an `if`/`else`, `try`, ... block: where it sits, and the block's lines when it is shown
+    anchor_block_note: str = ""
+    anchor_block_lines: tuple | None = None
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -111,6 +114,26 @@ class ChangeContextBuilder:
             rel = _rel(os.path.join(self.root, path) if not os.path.isabs(path) else path, self.root)
             out.setdefault(rel, []).extend(ranges or [(1, 10 ** 9)])
         return out
+
+    def _enclosing(self, ctx: "ChangeContext", anchor: str) -> None:
+        """Phase 3 (the delete-05 fix): an anchor nested in an `if`/`else`, `try`, ... block is shown with that block,
+        and a sentence saying where it sits in it (`prism.impact.enclosing`)."""
+        if not ctx.file.endswith(".py"):
+            return
+        from prism.impact.enclosing import MAX_BLOCK_LINES, describe, enclosing_block
+        sym = self.b.symbol_table.get(anchor)
+        parsed = self.b.parsed_file(sym.file)
+        if parsed is None:
+            return
+        text = parsed.source.decode("utf8", "replace")
+        block = enclosing_block(text, sym.line_range[0])
+        if block is None:
+            return
+        ctx.anchor_block_note = describe(block, anchor.rsplit(".", 1)[-1])
+        if block["hi"] - block["lo"] + 1 <= MAX_BLOCK_LINES:
+            lines = text.splitlines()
+            ctx.anchor_code = "\n".join(lines[block["lo"] - 1:block["hi"]])
+            ctx.anchor_block_lines = (block["lo"], block["hi"])
 
     def _fit_anchor(self, ctx: "ChangeContext", anchor: str, budget: int) -> None:
         """An anchor whose code and digest exceed `ANCHOR_SHARE` of the budget is given as an outline, its digest cut
@@ -182,6 +205,7 @@ class ChangeContextBuilder:
             siblings=[Sibling(s.qname, _rel(s.file, self.root), s.lines, s.reason, s.code)
                       for s in siblings(b, anchor, self.groups.of, exclude=self._neighbours(anchor),
                                         k=2 if not view else 12) if not seen(s.qname)][:2])
+        self._enclosing(ctx, anchor)
         if view:
             ctx.anchor_in_view = seen(anchor)
             if ctx.anchor_in_view:
@@ -351,6 +375,9 @@ def render(ctx: ChangeContext) -> str:
                 f"definition inside it follow (prism_read_code `{ctx.anchor}` gives the full code).",
                 f"```{fence}", ctx.anchor_code, "```"]
     else:
+        if ctx.anchor_block_note:
+            out.append(ctx.anchor_block_note + (f" Lines {ctx.anchor_block_lines[0]}-{ctx.anchor_block_lines[1]} "
+                                                f"(the block) follow." if ctx.anchor_block_lines else ""))
         out += [f"```{fence}", ctx.anchor_code, "```"]
     out += ["", "Digest (what its code does, line by line):", "```", ctx.anchor_digest, "```"]
 

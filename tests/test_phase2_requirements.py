@@ -7,7 +7,8 @@ fails today, and an unexpected pass fails the suite, so the marker comes off the
 - JS/TS: the same reference kinds as Python (imports, type use, `instanceof`, values);
 - C5: `prism_ask` says plainly when no symbol has the name asked about;
 - C6: `prism_read_code` accepts a module name and a module-level variable;
-- C7: `prism_change_context` shows the block enclosing a conditionally defined function (delete-05).
+- C7 (built, Phase 3): `prism_change_context` and `prism_read_code` show the block enclosing a conditionally defined
+  function (delete-05).
 """
 import os
 import subprocess
@@ -127,10 +128,19 @@ def test_c6_read_module_and_variable(layer):
     assert "3\tLIMIT = 3" in var
 
 
-@pytest.mark.xfail(strict=True, reason="C7: the enclosing block of a conditional definition")
 def test_c7_change_context_shows_the_enclosing_block(layer):
     out = layer.call("prism_change_context", symbol="pkg.core.legacy_mode")
     assert "if sys.version_info >= (3, 9):" in out and "else:" in out
+    assert "inside the `else:` branch of the if/else block" in out and "only statement in that branch" in out
+
+
+def test_c7_read_code_shows_the_enclosing_block(layer):
+    # delete-05: `prism_read_code` gave the two `def` lines; deleting them left `else:` empty
+    out = layer.call("prism_read_code", symbol="pkg.core.legacy_mode")
+    assert "\tif sys.version_info >= (3, 9):" in out and "\telse:" in out and "\t    def legacy_mode():" in out
+    assert "with its enclosing block" in out and "only statement in that branch" in out
+    plain = layer.call("prism_read_code", symbol="pkg.core.helper")          # not nested: unchanged
+    assert "enclosing block" not in plain
 
 
 def test_tools_work_on_the_fixture(layer):
