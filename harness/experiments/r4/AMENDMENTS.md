@@ -1651,3 +1651,65 @@ tools: in Phase 1 the agent preferred the standard tools whenever both were offe
 three arms. The first calls' output tokens:
 - `find_references` 166, `semantic_search` 1,290, `ast_search` 1,554, `run_shell` 37;
 - `prism_find_references` 287, `prism_change_context` 1,706, `prism_search` 3,410.
+
+### Phase 3 amendment 3: large fan-out tasks, the run's size, the pre-run audit (2026-11-22, before any Phase 3 run)
+
+**The user's decision:** tasks with 15-30 references across several files, where a reference search's size and
+quality matter. This replaces the 2-12 place hidden-dependency tasks. Those were mined, but jedi found all their
+places too, so they could not tell an LSP agent from PRISM.
+
+**The tasks** (`hidden_scout.py --places 15-30 --min-files 3 --kinds method,function,class`, then `hidden_tasks.py`):
+- **The target:** a production method, function or class with 15-30 places in 3+ files besides its own.
+- **The places:** calls and instantiations at each call site, imports (exact columns), `__all__` strings, subclass
+  bases, and the reference graph's other uses.
+- **Dropped when:** a call was guessed or matched by name only, an edge is not accounted for, or a string names it
+  that PRISM does not resolve.
+- **Every Phase 3 validation check applies, plus:**
+  - jedi's references must equal PRISM's places (`__all__` strings aside);
+  - renaming the definition alone must fail a scored test;
+  - the end-to-end scoring check.
+- **Per repository:** at most 3 tasks, at most 15 tried.
+
+**Mining, measured** (65 candidates tried in 10 repositories; typer and multidict gave none):
+
+| Outcome | Candidates |
+|---|---|
+| Valid tasks | 21 |
+| PRISM's places and jedi's references differ | 31 |
+| No test file using it passes at the start | 10 |
+| The answer key fails the tests | 3 |
+
+- **Of the 31 disagreements:**
+  - PRISM found places jedi did not, 23;
+  - jedi found places PRISM did not, 7;
+  - both, 1.
+- **Measured against the other reader** (a disagreement means one reader missed a place, not which one was right):
+  PRISM missed places on 8 of 65 targets (12%), jedi on 24 of 65 (37%).
+- **The end-to-end check dropped 1 of the 21:** werkzeug `send_file`, whose tests put absolute paths in their IDs,
+  so they cannot be matched in another working copy.
+
+**The run's size:**
+- turn cap 60 (was 28): up to 30 places, each an `edit_file`;
+- token budget 1,000,000 prompt tokens (`R3_BUDGET_TOKENS`, set in the Phase 3 cell; default unchanged).
+
+**Fixed before any run** (found by the mining and by the user's harness audit):
+- **PRISM:**
+  - every call's position is kept on its edge (`sites`);
+  - a call matched by name only is marked `via="name_match"`;
+  - reference edges keep up to 64 lines (was 5);
+  - an import or `__all__` entry spanning several lines keeps the name's own line (was the statement's first line:
+    632 references in instructor alone were mis-cited);
+  - index schema 12.
+- **The static check:** it ignores the task's generated hidden test (`derived.ignore`), so its string of the old
+  name counts in neither the done gate's tree nor the scorer's. Before this, the answer key failed one or the other.
+  String uses of the name (`__all__`) are counted.
+- **Compaction** summarises BASELINE_LSP's IDE tools like PRISM's (first 12 lines when old). Before, only the
+  baseline's outputs would have been re-sent in full.
+- **The pre-flight** renders the cell's own three arms with their exact tool lists (it rendered PRISM and BASELINE).
+- **The report** counts every tool's calls and output tokens, an `ide` turn kind, and the reference tools' and all
+  index-side tools' output tokens per arm.
+- **Tests:**
+  - goldens for `prism_find_references`, `prism_search`, `prism_read` and `prism_read_code`;
+  - the test-file rule through the tools;
+  - C1-C3 log fields in every arm;
+  - the new tools in the report and in compaction.
