@@ -196,3 +196,20 @@ def test_large_fanout_scout_reads_prism_sites_and_exports(tmp_path):
     assert gold["pkg/__init__.py"] == "from .core import build_conn\n\n__all__ = [\"build_conn\"]\n"
     assert "return core.build_conn(4)" in gold["pkg/b.py"] and "def build_conn(url):" in gold["pkg/core.py"]
     assert H.jedi_agreement(work, c)["agree"]
+
+
+def test_check_ignores_the_generated_test(tmp_path):
+    """The generated hidden test names the old method in a string; a run never has that file and the scorer applies
+    it before the check, so the check ignores it (both the done gate's tree and the scorer's tree pass the gold)."""
+    work = _repo(tmp_path)
+    c = _cand(work)
+    derived = {"kind": "rename_sites", "file": "pkg/conn.py", "qualname": "Conn.close", "old": "close",
+               "new": "close_impl", "ignore": ["tests/test_phase3_rename_close.py"]}
+    for f, t in H.gold_sites(work, c, "close_impl").items():
+        open(os.path.join(work, f), "w").write(t)
+    derived["baseline"] = DC.measure(derived, work)["counts"]
+    assert DC.check(derived, work)["ok"]                                       # the done gate's tree
+    os.makedirs(os.path.join(work, "tests"), exist_ok=True)
+    open(os.path.join(work, "tests/test_phase3_rename_close.py"), "w").write(
+        "def test_x():\n    assert not hasattr(object, \"close\")\n")
+    assert DC.check(derived, work)["ok"]                                       # the scorer's tree

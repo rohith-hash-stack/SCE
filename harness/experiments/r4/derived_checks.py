@@ -189,7 +189,8 @@ def measure(derived: dict, work: str) -> dict:
     kind = derived["kind"]
     counts: dict[str, int] = {}
     facts: dict = {}
-    files = python_files(work)
+    # `ignore`: the generated hidden test (a run never has it; the scorer applies it before this check)
+    files = [f for f in python_files(work) if f not in set(derived.get("ignore") or ())]
     own = derived["file"]
     own_tree = _parse(_read(work, own)) if os.path.isfile(os.path.join(work, own)) else None
     if kind in ("rename", "rename_sites"):

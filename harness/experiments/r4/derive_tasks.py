@@ -388,6 +388,7 @@ def validate(changed: dict, derived: dict, details: dict, tests: list, gen_rel: 
     # the baseline is the gold tree a run can reach: without the generated hidden test, which a run never has (its
     # `assert not hasattr(owner, "old")` would otherwise count as a use of the old name, under rename_sites a use
     # the run "removed")
+    derived["ignore"] = [gen_rel]
     gold_measure = DC.measure(derived, work)
     derived["baseline"] = gold_measure["counts"]
     _write(work, gen_rel, gen)
