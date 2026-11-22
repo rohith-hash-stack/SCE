@@ -13,7 +13,8 @@ over and a look-alike renamed both fail.
 **A candidate becomes a task only if every check passes** (`derive_tasks.validate`, Phase 2's checks: the tests pass
 at the start, 3 runs; the answer key passes them, a generated hidden test and the static check, 3 runs, nothing
 flaky; the start fails the check and a test) **and the places are live:** renaming the definition alone makes at
-least one scored test fail. Recorded for each task besides (`probes`): what the definition-only rename and the
+least one scored test fail; **and two readers agree:** jedi's Find All References (`r3/lsp_tools.py`) names exactly
+PRISM's places (by file and line). Recorded for each task besides (`probes`): what the definition-only rename and the
 token-matching rename do to the scored tests and to the static check.
 """
 from __future__ import annotations
@@ -116,6 +117,22 @@ def def_position(work: str, c: dict) -> tuple[int, int] | None:
     return (node.lineno, m.start(1)) if m else None
 
 
+def jedi_agreement(work: str, c: dict) -> dict:
+    """PRISM's places against jedi's Find All References on the definition (`r3/lsp_tools.py`), by (file, line)."""
+    from harness.experiments.r3.lsp_tools import LspError, LspReferences
+    try:
+        text = LspReferences(work).find_references(f"{c['file']}:{c['lines'][0]}")
+    except LspError as exc:
+        return {"agree": False, "error": str(exc)}
+    got = set()
+    for ln in text.splitlines()[1:]:
+        p = ln.split(":")
+        if len(p) > 3 and p[1].isdigit() and "(definition)" not in p[2]:
+            got.add((p[0], int(p[1])))
+    want = {(p["file"], p["line"]) for p in c["places"]}
+    return {"agree": got == want, "jedi_only": sorted(got - want)[:5], "prism_only": sorted(want - got)[:5]}
+
+
 def gold_sites(work: str, c: dict, new: str) -> dict | None:
     pos = def_position(work, c)
     if pos is None:
@@ -166,6 +183,9 @@ def build(c: dict, work: str, env, rev: str) -> dict:
     new = D.new_name(c["leaf"], taken)
     if new is None:
         return {"rejected": "no free new name"}
+    jedi = jedi_agreement(work, c)                  # the second reader: a language server's references
+    if not jedi["agree"]:
+        return {"rejected": f"PRISM's places and jedi's references differ: {jedi}"}
     changed = gold_sites(work, c, new)
     if changed is None:
         return {"rejected": "a place or the definition does not hold the name (or a property setter)"}

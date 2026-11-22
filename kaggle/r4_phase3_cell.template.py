@@ -6,7 +6,8 @@ SMOKE = False
 PHASE3_STAGE = "@@STAGE_KIND@@"       # "poc" (45 runs, go/no-go only) or "confirmatory" (225 runs)
 # PRISM Phase 3, hidden dependencies (harness/experiments/r4/AMENDMENTS.md, "Phase 3, hidden dependencies, two
 # stages"): the tasks of @@TASKS_PATH@@ x seeds @@SEEDS@@ x 3 arms, devstral-small-2:
-#   BASELINE    the agent loop with the shared tools and related_code; no PRISM
+#   BASELINE_LSP the agent loop with the shared tools, related_code and find_references (a language server's
+#               reference search, jedi 0.19.2: r3/lsp_tools.py); no PRISM
 #   PRISM       the same, with PRISM's tools available (prism_search and prism_read among them)
 #   PRISM_ONLY  PRISM's tools without grep and read_file (prism_search and prism_read in their place)
 # Every arm: the Phase 2 graph (reference pass, type tracking), and the harness feedback C1-C3 (--feedback).
@@ -52,7 +53,7 @@ if SHARD_ID not in range(1, len(SHARD_SEEDS) + 1):
     raise SystemExit(f"SHARD_ID must be 1-{len(SHARD_SEEDS)}, got {SHARD_ID!r}")
 SEED = SHARD_SEEDS[SHARD_ID - 1]
 STAGE = f"{os.path.basename('@@RESULTS_PATH@@')}_seed{SEED}"
-ARMS = ("BASELINE", "PRISM", "PRISM_ONLY")
+ARMS = ("BASELINE_LSP", "PRISM", "PRISM_ONLY")
 SMOKE_TASKS = ()
 SUMMARIZER = "devstral-small-2:24b-instruct-2512-q4_K_M"   # Phase 0 model (amendment); JSON mode, no think flag
 MODEL_FLAGS = ["--model", SUMMARIZER, "--ledger", "--phase1", "--raw-tools", "--feedback"]
@@ -170,7 +171,7 @@ if run(["git", "cat-file", "-e", f"origin/{BRANCH}:{RESULTS_PATH}"], cwd=SCE_DIR
 
 print("\n[setup] Install prism, the tokenizer library and uv", flush=True)
 run([sys.executable, "-m", "pip", "install", "-q", "-e", ".", "tokenizers", "uv", "packaging",
-     "pyflakes==3.2.0"], cwd=SCE_DIR, check=True)
+     "pyflakes==3.2.0", "jedi==0.19.2"], cwd=SCE_DIR, check=True)   # jedi: BASELINE_LSP's find_references
 child_env = dict(os.environ, PYTHONPATH=os.pathsep.join([SCE_DIR, os.path.join(SCE_DIR, "src")]),
                  PYTHONDONTWRITEBYTECODE="1",
                  PATH=os.pathsep.join([os.path.dirname(sys.executable), os.path.expanduser("~/.local/bin"),

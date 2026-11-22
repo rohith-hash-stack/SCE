@@ -38,6 +38,7 @@ PRISM_TOOLS = ("prism_change_context", "prism_blast_radius", "prism_ask", "prism
 SEARCH_MAX_LINES = 200
 READ_MAX_DEFS = 12
 BASELINE_TOOLS = ("related_code",)
+LSP_TOOLS = ("find_references",)
 
 
 class ToolError(Exception):
@@ -377,6 +378,18 @@ class ToolLayer:
                 continue
             out.append(self._digests.digest(q).render())
         return "\n\n".join(out)
+
+    def _find_references(self, symbol: str) -> str:
+        """BASELINE_LSP's language-server reference search (`lsp_tools.py`), on the working files as they are now."""
+        from harness.experiments.r3.lsp_tools import LspError, LspReferences
+        if self.shared is None:
+            raise ToolError("find_references needs the working tree")
+        if getattr(self, "_lsp", None) is None:
+            self._lsp = LspReferences(self.shared.work)
+        try:
+            return self._lsp.find_references(symbol)
+        except LspError as exc:
+            raise ToolError(str(exc)) from exc
 
     def _related_code(self, query: str) -> str:
         """R1's control in the loop: the functions a BM25 search over the repository's production functions ranks

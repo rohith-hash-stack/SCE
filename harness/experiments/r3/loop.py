@@ -75,6 +75,14 @@ PRISM_DOC = {
 BASELINE_DOC = {
     "related_code": ('{"query": str}', "The functions a keyword search over the repository ranks highest, as code."),
 }
+# BASELINE_LSP (Phase 3, the user's decision 2026-11-22): the baseline with a language server's reference search
+# (`r3/lsp_tools.py`, jedi), as Copilot- or Claude-style agents have.
+LSP_DOC = {
+    "find_references": ('{"symbol": str}', "A language server's Find All References: every place in the project that "
+                        "refers to this definition (resolved through imports, aliases and types; same-named things "
+                        "that are other objects are not included), as path:line:column and the line. `symbol`: a "
+                        "dotted name (pkg.module.Class.method, or Class.method) or path:line[:column] of a use."),
+}
 
 SYSTEM = """You are a software engineer working in a code repository. You work in turns: each turn, reply with
 exactly one JSON object calling one tool:
@@ -117,6 +125,7 @@ PARAM_SCHEMAS = {
     "prism_search": ({"pattern": _S, "path": _S, "kind": {"type": ["string", "null"]}}, ["pattern"]),
     "prism_read": ({"path": _S, "start": _I, "end": {"type": ["integer", "null"]}}, ["path"]),
     "related_code": ({"query": _S}, ["query"]),
+    "find_references": ({"symbol": _S}, ["symbol"]),
 }
 
 
@@ -125,12 +134,14 @@ PARAM_SCHEMAS = {
 # PRISM_ONLY (Phase 2 D3; support only, run only under its own pre-registration): PRISM's tools with `prism_search`
 # and `prism_read` in place of `grep` and `read_file`, to test whether PRISM can replace standard search.
 PRISM_ARMS = ("PRISM", "INJECTED", "PRISM_ONLY")
-ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY")
+ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP")
 #: the shared tools an arm does without
 REMOVED_SHARED = {"PRISM_ONLY": ("read_file", "grep")}
 
 
 def index_doc(version: str) -> dict:
+    if version == "BASELINE_LSP":
+        return {**BASELINE_DOC, **LSP_DOC}
     return PRISM_DOC if version in PRISM_ARMS else BASELINE_DOC
 
 

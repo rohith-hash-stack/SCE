@@ -75,7 +75,7 @@ def _summary(tool: str, output: str, ntok) -> str | None:
         if not keep:
             return None
         return "(older test results, summarised)\n" + "\n".join(keep)
-    kind = "index" if tool.startswith("prism_") or tool == "related_code" else tool
+    kind = "index" if tool.startswith("prism_") or tool in ("related_code", "find_references") else tool
     n = SUMMARY_LINES.get(kind)
     if n is None:
         return None

@@ -233,36 +233,36 @@ DESIGNS = {
                "descriptive": (("INJECTED", "PRISM"), ("PRISM_ONLY", "PRISM")),
                "subsets": {"derived": lambda t: bool(t.get("derived")), "controls": lambda t: bool(t.get("control"))}},
     # Phase 3 (AMENDMENTS "Phase 3, hidden dependencies, two stages", pre-registered 2026-11-22): 3 arms, PRISM and
-    # PRISM_ONLY against BASELINE (Holm over the two), PRISM_ONLY against PRISM descriptively; the hidden-dependency
+    # PRISM_ONLY against BASELINE_LSP, the baseline with a language server's find_references (Holm over the two), PRISM_ONLY against PRISM descriptively; the hidden-dependency
     # tasks and the controls apart, descriptively. The proof of concept (`"stage": "poc"`) adds the go/no-go verdict.
-    "phase3": {"arms": ("BASELINE", "PRISM", "PRISM_ONLY"),
-               "comparisons": (("PRISM", "BASELINE"), ("PRISM_ONLY", "BASELINE")),
+    "phase3": {"arms": ("BASELINE_LSP", "PRISM", "PRISM_ONLY"),
+               "comparisons": (("PRISM", "BASELINE_LSP"), ("PRISM_ONLY", "BASELINE_LSP")),
                "descriptive": (("PRISM_ONLY", "PRISM"),),
                "primary_on": lambda t: bool(t.get("derived")),         # the primary tests: the hidden tasks only
                "subsets": {"hidden": lambda t: bool(t.get("derived")), "controls": lambda t: bool(t.get("control"))}},
 }
 
 #: The proof of concept's go/no-go rule (AMENDMENTS "Phase 3", fixed before any Phase 3 run): on the hidden tasks
-#: only, GO when a PRISM arm (PRISM or PRISM_ONLY) solves at least `GO_MIN_EXTRA_SOLVES` more runs than BASELINE and
-#: BASELINE's mean score is higher on at most `GO_MAX_TASKS_LOST` hidden task; and at most `GO_MAX_DEAD` runs died
+#: only, GO when a PRISM arm (PRISM or PRISM_ONLY) solves at least `GO_MIN_EXTRA_SOLVES` more runs than BASELINE_LSP
+#: and BASELINE_LSP's mean score is higher on at most `GO_MAX_TASKS_LOST` hidden task; and at most `GO_MAX_DEAD` runs died
 #: on infrastructure. Anything else is NO-GO.
 GO_MIN_EXTRA_SOLVES, GO_MAX_TASKS_LOST, GO_MAX_DEAD = 3, 1, 2
 
 
-def go_no_go(rows: list[dict], per_task: dict, tasks: dict, expected_runs: int) -> dict:
+def go_no_go(rows: list[dict], per_task: dict, tasks: dict, expected_runs: int, ref: str = "BASELINE_LSP") -> dict:
     hidden = {tid for tid, t in tasks.items() if t.get("derived")}
     solved = {arm: sum(1 for r in rows if r["task"] in hidden and r["arm"] == arm and r["solved"])
-              for arm in ("BASELINE", "PRISM", "PRISM_ONLY")}
+              for arm in (ref, "PRISM", "PRISM_ONLY")}
     dead = max(0, expected_runs - len(rows)) + sum(1 for r in rows if r["infra"])   # missing runs count as dead
     arms = {}
     for arm in ("PRISM", "PRISM_ONLY"):
-        lost = sum(1 for tid in hidden if arm in per_task.get(tid, {}) and "BASELINE" in per_task[tid]
-                   and per_task[tid]["BASELINE"]["score"] > per_task[tid][arm]["score"] + 1e-12)
-        extra = solved[arm] - solved["BASELINE"]
+        lost = sum(1 for tid in hidden if arm in per_task.get(tid, {}) and ref in per_task[tid]
+                   and per_task[tid][ref]["score"] > per_task[tid][arm]["score"] + 1e-12)
+        extra = solved[arm] - solved[ref]
         arms[arm] = {"extra_solves": extra, "hidden_tasks_lost": lost,
                      "go": extra >= GO_MIN_EXTRA_SOLVES and lost <= GO_MAX_TASKS_LOST}
     ok_runs = dead <= GO_MAX_DEAD
-    return {"rule": {"min_extra_solves": GO_MIN_EXTRA_SOLVES, "max_hidden_tasks_lost": GO_MAX_TASKS_LOST,
+    return {"reference_arm": ref, "rule": {"min_extra_solves": GO_MIN_EXTRA_SOLVES, "max_hidden_tasks_lost": GO_MAX_TASKS_LOST,
                      "max_infrastructure_deaths": GO_MAX_DEAD},
             "hidden_tasks": len(hidden), "hidden_solved_runs": solved, "infrastructure_deaths": dead,
             "arms": arms, "verdict": "GO" if ok_runs and any(a["go"] for a in arms.values()) else "NO-GO"}

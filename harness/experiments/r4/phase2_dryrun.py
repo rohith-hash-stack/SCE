@@ -8,6 +8,7 @@ the tool layer, the injection for INJECTED, the loop, the done gate, scoring):
 - **gold** replays the answer key (`GOLD_DIR/<id>.patch`, without the generated hidden test) through `edit_file`:
   - the PRISM arms first call `prism_change_context` on the target;
   - PRISM_ONLY first calls `prism_search` for its name and `prism_read` on its file;
+  - BASELINE_LSP first calls `find_references` on the target's line;
   - then `run_tests` and `done`.
 
   It must end `resolved`.
@@ -26,7 +27,7 @@ import tempfile
 
 from harness.experiments.r3.dryrun import Script, edits_for
 
-ARMS = ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY")
+ARMS = ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY", "BASELINE_LSP")
 
 
 def gold_contents(clone: str, task: dict, patch: str) -> dict[str, tuple[str | None, str | None]]:
@@ -55,6 +56,8 @@ def gold_calls(task: dict, contents: dict, arm: str) -> list[dict]:
         calls += [{"tool": "prism_search", "args": {"pattern": rf"\b{q.rsplit('.', 1)[-1]}\b"}},
                   {"tool": "prism_read", "args": {"path": f, "start": max(1, task["target_line"] - 5),
                                                   "end": task["target_line"] + 20}}]
+    elif arm == "BASELINE_LSP":
+        calls.append({"tool": "find_references", "args": {"symbol": f"{f}:{task['target_line']}"}})
     elif arm in ("PRISM", "INJECTED"):
         calls.append({"tool": "prism_change_context", "args": {"symbol": task["anchor_qname"]}})
     for path, (old, new) in sorted(contents.items()):
@@ -93,7 +96,13 @@ def main(argv=None) -> int:
                                                                                                  "stuck_done")
             bad += not ok
             sc = res.get("score") or {}
+            first = None
+            log = os.path.join(a.out, f"{t['id']}__{arm}__{seed}.jsonl")
+            if os.path.exists(log):
+                first = next((json.loads(x) for x in open(log) if '"tool"' in x), None)
             print(json.dumps({"task": t["id"], "arm": arm, "script": kind, "outcome": res.get("outcome"), "ok": ok,
+                              "first_tool": (first or {}).get("tool"),
+                              "first_output": str((first or {}).get("output_head", ""))[:160],
                               "turns": res.get("turns"), "derived_check": sc.get("derived_check"),
                               "injected": (res.get("injected") or {}).get("tool")}), flush=True)
     return 1 if bad else 0

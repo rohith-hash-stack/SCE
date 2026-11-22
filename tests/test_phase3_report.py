@@ -7,7 +7,7 @@ import os
 from harness.experiments.r4 import rebaseline_report as R
 from tests.test_phase2_report import _run, _task
 
-ARMS3 = ("BASELINE", "PRISM", "PRISM_ONLY")
+ARMS3 = ("BASELINE_LSP", "PRISM", "PRISM_ONLY")
 
 
 def _doc(tmp_path, solved, stage="poc", missing=()):
@@ -28,37 +28,37 @@ def _doc(tmp_path, solved, stage="poc", missing=()):
 
 
 def test_design_and_go(tmp_path):
-    rep = _doc(tmp_path, {"BASELINE": {"p3-hidden-01": 1},
+    rep = _doc(tmp_path, {"BASELINE_LSP": {"p3-hidden-01": 1},
                           "PRISM": {"p3-hidden-01": 3, "p3-hidden-02": 2, "p3-hidden-03": 1},
                           "PRISM_ONLY": {"p3-hidden-01": 1}})
     assert rep["design"] == "phase3" and rep["arms"] == list(ARMS3) and rep["runs"] == 45
-    assert set(rep["primary"]) == {"PRISM vs BASELINE", "PRISM_ONLY vs BASELINE"}
+    assert set(rep["primary"]) == {"PRISM vs BASELINE_LSP", "PRISM_ONLY vs BASELINE_LSP"}
     assert set(rep["descriptive"]) == {"PRISM_ONLY vs PRISM"} and rep["primary_tasks"] == 4
-    assert rep["primary"]["PRISM vs BASELINE"]["tasks"] == 4                      # the control is not in it
+    assert rep["primary"]["PRISM vs BASELINE_LSP"]["tasks"] == 4                      # the control is not in it
     assert rep["subsets"]["hidden"]["tasks"] == 4 and rep["subsets"]["controls"]["tasks"] == 1
     g = rep["go_no_go"]
-    assert g["hidden_solved_runs"] == {"BASELINE": 1, "PRISM": 6, "PRISM_ONLY": 1}
+    assert g["hidden_solved_runs"] == {"BASELINE_LSP": 1, "PRISM": 6, "PRISM_ONLY": 1}
     assert g["arms"]["PRISM"] == {"extra_solves": 5, "hidden_tasks_lost": 0, "go": True}
     assert g["arms"]["PRISM_ONLY"]["go"] is False and g["verdict"] == "GO"
 
 
 def test_no_go_when_the_gain_is_small_or_baseline_wins_tasks(tmp_path):
-    rep = _doc(tmp_path, {"BASELINE": {"p3-hidden-01": 1}, "PRISM": {"p3-hidden-01": 3}, "PRISM_ONLY": {}})
+    rep = _doc(tmp_path, {"BASELINE_LSP": {"p3-hidden-01": 1}, "PRISM": {"p3-hidden-01": 3}, "PRISM_ONLY": {}})
     assert rep["go_no_go"]["arms"]["PRISM"]["extra_solves"] == 2 and rep["go_no_go"]["verdict"] == "NO-GO"
     (tmp_path / "phase3_poc").rename(tmp_path / "old")
-    rep = _doc(tmp_path, {"BASELINE": {"p3-hidden-01": 2, "p3-hidden-02": 2},
+    rep = _doc(tmp_path, {"BASELINE_LSP": {"p3-hidden-01": 2, "p3-hidden-02": 2},
                           "PRISM": {"p3-hidden-03": 3, "p3-hidden-04": 3}, "PRISM_ONLY": {}})
     g = rep["go_no_go"]["arms"]["PRISM"]
     assert g["extra_solves"] == 2 and g["hidden_tasks_lost"] == 2 and not g["go"]
 
 
 def test_no_go_when_runs_are_missing(tmp_path):
-    missing = {("p3-hidden-02", "BASELINE", 42), ("p3-hidden-02", "BASELINE", 43), ("p3-hidden-03", "PRISM", 44)}
-    rep = _doc(tmp_path, {"BASELINE": {}, "PRISM": {"p3-hidden-01": 3, "p3-hidden-02": 3}, "PRISM_ONLY": {}},
+    missing = {("p3-hidden-02", "BASELINE_LSP", 42), ("p3-hidden-02", "BASELINE_LSP", 43), ("p3-hidden-03", "PRISM", 44)}
+    rep = _doc(tmp_path, {"BASELINE_LSP": {}, "PRISM": {"p3-hidden-01": 3, "p3-hidden-02": 3}, "PRISM_ONLY": {}},
                missing=missing)
     assert rep["go_no_go"]["infrastructure_deaths"] == 3 and rep["go_no_go"]["verdict"] == "NO-GO"
 
 
 def test_confirmatory_stage_has_no_verdict(tmp_path):
-    rep = _doc(tmp_path, {"BASELINE": {}, "PRISM": {}, "PRISM_ONLY": {}}, stage="confirmatory")
+    rep = _doc(tmp_path, {"BASELINE_LSP": {}, "PRISM": {}, "PRISM_ONLY": {}}, stage="confirmatory")
     assert "go_no_go" not in rep

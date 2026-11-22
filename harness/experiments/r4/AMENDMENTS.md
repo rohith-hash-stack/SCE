@@ -1564,3 +1564,44 @@ turns. If a shard fails, the cell pushes, reports it as failed, and stops.
 
 **Fixed for the runs:** the code commit and its `src`/`harness` trees, and the sha256 of the task list, pinned in the
 cells.
+
+### Phase 3 amendment 1: the LSP-enabled baseline (2026-11-22, before any Phase 3 run)
+
+**The user's decision:** "Baseline should be like Copilot/Claude, using LSP, not just grep." PRISM is compared against
+an agent with a language server's reference search, not against grep alone.
+
+**The arm:** BASELINE_LSP replaces BASELINE in both Phase 3 stages. It is BASELINE's tools (the shared tools and
+`related_code`) plus `find_references`:
+- the language server's Find All References (`r3/lsp_tools.py`), backed by jedi 0.19.2 (the engine of
+  jedi-language-server and multilspy's Python default), pinned in the cell;
+- it resolves a dotted name or a `path:line[:column]`, and returns every place in the project whose name infers to
+  that definition, as `path:line:column: <line>`, up to 200 lines;
+- it reads the working tree as it is now, edits included, as a language server reads the editor's buffers;
+- its output is not summarised and not padded: it is what the server returns, rendered as text.
+
+The arm name `BASELINE` keeps its Phase 1/2 meaning. PRISM and PRISM_ONLY are unchanged and do not get
+`find_references`. The comparisons become PRISM − BASELINE_LSP and PRISM_ONLY − BASELINE_LSP. The go/no-go rule
+compares against BASELINE_LSP.
+
+**A second reader in mining:** a hidden task is kept only if jedi's references to the definition are exactly PRISM's
+places, by file and line (`hidden_tasks.jedi_agreement`).
+
+**Measured before any run, on the 23 validated candidates:**
+- **jedi agreed with PRISM on 22 of 23.**
+- **On the 23rd (scrapy `ResponseTypes.from_args`), jedi found a call PRISM missed:**
+  `scrapy/utils/_download_handlers.py:105`, `responsetypes.responsetypes.from_args(...)`. That answer key was
+  incomplete, and the scored tests did not exercise the missed call. The task is dropped.
+- **`find_references`' answers:** 378-1,836 characters (mean 855) for 3-11 references, 0.1-3.9 s.
+- **One task (`ContentSecurityPolicy.to_header`), the first call's output:**
+
+  | Arm | First call | Tokens |
+  |---|---|---|
+  | BASELINE_LSP | `find_references` | 166 |
+  | PRISM | `prism_change_context` | 1,706 |
+  | PRISM_ONLY | `prism_search` | 3,410 |
+
+**What this means for the design (recorded now, before any data):** on these tasks the LSP baseline sees exactly the
+places the answer key holds, at a tenth of the tokens of PRISM's change context. A correctness gap like Phase 2's
+`p2-signature-02` is not expected, and the token premise (an LSP floods the context) does not hold at 3-12
+references. Whether the go/no-go rule or the primary metric changes is the user's decision. Until the user amends
+it, the rule above stands unchanged.

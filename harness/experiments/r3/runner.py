@@ -315,7 +315,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     p.add_argument("task")
-    p.add_argument("version", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY"))
+    p.add_argument("version", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP"))
     p.add_argument("seed", type=int)
     p.add_argument("--clone", required=True)
     p.add_argument("--out", required=True)

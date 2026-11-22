@@ -121,3 +121,43 @@ def test_phase3_selection_rule():
     assert [x["id"] for x in poc] == ["p3-hidden-02", "p3-hidden-04", "p3-hidden-03", "p3-hidden-05"]
     assert conf[:4] == poc
     assert sum(1 for x in conf if x["repo"] == "a") == 3          # fewer than 12 qualify at 2 per repository
+
+
+def test_find_references_is_the_language_servers_reading(tmp_path):
+    from harness.experiments.r3.lsp_tools import LspReferences
+    work = _repo(tmp_path)
+    lsp = LspReferences(work)
+    out = lsp.find_references("Conn.close")
+    assert out.splitlines()[0].startswith("`pkg.conn.Conn.close` (function, pkg/conn.py:2): 3 reference(s)")
+    assert "pkg/svc.py:9:26: return self.conn.close()" in out and "pkg/user.py:6:14: return c.close()" in out
+    assert "o.close()" not in out and "fh.close()" not in out
+    assert "matches 2 definitions" in lsp.find_references("close")
+    assert lsp.find_references("pkg/user.py:6") == out                  # a use's line resolves to the method
+    assert lsp.find_references("pkg/conn.py:2") == out                  # so does the definition's
+
+
+def test_find_references_reads_the_edited_tree(tmp_path):
+    from harness.experiments.r3.lsp_tools import LspReferences
+    work = _repo(tmp_path)
+    p = tmp_path / "pkg" / "svc.py"
+    p.write_text(p.read_text().replace("return self.conn.close()", "return None"))
+    assert "svc.py" not in LspReferences(work).find_references("Conn.close")
+
+
+def test_jedi_agreement_on_the_fixture(tmp_path):
+    work = _repo(tmp_path)
+    c = _cand(work)
+    c["lines"] = [2, 3]
+    assert H.jedi_agreement(work, c)["agree"]
+    c["places"] = c["places"][:1]
+    r = H.jedi_agreement(work, c)
+    assert not r["agree"] and r["jedi_only"]
+
+
+def test_baseline_lsp_arm_tools():
+    from harness.experiments.r3 import loop
+    docs = loop.tool_docs("BASELINE_LSP")
+    assert "find_references" in docs and "related_code" in docs and "grep" in docs and "prism_" not in docs
+    assert "find_references" not in loop.tool_docs("BASELINE") and "find_references" not in loop.tool_docs("PRISM")
+    names = [t["function"]["name"] for t in loop.native_tools("BASELINE_LSP")]
+    assert names[-1] == "find_references"
