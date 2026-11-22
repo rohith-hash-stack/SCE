@@ -1496,6 +1496,10 @@ Turn cap 28, budget 300,000 tokens, devstral-small-2, as in Phase 2.
 - **Methods of classes with a base from outside the repository** are dropped (a rename may stop overriding the
   library's method), as in Phase 2, except for `ABC`, `Generic` and `Protocol`, which define no such method (added
   2026-11-22 during mining, before any run).
+- **The scored tests:** up to 4 test files: those with a place, then those naming the method's class, then those
+  importing a changed module. A file is used only if every test in it passes at the start; one failing for reasons of
+  its own (the network, in the mining sandbox) is skipped rather than rejecting the candidate (added 2026-11-22
+  during mining, before any run).
 - **A known bias, stated now:** a candidate whose answer key fails the tests (PRISM missed a place the tests
   exercise) is rejected. The task set therefore holds only targets PRISM resolves completely enough for the tests.
   The rejections are counted and reported as a measurement of PRISM's recall, never hidden.

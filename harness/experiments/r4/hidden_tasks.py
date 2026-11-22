@@ -46,21 +46,44 @@ def _imports(tree) -> set[str]:
     return out
 
 
-def scored_tests(work: str, c: dict, known: set) -> list[str]:
-    """The test files with a place, then the test files importing the target's module or a place's module."""
+#: per worktree: {test file: whether every test in it passes at the start}
+_START_OK: dict[tuple[str, str], bool] = {}
+MAX_TRIED_TEST_FILES = 10
+
+
+def scored_tests(work: str, c: dict, known: set, env=None) -> list[str]:
+    """The test files with a place, then the test files naming the method's class, then those importing the target's
+    module or a place's module; with `env`, only files whose every test passes at the start (a file failing for
+    reasons of its own, such as the network, is skipped rather than rejecting the candidate)."""
     first = [f for f in c["test_files"] if f in known]
     mods = {D.importable(work, f) for f in {c["file"], *c["files"]} if not f.startswith("tests")}
-    rest = []
+    cls = D._qual(c).rsplit(".", 1)[0].split(".")[-1]
+    named, rest = [], []
     for f in sorted(known - set(first)):
         if not f.endswith(".py"):
             continue
         try:
-            imps = _imports(ast.parse(D._read(work, f)))
+            text = D._read(work, f)
+            imps = _imports(ast.parse(text))
         except (SyntaxError, ValueError, OSError):
             continue
         if any(i == m or i.startswith(m + ".") or ("." in i and m.startswith(i + ".")) for i in imps for m in mods):
-            rest.append(f)
-    return (first + rest)[:MAX_TEST_FILES]
+            (named if re.search(rf"\b{re.escape(cls)}\b", text) else rest).append(f)
+    ordered = first + named + rest
+    if env is None:
+        return ordered[:MAX_TEST_FILES]
+    out = []
+    for f in ordered[:MAX_TRIED_TEST_FILES]:
+        key = (work, f)
+        if key not in _START_OK:
+            st = D._run_states(env, [f])
+            _START_OK[key] = not st.get("__unparsed__") and bool(st) and all(
+                v[0] == "passed" for k, v in st.items() if k != "__unparsed__")
+        if _START_OK[key]:
+            out.append(f)
+        if len(out) >= MAX_TEST_FILES:
+            break
+    return out
 
 
 def _rename_at(text: str, edits: list[tuple[int, int]], old: str, new: str) -> str | None:
@@ -131,9 +154,9 @@ def build(c: dict, work: str, env, rev: str) -> dict:
     from harness.experiments.r3.gate import reset_to
     reset_to(work, rev)
     known = set(env.test_files())
-    tests = scored_tests(work, c, known)
+    tests = scored_tests(work, c, known, env)
     if not tests:
-        return {"rejected": "no runnable test file"}
+        return {"rejected": "no test file that uses it passes at the start"}
     qual = D._qual(c)
     # `ABC`, `Generic` and `Protocol` define no method a rename could stop overriding
     outside = [b for b in D._outside_bases(work, c["file"], qual) if b not in INERT_BASES]
