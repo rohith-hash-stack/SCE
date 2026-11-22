@@ -1,7 +1,7 @@
 """Phase 3's two task files, chosen by the rule pre-registered in AMENDMENTS ("Phase 3, hidden dependencies, two
 stages", "Task selection, fixed now").
 
-    python -B -m harness.experiments.r4.phase3_tasks RAW.json RAW_GOLD_DIR
+    python -B -m harness.experiments.r4.phase3_tasks RAW.json:RAW_GOLD_DIR ...
 
 From the validated hidden tasks (`hidden_tasks.py`, then `derive_scoring_check.py`; any task with `rejected` is left
 out), ranked by grep's precision, lowest first, then the most look-alikes, then the repository, then the name:
@@ -9,7 +9,9 @@ out), ranked by grep's precision, lowest first, then the most look-alikes, then 
 - `phase3/tasks.json`: the POC's 4, then the next 8 with at most 2 per repository (3 if fewer than 12 qualify), and
   the controls `r4s-delete-05`, `r4s-delete-08`, `r4s-delete-10` (`"stage": "confirmatory"`, 225 runs).
 
-The controls are copied unchanged from `phase2/tasks.json`. The answer keys go to `phase3/gold/`.
+The batches (one per mining process) are merged; every validated task is renumbered `p3-hidden-NN` in ranking order
+and written, with its record, to `phase3/candidates.json` (the 20+ mined candidates). The controls are copied
+unchanged from `phase2/tasks.json`. The answer keys go to `phase3/gold/`.
 """
 from __future__ import annotations
 
@@ -61,21 +63,30 @@ def _doc(tasks: list[dict], stage: str, runs: int, urls: dict) -> dict:
 
 
 def main(argv=None) -> int:
-    raw_path, raw_gold = (argv if argv is not None else sys.argv[1:])[:2]
-    raw = json.load(open(raw_path))
-    valid = [t for t in raw["tasks"] if "rejected" not in t and t.get("scoring_check")]
+    pairs = [a.split(":", 1) for a in (argv if argv is not None else sys.argv[1:])]
+    valid, gold = [], {}
+    for raw_path, raw_gold in pairs:
+        for t in json.load(open(raw_path))["tasks"]:
+            if "rejected" in t or not t.get("scoring_check"):
+                continue
+            gold[id(t)] = open(os.path.join(raw_gold, f"{t['id']}.patch")).read()
+            valid.append(t)
+    for i, t in enumerate(sorted(valid, key=rank_key), 1):
+        t["mined_id"], t["id"] = t["id"], f"p3-hidden-{i:02d}"
+    valid.sort(key=lambda t: t["id"])
     poc, conf = select(valid)
     p2doc = json.load(open(os.path.join(HERE, "phase2", "tasks.json")))
     p2, urls = {t["id"]: t for t in p2doc["tasks"]}, {**p2doc["repo_urls"], **EXTRA_URLS}
     controls = [p2[c] for c in CONTROLS]
     os.makedirs(os.path.join(OUT, "gold"), exist_ok=True)
-    for t in conf:
-        shutil.copy(os.path.join(raw_gold, f"{t['id']}.patch"), os.path.join(OUT, "gold", f"{t['id']}.patch"))
-    json.dump(_doc(poc + [p2[POC_CONTROL]], "poc", (len(poc) + 1) * 3 * 3, urls), open(os.path.join(OUT, "poc.json"), "w"),
-              indent=1)
+    for t in valid:
+        open(os.path.join(OUT, "gold", f"{t['id']}.patch"), "w").write(gold[id(t)])
+    json.dump({"design": "phase3", "candidates": valid}, open(os.path.join(OUT, "candidates.json"), "w"), indent=1)
+    json.dump(_doc(poc + [p2[POC_CONTROL]], "poc", (len(poc) + 1) * 3 * 3, urls),
+              open(os.path.join(OUT, "poc.json"), "w"), indent=1)
     json.dump(_doc(conf + controls, "confirmatory", (len(conf) + len(controls)) * 3 * 5, urls),
               open(os.path.join(OUT, "tasks.json"), "w"), indent=1)
-    print("poc:", [t["id"] for t in poc], "confirmatory:", [t["id"] for t in conf])
+    print("candidates:", len(valid), "poc:", [t["id"] for t in poc], "confirmatory:", [t["id"] for t in conf])
     return 0
 
 
