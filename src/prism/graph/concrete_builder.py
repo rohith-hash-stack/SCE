@@ -111,6 +111,20 @@ from prism.graph.symbol_table import (
 # is Go's own equivalent addition - anonymous struct embedding, the real
 # mechanism Go composition/"inheritance" uses in place of EXTENDS syntax
 # it doesn't have - weighted identically to EXTENDS for the same reason.
+#: Call positions kept per call edge (`_note_call_site`)
+MAX_CALL_SITES = 64
+
+
+def _call_site_position(call_node) -> list[int]:
+    """`[line, column]` of a call's callee name: the attribute of `x.name(...)`, else the callee expression's start."""
+    fn = call_node.child_by_field_name("function")
+    name = fn.child_by_field_name("attribute") if fn is not None and fn.type == "attribute" else None
+    if name is None and fn is not None and fn.type == "member_expression":          # JS/TS `x.name(...)`
+        name = fn.child_by_field_name("property")
+    node = name or fn or call_node
+    return [node.start_point[0] + 1, node.start_point[1]]
+
+
 TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMENTS", "OVERRIDES", "EMBEDS"})
 
 # Issue A5 (post-implementation audit): inheritance-graph resolution -
@@ -2686,7 +2700,26 @@ class ConcreteGraphBuilder:
                         instance_map.bind(node_text(child, parsed.source), resolved_class)
 
     # -- Call resolution -------------------------------------------------- #
-    def _resolve_calls_in_function(
+    def _note_call_site(self, caller: str, target: str) -> None:
+        """Phase 3 (`prism_find_references`): the graph keeps one edge per caller and callee; each call's own position
+        (its callee name's line and column, 1-based line, 0-based byte column) is kept on that edge as `sites`."""
+        site = getattr(self, "_call_site", None)
+        if site is None or not self.graph.has_edge(caller, target):
+            return
+        e = self.graph.edges[caller, target]
+        sites = e.get("sites")
+        if sites is None:
+            sites = e["sites"] = []
+        if site not in sites and len(sites) < MAX_CALL_SITES:
+            sites.append(site)
+
+    def _resolve_calls_in_function(self, *args, **kwargs) -> None:
+        try:
+            self._resolve_calls_in_function_body(*args, **kwargs)
+        finally:
+            self._call_site = None                          # outside a call loop no position is current
+
+    def _resolve_calls_in_function_body(
         self,
         caller_qname: str,
         def_node: Node,
@@ -2701,6 +2734,7 @@ class ConcreteGraphBuilder:
         call_type = CALL_NODE_TYPE[lang]
         self_tokens = SELF_TOKEN_TEXT[lang]
         for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
+            self._call_site = _call_site_position(call_node)
             if lang == LanguageID.GO:
                 generic_target = self._resolve_go_generic_call(call_node, module, import_map, parsed.source)
                 if generic_target is not None:
@@ -2709,6 +2743,7 @@ class ConcreteGraphBuilder:
                     edge_kwargs = {"relation": "CALLS"}
                     edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
                     self.graph.add_edge(caller_qname, generic_target, **edge_kwargs)
+                    self._note_call_site(caller_qname, generic_target)
                     continue
             hazard = detect_call_site_hazard(call_node, lang, parsed.source, parsed.path)
             if hazard is not None:
@@ -2744,6 +2779,7 @@ class ConcreteGraphBuilder:
                     edge_kwargs = {"relation": "CALLS"}
                     edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
                     self.graph.add_edge(caller_qname, super_target, **edge_kwargs)
+                    self._note_call_site(caller_qname, super_target)
                 continue
             segments = call_callee_segments(call_node, parsed.source, lang)
             if not segments:
@@ -2758,6 +2794,7 @@ class ConcreteGraphBuilder:
                     edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
                     edge_kwargs["kind"] = "TENTATIVE_CALL"
                     self.graph.add_edge(caller_qname, chained, **edge_kwargs)
+                    self._note_call_site(caller_qname, chained)
                     self._dispatch_sites.append((caller_qname, chained))
                 continue
             # Item 3: go_call_resolution_ratio's denominator - a Go call
@@ -2780,6 +2817,7 @@ class ConcreteGraphBuilder:
                     if constructed not in self.graph:
                         self.graph.add_node(constructed, external=False)
                     self.graph.add_edge(caller_qname, constructed, relation="INSTANTIATES", via="class_value")
+                    self._note_call_site(caller_qname, constructed)
                     continue
             if target is None:
                 # Builtin-Receiver Exclusion fix: a receiver definitively
@@ -2832,6 +2870,7 @@ class ConcreteGraphBuilder:
                 elif self._last_resolution_was_ambiguous:
                     edge_kwargs["kind"] = "TENTATIVE_CALL"
             self.graph.add_edge(caller_qname, target, **edge_kwargs)
+            self._note_call_site(caller_qname, target)
             if relation == "CALLS" and target_symbol is None and len(segments) == 2 and segments[0] in self_tokens \
                     and enclosing_class is not None:
                 # Fix E: `self.m()` where no class up the hierarchy defines
@@ -2848,6 +2887,7 @@ class ConcreteGraphBuilder:
                 for alternative in self._last_resolution_alternatives:
                     if not self.graph.has_edge(caller_qname, alternative):
                         self.graph.add_edge(caller_qname, alternative, **{**edge_kwargs, "kind": "TENTATIVE_CALL"})
+                        self._note_call_site(caller_qname, alternative)
                         self._dispatch_sites.append((caller_qname, alternative))
 
         self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
@@ -3744,6 +3784,7 @@ class ConcreteGraphBuilder:
                     if family_root not in self.graph:
                         self.graph.add_node(family_root, external=False)
                     self.graph.add_edge(caller_qname, family_root, relation="CALLS", kind="TENTATIVE_CALL")
+                    self._note_call_site(caller_qname, family_root)
                     self._dispatch_sites.append((caller_qname, family_root))
                 return
         if len(candidates) == 1:
@@ -3787,6 +3828,7 @@ class ConcreteGraphBuilder:
             if target not in self.graph:
                 self.graph.add_node(target, external=False)
             self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL")
+            self._note_call_site(caller_qname, target)
             return
         if len(candidates) < 2:
             return
@@ -3837,7 +3879,10 @@ class ConcreteGraphBuilder:
             target = best_candidate.qualified_name
             if target not in self.graph:
                 self.graph.add_node(target, external=False)
-            self.graph.add_edge(caller_qname, target, relation="CALLS")
+            # `via`: chosen by name scoring, the receiver's type unknown (Phase 3: `prism_find_references` lists it
+            # as a possible reference, not a resolved one); the edge's relation and weight are unchanged
+            self.graph.add_edge(caller_qname, target, relation="CALLS", via="name_match")
+            self._note_call_site(caller_qname, target)
             return
 
         self._same_object_or_sentinel(caller_qname, call_node, parsed, module, lang, segments, candidates)
@@ -3859,6 +3904,7 @@ class ConcreteGraphBuilder:
         if target not in self.graph:
             self.graph.add_node(target, external=False)
         self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL")
+        self._note_call_site(caller_qname, target)
 
     def _emit_polymorphic_sentinel(
         self, caller_qname: str, call_node: Node, parsed: ParsedFile, simple_name: str, candidates: list[SymbolInfo]
@@ -3891,6 +3937,7 @@ class ConcreteGraphBuilder:
         if not new_types:
             return
         for new_node in iter_scoped_nodes(def_node, new_types, lang):
+            self._call_site = [new_node.start_point[0] + 1, new_node.start_point[1]]
             ctor_segments = _constructor_call_segments(new_node, lang, parsed.source)
             if ctor_segments is None and new_node.type == "new_expression":
                 ctor_node = new_node.child_by_field_name("constructor")
@@ -3904,6 +3951,7 @@ class ConcreteGraphBuilder:
             if target not in self.graph:
                 self.graph.add_node(target, external=False)
             self.graph.add_edge(caller_qname, target, relation="INSTANTIATES")
+            self._note_call_site(caller_qname, target)
 
     # -- READS_STATE (Python only - see module docstring) ------------------ #
     def _link_state_reads(

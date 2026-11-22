@@ -154,10 +154,16 @@ def test_jedi_agreement_on_the_fixture(tmp_path):
     assert not r["agree"] and r["jedi_only"]
 
 
-def test_baseline_lsp_arm_tools():
+def test_phase3_arm_tools():
     from harness.experiments.r3 import loop
-    docs = loop.tool_docs("BASELINE_LSP")
-    assert "find_references" in docs and "related_code" in docs and "grep" in docs and "prism_" not in docs
-    assert "find_references" not in loop.tool_docs("BASELINE") and "find_references" not in loop.tool_docs("PRISM")
-    names = [t["function"]["name"] for t in loop.native_tools("BASELINE_LSP")]
-    assert names[-1] == "find_references"
+
+    def names(v):
+        return [t["function"]["name"] for t in loop.native_tools(v)]
+    b, p, o = names("BASELINE_LSP"), names("PRISM_LSP"), names("PRISM_ONLY")
+    assert {"find_references", "semantic_search", "ast_search", "run_shell", "grep", "read_file"} <= set(b)
+    assert not any(n.startswith("prism_") for n in b) and "related_code" not in b
+    assert "prism_find_references" in p and "find_references" not in p and {"grep", "read_file"} <= set(p)
+    assert not {"semantic_search", "ast_search", "run_shell"} & set(p)
+    assert "prism_find_references" in o and not {"grep", "read_file", "find_references", "run_shell"} & set(o)
+    assert "prism_find_references" not in names("PRISM")             # Phase 2's PRISM arm unchanged
+    assert "find_references" not in names("BASELINE")

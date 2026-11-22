@@ -82,6 +82,22 @@ LSP_DOC = {
                         "refers to this definition (resolved through imports, aliases and types; same-named things "
                         "that are other objects are not included), as path:line:column and the line. `symbol`: a "
                         "dotted name (pkg.module.Class.method, or Class.method) or path:line[:column] of a use."),
+    "semantic_search": ('{"query": str}', "Search the code by meaning (words, not exact text): the code chunks "
+                        "(functions, classes, module code) that best match, with their lines."),
+    "ast_search": ('{"pattern": str, "path": str = "."}', "Structural search of the Python code with an ast-grep "
+                   "pattern: `$X.close()` (any receiver), `$F($A, $B)` (two arguments), `def $NAME($$$ARGS): "
+                   "$$$BODY`, `class $C($BASE)`. Each match's path:line:column and line."),
+    "run_shell": ('{"command": str}', "Run a read-only shell command in the repository (ls, cat, head, find, wc, rg, "
+                  "grep, git log/show/diff/status/blame, ...; joined by |, && or ;). No redirection; use edit_file to "
+                  "change files."),
+}
+# Phase 3 PRISM_LSP and PRISM_ONLY (the user's decision 2026-11-22): PRISM's own Find All References, from its graph.
+PRISM_REFS_DOC = {
+    "prism_find_references": ('{"symbol": str}', "Find All References from PRISM's graph: every place that refers to "
+                              "this definition, at its line and column, labelled (call, import, type annotation, "
+                              "subclass, isinstance, decorator, value...), each with the function it is in; calls "
+                              "PRISM could not resolve by type are listed apart as possible. `symbol`: a qualified "
+                              "name or path:line of a use or of the definition."),
 }
 
 SYSTEM = """You are a software engineer working in a code repository. You work in turns: each turn, reply with
@@ -126,6 +142,10 @@ PARAM_SCHEMAS = {
     "prism_read": ({"path": _S, "start": _I, "end": {"type": ["integer", "null"]}}, ["path"]),
     "related_code": ({"query": _S}, ["query"]),
     "find_references": ({"symbol": _S}, ["symbol"]),
+    "semantic_search": ({"query": _S}, ["query"]),
+    "ast_search": ({"pattern": _S, "path": _S}, ["pattern"]),
+    "run_shell": ({"command": _S}, ["command"]),
+    "prism_find_references": ({"symbol": _S}, ["symbol"]),
 }
 
 
@@ -133,15 +153,22 @@ PARAM_SCHEMAS = {
 # injected up front, and the same tools). BASELINE has `related_code` instead.
 # PRISM_ONLY (Phase 2 D3; support only, run only under its own pre-registration): PRISM's tools with `prism_search`
 # and `prism_read` in place of `grep` and `read_file`, to test whether PRISM can replace standard search.
-PRISM_ARMS = ("PRISM", "INJECTED", "PRISM_ONLY")
-ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP")
+PRISM_ARMS = ("PRISM", "INJECTED", "PRISM_ONLY", "PRISM_LSP")
+ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP")
+#: Phase 3's arms (the user's decision, 2026-11-22). BASELINE_LSP: the shared tools and an IDE agent's tools (a
+#: language server's references, semantic search, ast-grep, a read-only shell). PRISM_LSP: the shared tools and all of
+#: PRISM's tools, `prism_find_references` among them (not the language server's). PRISM_ONLY: PRISM's tools, with
+#: `prism_find_references`, without `grep` and `read_file`.
+PHASE3_ARMS = ("BASELINE_LSP", "PRISM_LSP", "PRISM_ONLY")
 #: the shared tools an arm does without
 REMOVED_SHARED = {"PRISM_ONLY": ("read_file", "grep")}
 
 
 def index_doc(version: str) -> dict:
     if version == "BASELINE_LSP":
-        return {**BASELINE_DOC, **LSP_DOC}
+        return dict(LSP_DOC)
+    if version in ("PRISM_LSP", "PRISM_ONLY"):
+        return {**PRISM_DOC, **PRISM_REFS_DOC}
     return PRISM_DOC if version in PRISM_ARMS else BASELINE_DOC
 
 

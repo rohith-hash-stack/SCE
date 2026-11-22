@@ -27,7 +27,7 @@ import tempfile
 
 from harness.experiments.r3.dryrun import Script, edits_for
 
-ARMS = ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY", "BASELINE_LSP")
+ARMS = ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP")
 
 
 def gold_contents(clone: str, task: dict, patch: str) -> dict[str, tuple[str | None, str | None]]:
@@ -52,13 +52,18 @@ def gold_contents(clone: str, task: dict, patch: str) -> dict[str, tuple[str | N
 def gold_calls(task: dict, contents: dict, arm: str) -> list[dict]:
     calls = []
     f, _, q = task["anchor"].partition("::")
+    if arm in ("PRISM_LSP", "PRISM_ONLY"):                  # Phase 3: PRISM's own Find All References first
+        calls.append({"tool": "prism_find_references", "args": {"symbol": task["anchor_qname"]}})
     if arm == "PRISM_ONLY":
         calls += [{"tool": "prism_search", "args": {"pattern": rf"\b{q.rsplit('.', 1)[-1]}\b"}},
                   {"tool": "prism_read", "args": {"path": f, "start": max(1, task["target_line"] - 5),
                                                   "end": task["target_line"] + 20}}]
     elif arm == "BASELINE_LSP":
-        calls.append({"tool": "find_references", "args": {"symbol": f"{f}:{task['target_line']}"}})
-    elif arm in ("PRISM", "INJECTED"):
+        calls += [{"tool": "find_references", "args": {"symbol": f"{f}:{task['target_line']}"}},
+                  {"tool": "semantic_search", "args": {"query": q.rsplit('.', 1)[-1].replace("_", " ")}},
+                  {"tool": "ast_search", "args": {"pattern": f"$X.{q.rsplit('.', 1)[-1]}($$$A)"}},
+                  {"tool": "run_shell", "args": {"command": f"git log --oneline -3 -- {f} | cat"}}]
+    elif arm in ("PRISM", "INJECTED", "PRISM_LSP"):
         calls.append({"tool": "prism_change_context", "args": {"symbol": task["anchor_qname"]}})
     for path, (old, new) in sorted(contents.items()):
         calls += [{"tool": "edit_file", "args": e} for e in edits_for(old, new, path)]

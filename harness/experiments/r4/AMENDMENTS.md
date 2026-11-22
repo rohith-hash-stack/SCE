@@ -1605,3 +1605,49 @@ places the answer key holds, at a tenth of the tokens of PRISM's change context.
 `p2-signature-02` is not expected, and the token premise (an LSP floods the context) does not hold at 3-12
 references. Whether the go/no-go rule or the primary metric changes is the user's decision. Until the user amends
 it, the rule above stands unchanged.
+
+### Phase 3 amendment 2: an IDE agent's baseline, PRISM's own references (2026-11-22, before any Phase 3 run)
+
+**The user's decisions:** the baseline should have what Claude Code, Cursor and Copilot have (semantic search, AST
+search, a shell, a language server's references). The PRISM arms get PRISM's own equivalents, never the baseline's
+tools: in Phase 1 the agent preferred the standard tools whenever both were offered, and bypassed PRISM.
+
+**Phase 3's arms** (`r3/loop.py` `PHASE3_ARMS`; these replace amendment 1's):
+
+| Arm | Tools |
+|---|---|
+| BASELINE_LSP | the shared tools (`read_file`, `list_dir`, `grep`, `edit_file`, `run_tests`, `done`), plus `find_references` (jedi 0.19.2), `semantic_search` (BM25 over code chunks), `ast_search` (ast-grep 0.39.6) and `run_shell` (read-only) |
+| PRISM_LSP | the shared tools and PRISM's tools, `prism_find_references` among them; no language server, semantic search, ast-grep or shell |
+| PRISM_ONLY | PRISM's tools with `prism_find_references`; without `grep` and `read_file` (as in Phase 2) |
+
+- `related_code` (BM25 over functions) is dropped from BASELINE_LSP: `semantic_search` covers it.
+- Phase 2's arms (BASELINE, PRISM, INJECTED, PRISM_ONLY as run) are unchanged at their pinned commit.
+
+**`prism_find_references`** (`r3/tools.py`):
+- **The places:** every place PRISM's graph resolves to the definition:
+  - calls and instantiations at each call's own line and column. The builder now records every call's position on
+    its graph edge (`sites`, `prism.graph.concrete_builder._note_call_site`; index schema 10). Before this, an edge
+    stood for all of a caller's calls to a callee;
+  - the reference graph's labelled uses (import, `__all__`, type annotation, subclass, isinstance, decorator,
+    value, ...);
+  - overrides in both directions.
+- **Each place:** labelled with its kind and the definition it is in, grouped by file, production before tests.
+- **Possible references, listed apart for the agent to check:** calls PRISM matched only by name (receiver type
+  unknown, newly marked `via="name_match"` on the edge) and guessed calls (`TENTATIVE_CALL`). A language server
+  leaves these out silently.
+- **The footer:** how many other uses of the same name belong to other objects.
+- **On the edited tree:** it reads the edited tree as PRISM's other tools do, through the WorkingIndex refresh.
+
+**The baseline's new tools** (`r3/baseline_tools.py`, the working tree as it is now):
+- **`semantic_search`:** BM25 over Python functions, methods, classes and module code, and 40-line windows of
+  other text files, with split identifiers; the top 10 chunks. An embedding model was ruled out: it would be
+  downloaded and run on CPU every run, beside the GPU model.
+- **`ast_search`:** ast-grep patterns over Python files; up to 100 matches.
+- **`run_shell`:** an allow-list of read-only commands joined by `|`, `&&`, `;`. Redirection, substitution,
+  background jobs, writing or program-running options (`find -exec/-delete`, `git -c`, `rg --pre`, `sort -o`,
+  `awk system`) and any command not on the list are refused. 20 s per call, 200 lines.
+
+**Dry run** (`ContentSecurityPolicy.to_header`, the answer key replayed through the real runner): resolved in all
+three arms. The first calls' output tokens:
+- `find_references` 166, `semantic_search` 1,290, `ast_search` 1,554, `run_shell` 37;
+- `prism_find_references` 287, `prism_change_context` 1,706, `prism_search` 3,410.

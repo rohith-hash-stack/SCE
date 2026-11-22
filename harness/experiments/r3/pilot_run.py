@@ -52,7 +52,7 @@ def main(argv=None) -> int:
     p.add_argument("--phase1", action="store_true")                               # Phase 1 items 2 and 3
     p.add_argument("--raw-tools", action="store_true")                            # Phase 1, re-baseline fix (A)
     p.add_argument("--feedback", action="store_true")                             # Phase 2 C1-C3, every arm
-    p.add_argument("--versions", nargs="+", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP"), default=list(VERSIONS),
+    p.add_argument("--versions", nargs="+", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP"), default=list(VERSIONS),
                    help="the arms to run, in this order within a task (the 3-arm re-baseline adds INJECTED)")
     a = p.parse_args(argv)
     extra = ((["--model", a.model] if a.model else []) + (["--think", a.think] if a.think else [])

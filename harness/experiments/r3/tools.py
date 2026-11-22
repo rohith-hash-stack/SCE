@@ -33,12 +33,12 @@ RELATED_MAX = 40
 #: (`prism.impact.dependents`); its code envelope follows.
 BLAST_LIST_SHARE = 0.55
 PRISM_TOOLS = ("prism_change_context", "prism_blast_radius", "prism_ask", "prism_read_code", "prism_new_function_context",
-               "prism_digest", "prism_search", "prism_read")
+               "prism_digest", "prism_search", "prism_read", "prism_find_references")
 #: `prism_search`'s hit lines (as `grep`'s); `prism_read`'s footer of definitions
 SEARCH_MAX_LINES = 200
 READ_MAX_DEFS = 12
 BASELINE_TOOLS = ("related_code",)
-LSP_TOOLS = ("find_references",)
+LSP_TOOLS = ("find_references", "semantic_search", "ast_search", "run_shell")
 
 
 class ToolError(Exception):
@@ -217,6 +217,191 @@ class ToolLayer:
                             + (f"; candidates: {', '.join(cands)}" if cands else "")) from exc
         return self._code_block(qname)
 
+    # ------------------------------------------------------------------ Phase 3: references from PRISM's graph
+    _REF_LABELS = {"call": "call", "instantiate": "instantiation", "possible": "possible call",
+                   "import": "import", "export": "__all__", "base": "subclass", "isinstance": "isinstance",
+                   "except": "except", "annotation": "type annotation", "generic": "type parameter",
+                   "decorator": "decorator", "value": "value", "attribute": "attribute", "override": "override",
+                   "definition": "definition"}
+
+    def _find_target(self, symbol: str) -> str:
+        """A qualified name (as `prism_read_code` resolves it), or `path:line`: the definition starting on that line,
+        else the one thing PRISM resolves a use on that line to (a recorded call site or a reference line)."""
+        from prism.mcp import server
+        b, root = self.wi.builder, self.wi.shadow
+        target = symbol.strip().strip("`")
+        path, _, line = target.rpartition(":")
+        if path and line.isdigit():
+            rel = path.replace("\\", "/").removeprefix("./")
+            abs_path = os.path.abspath(os.path.join(root, rel))
+            if not os.path.isfile(abs_path):
+                raise ToolError(f"no such file: {rel}")
+            n = int(line)
+            defs = [q for q in b._def_nodes if (s := b.symbol_table.get(q)) is not None
+                    and os.path.abspath(s.file) == abs_path and s.line_range[0] <= n <= s.line_range[1]]
+            starts = [q for q in defs if self._def_line(q) == n]
+            if starts:
+                return min(starts, key=lambda q: len(q))
+            found = set()
+            for src in defs or []:
+                for _s, dst, e in b.graph.out_edges(src, data=True):
+                    if any(site[0] == n for site in e.get("sites", ())):
+                        found.add(dst)
+            rg = getattr(b, "reference_graph", None)
+            if rg is not None:
+                for src in defs:
+                    if src in rg:
+                        for _s, dst, e in rg.out_edges(src, data=True):
+                            if n in e.get("lines", ()):
+                                found.add(dst)
+            found = {q for q in found if q in b.symbol_table}
+            if len(found) == 1:
+                return found.pop()
+            if found:
+                raise ToolError(f"{rel}:{n} uses several definitions: " + ", ".join(sorted(found)[:10])
+                                + "; ask with one of these names")
+            raise ToolError(f"PRISM resolves nothing on {rel}:{n}; ask with the definition's name")
+        ctx = server._cache._entries.get(self._key)
+        try:
+            return server._resolve_seed_or_raise(ctx, target)
+        except Exception as exc:
+            data = getattr(exc, "data", None) or {}
+            cands = data.get("candidates") if isinstance(data, dict) else None
+            msg = getattr(exc, "message", None) or str(exc)
+            raise ToolError(msg.replace(root + os.sep, "").replace(root, ".")
+                            + (f"; candidates: {', '.join(cands)}" if cands else "")) from exc
+
+    def _def_line(self, q: str) -> int:
+        """The line of a definition's `def`/`class` keyword (after its decorators)."""
+        s = self.wi.builder.symbol_table.get(q)
+        lines = self._lines(s.file)
+        leaf = q.rsplit(".", 1)[-1]
+        for i in range(s.line_range[0], min(s.line_range[1], len(lines)) + 1):
+            if re.match(rf"\s*(async\s+)?(def|class)\s+{re.escape(leaf)}\b", lines[i - 1]):
+                return i
+        return s.line_range[0]
+
+    def _prism_find_references(self, symbol: str) -> str:
+        """Every place PRISM's graph resolves to one definition, as a language server's Find All References lists
+        them, each labelled with how it uses the definition and the definition it sits in:
+        - calls and instantiations: the main graph's call edges, at each call's own position (`sites`);
+        - other uses (imports, `__all__`, type annotations, subclasses, isinstance, decorators, values...): the
+          reference graph's labelled edges, at their lines;
+        - overrides in either direction.
+        Grouped by file, production first; then how many uses of the same name belong to other objects."""
+        from prism.graph.references import references_to
+        b, root = self.wi.builder, self.wi.shadow
+        q = self._find_target(symbol)
+        sym = b.symbol_table.get(q)
+        leaf = q.rsplit(".", 1)[-1]
+        rows = {}                                                  # (rel, line, col) -> (label, enclosing)
+
+        def rel_of(path):
+            return os.path.relpath(path, root) if path and os.path.isabs(path) else path
+
+        def add(rel, line, col, label, where):
+            if rel is None or line is None:
+                return
+            if col is None:
+                lines = self._lines(os.path.join(root, rel))
+                text = lines[line - 1] if 0 < line <= len(lines) else ""
+                m = re.search(rf"\b{re.escape(leaf)}\b", text)
+                col = len(text[:m.start()].encode()) if m else 0
+            key = (rel, line, col)
+            if key not in rows:
+                rows[key] = (label, where)
+
+        own = rel_of(sym.file)
+        add(own, self._def_line(q), None, "definition", q.rsplit(".", 1)[0])
+        truncated = 0
+        for src, _d, e in b.graph.in_edges(q, data=True):
+            rel_ = e.get("relation")
+            if rel_ not in ("CALLS", "INSTANTIATES", "OVERRIDES"):
+                continue
+            ss = b.symbol_table.get(src)
+            if ss is None:
+                continue
+            f = rel_of(ss.file)
+            if rel_ == "OVERRIDES":
+                add(f, self._def_line(src), None, "override", src)
+                continue
+            guessed = e.get("kind") == "TENTATIVE_CALL" or e.get("via") == "name_match"
+            label = "instantiate" if rel_ == "INSTANTIATES" else "possible" if guessed else "call"
+            sites = e.get("sites")
+            if not sites:                                          # an index without call sites: the caller only
+                add(f, ss.line_range[0], None, label + " (somewhere in this function)", src)
+            for line, col in sites or ():
+                add(f, line, col, label, src)
+        for _s, dst, e in b.graph.out_edges(q, data=True):
+            if e.get("relation") == "OVERRIDES" and (ds := b.symbol_table.get(dst)) is not None:
+                add(rel_of(ds.file), self._def_line(dst), None, "override", dst + " (overridden by this one)")
+        for r in references_to(b, q):
+            f = rel_of(r["file"])
+            for line in r["lines"]:
+                add(f, line, None, r["kinds"][0] if len(r["kinds"]) == 1 else "/".join(r["kinds"]),
+                    r["source"] if not r["is_module"] else "<module>")
+            truncated += max(0, r["count"] - len(r["lines"]))
+        possible = {k: v for k, v in rows.items() if v[0].startswith("possible")}
+        rows = {k: v for k, v in rows.items() if k not in possible}
+        by_file: dict[str, list] = {}
+        for (f, line, col), (label, where) in rows.items():
+            by_file.setdefault(f, []).append((line, col, label, where))
+        files = sorted(by_file, key=lambda f: (self._is_test(f), f))
+        n = sum(len(v) for v in by_file.values()) - 1
+        counts: dict[str, int] = {}
+        for (label, _w) in rows.values():
+            if label != "definition":
+                k = self._REF_LABELS.get(label.split(" ")[0], label)
+                counts[k] = counts.get(k, 0) + 1
+        tests = sum(len(by_file[f]) for f in files if self._is_test(f))
+        out = [f"`{q}` ({sym.kind}, {own}:{self._def_line(q)}): {n} reference(s) in "
+               f"{len([f for f in files if any(x[2] != 'definition' for x in by_file[f])])} file(s) ("
+               + ", ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))
+               + f"); {tests} in test files" + (f"; {len(possible)} possible (below)" if possible else "")]
+        shown = 0
+        for f in files:
+            out.append(f + (" [test]" if self._is_test(f) else ""))
+            lines = self._lines(os.path.join(root, f))
+            for line, col, label, where in sorted(by_file[f]):
+                if shown >= SEARCH_MAX_LINES:
+                    break
+                text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+                lab = self._REF_LABELS.get(label.split(" ")[0], label) + label[len(label.split(" ")[0]):]
+                out.append(f"  {line}:{col + 1} [{lab}] in `{where}`: {text}")
+                shown += 1
+        if shown < n + 1:
+            out.append(f"... ({n + 1 - shown} more)")
+        if truncated:
+            out.append(f"(and {truncated} more use(s) inside the definitions above; their lines were not kept)")
+        if possible:
+            out.append(f"Possible references ({len(possible)}): calls of `{leaf}` on a receiver whose type PRISM could "
+                       f"not determine, matched by name; check each:")
+            for (f, line, col), (_label, where) in sorted(possible.items()):
+                lines = self._lines(os.path.join(root, f))
+                text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+                out.append(f"  {f}:{line}:{col + 1} in `{where}`: {text}")
+        listed = {(f, line) for (f, line, _c) in [*rows, *possible]}
+        other = self._other_uses(leaf, listed)
+        if other:
+            out.append(f"Not references: {other[0]} other use(s) of the name `{leaf}` in {other[1]} file(s) belong to "
+                       f"other objects (not listed).")
+        return "\n".join(out)
+
+    def _other_uses(self, leaf: str, listed: set) -> tuple[int, int] | None:
+        """How many lines of Python files use the word `leaf` without being a listed reference, and in how many files."""
+        import subprocess
+        base = self.shared.work if self.shared is not None else self.wi.shadow
+        r = subprocess.run(["git", "-C", base, "grep", "-n", "-w", "-I", "--untracked", "-e", leaf, "--",
+                            "*.py"], capture_output=True, text=True, errors="replace")
+        n, files = 0, set()
+        for ln in r.stdout.splitlines():
+            f, _, rest = ln.partition(":")
+            num = rest.split(":", 1)[0]
+            if num.isdigit() and (f, int(num)) not in listed:
+                n += 1
+                files.add(f)
+        return (n, len(files)) if n else None
+
     # ------------------------------------------------------------------ Phase D: search and read (current text)
     def _is_test(self, rel: str) -> bool:
         from prism.scanner.entrypoint_gate import is_test_file
@@ -378,6 +563,30 @@ class ToolLayer:
                 continue
             out.append(self._digests.digest(q).render())
         return "\n\n".join(out)
+
+    def _baseline(self):
+        from harness.experiments.r3.baseline_tools import BaselineTools
+        if self.shared is None:
+            raise ToolError("this tool needs the working tree")
+        if getattr(self, "_bt", None) is None:
+            self._bt = BaselineTools(self.shared.work)
+        return self._bt
+
+    def _bt_call(self, name: str, *args) -> str:
+        from harness.experiments.r3.baseline_tools import BaselineToolError
+        try:
+            return getattr(self._baseline(), name)(*args)
+        except BaselineToolError as exc:
+            raise ToolError(str(exc)) from exc
+
+    def _semantic_search(self, query: str) -> str:
+        return self._bt_call("semantic_search", query)
+
+    def _ast_search(self, pattern: str, path: str = ".") -> str:
+        return self._bt_call("ast_search", pattern, path)
+
+    def _run_shell(self, command: str) -> str:
+        return self._bt_call("run_shell", command)
 
     def _find_references(self, symbol: str) -> str:
         """BASELINE_LSP's language-server reference search (`lsp_tools.py`), on the working files as they are now."""

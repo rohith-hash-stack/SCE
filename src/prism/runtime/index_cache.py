@@ -100,7 +100,7 @@ except ImportError:  # pragma: no cover - networkx is a hard dependency elsewher
 #: Bumped 4 -> 5 for `SymbolInfo.nested_in_function`, for the same
 #: hand-listed-fields reason: it decides whether a symbol enters Rule D's
 #: bare-name index, so a cached build must restore it exactly.
-_SCHEMA_VERSION = 9  # 9: test-file rule (spec/ JS/TS/Ruby only; test.py by content); 8: reference edges keep their lines, module nodes their file; 7: the reference graph and its aliases (Phase B sub-pass 2d); 6: SymbolInfo.aliases
+_SCHEMA_VERSION = 10  # 10: call edges keep their call sites (`sites`, Phase 3 prism_find_references); 9: test-file rule (spec/ JS/TS/Ruby only; test.py by content); 8: reference edges keep their lines, module nodes their file; 7: the reference graph and its aliases (Phase B sub-pass 2d); 6: SymbolInfo.aliases
 
 
 def index_cache_path(repo_root: str) -> Path:
