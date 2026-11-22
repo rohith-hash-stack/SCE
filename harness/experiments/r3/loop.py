@@ -36,7 +36,9 @@ import urllib.request
 MODEL = "qwen2.5-coder:14b-instruct-q8_0"
 NUM_CTX = 20480
 ANSWER_TOKENS = 4096
-BUDGET_TOKENS = 300_000
+#: every prompt token of a run counts; Phase 3 (amendment 3: up to 30 places to edit, 60 turns) sets
+#: `R3_BUDGET_TOKENS=1000000` in its cell's environment
+BUDGET_TOKENS = int(os.environ.get("R3_BUDGET_TOKENS", "300000"))
 DEFAULT_TURN_CAP = 30
 TEMPERATURE = 0.2
 STUCK_DONE_REJECTIONS = 3     # amendment R4-SANITY-2

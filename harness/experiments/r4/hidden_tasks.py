@@ -100,20 +100,25 @@ def _rename_at(text: str, edits: list[tuple[int, int]], old: str, new: str) -> s
 
 
 def def_position(work: str, c: dict) -> tuple[int, int] | None:
-    """The (line, byte column) of the method's name in its `def`; None for a property with a setter or any other
-    second definition or bare use of the name inside its class."""
+    """The (line, byte column) of the definition's name in its `def`/`class`; None when the name is defined twice in
+    its container (a property with a setter, `@overload`s, a conditional redefinition) or a method's class uses the
+    bare name."""
     tree = ast.parse(D._read(work, c["file"]))
     qual = D._qual(c)
     node = DC.find_def(tree, qual)
-    cls = DC.find_def(tree, qual.rsplit(".", 1)[0])
-    if node is None or cls is None:
+    if node is None:
         return None
-    same = [x for x in ast.walk(cls) if (isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef)) and x.name == c["leaf"])
-            or (isinstance(x, ast.Name) and x.id == c["leaf"])]
-    if same != [node]:
+    parent = DC.find_def(tree, qual.rsplit(".", 1)[0]) if "." in qual else tree
+    if parent is None:
+        return None
+    defs = [x for x in ast.walk(parent) if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and x.name == c["leaf"]]
+    if defs != [node]:
+        return None
+    if parent is not tree and any(isinstance(x, ast.Name) and x.id == c["leaf"] for x in ast.walk(parent)):
         return None
     ln = D._read(work, c["file"]).encode("utf8").split(b"\n")[node.lineno - 1]
-    m = re.search(rb"\bdef\s+(" + re.escape(c["leaf"].encode()) + rb")\b", ln)
+    m = re.search(rb"\b(?:def|class)\s+(" + re.escape(c["leaf"].encode()) + rb")\b", ln)
     return (node.lineno, m.start(1)) if m else None
 
 
@@ -129,7 +134,7 @@ def jedi_agreement(work: str, c: dict) -> dict:
         p = ln.split(":")
         if len(p) > 3 and p[1].isdigit() and "(definition)" not in p[2]:
             got.add((p[0], int(p[1])))
-    want = {(p["file"], p["line"]) for p in c["places"]}
+    want = {(p["file"], p["line"]) for p in c["places"] if p["how"] != "string"}     # `__all__`: not a reference
     return {"agree": got == want, "jedi_only": sorted(got - want)[:5], "prism_only": sorted(want - got)[:5]}
 
 
@@ -176,7 +181,8 @@ def build(c: dict, work: str, env, rev: str) -> dict:
         return {"rejected": "no test file that uses it passes at the start"}
     qual = D._qual(c)
     # `ABC`, `Generic` and `Protocol` define no method a rename could stop overriding
-    outside = [b for b in D._outside_bases(work, c["file"], qual) if b not in INERT_BASES]
+    outside = [b for b in D._outside_bases(work, c["file"], qual) if b not in INERT_BASES] \
+        if c.get("kind") == "method" else []
     if outside:
         return {"rejected": f"method of a class with an outside base (may override it): {outside}"}
     taken = lambda name: bool(D._git(work, "grep", "-l", "-w", name, "--").stdout.strip())

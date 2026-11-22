@@ -143,7 +143,7 @@ def old_imports(tree, rel: str, old_module_names: set, name: str) -> int:
 
 def scoped_uses(text: str, name: str) -> dict[str, int]:
     """`{"scope|receiver": count}` for the uses of `name` in a module: `x.name` (receiver `x`, as written), a bare
-    `name`, a `name=` keyword, a definition, an import. The scope is the enclosing definitions' dotted names, so the
+    `name`, a `name=` keyword, a definition, an import, a string equal to it. The scope is the enclosing definitions' dotted names, so the
     count survives edits that move lines."""
     tree = _parse(text)
     out: dict[str, int] = {}
@@ -177,6 +177,8 @@ def scoped_uses(text: str, name: str) -> dict[str, int]:
             add(scope, "<keyword>")
         elif isinstance(x, ast.alias) and name in (x.name.rsplit(".", 1)[-1], x.asname):
             add(scope, "<import>")
+        elif isinstance(x, ast.Constant) and x.value == name:
+            add(scope, "<string>")                                  # `__all__`, `getattr(obj, "name")`
 
     visit(tree, [])
     return out

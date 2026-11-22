@@ -167,3 +167,32 @@ def test_phase3_arm_tools():
     assert "prism_find_references" in o and not {"grep", "read_file", "find_references", "run_shell"} & set(o)
     assert "prism_find_references" not in names("PRISM")             # Phase 2's PRISM arm unchanged
     assert "find_references" not in names("BASELINE")
+
+
+def test_large_fanout_scout_reads_prism_sites_and_exports(tmp_path):
+    """A function used through imports, `__all__`, calls and a subclass's base: every place from PRISM's own graph
+    (call sites on the edges), import columns exact, the `__all__` string a place."""
+    files = {"pkg/__init__.py": "from .core import make_conn\n\n__all__ = [\"make_conn\"]\n",
+             "pkg/core.py": "def make_conn(url):\n    return url\n\n\ndef again():\n    return make_conn(1)\n",
+             "pkg/a.py": "from pkg.core import make_conn\n\n\ndef f():\n    make_conn(2)\n    return make_conn(3)\n",
+             "pkg/b.py": "from pkg import core\n\n\ndef g():\n    return core.make_conn(4)\n"}
+    for p, t in files.items():
+        (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / p).write_text(t)
+    for cmd in (["init", "-q"], ["add", "-A"], ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "s"]):
+        subprocess.run(["git", "-C", str(tmp_path), *cmd], check=True)
+    HS.MIN_PLACES, HS.MAX_PLACES, HS.MIN_FILES, HS.KINDS = 2, 30, 2, ("function",)
+    try:
+        rep = HS.scout("t", str(tmp_path), "HEAD")
+    finally:
+        HS.MIN_PLACES, HS.MAX_PLACES, HS.MIN_FILES, HS.KINDS = 2, 12, 2, ("method",)
+    c = next(x for x in rep["candidates"] if x["leaf"] == "make_conn")
+    got = sorted((p["file"], p["line"], p["col"], p["how"]) for p in c["places"])
+    assert got == [("pkg/__init__.py", 1, 18, "import"), ("pkg/__init__.py", 3, 12, "string"),
+                   ("pkg/a.py", 1, 21, "import"), ("pkg/a.py", 5, 4, "call"), ("pkg/a.py", 6, 11, "call"),
+                   ("pkg/b.py", 5, 16, "call"), ("pkg/core.py", 6, 11, "call")]
+    work = str(tmp_path)
+    gold = H.gold_sites(work, c, "build_conn")
+    assert gold["pkg/__init__.py"] == "from .core import build_conn\n\n__all__ = [\"build_conn\"]\n"
+    assert "return core.build_conn(4)" in gold["pkg/b.py"] and "def build_conn(url):" in gold["pkg/core.py"]
+    assert H.jedi_agreement(work, c)["agree"]

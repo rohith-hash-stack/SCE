@@ -30,6 +30,9 @@ import sys
 import tempfile
 
 MIN_PLACES, MAX_PLACES, MIN_FILES = 2, 12, 2
+#: Phase 3 amendment 3 (large fan-out, the user's decision 2026-11-22): `--places 15-30 --min-files 3 --kinds
+#: method,function,class`
+KINDS = ("method",)
 
 
 def _git(cwd, *args):
@@ -83,7 +86,12 @@ def name_nodes(tree, leaf: str) -> list[tuple[int, int, str]]:
         elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.name == leaf:
             out.append((n.lineno, -1, "def"))
         elif isinstance(n, ast.alias) and leaf in (n.name.rsplit(".", 1)[-1], n.asname):
-            out.append((n.lineno, -1, "import"))
+            exact = n.asname is None or n.asname == leaf and n.name.rsplit(".", 1)[-1] == leaf
+            col = n.col_offset + len(n.name) - len(leaf) if exact and hasattr(n, "col_offset") else -1
+            out.append((n.lineno, col, "import"))           # `import x as leaf`: no column, the candidate is dropped
+        elif isinstance(n, ast.Constant) and n.value == leaf and n.lineno == n.end_lineno \
+                and n.end_col_offset - n.col_offset == len(leaf) + 2:
+            out.append((n.lineno, n.col_offset + 1, "string"))   # a plain quoted string ('leaf' or "leaf")
     return out
 
 
@@ -99,7 +107,8 @@ def scout(name: str, clone: str, rev: str) -> dict:
     work = os.path.join(scratch, "w")
     subprocess.run(["git", "-C", clone, "worktree", "add", "-q", "--detach", work, rev], check=True)
     try:
-        b, sites = record_call_sites(work)
+        from prism.cli import LANGUAGE_TIER_PERMISSIVE, build_pipeline
+        b, _ = build_pipeline(work, LANGUAGE_TIER_PERMISSIVE, use_cache=False)   # call edges keep their `sites`
         g, rg = b.graph, getattr(b, "reference_graph", None)
         rel = lambda p: os.path.relpath(p, work) if p and os.path.isabs(p) else p
         trees = {}
@@ -108,43 +117,52 @@ def scout(name: str, clone: str, rev: str) -> dict:
                 trees[f] = ast.parse(open(os.path.join(work, f), "rb").read())
             except (SyntaxError, ValueError, OSError, RecursionError):
                 continue
-        by_target = collections.defaultdict(list)
-        for s in sites:
-            by_target[s["target"]].append(s)
         by_leaf = collections.Counter(q.rsplit(".", 1)[-1] for q, s in b.symbol_table._symbols.items()
                                       if getattr(s, "kind", None) in ("method", "function"))
         out, reasons = [], collections.Counter()
         for q, sym in list(b.symbol_table._symbols.items()):
-            if getattr(sym, "kind", None) != "method":
+            if getattr(sym, "kind", None) not in KINDS:
                 continue
             leaf = q.rsplit(".", 1)[-1]
             own = rel(sym.file)
             if leaf.startswith("_") or len(leaf) < 3 or is_test(own) or NOT_PRODUCT.search(own) or own not in trees:
                 continue
-            if by_leaf[leaf] < 2 and not any(f for f, t in trees.items()
-                                             for x in name_nodes(t, leaf) if x[2] == "attribute"):
+            if KINDS == ("method",) and by_leaf[leaf] < 2 and not any(
+                    f for f, t in trees.items() for x in name_nodes(t, leaf) if x[2] == "attribute"):
                 continue
             why = None
             places = []                                 # (file, line, col, how)
-            for s in by_target.get(q, []):
-                if s["tentative"]:
-                    why = "tentative call"
-                    break
-                cs = b.symbol_table.get(s["caller"])
-                f = rel(cs.file) if cs is not None else None
-                if f is None or s["name"] != leaf:
-                    why = "call site without a file"
-                    break
-                places.append((f, s["line"], s["col"], "call"))
-            if why is None and q in g:
-                callers = {s["caller"] for s in by_target.get(q, [])}
+            if q in g:
                 for src, _d, e in g.in_edges(q, data=True):
                     r = e.get("relation")
+                    ss = b.symbol_table.get(src)
+                    f = rel(ss.file) if ss is not None else None
                     if r == "OVERRIDES":
                         why = "override"
-                    elif r in ("CALLS", "INSTANTIATES") and src not in callers:
-                        why = "call edge without a site"
-                    elif r not in ("CALLS", "INSTANTIATES", "ENCLOSES"):
+                    elif r in ("CALLS", "INSTANTIATES"):
+                        if e.get("kind") == "TENTATIVE_CALL":
+                            why = "tentative call"
+                        elif e.get("via") == "name_match":
+                            why = "a call matched by name only"
+                        elif not e.get("sites") or f is None:
+                            why = "call edge without a site"
+                        else:
+                            text = open(os.path.join(work, f), "rb").read().split(b"\n")
+                            for line, col in e["sites"]:
+                                if text[line - 1][col:col + len(leaf)] != leaf.encode():
+                                    why = "a call site does not hold the name"
+                                    break
+                                places.append((f, line, col, "instantiate" if r == "INSTANTIATES" else "call"))
+                    elif r in ("EXTENDS", "IMPLEMENTS"):
+                        cls_line = next((n.lineno for n in ast.walk(trees.get(f)) if isinstance(n, ast.ClassDef)
+                                         and n.name == src.rsplit(".", 1)[-1]), None) if trees.get(f) else None
+                        bases = [x for x in name_nodes(trees[f], leaf) if x[0] == cls_line
+                                 and x[2] in ("attribute", "name")] if cls_line else []
+                        if len(bases) != 1:
+                            why = "a subclass's base not found"
+                        else:
+                            places.append((f, bases[0][0], bases[0][1], "base"))
+                    elif r != "ENCLOSES":
                         why = f"{r} edge"
                     if why:
                         break
@@ -157,14 +175,19 @@ def scout(name: str, clone: str, rev: str) -> dict:
                         rel(getattr(b.symbol_table.get(src), "file", None))
                     tree = trees.get(f)
                     lines = set(e.get("lines", ()))
-                    found = [x for x in name_nodes(tree, leaf) if x[0] in lines and x[2] in ("attribute", "name")] \
-                        if tree is not None else []
-                    if len(found) != e["count"]:            # lines cut at MAX_EDGE_LINES, or a line with a look-alike
-                        why = "reference lines do not account for each use exactly"
+                    found = [x for x in name_nodes(tree, leaf) if x[0] in lines
+                             and x[2] in ("attribute", "name", "import", "string")] if tree is not None else []
+                    if len(found) != e["count"] or any(x[1] < 0 for x in found):
+                        why = "reference lines do not account for each use exactly"   # cut at 5 lines, a look-alike
                         break
-                    places += [(f, ln, col, "reference") for ln, col, _k in found]
-            if why is None and any(string_uses(t, leaf) for t in trees.values()):
-                why = "the name appears as a string"
+                    places += [(f, ln, col, k) for ln, col, k in found]
+            if why is None:
+                pk = {(p[0], p[1], p[2]) for p in places}
+                stray = [(f, x[0]) for f, t in trees.items() for x in name_nodes(t, leaf)
+                         if x[2] == "string" and (f, x[0], x[1]) not in pk]
+                if stray or any(string_uses(t, leaf) > sum(1 for x in name_nodes(t, leaf) if x[2] == "string")
+                                for t in trees.values()):
+                    why = "the name appears as a string PRISM does not resolve"
             seen = {}
             for p in places:
                 seen.setdefault(p[:3], p)
@@ -173,7 +196,7 @@ def scout(name: str, clone: str, rev: str) -> dict:
             if why is None and not MIN_PLACES <= len(places) <= MAX_PLACES:
                 why = f"{len(places)} places"
             if why is None and len(files - {own}) < MIN_FILES:
-                why = "fewer than 2 other files"
+                why = f"fewer than {MIN_FILES} other files"
             if why is None and all(is_test(f) for f in files - {own}):
                 why = "only tests use it"
             if why:
@@ -185,7 +208,7 @@ def scout(name: str, clone: str, rev: str) -> dict:
                     and not (f == own and x[2] == "def")]
             word_files = set(_git(work, "grep", "-l", "-w", "-I", leaf, "--").split()) - {own}
             out.append({
-                "repo": name, "rev": rev, "qname": q, "file": own, "lines": list(sym.line_range), "kind": "method",
+                "repo": name, "rev": rev, "qname": q, "file": own, "lines": list(sym.line_range), "kind": sym.kind,
                 "leaf": leaf, "places": [{"file": f, "line": ln, "col": c, "how": h} for f, ln, c, h in places],
                 "n_places": len(places), "files": sorted(files), "test_files": sorted(f for f in files if is_test(f)),
                 "lookalikes": len(look), "lookalike_files": len({f for f, _ in look}),
@@ -200,8 +223,18 @@ def scout(name: str, clone: str, rev: str) -> dict:
 
 
 def main(argv=None) -> int:
-    argv = argv if argv is not None else sys.argv[1:]
-    out_path, specs = argv[0], argv[1:]
+    global MIN_PLACES, MAX_PLACES, MIN_FILES, KINDS
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("out")
+    p.add_argument("specs", nargs="+")
+    p.add_argument("--places", default=f"{MIN_PLACES}-{MAX_PLACES}")
+    p.add_argument("--min-files", type=int, default=MIN_FILES)
+    p.add_argument("--kinds", default=",".join(KINDS))
+    a = p.parse_args(argv)
+    MIN_PLACES, MAX_PLACES = (int(x) for x in a.places.split("-"))
+    MIN_FILES, KINDS = a.min_files, tuple(a.kinds.split(","))
+    out_path, specs = a.out, a.specs
     reports = json.load(open(out_path)) if os.path.exists(out_path) else {}
     for spec in specs:
         name, rest = spec.split("=", 1)

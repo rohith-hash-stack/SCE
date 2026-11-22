@@ -67,7 +67,7 @@ TASKS = "@@TASKS_PATH@@"      # Phase 3 (phase3/TASKS.md)
 TASKS_SHA = "@@TASKS_SHA@@"           # sha256 of the task list (json, sorted keys); also stored in the file
 LAYER1_POOL = "harness/experiments/r4/sanity/layer1_pool.json"
 SEEDS = (SEED,)                       # this shard's seed only
-TURN_CAP = 28                         # R3a's
+TURN_CAP = 60                         # Phase 3 amendment 3: up to 30 places to edit, one edit_file each
 SESSION_HOURS = 11.5
 STOP_MARGIN_MIN = 30                  # no run starts later than this before the limit (non-thinking runs: ~5-10 min)
 DISK_CLEAN_GB = 5                     # under this before a repository (or during runs): clear the download caches
@@ -172,7 +172,7 @@ if run(["git", "cat-file", "-e", f"origin/{BRANCH}:{RESULTS_PATH}"], cwd=SCE_DIR
 print("\n[setup] Install prism, the tokenizer library and uv", flush=True)
 run([sys.executable, "-m", "pip", "install", "-q", "-e", ".", "tokenizers", "uv", "packaging",
      "pyflakes==3.2.0", "jedi==0.19.2", "ast-grep-cli==0.39.6"], cwd=SCE_DIR, check=True)   # jedi: BASELINE_LSP's find_references
-child_env = dict(os.environ, PYTHONPATH=os.pathsep.join([SCE_DIR, os.path.join(SCE_DIR, "src")]),
+child_env = dict(os.environ, R3_BUDGET_TOKENS="1000000", PYTHONPATH=os.pathsep.join([SCE_DIR, os.path.join(SCE_DIR, "src")]),
                  PYTHONDONTWRITEBYTECODE="1",
                  PATH=os.pathsep.join([os.path.dirname(sys.executable), os.path.expanduser("~/.local/bin"),
                                        os.environ.get("PATH", "")]))
