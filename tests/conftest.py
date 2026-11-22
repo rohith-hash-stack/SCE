@@ -92,3 +92,22 @@ def _guard_default_pilot_checkpoint_path():
     mp.setattr(runner_module, "save_checkpoint", _guarded_save_checkpoint)
     yield
     mp.undo()
+
+
+class _FallbackTokenizerState:
+    """PRISM's regex fallback tokenizer as the resolved backend (`prism.slicer.tokenizer._STATE`)."""
+    encoding = None
+    backend_name = "fallback-regex (pinned by the test)"
+
+    def resolve(self) -> None:
+        pass
+
+
+@pytest.fixture
+def fallback_tokenizer(monkeypatch):
+    """Pin PRISM's token counting to the regex fallback. Tests whose tight budgets were calibrated with the
+    fallback's (deliberately over-counting) costs use it, so they behave the same on a machine where tiktoken's
+    exact cl100k_base encoding loads (counts there are lower: the same budget then admits more items)."""
+    from prism.slicer import tokenizer
+    monkeypatch.setattr(tokenizer, "_STATE", _FallbackTokenizerState())
+    yield

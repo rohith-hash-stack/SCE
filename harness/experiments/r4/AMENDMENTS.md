@@ -1713,3 +1713,26 @@ places too, so they could not tell an LSP agent from PRISM.
   - the test-file rule through the tools;
   - C1-C3 log fields in every arm;
   - the new tools in the report and in compaction.
+
+### Phase 3 pre-run audit: the 17 failing tests (2026-11-22, before any Phase 3 run)
+
+**Method:** the full suite had 17 failures, and all 17 also fail at `f12a681a`, the code of every Phase 2 run (run
+with that commit's own `src`). So none came from the Phase 3 changes. Each was traced to its cause; the user chose
+to fix those that bear on the run and to mark the rest with their cause, never silently.
+
+| Tests | Cause | Handling |
+|---|---|---|
+| 6 packer tests (`budget_exceeded` ×2, `pipeline_preservation`, `progressive_seed_degradation`, `redundancy_elimination`, `runtime_tracer`) | budgets calibrated with PRISM's over-counting fallback tokenizer; with tiktoken's exact counts the same budgets admit more | pinned to the fallback (`tests/conftest.py` `fallback_tokenizer`): they pass |
+| `benchmark` compression @4000 | real: 38% compression, under the 45% target | strict xfail, tracked defect |
+| `benchmark` budget @2000 | real: a 2000-token pack renders 2029 tokens (the 0.92 safety margin is calibrated with the fallback) | strict xfail, tracked defect. Every tool output is cut at 4000 tokens, so no run sees it |
+| `query_to_evidence` ×3, `nlq_p1` ×2 | stale snapshots of the October evaluations: the reference graph (Phase B) and `8d0b7756` (bounded container-stub trials, verified by bisection from a passing commit) changed what is requested and stubbed | strict xfail until those evaluations are re-run |
+| `two_pass_root_imports` ×4 | the express corpus here was never `npm install`ed (`node_modules/etag` missing) | skipped when it is missing |
+
+None of these changes PRISM's behaviour in a run: the packer, the NLQ planner and the context package are exactly
+the Phase 2 code.
+
+**Also fixed before the run:**
+- **The go/no-go verdict:** each POC shard runs one seed and reports alone. A report without all the stage's seeds
+  (`seeds` in the task file: 42-44) says INCOMPLETE, not NO-GO. The verdict is the merged analysis's.
+- **The dry run of the 4 POC tasks:** the answer key replayed through the runner resolves in all 3 arms (18-26 turns,
+  under the 60-turn cap), and the unchanged start is rejected by the done gate (`stuck_done`) for each task.

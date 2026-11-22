@@ -56,8 +56,11 @@ def select(valid: list[dict]) -> tuple[list[dict], list[dict]]:
     return poc, conf
 
 
+SEEDS = {"poc": [42, 43, 44], "confirmatory": [101, 102, 103, 104, 105]}
+
+
 def _doc(tasks: list[dict], stage: str, runs: int, urls: dict) -> dict:
-    return {"design": "phase3", "stage": stage, "expected_runs": runs,
+    return {"design": "phase3", "stage": stage, "expected_runs": runs, "seeds": SEEDS[stage],
             "repo_urls": {r: urls[r] for r in sorted({t["repo"] for t in tasks})}, "tasks": tasks,
             "tasks_sha256": hashlib.sha256(json.dumps(tasks, sort_keys=True).encode()).hexdigest()}
 

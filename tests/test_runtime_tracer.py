@@ -17,6 +17,13 @@ from prism.runtime.tracer import Tracer, TraceRecord, resolve_qualified_name, ru
 from prism.slicer.distance import DistanceConfig, DistanceEngine
 from prism.slicer.knapsack import ContextKnapsackPacker
 
+import pytest
+
+# Budgets in this module were calibrated with PRISM's fallback tokenizer (see `tests/conftest.py`
+# `fallback_tokenizer`); with tiktoken's exact counts the same budgets admit more items.
+pytestmark = pytest.mark.usefixtures("fallback_tokenizer")
+
+
 
 def _write_traced_module(tmp_path):
     repo = tmp_path / "repo"

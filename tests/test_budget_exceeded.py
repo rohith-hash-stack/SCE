@@ -11,6 +11,13 @@ from prism.serializers.markdown import render_markdown
 from prism.slicer.distance import DistanceConfig, DistanceEngine
 from prism.slicer.knapsack import ContextKnapsackPacker
 
+import pytest
+
+# Budgets in this module were calibrated with PRISM's fallback tokenizer (see `tests/conftest.py`
+# `fallback_tokenizer`); with tiktoken's exact counts the same budgets admit more items.
+pytestmark = pytest.mark.usefixtures("fallback_tokenizer")
+
+
 
 def _pack(repo_path: str, seed: str, budget: int):
     builder, tag_matrix = build_pipeline(repo_path)

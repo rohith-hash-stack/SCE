@@ -267,10 +267,14 @@ DESIGNS = {
 GO_MIN_EXTRA_SOLVES, GO_MAX_TASKS_LOST, GO_MAX_DEAD = 3, 1, 2
 
 
-def go_no_go(rows: list[dict], per_task: dict, tasks: dict, expected_runs: int, ref: str = "BASELINE_LSP") -> dict:
+def go_no_go(rows: list[dict], per_task: dict, tasks: dict, expected_runs: int, ref: str = "BASELINE_LSP",
+             seeds: list | None = None) -> dict:
     hidden = {tid for tid, t in tasks.items() if t.get("derived")}
     solved = {arm: sum(1 for r in rows if r["task"] in hidden and r["arm"] == arm and r["solved"])
               for arm in (ref, "PRISM_LSP", "PRISM_ONLY")}
+    # a shard's own report sees one seed: the verdict is only for all the stage's seeds (the merged analysis)
+    seeds_seen = sorted({r["seed"] for r in rows})
+    incomplete = bool(seeds) and seeds_seen != sorted(seeds)
     dead = max(0, expected_runs - len(rows)) + sum(1 for r in rows if r["infra"])   # missing runs count as dead
     arms = {}
     for arm in ("PRISM_LSP", "PRISM_ONLY"):
@@ -283,7 +287,9 @@ def go_no_go(rows: list[dict], per_task: dict, tasks: dict, expected_runs: int, 
     return {"reference_arm": ref, "rule": {"min_extra_solves": GO_MIN_EXTRA_SOLVES, "max_hidden_tasks_lost": GO_MAX_TASKS_LOST,
                      "max_infrastructure_deaths": GO_MAX_DEAD},
             "hidden_tasks": len(hidden), "hidden_solved_runs": solved, "infrastructure_deaths": dead,
-            "arms": arms, "verdict": "GO" if ok_runs and any(a["go"] for a in arms.values()) else "NO-GO"}
+            "arms": arms, "seeds_expected": sorted(seeds or []), "seeds_seen": seeds_seen,
+            "verdict": "INCOMPLETE (not every seed of the stage; the verdict is the merged analysis's)" if incomplete
+            else "GO" if ok_runs and any(a["go"] for a in arms.values()) else "NO-GO"}
 
 
 def compare(rows: list[dict], per_task: dict, arm: str, ref: str) -> dict | None:
@@ -380,7 +386,7 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
     rep["injection"] = injection_summary(results, rows)
     rep["process"] = process(rows, arms)
     if doc.get("stage") == "poc":
-        rep["go_no_go"] = go_no_go(rows, per_task, tasks, doc.get("expected_runs", 0))
+        rep["go_no_go"] = go_no_go(rows, per_task, tasks, doc.get("expected_runs", 0), seeds=doc.get("seeds"))
     rep["turn_efficiency"] = turn_efficiency(rows, per_task, arms, design["comparisons"])
     rep["code_review"] = code_review(rows, arms, design["comparisons"] + design["descriptive"])
     return rep

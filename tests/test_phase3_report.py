@@ -16,7 +16,8 @@ def _doc(tmp_path, solved, stage="poc", missing=()):
     d.mkdir()
     tasks = [_task(f"p3-hidden-0{i}", family="rename_hidden", derived={"kind": "rename_sites"}) for i in range(1, 5)]
     tasks.append(_task("r4s-delete-05", family="delete", control=True))
-    json.dump({"design": "phase3", "stage": stage, "expected_runs": 45, "tasks": tasks}, open(tmp_path / "t.json", "w"))
+    json.dump({"design": "phase3", "stage": stage, "expected_runs": 45, "seeds": [42, 43, 44], "tasks": tasks},
+              open(tmp_path / "t.json", "w"))
     for t in tasks:
         for arm in ARMS3:
             for k, seed in enumerate((42, 43, 44)):
@@ -111,3 +112,12 @@ def test_old_outputs_of_every_arms_index_tools_are_summarised_alike():
         assert counts["summarised"] == 1, tool
         assert out[0]["content"].startswith("line 0\nline 1") and "omitted" in out[0]["content"], tool
         assert len(out[0]["content"].splitlines()) == 13, tool
+
+
+def test_a_shards_own_report_is_incomplete_not_no_go(tmp_path):
+    """Each POC shard runs one seed; its own report must not read as NO-GO for the 30 runs the other shards hold."""
+    rep = _doc(tmp_path, {"BASELINE_LSP": {}, "PRISM_LSP": {"p3-hidden-01": 3, "p3-hidden-02": 3}, "PRISM_ONLY": {}},
+               missing={(t, a, s) for t in ("p3-hidden-01", "p3-hidden-02", "p3-hidden-03", "p3-hidden-04",
+                                            "r4s-delete-05") for a in ARMS3 for s in (43, 44)})
+    g = rep["go_no_go"]
+    assert g["seeds_seen"] == [42] and g["verdict"].startswith("INCOMPLETE")
