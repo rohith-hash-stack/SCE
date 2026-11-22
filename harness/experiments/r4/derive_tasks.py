@@ -385,9 +385,12 @@ def validate(changed: dict, derived: dict, details: dict, tests: list, gen_rel: 
     # 2. the gold tree
     for f, text in changed.items():
         _write(work, f, text)
-    _write(work, gen_rel, gen)
+    # the baseline is the gold tree a run can reach: without the generated hidden test, which a run never has (its
+    # `assert not hasattr(owner, "old")` would otherwise count as a use of the old name, under rename_sites a use
+    # the run "removed")
     gold_measure = DC.measure(derived, work)
     derived["baseline"] = gold_measure["counts"]
+    _write(work, gen_rel, gen)
     chk = DC.check(derived, work)
     if not chk["ok"]:
         return {"rejected": f"gold fails the static check: {chk['problems']}"}
