@@ -36,8 +36,9 @@ def new_reference_graph() -> nx.DiGraph:
     return nx.DiGraph()
 
 
-#: Lines kept per edge: where the uses are, for the tools to cite (the count keeps the total).
-MAX_EDGE_LINES = 5
+#: Lines kept per edge: where the uses are, for the tools to cite (the count keeps the total). 64 since Phase 3:
+#: `prism_find_references` lists every use, and a module can use a name more than 5 times.
+MAX_EDGE_LINES = 64
 
 
 def add_reference(g: nx.DiGraph, src: str, dst: str, kind: str, module_node: str | None = None,

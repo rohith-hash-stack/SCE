@@ -21,7 +21,10 @@ QWEN = os.environ.get("HARNESS_TOKENIZER_PATH", "/home/user/models/qwen2-tokeniz
 CORPORA = "/home/user/SCE/.benchmarks/corpora"
 ROOTS = {"express": f"{CORPORA}/express", "trpc": f"{CORPORA}/trpc/packages/server/src"}
 
-pytestmark = pytest.mark.skipif(not os.path.exists(QWEN), reason="Qwen tokenizer missing")
+import importlib.util  # noqa: E402
+
+pytestmark = pytest.mark.skipif(not os.path.exists(QWEN) or importlib.util.find_spec("transformers") is None,
+                                reason="Qwen tokenizer or the transformers package missing (harness/tokenizer.py)")
 
 
 class HashEmbedder:

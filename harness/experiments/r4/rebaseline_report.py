@@ -101,11 +101,16 @@ def set_aside(root: str, tasks: dict) -> dict[str, set[str]]:
 
 
 EXPLORE = ("read_file", "grep", "list_dir", "related_code")
+#: Phase 3: BASELINE_LSP's IDE-agent tools (`r3/lsp_tools.py`, `r3/baseline_tools.py`), counted apart from PRISM's
+IDE_TOOLS = ("find_references", "semantic_search", "ast_search", "run_shell")
+#: the reference searches the Phase 3 arms compare: the language server's and PRISM's own
+REFERENCE_TOOLS = ("find_references", "prism_find_references")
 
 
 def efficiency(turns: list[dict]) -> dict:
     """Turn efficiency of one run, from its turn log."""
-    kinds = {"prism": 0, "explore": 0, "edit_applied": 0, "edit_failed": 0, "test": 0, "parse_error": 0, "other": 0}
+    kinds = {"prism": 0, "ide": 0, "explore": 0, "edit_applied": 0, "edit_failed": 0, "test": 0, "parse_error": 0,
+             "other": 0}
     first_edit, after_prism, pending = None, 0, False
     for t in turns:
         tool = str(t.get("tool") or "")
@@ -114,6 +119,8 @@ def efficiency(turns: list[dict]) -> dict:
             kinds["parse_error"] += 1
         elif tool.startswith("prism_"):
             kinds["prism"] += 1
+        elif tool in IDE_TOOLS:
+            kinds["ide"] += 1
         elif tool in EXPLORE:
             kinds["explore"] += 1
         elif tool == "edit_file":
@@ -184,6 +191,15 @@ def result_dirs(results: str) -> list[str]:
     return out
 
 
+def _per_tool(turns: list[dict], value) -> dict:
+    out: dict[str, int] = {}
+    for t in turns:
+        tool = t.get("tool")
+        if tool:
+            out[tool] = out.get(tool, 0) + value(t)
+    return out
+
+
 def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
     rows, seen = [], {}
     # every run file; only the task file's tasks are kept (Phase 2's derived tasks are `p2-*`, not `r4s-*`)
@@ -206,6 +222,8 @@ def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
                                          and not str(t.get("output_head", "")).startswith(("edited", "created"))),
                      "prism_output_tokens": sum(t.get("output_tokens") or 0 for t in turns
                                                 if str(t.get("tool") or "").startswith("prism_")),
+                     "tool_calls": _per_tool(turns, lambda t: 1),
+                     "tool_output_tokens": _per_tool(turns, lambda t: t.get("output_tokens") or 0),
                      "efficiency": efficiency(turns), "post_prism": post_prism(turns),
                      "review": s.get("review")})
     return rows
@@ -497,8 +515,22 @@ def process(rows: list[dict], arms=ARMS) -> dict:
                     "parse_error_rate": sum(r["parse_errors"] for r in rs) / turns, "ends": ends,
                     "mean_tokens": st.mean(r["used_tokens"] or 0 for r in rs),
                     "failed_edits_per_turn": sum(r["failed_edits"] for r in rs) / turns,
-                    "prism_output_tokens_per_run": st.mean(r["prism_output_tokens"] for r in rs)}
+                    "prism_output_tokens_per_run": st.mean(r["prism_output_tokens"] for r in rs),
+                    # Phase 3: every tool's calls and output tokens per run, the reference searches and all
+                    # index-side tools (PRISM's, or the IDE agent's) apart
+                    "tool_calls_per_run": _mean_per_tool(rs, "tool_calls"),
+                    "tool_output_tokens_per_run": _mean_per_tool(rs, "tool_output_tokens"),
+                    "reference_tool_output_tokens_per_run": st.mean(
+                        sum(v for k, v in r["tool_output_tokens"].items() if k in REFERENCE_TOOLS) for r in rs),
+                    "index_tool_output_tokens_per_run": st.mean(
+                        sum(v for k, v in r["tool_output_tokens"].items() if k.startswith("prism_") or k in IDE_TOOLS
+                            or k == "related_code") for r in rs)}
     return out
+
+
+def _mean_per_tool(rs: list[dict], key: str) -> dict:
+    tools = sorted({k for r in rs for k in r[key]})
+    return {k: st.mean(r[key].get(k, 0) for r in rs) for k in tools}
 
 
 def health(results: str, tasks_path: str, seeds: list[int]) -> tuple[bool, dict]:

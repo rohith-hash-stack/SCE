@@ -319,7 +319,8 @@ for port in PORTS:
 
 print("\n[preflight] the harness renders devstral's template as Ollama does", flush=True)
 _pf = subprocess.run([sys.executable, "-m", "harness.experiments.r4.raw_preflight", "--base-url",
-                      f"http://127.0.0.1:{PORTS[0]}", "--model", SUMMARIZER, "--out", os.path.join(OUT, "preflight.json")],
+                      f"http://127.0.0.1:{PORTS[0]}", "--model", SUMMARIZER, "--out", os.path.join(OUT, "preflight.json"),
+                      "--versions", *ARMS],
                      cwd=SCE_DIR, env=child_env, capture_output=True, text=True)
 print(_pf.stdout[-3000:], _pf.stderr[-2000:], flush=True)
 if _pf.returncode != 0:

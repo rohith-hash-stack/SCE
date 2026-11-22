@@ -62,3 +62,52 @@ def test_no_go_when_runs_are_missing(tmp_path):
 def test_confirmatory_stage_has_no_verdict(tmp_path):
     rep = _doc(tmp_path, {"BASELINE_LSP": {}, "PRISM_LSP": {}, "PRISM_ONLY": {}}, stage="confirmatory")
     assert "go_no_go" not in rep
+
+
+def test_new_tools_are_counted_and_never_crash(tmp_path):
+    """Turn logs with every Phase 3 tool: the report counts the IDE tools and the two reference searches apart."""
+    d = tmp_path / "phase3_poc"
+    d.mkdir()
+    tasks = [_task("p3-hidden-01", family="rename_hidden", derived={"kind": "rename_sites"}),
+             _task("p3-hidden-02", family="rename_hidden", derived={"kind": "rename_sites"})]
+    json.dump({"design": "phase3", "stage": "confirmatory", "tasks": tasks}, open(tmp_path / "t.json", "w"))
+    logs = {"BASELINE_LSP": [("find_references", 160), ("semantic_search", 1200), ("ast_search", 1500),
+                             ("run_shell", 40), ("edit_file", 10)],
+            "PRISM_LSP": [("prism_find_references", 290), ("prism_change_context", 1700), ("grep", 300),
+                          ("edit_file", 10)],
+            "PRISM_ONLY": [("prism_find_references", 290), ("prism_search", 3400), ("prism_read", 380),
+                           ("edit_file", 10)]}
+    for t in tasks:
+        for arm, calls in logs.items():
+            _run(str(d), t["id"], arm, 42, True)
+            with open(d / f"{t['id']}__{arm}__42.jsonl", "w") as fh:
+                for i, (tool, tok) in enumerate(calls, 1):
+                    fh.write(json.dumps({"turn": i, "tool": tool, "args": {"symbol": "pkg.m.f"}, "output_tokens": tok,
+                                         "output_head": "edited" if tool == "edit_file" else "x"}) + "\n")
+    rep = R.analyse(str(d), str(tmp_path / "t.json"))
+    p = rep["process"]
+    assert p["BASELINE_LSP"]["reference_tool_output_tokens_per_run"] == 160
+    assert p["PRISM_LSP"]["reference_tool_output_tokens_per_run"] == 290
+    assert p["BASELINE_LSP"]["index_tool_output_tokens_per_run"] == 160 + 1200 + 1500 + 40
+    assert p["PRISM_ONLY"]["index_tool_output_tokens_per_run"] == 290 + 3400 + 380
+    assert p["PRISM_LSP"]["tool_calls_per_run"]["prism_find_references"] == 1
+    assert p["BASELINE_LSP"]["prism_output_tokens_per_run"] == 0
+    eff = rep["turn_efficiency"]
+    assert eff is not None
+    assert "PRISM_LSP" in rep["process"] and "post_prism_by_arm" in eff and "PRISM_LSP" in eff["post_prism_by_arm"]
+
+
+def test_old_outputs_of_every_arms_index_tools_are_summarised_alike():
+    """Compaction (Phase 1 item 2) summarises an old index-tool output to its first lines; Phase 3's IDE tools and
+    `prism_find_references` follow the same rule, so no arm keeps re-sending its old tool outputs in full."""
+    from harness.experiments.r3.compaction import compact
+    big = "\n".join(f"line {i}" for i in range(60))
+    for tool in ("find_references", "semantic_search", "ast_search", "run_shell", "prism_find_references",
+                 "prism_change_context"):
+        hist = [{"role": "user", "content": big, "tool_output": True, "tool": tool, "args": {"q": tool}, "turn": 1}]
+        hist += [{"role": "user", "content": f"short {i}", "tool_output": True, "tool": "edit_file", "args": {},
+                  "turn": i + 2} for i in range(8)]
+        out, counts = compact(hist, lambda s: len(s) // 4)
+        assert counts["summarised"] == 1, tool
+        assert out[0]["content"].startswith("line 0\nline 1") and "omitted" in out[0]["content"], tool
+        assert len(out[0]["content"].splitlines()) == 13, tool

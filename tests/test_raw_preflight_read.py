@@ -19,3 +19,18 @@ def test_failures():
 def test_escaped_values():
     raw = '{"tool": "edit_file", "args": {"path": "a.py", "old": "x = \\"y\\"\\n", "new": ""}}'
     assert call_read_ok(["edit_file", {}], ["edit_file", {"path": "a.py", "old": 'x = "y"\n', "new": ""}], raw)
+
+
+def test_cases_cover_the_arms_asked_with_their_own_tools():
+    """Phase 3: the pre-flight renders the cell's own arms (their system prompts and native tool lists)."""
+    from harness.experiments.r3.loop import native_tools, system_prompt
+    from harness.experiments.r4.raw_preflight import cases
+    got = cases(("BASELINE_LSP", "PRISM_LSP", "PRISM_ONLY"))
+    assert [n.split(":", 1)[0] for n, _ in got] == ["BASELINE_LSP"] * 2 + ["PRISM_LSP"] * 2 + ["PRISM_ONLY"] * 2
+    for name, msgs in got:
+        arm = name.split(":", 1)[0]
+        assert msgs[0]["content"] == system_prompt(arm)
+        names = {t["function"]["name"] for t in native_tools(arm)}
+        assert ("find_references" in names) == (arm == "BASELINE_LSP")
+        assert ("prism_find_references" in names) == (arm != "BASELINE_LSP")
+    assert [n for n, _ in cases()][0].startswith("PRISM:")                    # the default is unchanged

@@ -1,0 +1,18 @@
+prism_search '\\bparse\\b': 17 hits in 8 files (docs 6, import 6, call 3, test 3, string 1, definition 1)
+README.md:9: [docs] | a re-export (`from .core.parse import parse`), imported both ways | `src/shelf/__init__.py`; `cli.py`, `tests/test_parse.py` | T2 callers through re-exports; T5 import sites |
+README.md:10: [docs] | an alias import and a call through it | `cli.py` (`parse as p`, `check`) | T2 through an alias |
+README.md:14: [docs] | a docs page naming two functions | `docs/usage.md` (`parse`, `render`) | T9 docs |
+README.md:15: [docs] | tests calling three functions directly and one through a helper | `tests/` (`parse`, `render`, `export_all`; `normalize` via `tests/helpers.py`) | T8 tests reaching a function; `include_tests=False` |
+README.md:20: [docs] | raises, empty returns, state changes | `core/parse.py` `parse` (raises `ValueError`, returns `[]`), `store.py` `Store.set_value`, `models/query.py` `QuerySet.get` | T1, T3 |
+docs/usage.md:3: [docs] Call `parse` on the text, then `render` on the records it returns.
+src/shelf/__init__.py:2: [import] from .core.parse import parse
+src/shelf/__init__.py:4: [string] __all__ = ["parse"]
+src/shelf/cli.py:4: [import] from shelf import parse
+src/shelf/cli.py:5: [import] from shelf.core.parse import parse as p
+src/shelf/cli.py:12: [call; in `src.shelf.cli.main`] records = parse(sys.stdin.read())
+src/shelf/core/parse.py:16: [definition; in `src.shelf.core.parse.parse`] def parse(text):
+src/shelf/plugins/csv_plugin.py:3: [import] from shelf.core.parse import parse
+src/shelf/plugins/csv_plugin.py:9: [call; in `src.shelf.plugins.csv_plugin.load_csv`] return parse(text)
+tests/helpers.py:1: [test; import] from shelf.core.parse import normalize
+tests/test_parse.py:1: [test; import] from shelf import parse
+tests/test_parse.py:6: [test; call; in `tests.test_parse.test_parse_two_lines`] assert parse("a,b\nc") == [["a", "b"], ["c"]]

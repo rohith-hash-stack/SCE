@@ -77,15 +77,24 @@ def normalize(text: str, roots: list[str]) -> str:
     return "\n".join(line.rstrip() for line in text.splitlines()).strip() + "\n"
 
 
+class _NoTests:
+    def run_test(self, rel, ids=None):
+        return {}
+
+
 class _Layer:
     """R3's ToolLayer, plus `include_tests` for the blast radius."""
 
     def __init__(self, repo: str, base: Path):
+        from harness.experiments.r3.shared_tools import SharedTools
         from harness.experiments.r3.tools import ToolLayer
         from harness.experiments.r3.working_index import WorkingIndex
         self.work = setup_repo(repo, base)
         self.wi = WorkingIndex(str(self.work), str(base / f"{repo}-shadow"))
         self.layer = ToolLayer(self.wi, None)
+        # `prism_search`, `prism_read` and `prism_find_references` read the working files through the run's shared
+        # tools, as in a run (Phase D, Phase 3)
+        self.layer.shared = SharedTools(str(self.work), _NoTests(), [])
 
     def call(self, tool: str, args: dict) -> str:
         args = dict(args)

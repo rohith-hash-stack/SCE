@@ -54,9 +54,14 @@ def call_read_ok(chat_call, raw_call, raw_response: str) -> bool:
     return all(v in raw_response or json.dumps(v)[1:-1] in raw_response for v in _strings(raw_call[1]))
 
 
-def cases() -> list[tuple[str, list[dict]]]:
+#: the arms the pre-flight renders by default (the re-baseline's and Phase 2's); a Phase 3 cell passes its own
+DEFAULT_VERSIONS = ("PRISM", "BASELINE")
+
+
+def cases(versions=DEFAULT_VERSIONS) -> list[tuple[str, list[dict]]]:
+    """(name, messages) per arm and case; the name starts with the arm and a colon."""
     out = []
-    for version in ("PRISM", "BASELINE"):
+    for version in versions:
         sys_p = system_prompt(version)
         task = "Remove the getter `shape` defined inside the function `object` from `src/a.ts`. Remaining tests must pass."
         call1 = {"tool": "read_file", "args": {"path": "src/a.ts", "start": 1, "end": 40}}
@@ -78,14 +83,16 @@ def main(argv=None) -> int:
     p.add_argument("--base-url", required=True)
     p.add_argument("--model", required=True)
     p.add_argument("--out")
+    p.add_argument("--versions", nargs="+", default=list(DEFAULT_VERSIONS),
+                   help="the arms whose prompts and tool lists are rendered (Phase 3: BASELINE_LSP PRISM_LSP PRISM_ONLY)")
     a = p.parse_args(argv)
     url = a.base_url.rstrip("/")
     opts = {"temperature": 0.0, "seed": 42, "num_ctx": 20480, "num_predict": 64}     # greedy: the least sampling noise
     clear = lambda: _post(url, "/api/generate", {"model": a.model, "prompt": "Count to three.", "stream": False,
                                                   "options": {**opts, "num_predict": 4}})
     rows, ok = [], True
-    for name, msgs in cases():
-        tools = native_tools("PRISM" if name.startswith("PRISM") else "BASELINE")
+    for name, msgs in cases(a.versions):
+        tools = native_tools(name.split(":", 1)[0])                     # the case's own arm, its exact tool list
         clear()
         chat = _post(url, "/api/chat", {"model": a.model, "messages": native_messages(msgs), "tools": tools,
                                         "stream": False, "options": opts})

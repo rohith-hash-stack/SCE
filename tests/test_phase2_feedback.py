@@ -135,7 +135,7 @@ T = '{"tool": "run_tests", "args": {}}'
 D = '{"tool": "done", "args": {"summary": "ok"}}'
 
 
-@pytest.mark.parametrize("version", ["BASELINE", "PRISM", "INJECTED"])
+@pytest.mark.parametrize("version", ["BASELINE", "PRISM", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP"])
 def test_repeat_note_in_every_arm(tmp_path, version):
     L.AgentRun({"id": "t", "prompt": "p"}, version, 42, _Scripted([R, T, R, T, D]), _Shared(),
                feedback=True).run(str(tmp_path))
@@ -163,3 +163,46 @@ def test_syntax_problem_and_warning_units():
     assert syntax_problem("a.py", "x = 1\n") is None and syntax_problem("a.md", "((") is None
     assert syntax_problem("a.py", "def f(:\n").startswith("line 1")
     assert edit_warning("a.py", "x = 1\n", "x = 2\n") == ""
+
+
+# ---------------------------------------------------------------------------------------------- the turn log
+class _Index:
+    """A stand-in index layer: a fixed answer per tool (the repeat check sees the identical answer)."""
+    def call(self, tool, **args):
+        return f"{tool} answer"
+
+
+@pytest.mark.parametrize("version,tool", [("BASELINE_LSP", "find_references"), ("PRISM_LSP", "prism_find_references"),
+                                          ("PRISM_ONLY", "prism_find_references")])
+def test_repeat_note_on_the_reference_tools(tmp_path, version, tool):
+    call = json.dumps({"tool": tool, "args": {"symbol": "pkg.m.f"}})
+    L.AgentRun({"id": "t", "prompt": "p"}, version, 42, _Scripted([call, call, D]), _Shared(), _Index(),
+               feedback=True).run(str(tmp_path))
+    log = [json.loads(ln) for ln in open(tmp_path / f"t__{version}__42.jsonl")]
+    assert log[0]["tool"] == tool and "repeat_of_turn" not in log[0] and log[1]["repeat_of_turn"] == 1
+
+
+def test_c1_c2_flags_are_logged(tmp_path):
+    """C1 and C2 as the turn log records them (the analysis reads these fields, not the outputs, which are cut)."""
+    text = PYTEST_OUT.replace("/work/", str(tmp_path) + "/")
+    shared = _tools(tmp_path, feedback=True, result=_failing_result(text))
+    shared.done_summary = None
+    edit = lambda old, new: json.dumps({"tool": "edit_file", "args": {"path": "pkg/m.py", "old": old, "new": new}})
+    replies = [edit(BROKEN_OLD, BROKEN_NEW), edit("import types\n", "import types  # x\n"),
+               edit("else:\n", "else:\n    pass\n"), T, D]
+    L.AgentRun({"id": "t", "prompt": "p"}, "BASELINE_LSP", 42, _Scripted(replies), shared,
+               feedback=True).run(str(tmp_path / "out"))
+    log = [json.loads(ln) for ln in open(tmp_path / "out" / "t__BASELINE_LSP__42.jsonl")]
+    assert log[0].get("edit_broke_syntax") is True and "edit_left_syntax_error" not in log[0]
+    assert log[1].get("edit_left_syntax_error") is True
+    assert "edit_broke_syntax" not in log[2] and "edit_left_syntax_error" not in log[2]       # the fix: no flag
+    assert log[3]["tool"] == "run_tests" and log[3].get("first_error_shown") is True
+
+
+def test_flags_absent_without_feedback(tmp_path):
+    shared = _tools(tmp_path, feedback=False)
+    replies = [json.dumps({"tool": "edit_file", "args": {"path": "pkg/m.py", "old": BROKEN_OLD, "new": BROKEN_NEW}}), D]
+    L.AgentRun({"id": "t", "prompt": "p"}, "PRISM_LSP", 42, _Scripted(replies), shared, _Index(),
+               feedback=False).run(str(tmp_path / "out"))
+    log = [json.loads(ln) for ln in open(tmp_path / "out" / "t__PRISM_LSP__42.jsonl")]
+    assert not any(k in log[0] for k in ("edit_broke_syntax", "edit_left_syntax_error", "repeat_of_turn"))

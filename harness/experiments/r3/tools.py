@@ -222,6 +222,7 @@ class ToolLayer:
                    "import": "import", "export": "__all__", "base": "subclass", "isinstance": "isinstance",
                    "except": "except", "annotation": "type annotation", "generic": "type parameter",
                    "decorator": "decorator", "value": "value", "attribute": "attribute", "override": "override",
+                   "callref": "used in a call",
                    "definition": "definition"}
 
     def _find_target(self, symbol: str) -> str:
@@ -338,7 +339,8 @@ class ToolLayer:
         for r in references_to(b, q):
             f = rel_of(r["file"])
             for line in r["lines"]:
-                add(f, line, None, r["kinds"][0] if len(r["kinds"]) == 1 else "/".join(r["kinds"]),
+                kinds = ["callref" if k == "call" else k for k in r["kinds"]]   # the reference pass's "call": a
+                add(f, line, None, kinds[0] if len(kinds) == 1 else "/".join(kinds),  # name inside a call expression
                     r["source"] if not r["is_module"] else "<module>")
             truncated += max(0, r["count"] - len(r["lines"]))
         possible = {k: v for k, v in rows.items() if v[0].startswith("possible")}

@@ -17,7 +17,8 @@ never touched):
    - `read_file`: one line (file, lines, size; read again for the text);
    - `run_tests`: the per-file count lines and at most 5 failing test names per file;
    - `grep` / `list_dir`: the first lines;
-   - an index tool (`prism_*`, `related_code`): the first lines, the same rule in both arms.
+   - an index tool (`prism_*`, `related_code`, and Phase 3's `find_references`, `semantic_search`, `ast_search`,
+     `run_shell`): the first lines, the same rule in every arm.
    Short outputs (edits, done, errors) are kept.
 
 The progress ledger (files read, edits, latest tests) is untouched and still appended to the newest message, so the
@@ -29,6 +30,8 @@ import re
 
 KEEP_RECENT = 6            # tool outputs kept in full, counting back from the newest
 SUMMARY_LINES = {"grep": 8, "list_dir": 12, "index": 12}
+#: the non-PRISM tools summarised as index tools: R1's control and, since Phase 3, BASELINE_LSP's IDE-agent tools
+INDEX_TOOLS = ("related_code", "find_references", "semantic_search", "ast_search", "run_shell")
 #: reads of numbered file lines: `prism_read` (Phase 2 D2) is `read_file`'s output with a PRISM footer
 READS = ("read_file", "prism_read")
 FAILING_NAMES = 5
@@ -75,7 +78,7 @@ def _summary(tool: str, output: str, ntok) -> str | None:
         if not keep:
             return None
         return "(older test results, summarised)\n" + "\n".join(keep)
-    kind = "index" if tool.startswith("prism_") or tool in ("related_code", "find_references") else tool
+    kind = "index" if tool.startswith("prism_") or tool in INDEX_TOOLS else tool
     n = SUMMARY_LINES.get(kind)
     if n is None:
         return None
