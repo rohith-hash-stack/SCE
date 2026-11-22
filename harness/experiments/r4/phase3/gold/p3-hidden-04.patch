@@ -1,0 +1,206 @@
+diff --git a/src/fastmcp/utilities/mcp_server_config/__init__.py b/src/fastmcp/utilities/mcp_server_config/__init__.py
+index 6cdfadcc..1fc8934f 100644
+--- a/src/fastmcp/utilities/mcp_server_config/__init__.py
++++ b/src/fastmcp/utilities/mcp_server_config/__init__.py
+@@ -7,7 +7,7 @@ The current version is v1, which is re-exported here for convenience.
+ from fastmcp.utilities.mcp_server_config.v1.environments.base import Environment
+ from fastmcp.utilities.mcp_server_config.v1.environments.uv import UVEnvironment
+ from fastmcp.utilities.mcp_server_config.v1.mcp_server_config import (
+-    Deployment,
++    DeploymentImpl,
+     MCPServerConfig,
+     generate_schema,
+ )
+@@ -15,7 +15,7 @@ from fastmcp.utilities.mcp_server_config.v1.sources.base import Source
+ from fastmcp.utilities.mcp_server_config.v1.sources.filesystem import FileSystemSource
+ 
+ __all__ = [
+-    "Deployment",
++    "DeploymentImpl",
+     "Environment",
+     "FileSystemSource",
+     "MCPServerConfig",
+diff --git a/src/fastmcp/utilities/mcp_server_config/v1/mcp_server_config.py b/src/fastmcp/utilities/mcp_server_config/v1/mcp_server_config.py
+index 5858680c..259150ca 100644
+--- a/src/fastmcp/utilities/mcp_server_config/v1/mcp_server_config.py
++++ b/src/fastmcp/utilities/mcp_server_config/v1/mcp_server_config.py
+@@ -33,7 +33,7 @@ SourceType: TypeAlias = FileSystemSource
+ EnvironmentType: TypeAlias = UVEnvironment
+ 
+ 
+-class Deployment(BaseModel):
++class DeploymentImpl(BaseModel):
+     """Configuration for server deployment and runtime settings."""
+ 
+     transport: Literal["stdio", "http", "sse", "streamable-http"] | None = Field(
+@@ -162,8 +162,8 @@ class MCPServerConfig(BaseModel):
+     )
+ 
+     # Deployment configuration
+-    deployment: Deployment = Field(
+-        default_factory=lambda: Deployment(),
++    deployment: DeploymentImpl = Field(
++        default_factory=lambda: DeploymentImpl(),
+         description="Server deployment and runtime settings",
+     )
+ 
+@@ -175,7 +175,7 @@ class MCPServerConfig(BaseModel):
+         @overload
+         def __init__(self, *, environment: dict | UVEnvironment, **data) -> None: ...
+         @overload
+-        def __init__(self, *, deployment: dict | Deployment, **data) -> None: ...
++        def __init__(self, *, deployment: dict | DeploymentImpl, **data) -> None: ...
+         def __init__(self, **data) -> None: ...
+ 
+     @field_validator("source", mode="before")
+@@ -207,7 +207,7 @@ class MCPServerConfig(BaseModel):
+ 
+     @field_validator("deployment", mode="before")
+     @classmethod
+-    def validate_deployment(cls, v: dict | Deployment) -> Deployment:
++    def validate_deployment(cls, v: dict | DeploymentImpl) -> DeploymentImpl:
+         """Validate and convert deployment to Deployment.
+ 
+         Accepts:
+@@ -216,8 +216,8 @@ class MCPServerConfig(BaseModel):
+ 
+         """
+         if isinstance(v, dict):
+-            return Deployment(**v)
+-        return cast(Deployment, v)  # type: ignore[return-value]
++            return DeploymentImpl(**v)
++        return cast(DeploymentImpl, v)  # type: ignore[return-value]
+ 
+     @classmethod
+     def from_file(cls, file_path: Path) -> MCPServerConfig:
+@@ -302,7 +302,7 @@ class MCPServerConfig(BaseModel):
+             # Convert streamable-http to http for backward compatibility
+             if transport == "streamable-http":
+                 transport = "http"
+-            deployment = Deployment(
++            deployment = DeploymentImpl(
+                 transport=transport,
+                 host=host,
+                 port=port,
+diff --git a/tests/cli/test_config.py b/tests/cli/test_config.py
+index cb4dd00a..8b86416d 100644
+--- a/tests/cli/test_config.py
++++ b/tests/cli/test_config.py
+@@ -8,7 +8,7 @@ import pytest
+ from pydantic import ValidationError
+ 
+ from fastmcp.utilities.mcp_server_config import (
+-    Deployment,
++    DeploymentImpl,
+     MCPServerConfig,
+ )
+ from fastmcp.utilities.mcp_server_config.v1.environments.uv import UVEnvironment
+@@ -254,12 +254,12 @@ class TestMCPServerConfig:
+         assert config.source.entrypoint is None
+         # Environment and deployment are now always present but empty
+         assert isinstance(config.environment, UVEnvironment)
+-        assert isinstance(config.deployment, Deployment)
++        assert isinstance(config.deployment, DeploymentImpl)
+         # Check they have no values set
+         assert not config.environment._must_run_with_uv()
+         assert all(
+             getattr(config.deployment, field, None) is None
+-            for field in Deployment.model_fields
++            for field in DeploymentImpl.model_fields
+         )
+ 
+     def test_nested_structure(self):
+@@ -280,7 +280,7 @@ class TestMCPServerConfig:
+         assert config.source.path == "server.py"
+         assert config.source.entrypoint is None
+         assert isinstance(config.environment, UVEnvironment)
+-        assert isinstance(config.deployment, Deployment)
++        assert isinstance(config.deployment, DeploymentImpl)
+ 
+     def test_from_file(self, tmp_path):
+         """Test loading config from JSON file with nested structure."""
+@@ -407,17 +407,17 @@ class TestMCPServerConfig:
+         assert config.source.path == "server.py"
+         # Environment and deployment are now always present but may be empty
+         assert isinstance(config.environment, UVEnvironment)
+-        assert isinstance(config.deployment, Deployment)
++        assert isinstance(config.deployment, DeploymentImpl)
+ 
+         # Only environment with values
+         config = MCPServerConfig(
+             source={"path": "server.py"}, environment={"python": "3.12"}
+         )
+         assert config.environment.python == "3.12"
+-        assert isinstance(config.deployment, Deployment)
++        assert isinstance(config.deployment, DeploymentImpl)
+         assert all(
+             getattr(config.deployment, field, None) is None
+-            for field in Deployment.model_fields
++            for field in DeploymentImpl.model_fields
+         )
+ 
+         # Only deployment with values
+@@ -452,7 +452,7 @@ class TestMCPServerConfigRoundtrip:
+         config = MCPServerConfig(
+             source=FileSystemSource(path="server.py", entrypoint="app"),
+             environment=UVEnvironment(python="3.11"),
+-            deployment=Deployment(transport="http", port=8080),
++            deployment=DeploymentImpl(transport="http", port=8080),
+         )
+         config_dict = config.model_dump()
+         reconstructed = MCPServerConfig(**config_dict)
+diff --git a/tests/cli/test_mcp_server_config_schema.py b/tests/cli/test_mcp_server_config_schema.py
+index 2be2c693..b16bf66d 100644
+--- a/tests/cli/test_mcp_server_config_schema.py
++++ b/tests/cli/test_mcp_server_config_schema.py
+@@ -3,7 +3,7 @@
+ import pytest
+ 
+ from fastmcp.utilities.mcp_server_config.v1.mcp_server_config import (
+-    Deployment,
++    DeploymentImpl,
+     generate_schema,
+ )
+ 
+@@ -168,5 +168,5 @@ def test_schema_log_level_enum():
+ )
+ def test_transport_values_accepted(transport):
+     """Test that all valid transport values are accepted."""
+-    deployment = Deployment(transport=transport)
++    deployment = DeploymentImpl(transport=transport)
+     assert deployment.transport == transport
+diff --git a/tests/cli/test_phase3_rename_Deployment.py b/tests/cli/test_phase3_rename_Deployment.py
+new file mode 100644
+index 00000000..119c4d9d
+--- /dev/null
++++ b/tests/cli/test_phase3_rename_Deployment.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_DeploymentImpl():
++    owner = importlib.import_module('fastmcp.utilities.mcp_server_config.v1.mcp_server_config')
++    assert hasattr(owner, 'DeploymentImpl')
++    assert not hasattr(owner, 'Deployment')
+diff --git a/tests/cli/test_run_config.py b/tests/cli/test_run_config.py
+index 4d1036ae..e8c02657 100644
+--- a/tests/cli/test_run_config.py
++++ b/tests/cli/test_run_config.py
+@@ -8,7 +8,7 @@ import pytest
+ 
+ from fastmcp.cli.run import load_mcp_server_config
+ from fastmcp.utilities.mcp_server_config import (
+-    Deployment,
++    DeploymentImpl,
+     MCPServerConfig,
+ )
+ from fastmcp.utilities.mcp_server_config.v1.environments.uv import UVEnvironment
+@@ -55,7 +55,7 @@ def test_load_mcp_server_config(sample_config, monkeypatch):
+         # Check that we got the right types
+         assert isinstance(config, MCPServerConfig)
+         assert isinstance(config.source, FileSystemSource)
+-        assert isinstance(config.deployment, Deployment)
++        assert isinstance(config.deployment, DeploymentImpl)
+         assert isinstance(config.environment, UVEnvironment)
+ 
+         # Check source - path is not resolved yet, only during load_server

@@ -1,0 +1,153 @@
+diff --git a/litestar/cli/commands/sessions.py b/litestar/cli/commands/sessions.py
+index a8c163cb8..7bc5e95e0 100644
+--- a/litestar/cli/commands/sessions.py
++++ b/litestar/cli/commands/sessions.py
+@@ -9,7 +9,7 @@ from rich.prompt import Confirm
+ from litestar import Litestar
+ from litestar.cli._utils import LitestarCLIException, LitestarGroup, console
+ from litestar.middleware import DefineMiddleware
+-from litestar.middleware.session import SessionMiddleware
++from litestar.middleware.session import SessionMiddlewareImpl
+ from litestar.middleware.session.server_side import ServerSideSessionBackend
+ from litestar.utils import is_class_and_subclass
+ 
+@@ -20,7 +20,7 @@ def get_session_backend(app: Litestar) -> ServerSideSessionBackend:
+     """Get the session backend used by a ``Litestar`` app."""
+     for middleware in app.middleware:
+         if isinstance(middleware, DefineMiddleware):
+-            if not is_class_and_subclass(middleware.middleware, SessionMiddleware):
++            if not is_class_and_subclass(middleware.middleware, SessionMiddlewareImpl):
+                 continue
+             backend = middleware.kwargs["backend"]
+             if not isinstance(backend, ServerSideSessionBackend):
+diff --git a/litestar/middleware/session/__init__.py b/litestar/middleware/session/__init__.py
+index 1ca9c174b..f2a33c384 100644
+--- a/litestar/middleware/session/__init__.py
++++ b/litestar/middleware/session/__init__.py
+@@ -1,3 +1,3 @@
+-from .base import SessionMiddleware
++from .base import SessionMiddlewareImpl
+ 
+-__all__ = ("SessionMiddleware",)
++__all__ = ("SessionMiddlewareImpl",)
+diff --git a/litestar/middleware/session/base.py b/litestar/middleware/session/base.py
+index 874ceeaed..e3d3d40a9 100644
+--- a/litestar/middleware/session/base.py
++++ b/litestar/middleware/session/base.py
+@@ -16,7 +16,7 @@ from litestar.middleware.base import AbstractMiddleware, DefineMiddleware
+ from litestar.serialization import decode_json, encode_json
+ from litestar.utils import get_serializer_from_scope
+ 
+-__all__ = ("BaseBackendConfig", "BaseSessionBackend", "SessionMiddleware")
++__all__ = ("BaseBackendConfig", "BaseSessionBackend", "SessionMiddlewareImpl")
+ 
+ 
+ if TYPE_CHECKING:
+@@ -93,7 +93,7 @@ class BaseBackendConfig(ABC, Generic[BaseSessionBackendT]):
+         Returns:
+             An instance of DefineMiddleware including ``self`` as the config kwarg value.
+         """
+-        return DefineMiddleware(SessionMiddleware, backend=self._backend_class(config=self))
++        return DefineMiddleware(SessionMiddlewareImpl, backend=self._backend_class(config=self))
+ 
+ 
+ class BaseSessionBackend(ABC, Generic[ConfigT]):
+@@ -185,7 +185,7 @@ class BaseSessionBackend(ABC, Generic[ConfigT]):
+         """
+ 
+ 
+-class SessionMiddleware(AbstractMiddleware, Generic[BaseSessionBackendT]):
++class SessionMiddlewareImpl(AbstractMiddleware, Generic[BaseSessionBackendT]):
+     """Litestar session middleware for storing session data."""
+ 
+     def __init__(self, app: ASGIApp, backend: BaseSessionBackendT) -> None:
+diff --git a/litestar/plugins/flash.py b/litestar/plugins/flash.py
+index 060890fb8..8eb6f7c3d 100644
+--- a/litestar/plugins/flash.py
++++ b/litestar/plugins/flash.py
+@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
+ import litestar.exceptions
+ from litestar.exceptions import MissingDependencyException
+ from litestar.middleware import DefineMiddleware
+-from litestar.middleware.session import SessionMiddleware
++from litestar.middleware.session import SessionMiddlewareImpl
+ from litestar.plugins import InitPlugin
+ from litestar.security.session_auth.middleware import MiddlewareWrapper
+ from litestar.template.base import _get_request_from_context
+@@ -52,7 +52,7 @@ class FlashPlugin(InitPlugin):
+         """
+         for mw in app_config.middleware:
+             if isinstance(mw, DefineMiddleware) and is_class_and_subclass(
+-                mw.middleware, (MiddlewareWrapper, SessionMiddleware)
++                mw.middleware, (MiddlewareWrapper, SessionMiddlewareImpl)
+             ):
+                 break
+         else:
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 9c4d8a678..996b9949e 100644
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -24,7 +24,7 @@ from time_machine import travel
+ from valkey.asyncio import Valkey as AsyncValkey
+ from valkey.client import Valkey
+ 
+-from litestar.middleware.session import SessionMiddleware
++from litestar.middleware.session import SessionMiddlewareImpl
+ from litestar.middleware.session.base import BaseSessionBackend
+ from litestar.middleware.session.client_side import ClientSideSessionBackend, CookieBackendConfig
+ from litestar.middleware.session.server_side import ServerSideSessionBackend, ServerSideSessionConfig
+@@ -171,15 +171,15 @@ def session_backend_config_memory(memory_store: MemoryStore) -> ServerSideSessio
+ 
+ 
+ @pytest.fixture
+-def session_middleware(session_backend: BaseSessionBackend, mock_asgi_app: ASGIApp) -> SessionMiddleware[Any]:
+-    return SessionMiddleware(app=mock_asgi_app, backend=session_backend)
++def session_middleware(session_backend: BaseSessionBackend, mock_asgi_app: ASGIApp) -> SessionMiddlewareImpl[Any]:
++    return SessionMiddlewareImpl(app=mock_asgi_app, backend=session_backend)
+ 
+ 
+ @pytest.fixture
+ def cookie_session_middleware(
+     cookie_session_backend: ClientSideSessionBackend, mock_asgi_app: ASGIApp
+-) -> SessionMiddleware[ClientSideSessionBackend]:
+-    return SessionMiddleware(app=mock_asgi_app, backend=cookie_session_backend)
++) -> SessionMiddlewareImpl[ClientSideSessionBackend]:
++    return SessionMiddlewareImpl(app=mock_asgi_app, backend=cookie_session_backend)
+ 
+ 
+ @pytest.fixture
+diff --git a/tests/unit/test_middleware/test_session/test_client_side_backend.py b/tests/unit/test_middleware/test_session/test_client_side_backend.py
+index 37e28c36b..c62c9f4dd 100644
+--- a/tests/unit/test_middleware/test_session/test_client_side_backend.py
++++ b/tests/unit/test_middleware/test_session/test_client_side_backend.py
+@@ -11,7 +11,7 @@ from cryptography.exceptions import InvalidTag
+ from litestar import Request, get, post
+ from litestar.datastructures.headers import MutableScopeHeaders
+ from litestar.exceptions import ImproperlyConfiguredException
+-from litestar.middleware.session import SessionMiddleware
++from litestar.middleware.session import SessionMiddlewareImpl
+ from litestar.middleware.session.client_side import (
+     AAD,
+     CHUNK_SIZE,
+@@ -162,7 +162,7 @@ def test_session_cookie_name_matching(cookie_session_backend_config: "CookieBack
+ 
+ @pytest.mark.parametrize("mutate", [False, True])
+ def test_load_session_cookies_and_expire_previous(
+-    mutate: bool, cookie_session_middleware: SessionMiddleware[ClientSideSessionBackend]
++    mutate: bool, cookie_session_middleware: SessionMiddlewareImpl[ClientSideSessionBackend]
+ ) -> None:
+     """Should load session cookies into session from request and overwrite the previously set cookies with the upcoming
+     response.
+diff --git a/tests/unit/test_middleware/test_session/test_phase3_rename_SessionMiddleware.py b/tests/unit/test_middleware/test_session/test_phase3_rename_SessionMiddleware.py
+new file mode 100644
+index 000000000..0f5fccd5d
+--- /dev/null
++++ b/tests/unit/test_middleware/test_session/test_phase3_rename_SessionMiddleware.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_SessionMiddlewareImpl():
++    owner = importlib.import_module('litestar.middleware.session.base')
++    assert hasattr(owner, 'SessionMiddlewareImpl')
++    assert not hasattr(owner, 'SessionMiddleware')

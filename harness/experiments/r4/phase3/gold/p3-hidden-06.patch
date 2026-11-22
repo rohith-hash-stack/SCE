@@ -1,0 +1,222 @@
+diff --git a/examples/auth/aws_oauth/server.py b/examples/auth/aws_oauth/server.py
+index dfe596a8..b6096493 100644
+--- a/examples/auth/aws_oauth/server.py
++++ b/examples/auth/aws_oauth/server.py
+@@ -19,7 +19,7 @@ from dotenv import load_dotenv
+ 
+ from fastmcp import FastMCP
+ from fastmcp.server.auth.providers.aws import AWSCognitoProvider
+-from fastmcp.server.dependencies import get_access_token
++from fastmcp.server.dependencies import fetch_access_token
+ 
+ logging.basicConfig(level=logging.DEBUG)
+ 
+@@ -47,7 +47,7 @@ def echo(message: str) -> str:
+ @mcp.tool
+ async def get_access_token_claims() -> dict:
+     """Get the authenticated user's access token claims."""
+-    token = get_access_token()
++    token = fetch_access_token()
+     return {
+         "sub": token.claims.get("sub"),
+         "username": token.claims.get("username"),
+diff --git a/src/fastmcp/server/dependencies.py b/src/fastmcp/server/dependencies.py
+index 0ecaac4a..b7ceddf7 100644
+--- a/src/fastmcp/server/dependencies.py
++++ b/src/fastmcp/server/dependencies.py
+@@ -47,7 +47,7 @@ __all__ = [
+     "CurrentFastMCP",
+     "CurrentWorker",
+     "Progress",
+-    "get_access_token",
++    "fetch_access_token",
+     "get_context",
+     "get_http_headers",
+     "get_http_request",
+@@ -373,7 +373,7 @@ def get_http_headers(include_all: bool = False) -> dict[str, str]:
+         return {}
+ 
+ 
+-def get_access_token() -> AccessToken | None:
++def fetch_access_token() -> AccessToken | None:
+     """Get the FastMCP access token from the current context.
+ 
+     This function first tries to get the token from the current HTTP request's scope,
+diff --git a/src/fastmcp/server/middleware/authorization.py b/src/fastmcp/server/middleware/authorization.py
+index 46038f6c..dcecfa5d 100644
+--- a/src/fastmcp/server/middleware/authorization.py
++++ b/src/fastmcp/server/middleware/authorization.py
+@@ -37,7 +37,7 @@ from fastmcp.server.auth.authorization import (
+     AuthContext,
+     run_auth_checks,
+ )
+-from fastmcp.server.dependencies import get_access_token
++from fastmcp.server.dependencies import fetch_access_token
+ from fastmcp.server.middleware.middleware import (
+     CallNext,
+     Middleware,
+@@ -100,7 +100,7 @@ class AuthMiddleware(Middleware):
+         if _current_transport.get() == "stdio":
+             return tools
+ 
+-        token = get_access_token()
++        token = fetch_access_token()
+ 
+         authorized_tools: list[Tool] = []
+         for tool in tools:
+@@ -144,7 +144,7 @@ class AuthMiddleware(Middleware):
+             )
+ 
+         # Global auth check
+-        token = get_access_token()
++        token = fetch_access_token()
+         ctx = AuthContext(token=token, component=tool)
+         if not run_auth_checks(self.auth, ctx):
+             raise AuthorizationError(
+@@ -167,7 +167,7 @@ class AuthMiddleware(Middleware):
+         if _current_transport.get() == "stdio":
+             return resources
+ 
+-        token = get_access_token()
++        token = fetch_access_token()
+ 
+         authorized_resources: list[Resource] = []
+         for resource in resources:
+@@ -211,7 +211,7 @@ class AuthMiddleware(Middleware):
+             )
+ 
+         # Global auth check
+-        token = get_access_token()
++        token = fetch_access_token()
+         ctx = AuthContext(token=token, component=component)
+         if not run_auth_checks(self.auth, ctx):
+             raise AuthorizationError(
+@@ -236,7 +236,7 @@ class AuthMiddleware(Middleware):
+         if _current_transport.get() == "stdio":
+             return templates
+ 
+-        token = get_access_token()
++        token = fetch_access_token()
+ 
+         authorized_templates: list[ResourceTemplate] = []
+         for template in templates:
+@@ -260,7 +260,7 @@ class AuthMiddleware(Middleware):
+         if _current_transport.get() == "stdio":
+             return prompts
+ 
+-        token = get_access_token()
++        token = fetch_access_token()
+ 
+         authorized_prompts: list[Prompt] = []
+         for prompt in prompts:
+@@ -302,7 +302,7 @@ class AuthMiddleware(Middleware):
+             )
+ 
+         # Global auth check
+-        token = get_access_token()
++        token = fetch_access_token()
+         ctx = AuthContext(token=token, component=prompt)
+         if not run_auth_checks(self.auth, ctx):
+             raise AuthorizationError(
+diff --git a/src/fastmcp/server/server.py b/src/fastmcp/server/server.py
+index a1c328a0..ba196957 100644
+--- a/src/fastmcp/server/server.py
++++ b/src/fastmcp/server/server.py
+@@ -59,7 +59,7 @@ from fastmcp.prompts.prompt import PromptResult
+ from fastmcp.resources.resource import Resource, ResourceResult
+ from fastmcp.resources.template import ResourceTemplate
+ from fastmcp.server.auth import AuthContext, AuthProvider, run_auth_checks
+-from fastmcp.server.dependencies import get_access_token
++from fastmcp.server.dependencies import fetch_access_token
+ from fastmcp.server.lifespan import Lifespan
+ from fastmcp.server.low_level import LowLevelServer
+ from fastmcp.server.middleware import Middleware, MiddlewareContext
+@@ -162,7 +162,7 @@ def _get_auth_context() -> tuple[bool, Any]:
+     is_stdio = _current_transport.get() == "stdio"
+     if is_stdio:
+         return (True, None)
+-    return (False, get_access_token())
++    return (False, fetch_access_token())
+ 
+ 
+ @asynccontextmanager
+diff --git a/src/fastmcp/server/telemetry.py b/src/fastmcp/server/telemetry.py
+index 6c263225..6138664c 100644
+--- a/src/fastmcp/server/telemetry.py
++++ b/src/fastmcp/server/telemetry.py
+@@ -12,11 +12,11 @@ from fastmcp.telemetry import extract_trace_context, get_tracer
+ 
+ def get_auth_span_attributes() -> dict[str, str]:
+     """Get auth attributes for the current request, if authenticated."""
+-    from fastmcp.server.dependencies import get_access_token
++    from fastmcp.server.dependencies import fetch_access_token
+ 
+     attrs: dict[str, str] = {}
+     try:
+-        token = get_access_token()
++        token = fetch_access_token()
+         if token:
+             if token.client_id:
+                 attrs["enduser.id"] = token.client_id
+diff --git a/tests/server/http/test_phase3_rename_get_access_token.py b/tests/server/http/test_phase3_rename_get_access_token.py
+new file mode 100644
+index 00000000..244dd844
+--- /dev/null
++++ b/tests/server/http/test_phase3_rename_get_access_token.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_fetch_access_token():
++    owner = importlib.import_module('fastmcp.server.dependencies')
++    assert hasattr(owner, 'fetch_access_token')
++    assert not hasattr(owner, 'get_access_token')
+diff --git a/tests/server/http/test_stale_access_token.py b/tests/server/http/test_stale_access_token.py
+index 34f271e7..98561cea 100644
+--- a/tests/server/http/test_stale_access_token.py
++++ b/tests/server/http/test_stale_access_token.py
+@@ -16,7 +16,7 @@ from mcp.shared.context import RequestContext
+ from starlette.requests import Request
+ 
+ from fastmcp.server.auth import AccessToken
+-from fastmcp.server.dependencies import get_access_token
++from fastmcp.server.dependencies import fetch_access_token
+ 
+ 
+ class TestStaleAccessToken:
+@@ -75,7 +75,7 @@ class TestStaleAccessToken:
+ 
+         try:
+             # Call get_access_token - should return FRESH token
+-            result = get_access_token()
++            result = fetch_access_token()
+ 
+             # Assert we get the FRESH token, not the stale one
+             assert result is not None, "Expected an access token but got None"
+@@ -106,7 +106,7 @@ class TestStaleAccessToken:
+         auth_token = auth_context_var.set(user)
+ 
+         try:
+-            result = get_access_token()
++            result = fetch_access_token()
+ 
+             assert result is not None
+             assert result.token == "context-var-token"
+@@ -118,7 +118,7 @@ class TestStaleAccessToken:
+         Verify that get_access_token returns None when there's no
+         authenticated user anywhere.
+         """
+-        result = get_access_token()
++        result = fetch_access_token()
+         assert result is None
+ 
+     def test_get_access_token_falls_back_when_scope_user_is_not_authenticated(self):
+@@ -149,7 +149,7 @@ class TestStaleAccessToken:
+         request_token = request_ctx.set(mock_request_context)
+ 
+         try:
+-            result = get_access_token()
++            result = fetch_access_token()
+ 
+             # Should fall back to auth_context_var since scope user is unauthenticated
+             assert result is not None

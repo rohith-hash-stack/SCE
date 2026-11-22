@@ -1,0 +1,161 @@
+diff --git a/litestar/dto/__init__.py b/litestar/dto/__init__.py
+index 052e6a4a1..86cb697d4 100644
+--- a/litestar/dto/__init__.py
++++ b/litestar/dto/__init__.py
+@@ -2,7 +2,7 @@ from .base_dto import AbstractDTO
+ from .config import DTOConfig
+ from .data_structures import DTOData, DTOFieldDefinition
+ from .dataclass_dto import DataclassDTO
+-from .field import DTOField, Mark, dto_field
++from .field import DTOField, MarkImpl, dto_field
+ from .msgspec_dto import MsgspecDTO
+ from .types import RenameStrategy
+ 
+@@ -13,7 +13,7 @@ __all__ = (
+     "DTOField",
+     "DTOFieldDefinition",
+     "DataclassDTO",
+-    "Mark",
++    "MarkImpl",
+     "MsgspecDTO",
+     "RenameStrategy",
+     "dto_field",
+diff --git a/litestar/dto/_backend.py b/litestar/dto/_backend.py
+index 9b3d57c5d..ff4187e5f 100644
+--- a/litestar/dto/_backend.py
++++ b/litestar/dto/_backend.py
+@@ -32,7 +32,7 @@ from litestar.dto._types import (
+     UnionType,
+ )
+ from litestar.dto.data_structures import DTOData, DTOFieldDefinition
+-from litestar.dto.field import Mark
++from litestar.dto.field import MarkImpl
+ from litestar.enums import RequestEncodingType
+ from litestar.params import KwargDefinition
+ from litestar.serialization import decode_json, decode_msgpack
+@@ -146,7 +146,7 @@ class DTOBackend:
+                 )
+ 
+             if _should_mark_private(field_definition, self.dto_factory.config.underscore_fields_private):
+-                field_definition.dto_field.mark = Mark.PRIVATE
++                field_definition.dto_field.mark = MarkImpl.PRIVATE
+ 
+             try:
+                 transfer_type = self._create_transfer_type(
+@@ -920,11 +920,11 @@ def _should_exclude_field(
+         return True
+     if include and field_name not in include and not (any(f.startswith(f"{field_name}.") for f in include)):
+         return True
+-    if field_definition.dto_field.mark is Mark.PRIVATE:
++    if field_definition.dto_field.mark is MarkImpl.PRIVATE:
+         return True
+-    if is_data_field and field_definition.dto_field.mark is Mark.READ_ONLY:
++    if is_data_field and field_definition.dto_field.mark is MarkImpl.READ_ONLY:
+         return True
+-    return not is_data_field and field_definition.dto_field.mark is Mark.WRITE_ONLY
++    return not is_data_field and field_definition.dto_field.mark is MarkImpl.WRITE_ONLY
+ 
+ 
+ def _create_transfer_model_type_annotation(transfer_type: TransferType) -> Any:
+diff --git a/litestar/dto/field.py b/litestar/dto/field.py
+index b2f0b98d1..5984a7fda 100644
+--- a/litestar/dto/field.py
++++ b/litestar/dto/field.py
+@@ -17,7 +17,7 @@ if TYPE_CHECKING:
+ __all__ = (
+     "DTO_FIELD_META_KEY",
+     "DTOField",
+-    "Mark",
++    "MarkImpl",
+     "dto_field",
+     "extract_dto_field",
+ )
+@@ -25,7 +25,7 @@ __all__ = (
+ DTO_FIELD_META_KEY = "__dto__"
+ 
+ 
+-class Mark(StrEnum):
++class MarkImpl(StrEnum):
+     """For marking field definitions on domain models."""
+ 
+     READ_ONLY = "read-only"
+@@ -40,11 +40,11 @@ class Mark(StrEnum):
+ class DTOField:
+     """For configuring DTO behavior on model fields."""
+ 
+-    mark: Mark | Literal["read-only", "write-only", "private"] | None = None
++    mark: MarkImpl | Literal["read-only", "write-only", "private"] | None = None
+     """Mark the field as read-only, or private."""
+ 
+ 
+-def dto_field(mark: Literal["read-only", "write-only", "private"] | Mark) -> dict[str, DTOField]:
++def dto_field(mark: Literal["read-only", "write-only", "private"] | MarkImpl) -> dict[str, DTOField]:
+     """Create a field metadata mapping.
+ 
+     Args:
+@@ -56,7 +56,7 @@ def dto_field(mark: Literal["read-only", "write-only", "private"] | Mark) -> dic
+ 
+         Marking a field automates its inclusion/exclusion from DTO field definitions, depending on the DTO's purpose.
+     """
+-    return {DTO_FIELD_META_KEY: DTOField(mark=Mark(mark))}
++    return {DTO_FIELD_META_KEY: DTOField(mark=MarkImpl(mark))}
+ 
+ 
+ def extract_dto_field(field_definition: FieldDefinition, field_info_mapping: Mapping[str, Any]) -> DTOField:
+diff --git a/tests/unit/test_dto/test_msgspec.py b/tests/unit/test_dto/test_msgspec.py
+index aec2d97d8..c0ca438f8 100644
+--- a/tests/unit/test_dto/test_msgspec.py
++++ b/tests/unit/test_dto/test_msgspec.py
+@@ -9,7 +9,7 @@ import pytest
+ from msgspec import Meta, Struct, field
+ 
+ from litestar import Litestar, post
+-from litestar.dto import DTOField, Mark, MsgspecDTO, dto_field
++from litestar.dto import DTOField, MarkImpl, MsgspecDTO, dto_field
+ from litestar.dto.data_structures import DTOFieldDefinition
+ from litestar.typing import FieldDefinition
+ 
+@@ -37,7 +37,7 @@ def expected_field_defs(int_factory: Callable[[], int]) -> list[DTOFieldDefiniti
+                 ),
+                 model_name=ANY,
+                 default_factory=None,
+-                dto_field=DTOField(mark=Mark.READ_ONLY),
++                dto_field=DTOField(mark=MarkImpl.READ_ONLY),
+             ),
+             metadata=ANY,
+             type_wrappers=ANY,
+diff --git a/tests/unit/test_dto/test_phase3_rename_Mark.py b/tests/unit/test_dto/test_phase3_rename_Mark.py
+new file mode 100644
+index 000000000..3f5664661
+--- /dev/null
++++ b/tests/unit/test_dto/test_phase3_rename_Mark.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_MarkImpl():
++    owner = importlib.import_module('litestar.dto.field')
++    assert hasattr(owner, 'MarkImpl')
++    assert not hasattr(owner, 'Mark')
+diff --git a/tests/unit/test_plugins/test_pydantic/test_pydantic_dto_factory.py b/tests/unit/test_plugins/test_pydantic/test_pydantic_dto_factory.py
+index 2893c648c..1e10950cd 100644
+--- a/tests/unit/test_plugins/test_pydantic/test_pydantic_dto_factory.py
++++ b/tests/unit/test_plugins/test_pydantic/test_pydantic_dto_factory.py
+@@ -10,7 +10,7 @@ from unittest.mock import ANY
+ import pydantic as pydantic_v2
+ import pytest
+ 
+-from litestar.dto import DTOField, DTOFieldDefinition, Mark, dto_field
++from litestar.dto import DTOField, DTOFieldDefinition, MarkImpl, dto_field
+ from litestar.plugins.pydantic import PydanticDTO
+ from litestar.typing import FieldDefinition
+ 
+@@ -39,7 +39,7 @@ def expected_field_defs(int_factory: Callable[[], int]) -> list[DTOFieldDefiniti
+                 ),
+                 model_name=ANY,
+                 default_factory=None,
+-                dto_field=DTOField(mark=Mark.READ_ONLY),
++                dto_field=DTOField(mark=MarkImpl.READ_ONLY),
+             ),
+             metadata=ANY,
+             type_wrappers=ANY,

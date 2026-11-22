@@ -1,0 +1,162 @@
+diff --git a/pydantic/v1/__init__.py b/pydantic/v1/__init__.py
+index 6ad3f4666..3a86dffb2 100644
+--- a/pydantic/v1/__init__.py
++++ b/pydantic/v1/__init__.py
+@@ -10,7 +10,7 @@ from pydantic.v1.errors import *
+ from pydantic.v1.fields import Field, PrivateAttr, Required
+ from pydantic.v1.main import *
+ from pydantic.v1.networks import *
+-from pydantic.v1.parse import Protocol
++from pydantic.v1.parse import ProtocolImpl
+ from pydantic.v1.tools import *
+ from pydantic.v1.types import *
+ from pydantic.v1.version import VERSION, compiled
+@@ -64,7 +64,7 @@ __all__ = [
+     'KafkaDsn',
+     'validate_email',
+     # parse
+-    'Protocol',
++    'ProtocolImpl',
+     # tools
+     'parse_file_as',
+     'parse_obj_as',
+diff --git a/pydantic/v1/main.py b/pydantic/v1/main.py
+index 36e9c44c9..25b1c1b77 100644
+--- a/pydantic/v1/main.py
++++ b/pydantic/v1/main.py
+@@ -41,7 +41,7 @@ from pydantic.v1.fields import (
+     is_finalvar_with_default_val,
+ )
+ from pydantic.v1.json import custom_pydantic_encoder, pydantic_encoder
+-from pydantic.v1.parse import Protocol, load_file, load_str_bytes
++from pydantic.v1.parse import ProtocolImpl, load_file, load_str_bytes
+ from pydantic.v1.schema import default_ref_template, model_schema
+ from pydantic.v1.types import PyObject, StrBytes
+ from pydantic.v1.typing import (
+@@ -555,7 +555,7 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
+         *,
+         content_type: str = None,
+         encoding: str = 'utf8',
+-        proto: Protocol = None,
++        proto: ProtocolImpl = None,
+         allow_pickle: bool = False,
+     ) -> 'Model':
+         try:
+@@ -578,7 +578,7 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
+         *,
+         content_type: str = None,
+         encoding: str = 'utf8',
+-        proto: Protocol = None,
++        proto: ProtocolImpl = None,
+         allow_pickle: bool = False,
+     ) -> 'Model':
+         obj = load_file(
+diff --git a/pydantic/v1/parse.py b/pydantic/v1/parse.py
+index 431d75a64..66ef6ca13 100644
+--- a/pydantic/v1/parse.py
++++ b/pydantic/v1/parse.py
+@@ -7,7 +7,7 @@ from typing import Any, Callable, Union
+ from pydantic.v1.types import StrBytes
+ 
+ 
+-class Protocol(str, Enum):
++class ProtocolImpl(str, Enum):
+     json = 'json'
+     pickle = 'pickle'
+ 
+@@ -17,7 +17,7 @@ def load_str_bytes(
+     *,
+     content_type: str = None,
+     encoding: str = 'utf8',
+-    proto: Protocol = None,
++    proto: ProtocolImpl = None,
+     allow_pickle: bool = False,
+     json_loads: Callable[[str], Any] = json.loads,
+ ) -> Any:
+@@ -25,17 +25,17 @@ def load_str_bytes(
+         if content_type.endswith(('json', 'javascript')):
+             pass
+         elif allow_pickle and content_type.endswith('pickle'):
+-            proto = Protocol.pickle
++            proto = ProtocolImpl.pickle
+         else:
+             raise TypeError(f'Unknown content-type: {content_type}')
+ 
+-    proto = proto or Protocol.json
++    proto = proto or ProtocolImpl.json
+ 
+-    if proto == Protocol.json:
++    if proto == ProtocolImpl.json:
+         if isinstance(b, bytes):
+             b = b.decode(encoding)
+         return json_loads(b)
+-    elif proto == Protocol.pickle:
++    elif proto == ProtocolImpl.pickle:
+         if not allow_pickle:
+             raise RuntimeError('Trying to decode with pickle with allow_pickle=False')
+         bb = b if isinstance(b, bytes) else b.encode()
+@@ -49,7 +49,7 @@ def load_file(
+     *,
+     content_type: str = None,
+     encoding: str = 'utf8',
+-    proto: Protocol = None,
++    proto: ProtocolImpl = None,
+     allow_pickle: bool = False,
+     json_loads: Callable[[str], Any] = json.loads,
+ ) -> Any:
+@@ -57,9 +57,9 @@ def load_file(
+     b = path.read_bytes()
+     if content_type is None:
+         if path.suffix in ('.js', '.json'):
+-            proto = Protocol.json
++            proto = ProtocolImpl.json
+         elif path.suffix == '.pkl':
+-            proto = Protocol.pickle
++            proto = ProtocolImpl.pickle
+ 
+     return load_str_bytes(
+         b, proto=proto, content_type=content_type, encoding=encoding, allow_pickle=allow_pickle, json_loads=json_loads
+diff --git a/pydantic/v1/tools.py b/pydantic/v1/tools.py
+index 6838a23ec..23a548f47 100644
+--- a/pydantic/v1/tools.py
++++ b/pydantic/v1/tools.py
+@@ -3,7 +3,7 @@ from functools import lru_cache
+ from pathlib import Path
+ from typing import TYPE_CHECKING, Any, Callable, Optional, Type, TypeVar, Union
+ 
+-from pydantic.v1.parse import Protocol, load_file, load_str_bytes
++from pydantic.v1.parse import ProtocolImpl, load_file, load_str_bytes
+ from pydantic.v1.types import StrBytes
+ from pydantic.v1.typing import display_as_type
+ 
+@@ -44,7 +44,7 @@ def parse_file_as(
+     *,
+     content_type: str = None,
+     encoding: str = 'utf8',
+-    proto: Protocol = None,
++    proto: ProtocolImpl = None,
+     allow_pickle: bool = False,
+     json_loads: Callable[[str], Any] = json.loads,
+     type_name: Optional[NameFactory] = None,
+@@ -66,7 +66,7 @@ def parse_raw_as(
+     *,
+     content_type: str = None,
+     encoding: str = 'utf8',
+-    proto: Protocol = None,
++    proto: ProtocolImpl = None,
+     allow_pickle: bool = False,
+     json_loads: Callable[[str], Any] = json.loads,
+     type_name: Optional[NameFactory] = None,
+diff --git a/tests/test_phase3_rename_Protocol.py b/tests/test_phase3_rename_Protocol.py
+new file mode 100644
+index 000000000..507433495
+--- /dev/null
++++ b/tests/test_phase3_rename_Protocol.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_ProtocolImpl():
++    owner = importlib.import_module('pydantic.v1.parse')
++    assert hasattr(owner, 'ProtocolImpl')
++    assert not hasattr(owner, 'Protocol')

@@ -1,0 +1,276 @@
+diff --git a/src/fastmcp/server/providers/base.py b/src/fastmcp/server/providers/base.py
+index 03c00a8a..27dc126a 100644
+--- a/src/fastmcp/server/providers/base.py
++++ b/src/fastmcp/server/providers/base.py
+@@ -45,7 +45,7 @@ from fastmcp.utilities.components import FastMCPComponent
+ from fastmcp.utilities.versions import VersionSpec, version_sort_key
+ 
+ if TYPE_CHECKING:
+-    from fastmcp.server.transforms import Transform
++    from fastmcp.server.transforms import TransformImpl
+ 
+ 
+ class Provider:
+@@ -67,17 +67,17 @@ class Provider:
+     """
+ 
+     def __init__(self) -> None:
+-        self._transforms: list[Transform] = []
++        self._transforms: list[TransformImpl] = []
+ 
+     def __repr__(self) -> str:
+         return f"{self.__class__.__name__}()"
+ 
+     @property
+-    def transforms(self) -> list[Transform]:
++    def transforms(self) -> list[TransformImpl]:
+         """All transforms applied to components from this provider."""
+         return list(self._transforms)
+ 
+-    def add_transform(self, transform: Transform) -> None:
++    def add_transform(self, transform: TransformImpl) -> None:
+         """Add a transform to this provider.
+ 
+         Transforms modify components (tools, resources, prompts) as they flow
+@@ -97,7 +97,7 @@ class Provider:
+         """
+         self._transforms.append(transform)
+ 
+-    def wrap_transform(self, transform: Transform) -> Provider:
++    def wrap_transform(self, transform: TransformImpl) -> Provider:
+         """Return a new provider with this transform applied (immutable).
+ 
+         Unlike add_transform() which mutates this provider, wrap_transform()
+diff --git a/src/fastmcp/server/providers/wrapped_provider.py b/src/fastmcp/server/providers/wrapped_provider.py
+index 4f5c0df9..164b7aea 100644
+--- a/src/fastmcp/server/providers/wrapped_provider.py
++++ b/src/fastmcp/server/providers/wrapped_provider.py
+@@ -17,7 +17,7 @@ if TYPE_CHECKING:
+     from fastmcp.prompts.prompt import Prompt
+     from fastmcp.resources.resource import Resource
+     from fastmcp.resources.template import ResourceTemplate
+-    from fastmcp.server.transforms import Transform
++    from fastmcp.server.transforms import TransformImpl
+     from fastmcp.tools.tool import Tool
+     from fastmcp.utilities.components import FastMCPComponent
+ 
+@@ -33,7 +33,7 @@ class _WrappedProvider(Provider):
+     unchanged, and the wrapper adds its transform layer.
+     """
+ 
+-    def __init__(self, inner: Provider, transform: Transform) -> None:
++    def __init__(self, inner: Provider, transform: TransformImpl) -> None:
+         """Initialize wrapped provider.
+ 
+         Args:
+diff --git a/src/fastmcp/server/server.py b/src/fastmcp/server/server.py
+index a1c328a0..ee85c0b0 100644
+--- a/src/fastmcp/server/server.py
++++ b/src/fastmcp/server/server.py
+@@ -70,7 +70,7 @@ from fastmcp.server.tasks.config import TaskConfig, TaskMeta
+ from fastmcp.server.telemetry import server_span
+ from fastmcp.server.transforms import (
+     ToolTransform,
+-    Transform,
++    TransformImpl,
+ )
+ from fastmcp.server.transforms.enabled import apply_session_transforms, is_enabled
+ from fastmcp.settings import DuplicateBehavior as DuplicateBehaviorSetting
+@@ -549,7 +549,7 @@ class FastMCP(
+             *prompts,
+         ]
+ 
+-    def add_transform(self, transform: Transform) -> None:
++    def add_transform(self, transform: TransformImpl) -> None:
+         """Add a server-level transform.
+ 
+         Server-level transforms are applied after all providers are aggregated.
+diff --git a/src/fastmcp/server/transforms/__init__.py b/src/fastmcp/server/transforms/__init__.py
+index 63225854..15aa82f8 100644
+--- a/src/fastmcp/server/transforms/__init__.py
++++ b/src/fastmcp/server/transforms/__init__.py
+@@ -65,7 +65,7 @@ class GetPromptNext(Protocol):
+     ) -> Awaitable[Prompt | None]: ...
+ 
+ 
+-class Transform:
++class TransformImpl:
+     """Base class for component transformations.
+ 
+     List operations use a pure function pattern: transforms receive sequences
+@@ -237,7 +237,7 @@ __all__ = [
+     "PromptsAsTools",
+     "ResourcesAsTools",
+     "ToolTransform",
+-    "Transform",
++    "TransformImpl",
+     "VersionFilter",
+     "VersionSpec",
+     "is_enabled",
+diff --git a/src/fastmcp/server/transforms/enabled.py b/src/fastmcp/server/transforms/enabled.py
+index faf9aeaa..f70c97f9 100644
+--- a/src/fastmcp/server/transforms/enabled.py
++++ b/src/fastmcp/server/transforms/enabled.py
+@@ -19,7 +19,7 @@ from fastmcp.server.transforms import (
+     GetResourceNext,
+     GetResourceTemplateNext,
+     GetToolNext,
+-    Transform,
++    TransformImpl,
+ )
+ from fastmcp.utilities.versions import VersionSpec
+ 
+@@ -36,7 +36,7 @@ _FASTMCP_KEY = "fastmcp"
+ _INTERNAL_KEY = "_internal"
+ 
+ 
+-class Enabled(Transform):
++class Enabled(TransformImpl):
+     """Sets enabled state on matching components.
+ 
+     Does NOT filter inline - just marks components with enabled state.
+diff --git a/src/fastmcp/server/transforms/namespace.py b/src/fastmcp/server/transforms/namespace.py
+index 152d493e..cada8730 100644
+--- a/src/fastmcp/server/transforms/namespace.py
++++ b/src/fastmcp/server/transforms/namespace.py
+@@ -11,7 +11,7 @@ from fastmcp.server.transforms import (
+     GetResourceNext,
+     GetResourceTemplateNext,
+     GetToolNext,
+-    Transform,
++    TransformImpl,
+ )
+ from fastmcp.utilities.versions import VersionSpec
+ 
+@@ -25,7 +25,7 @@ if TYPE_CHECKING:
+ _URI_PATTERN = re.compile(r"^([^:]+://)(.*?)$")
+ 
+ 
+-class Namespace(Transform):
++class Namespace(TransformImpl):
+     """Prefixes component names with a namespace.
+ 
+     - Tools: name → namespace_name
+diff --git a/src/fastmcp/server/transforms/prompts_as_tools.py b/src/fastmcp/server/transforms/prompts_as_tools.py
+index 83ef3081..48bf307e 100644
+--- a/src/fastmcp/server/transforms/prompts_as_tools.py
++++ b/src/fastmcp/server/transforms/prompts_as_tools.py
+@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Annotated, Any
+ 
+ from mcp.types import TextContent
+ 
+-from fastmcp.server.transforms import GetToolNext, Transform
++from fastmcp.server.transforms import GetToolNext, TransformImpl
+ from fastmcp.tools.tool import Tool
+ from fastmcp.utilities.versions import VersionSpec
+ 
+@@ -32,7 +32,7 @@ if TYPE_CHECKING:
+ # Note: FastMCP imported inside tools to avoid circular import
+ 
+ 
+-class PromptsAsTools(Transform):
++class PromptsAsTools(TransformImpl):
+     """Transform that adds tools for listing and getting prompts.
+ 
+     Generates two tools:
+diff --git a/src/fastmcp/server/transforms/resources_as_tools.py b/src/fastmcp/server/transforms/resources_as_tools.py
+index 00fc4382..e8d6beff 100644
+--- a/src/fastmcp/server/transforms/resources_as_tools.py
++++ b/src/fastmcp/server/transforms/resources_as_tools.py
+@@ -21,7 +21,7 @@ import json
+ from collections.abc import Sequence
+ from typing import TYPE_CHECKING, Annotated, Any
+ 
+-from fastmcp.server.transforms import GetToolNext, Transform
++from fastmcp.server.transforms import GetToolNext, TransformImpl
+ from fastmcp.tools.tool import Tool
+ from fastmcp.utilities.versions import VersionSpec
+ 
+@@ -29,7 +29,7 @@ if TYPE_CHECKING:
+     from fastmcp.server.providers.base import Provider
+ 
+ 
+-class ResourcesAsTools(Transform):
++class ResourcesAsTools(TransformImpl):
+     """Transform that adds tools for listing and reading resources.
+ 
+     Generates two tools:
+diff --git a/src/fastmcp/server/transforms/tool_transform.py b/src/fastmcp/server/transforms/tool_transform.py
+index ed58788d..9d71e3a6 100644
+--- a/src/fastmcp/server/transforms/tool_transform.py
++++ b/src/fastmcp/server/transforms/tool_transform.py
+@@ -5,7 +5,7 @@ from __future__ import annotations
+ from collections.abc import Sequence
+ from typing import TYPE_CHECKING
+ 
+-from fastmcp.server.transforms import GetToolNext, Transform
++from fastmcp.server.transforms import GetToolNext, TransformImpl
+ from fastmcp.tools.tool_transform import ToolTransformConfig
+ from fastmcp.utilities.versions import VersionSpec
+ 
+@@ -13,7 +13,7 @@ if TYPE_CHECKING:
+     from fastmcp.tools.tool import Tool
+ 
+ 
+-class ToolTransform(Transform):
++class ToolTransform(TransformImpl):
+     """Applies tool transformations to modify tool schemas.
+ 
+     Wraps ToolTransformConfig to apply argument renames, schema changes,
+diff --git a/src/fastmcp/server/transforms/version_filter.py b/src/fastmcp/server/transforms/version_filter.py
+index d49928cd..aee618b0 100644
+--- a/src/fastmcp/server/transforms/version_filter.py
++++ b/src/fastmcp/server/transforms/version_filter.py
+@@ -10,7 +10,7 @@ from fastmcp.server.transforms import (
+     GetResourceNext,
+     GetResourceTemplateNext,
+     GetToolNext,
+-    Transform,
++    TransformImpl,
+ )
+ from fastmcp.utilities.versions import VersionSpec
+ 
+@@ -21,7 +21,7 @@ if TYPE_CHECKING:
+     from fastmcp.tools.tool import Tool
+ 
+ 
+-class VersionFilter(Transform):
++class VersionFilter(TransformImpl):
+     """Filters components by version range.
+ 
+     When applied to a provider or server, only components within the version
+diff --git a/tests/server/providers/test_phase3_rename_Transform.py b/tests/server/providers/test_phase3_rename_Transform.py
+new file mode 100644
+index 00000000..a514a4e3
+--- /dev/null
++++ b/tests/server/providers/test_phase3_rename_Transform.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_TransformImpl():
++    owner = importlib.import_module('fastmcp.server.transforms')
++    assert hasattr(owner, 'TransformImpl')
++    assert not hasattr(owner, 'Transform')
+diff --git a/tests/server/providers/test_transforming_provider.py b/tests/server/providers/test_transforming_provider.py
+index ce7acd2a..11e29c6a 100644
+--- a/tests/server/providers/test_transforming_provider.py
++++ b/tests/server/providers/test_transforming_provider.py
+@@ -264,7 +264,7 @@ class TestNoTransformation:
+ 
+     async def test_transform_passthrough(self):
+         """Test that base Transform passes through unchanged."""
+-        from fastmcp.server.transforms import Transform
++        from fastmcp.server.transforms import TransformImpl
+ 
+         server = FastMCP("Test")
+ 
+@@ -273,7 +273,7 @@ class TestNoTransformation:
+             return "result"
+ 
+         provider = FastMCPProvider(server)
+-        transform = Transform()
++        transform = TransformImpl()
+ 
+         tools = await provider.list_tools()
+         transformed_tools = await transform.list_tools(tools)

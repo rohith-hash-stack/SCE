@@ -93,7 +93,7 @@ def main(argv=None) -> int:
             continue
         clone = os.path.abspath(clones[t["repo"]])
         contents = gold_contents(clone, t, open(os.path.join(a.gold_dir, f"{t['id']}.patch")).read())
-        runs = [(arm, "gold", 42) for arm in a.arms] + ([("BASELINE", "empty", 43)] if "BASELINE" in a.arms else [])
+        runs = [(arm, "gold", 42) for arm in a.arms] + [(b, "empty", 43) for b in ("BASELINE", "BASELINE_LSP") if b in a.arms][:1]
         for arm, kind, seed in runs:
             model = Script(gold_calls(t, contents, arm) if kind == "gold" else [])
             res = run_task(t, arm, seed, clone, a.out, a.cache, model, a.turn_cap, ledger=True, feedback=True)
