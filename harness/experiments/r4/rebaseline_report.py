@@ -225,7 +225,10 @@ def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
                      "tool_calls": _per_tool(turns, lambda t: 1),
                      "tool_output_tokens": _per_tool(turns, lambda t: t.get("output_tokens") or 0),
                      "efficiency": efficiency(turns), "post_prism": post_prism(turns),
-                     "review": s.get("review")})
+                     "review": s.get("review"),
+                     # POC 2: the Layer 1 loop breaker (every arm) and the gateway's record (PRISM_GW)
+                     "loop_refused": sum(1 for t in turns if t.get("loop_refused")),
+                     "gateway": s.get("gateway")})
     return rows
 
 
@@ -258,6 +261,15 @@ DESIGNS = {
                "descriptive": (("PRISM_ONLY", "PRISM_LSP"),),
                "primary_on": lambda t: bool(t.get("derived")),         # the primary tests: the hidden tasks only
                "subsets": {"hidden": lambda t: bool(t.get("derived")), "controls": lambda t: bool(t.get("control"))}},
+    # Phase 3 POC 2 (AMENDMENTS "Phase 3, POC 2"): every arm with the Layer 1 guards. PRISM_LSP and PRISM_GW against
+    # BASELINE_LSP (Holm over the two); PRISM_GW against PRISM_LSP, the gateway's own effect, descriptively, with the
+    # gateway's intervention record (`gateway_effectiveness`).
+    "poc2": {"arms": ("BASELINE_LSP", "PRISM_LSP", "PRISM_GW"),
+             "comparisons": (("PRISM_LSP", "BASELINE_LSP"), ("PRISM_GW", "BASELINE_LSP")),
+             "descriptive": (("PRISM_GW", "PRISM_LSP"),),
+             "primary_on": lambda t: bool(t.get("derived")),
+             "go_arms": ("PRISM_LSP", "PRISM_GW"),
+             "subsets": {"hidden": lambda t: bool(t.get("derived")), "controls": lambda t: bool(t.get("control"))}},
 }
 
 #: The proof of concept's go/no-go rule (AMENDMENTS "Phase 3", fixed before any Phase 3 run): on the hidden tasks
@@ -268,16 +280,16 @@ GO_MIN_EXTRA_SOLVES, GO_MAX_TASKS_LOST, GO_MAX_DEAD = 3, 1, 2
 
 
 def go_no_go(rows: list[dict], per_task: dict, tasks: dict, expected_runs: int, ref: str = "BASELINE_LSP",
-             seeds: list | None = None) -> dict:
+             seeds: list | None = None, go_arms=("PRISM_LSP", "PRISM_ONLY")) -> dict:
     hidden = {tid for tid, t in tasks.items() if t.get("derived")}
     solved = {arm: sum(1 for r in rows if r["task"] in hidden and r["arm"] == arm and r["solved"])
-              for arm in (ref, "PRISM_LSP", "PRISM_ONLY")}
+              for arm in (ref, *go_arms)}
     # a shard's own report sees one seed: the verdict is only for all the stage's seeds (the merged analysis)
     seeds_seen = sorted({r["seed"] for r in rows})
     incomplete = bool(seeds) and seeds_seen != sorted(seeds)
     dead = max(0, expected_runs - len(rows)) + sum(1 for r in rows if r["infra"])   # missing runs count as dead
     arms = {}
-    for arm in ("PRISM_LSP", "PRISM_ONLY"):
+    for arm in go_arms:
         lost = sum(1 for tid in hidden if arm in per_task.get(tid, {}) and ref in per_task[tid]
                    and per_task[tid][ref]["score"] > per_task[tid][arm]["score"] + 1e-12)
         extra = solved[arm] - solved[ref]
@@ -386,7 +398,10 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
     rep["injection"] = injection_summary(results, rows)
     rep["process"] = process(rows, arms)
     if doc.get("stage") == "poc":
-        rep["go_no_go"] = go_no_go(rows, per_task, tasks, doc.get("expected_runs", 0), seeds=doc.get("seeds"))
+        rep["go_no_go"] = go_no_go(rows, per_task, tasks, doc.get("expected_runs", 0), seeds=doc.get("seeds"),
+                                   go_arms=design.get("go_arms", ("PRISM_LSP", "PRISM_ONLY")))
+    if any(r["gateway"] for r in rows):
+        rep["gateway_effectiveness"] = gateway_effectiveness(rows)
     rep["turn_efficiency"] = turn_efficiency(rows, per_task, arms, design["comparisons"])
     rep["code_review"] = code_review(rows, arms, design["comparisons"] + design["descriptive"])
     return rep
@@ -522,6 +537,7 @@ def process(rows: list[dict], arms=ARMS) -> dict:
                     "mean_tokens": st.mean(r["used_tokens"] or 0 for r in rs),
                     "failed_edits_per_turn": sum(r["failed_edits"] for r in rs) / turns,
                     "prism_output_tokens_per_run": st.mean(r["prism_output_tokens"] for r in rs),
+                    "loop_refused_per_run": st.mean(r.get("loop_refused", 0) for r in rs),
                     # Phase 3: every tool's calls and output tokens per run, the reference searches and all
                     # index-side tools (PRISM's, or the IDE agent's) apart
                     "tool_calls_per_run": _mean_per_tool(rs, "tool_calls"),
@@ -532,6 +548,55 @@ def process(rows: list[dict], arms=ARMS) -> dict:
                         sum(v for k, v in r["tool_output_tokens"].items() if k.startswith("prism_") or k in IDE_TOOLS
                             or k == "related_code") for r in rs)}
     return out
+
+
+GUIDANCE = ("suggest_tool", "search_augment", "wrong_target", "worklist", "stall")
+BLOCKS = ("block_lookalike", "block_syntax", "block_done")
+
+
+def gateway_effectiveness(rows: list[dict]) -> dict:
+    """POC 2's measurement of the gateway (AMENDMENTS "Phase 3, POC 2", "Gateway effectiveness"), over the runs that
+    carry its record (PRISM_GW). Per intervention: its type, whether it blocked, its outcome (`prevented` / `ignored` for
+    blocks, `followed` / `ignored` for guidance) and `places_ok` (the places it named are correct in the final tree).
+    An intervention **contributed** when it was prevented or followed, its places are correct at the end (or it named
+    none), and the run was solved (its hidden tests passed)."""
+    rs = [r for r in rows if r["gateway"]]
+    ivs = [(r, iv) for r in rs for iv in r["gateway"].get("log", [])]
+    acted = lambda iv: iv["outcome"] in ("prevented", "followed")
+    contributed = lambda r, iv: acted(iv) and iv.get("places_ok") is not False and r["solved"]
+    by_type = {}
+    for t in GUIDANCE + BLOCKS:
+        xs = [(r, iv) for r, iv in ivs if iv["type"] == t]
+        if xs:
+            by_type[t] = {"n": len(xs), **{o: sum(1 for _r, iv in xs if iv["outcome"] == o)
+                                         for o in ("prevented", "followed", "ignored")},
+                          "places_ok_at_end": sum(1 for _r, iv in xs if iv.get("places_ok") is True),
+                          "contributed": sum(1 for r, iv in xs if contributed(r, iv))}
+    acted_runs = [r for r in rs if any(acted(iv) for iv in r["gateway"].get("log", []))]
+    other_runs = [r for r in rs if r not in acted_runs]
+    rate = lambda xs: (sum(r["solved"] for r in xs) / len(xs)) if xs else None
+    return {
+        "runs": len(rs), "runs_without_target": sum(1 for r in rs if not r["gateway"].get("target")),
+        "interventions": len(ivs), "interventions_per_run": len(ivs) / len(rs) if rs else 0,
+        "prevented_tool_calls": sum(1 for _r, iv in ivs if iv["type"] == "block_done" and iv["outcome"] == "prevented"),
+        "prevented_edits": sum(1 for _r, iv in ivs if iv["type"] in ("block_lookalike", "block_syntax")
+                               and iv["outcome"] == "prevented"),
+        "ignored": sum(1 for _r, iv in ivs if iv["outcome"] == "ignored"),
+        "ignored_blocks": sum(1 for _r, iv in ivs if iv["blocking"] and iv["outcome"] == "ignored"),
+        "ignored_guidance": sum(1 for _r, iv in ivs if not iv["blocking"] and iv["outcome"] == "ignored"),
+        "followed": sum(1 for _r, iv in ivs if iv["outcome"] == "followed"),
+        "contributed": sum(1 for r, iv in ivs if contributed(r, iv)),
+        "by_type": by_type,
+        # descriptive, not causal: runs in which the agent acted on at least one intervention, against the rest
+        "solve_rate_runs_acted_on_guidance": rate(acted_runs), "runs_acted_on_guidance": len(acted_runs),
+        "solve_rate_runs_not_acted": rate(other_runs), "runs_not_acted": len(other_runs),
+        "gateway_message_chars_per_run": st.mean(sum(iv.get("chars", 0) for iv in r["gateway"].get("log", []))
+                                                 for r in rs) if rs else 0,
+        "per_task": {tid: {"runs": len(xs), "solved": sum(r["solved"] for r in xs),
+                           "interventions": sum(len(r["gateway"].get("log", [])) for r in xs),
+                           "contributed": sum(1 for r in xs for iv in r["gateway"].get("log", []) if contributed(r, iv))}
+                     for tid in sorted({r["task"] for r in rs}) for xs in [[r for r in rs if r["task"] == tid]]},
+    }
 
 
 def _mean_per_tool(rs: list[dict], key: str) -> dict:

@@ -314,6 +314,58 @@ class ToolLayer:
           reference graph's labelled edges, at their lines;
         - overrides in either direction.
         Grouped by file, production first; then how many uses of the same name belong to other objects."""
+        d = self.reference_places(symbol)
+        q, sym, leaf, rows, possible, truncated = (d["target"], d["sym"], d["leaf"], d["rows"], d["possible"],
+                                                   d["truncated"])
+        root, own = self.wi.shadow, d["file"]
+        by_file: dict[str, list] = {}
+        for (f, line, col), (label, where) in rows.items():
+            by_file.setdefault(f, []).append((line, col, label, where))
+        files = sorted(by_file, key=lambda f: (self._is_test(f), f))
+        n = sum(len(v) for v in by_file.values()) - 1
+        counts: dict[str, int] = {}
+        for (label, _w) in rows.values():
+            if label != "definition":
+                k = self._ref_label(label.split(" ")[0])
+                counts[k] = counts.get(k, 0) + 1
+        tests = sum(len(by_file[f]) for f in files if self._is_test(f))
+        out = [f"`{q}` ({sym.kind}, {own}:{self._def_line(q)}): {n} reference(s) in "
+               f"{len([f for f in files if any(x[2] != 'definition' for x in by_file[f])])} file(s) ("
+               + ", ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))
+               + f"); {tests} in test files" + (f"; {len(possible)} possible (below)" if possible else "")]
+        shown = 0
+        for f in files:
+            out.append(f + (" [test]" if self._is_test(f) else ""))
+            lines = self._lines(os.path.join(root, f))
+            for line, col, label, where in sorted(by_file[f]):
+                if shown >= SEARCH_MAX_LINES:
+                    break
+                text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+                lab = self._ref_label(label.split(" ")[0]) + label[len(label.split(" ")[0]):]
+                out.append(f"  {line}:{col + 1} [{lab}] in `{where}`: {text}")
+                shown += 1
+        if shown < n + 1:
+            out.append(f"... ({n + 1 - shown} more)")
+        if truncated:
+            out.append(f"(and {truncated} more use(s) inside the definitions above; their lines were not kept)")
+        if possible:
+            out.append(f"Possible references ({len(possible)}): calls of `{leaf}` on a receiver whose type PRISM could "
+                       f"not determine, matched by name; check each:")
+            for (f, line, col), (_label, where) in sorted(possible.items()):
+                lines = self._lines(os.path.join(root, f))
+                text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+                out.append(f"  {f}:{line}:{col + 1} in `{where}`: {text}")
+        listed = {(f, line) for (f, line, _c) in [*rows, *possible]}
+        other = self._other_uses(leaf, listed)
+        if other:
+            out.append(f"Not references: {other[0]} other use(s) of the name `{leaf}` in {other[1]} file(s) belong to "
+                       f"other objects (not listed).")
+        return "\n".join(out)
+
+    def reference_places(self, symbol: str) -> dict:
+        """`prism_find_references`'s places as data (also what the PRISM gateway, `prism.gateway`, tracks):
+        `target` (the qualified name), `leaf`, `file` / `def_line` (the definition), `rows` ({(rel, line, byte col):
+        (label, enclosing)}, the definition included) and `possible` (the same, for calls matched only by name)."""
         from prism.graph.references import references_to
         b, root = self.wi.builder, self.wi.shadow
         q = self._find_target(symbol)
@@ -370,49 +422,8 @@ class ToolLayer:
             truncated += max(0, r["count"] - len(r["lines"]))
         possible = {k: v for k, v in rows.items() if v[0].startswith("possible")}
         rows = {k: v for k, v in rows.items() if k not in possible}
-        by_file: dict[str, list] = {}
-        for (f, line, col), (label, where) in rows.items():
-            by_file.setdefault(f, []).append((line, col, label, where))
-        files = sorted(by_file, key=lambda f: (self._is_test(f), f))
-        n = sum(len(v) for v in by_file.values()) - 1
-        counts: dict[str, int] = {}
-        for (label, _w) in rows.values():
-            if label != "definition":
-                k = self._ref_label(label.split(" ")[0])
-                counts[k] = counts.get(k, 0) + 1
-        tests = sum(len(by_file[f]) for f in files if self._is_test(f))
-        out = [f"`{q}` ({sym.kind}, {own}:{self._def_line(q)}): {n} reference(s) in "
-               f"{len([f for f in files if any(x[2] != 'definition' for x in by_file[f])])} file(s) ("
-               + ", ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))
-               + f"); {tests} in test files" + (f"; {len(possible)} possible (below)" if possible else "")]
-        shown = 0
-        for f in files:
-            out.append(f + (" [test]" if self._is_test(f) else ""))
-            lines = self._lines(os.path.join(root, f))
-            for line, col, label, where in sorted(by_file[f]):
-                if shown >= SEARCH_MAX_LINES:
-                    break
-                text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
-                lab = self._ref_label(label.split(" ")[0]) + label[len(label.split(" ")[0]):]
-                out.append(f"  {line}:{col + 1} [{lab}] in `{where}`: {text}")
-                shown += 1
-        if shown < n + 1:
-            out.append(f"... ({n + 1 - shown} more)")
-        if truncated:
-            out.append(f"(and {truncated} more use(s) inside the definitions above; their lines were not kept)")
-        if possible:
-            out.append(f"Possible references ({len(possible)}): calls of `{leaf}` on a receiver whose type PRISM could "
-                       f"not determine, matched by name; check each:")
-            for (f, line, col), (_label, where) in sorted(possible.items()):
-                lines = self._lines(os.path.join(root, f))
-                text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
-                out.append(f"  {f}:{line}:{col + 1} in `{where}`: {text}")
-        listed = {(f, line) for (f, line, _c) in [*rows, *possible]}
-        other = self._other_uses(leaf, listed)
-        if other:
-            out.append(f"Not references: {other[0]} other use(s) of the name `{leaf}` in {other[1]} file(s) belong to "
-                       f"other objects (not listed).")
-        return "\n".join(out)
+        return {"target": q, "sym": sym, "leaf": leaf, "file": own, "def_line": self._def_line(q), "rows": rows,
+                "possible": possible, "truncated": truncated}
 
     def _other_uses(self, leaf: str, listed: set) -> tuple[int, int] | None:
         """How many lines of Python files use the word `leaf` without being a listed reference, and in how many files."""

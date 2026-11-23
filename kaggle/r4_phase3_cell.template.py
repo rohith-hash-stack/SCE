@@ -6,12 +6,7 @@ SMOKE = False
 PHASE3_STAGE = "@@STAGE_KIND@@"       # "poc" (45 runs, go/no-go only) or "confirmatory" (225 runs)
 # PRISM Phase 3, hidden dependencies (harness/experiments/r4/AMENDMENTS.md, "Phase 3, hidden dependencies, two
 # stages"): the tasks of @@TASKS_PATH@@ x seeds @@SEEDS@@ x 3 arms, devstral-small-2:
-#   BASELINE_LSP the shared tools and an IDE agent's tools: find_references (jedi 0.19.2), semantic_search (BM25),
-#               ast_search (ast-grep 0.39.6), run_shell (read-only); no PRISM (r3/lsp_tools.py, r3/baseline_tools.py)
-#   PRISM_LSP   the shared tools and all of PRISM's tools, prism_find_references among them (no language server)
-#   PRISM_ONLY  PRISM's tools with prism_find_references, without grep and read_file
-# Every arm: the Phase 2 graph (reference pass, type tracking), and the harness feedback C1-C3 (--feedback).
-# The Phase 1
+@@ARMS_DOC@@# The Phase 1
 # harness: native tool calling read by the harness (--raw-tools: devstral's template rendered and its [TOOL_CALLS]
 # parsed by r3/mistral_raw.py, so no reply is discarded unseen), history hygiene + compaction (--phase1), ledger,
 # gate, turn cap 60, budget 1,000,000 (every prompt token counts; Phase 3 amendment 3). A run edits 15-30 places,
@@ -54,10 +49,10 @@ if SHARD_ID not in range(1, len(SHARD_SEEDS) + 1):
     raise SystemExit(f"SHARD_ID must be 1-{len(SHARD_SEEDS)}, got {SHARD_ID!r}")
 SEED = SHARD_SEEDS[SHARD_ID - 1]
 STAGE = f"{os.path.basename('@@RESULTS_PATH@@')}_seed{SEED}"
-ARMS = ("BASELINE_LSP", "PRISM_LSP", "PRISM_ONLY")
+ARMS = @@ARMS@@
 SMOKE_TASKS = ()
 SUMMARIZER = "devstral-small-2:24b-instruct-2512-q4_K_M"   # Phase 0 model (amendment); JSON mode, no think flag
-MODEL_FLAGS = ["--model", SUMMARIZER, "--ledger", "--phase1", "--raw-tools", "--feedback"]
+MODEL_FLAGS = ["--model", SUMMARIZER, "--ledger", "--phase1", "--raw-tools", "--feedback"@@EXTRA_FLAGS@@]
 OLLAMA_VERSION = "0.34.0"
 PORTS = (11434,)
 GPU_GROUPS = ("0,1",)
@@ -202,7 +197,7 @@ doc = json.load(open(os.path.join(SCE_DIR, TASKS)))
 got_sha = hashlib.sha256(json.dumps(doc["tasks"], sort_keys=True).encode()).hexdigest()
 if got_sha != TASKS_SHA or doc.get("tasks_sha256") != TASKS_SHA:
     abort(f"the Phase 3 task list is not the committed one: {got_sha}")
-if doc.get("design") != "phase3" or doc.get("stage") != PHASE3_STAGE:
+if doc.get("design") != "@@DESIGN@@" or doc.get("stage") != PHASE3_STAGE:
     abort(f"the task list is not marked as the Phase 3 design, stage {PHASE3_STAGE}")
 STASKS = [t for t in doc["tasks"] if t["id"] in SMOKE_TASKS] if SMOKE else doc["tasks"]
 if SMOKE and len(STASKS) != len(SMOKE_TASKS):
@@ -321,7 +316,7 @@ for port in PORTS:
 print("\n[preflight] the harness renders devstral's template as Ollama does", flush=True)
 _pf = subprocess.run([sys.executable, "-m", "harness.experiments.r4.raw_preflight", "--base-url",
                       f"http://127.0.0.1:{PORTS[0]}", "--model", SUMMARIZER, "--out", os.path.join(OUT, "preflight.json"),
-                      "--versions", *ARMS],
+                      "--versions", *ARMS@@PREFLIGHT_FLAGS@@],
                      cwd=SCE_DIR, env=child_env, capture_output=True, text=True)
 print(_pf.stdout[-3000:], _pf.stderr[-2000:], flush=True)
 if _pf.returncode != 0:

@@ -58,11 +58,11 @@ def call_read_ok(chat_call, raw_call, raw_response: str) -> bool:
 DEFAULT_VERSIONS = ("PRISM", "BASELINE")
 
 
-def cases(versions=DEFAULT_VERSIONS) -> list[tuple[str, list[dict]]]:
+def cases(versions=DEFAULT_VERSIONS, guards: bool = False) -> list[tuple[str, list[dict]]]:
     """(name, messages) per arm and case; the name starts with the arm and a colon."""
     out = []
     for version in versions:
-        sys_p = system_prompt(version)
+        sys_p = system_prompt(version, guards=guards)
         task = "Remove the getter `shape` defined inside the function `object` from `src/a.ts`. Remaining tests must pass."
         call1 = {"tool": "read_file", "args": {"path": "src/a.ts", "start": 1, "end": 40}}
         out1 = "src/a.ts (lines 1-3 of 3)\n1\texport function object<T>(s: T): Obj<T> {\n2\t  return a && b;\n3\t}"
@@ -85,14 +85,15 @@ def main(argv=None) -> int:
     p.add_argument("--out")
     p.add_argument("--versions", nargs="+", default=list(DEFAULT_VERSIONS),
                    help="the arms whose prompts and tool lists are rendered (Phase 3: BASELINE_LSP PRISM_LSP PRISM_ONLY)")
+    p.add_argument("--guards", action="store_true", help="POC 2: the guarded edit_file in every arm's prompt and tools")
     a = p.parse_args(argv)
     url = a.base_url.rstrip("/")
     opts = {"temperature": 0.0, "seed": 42, "num_ctx": 20480, "num_predict": 64}     # greedy: the least sampling noise
     clear = lambda: _post(url, "/api/generate", {"model": a.model, "prompt": "Count to three.", "stream": False,
                                                   "options": {**opts, "num_predict": 4}})
     rows, ok = [], True
-    for name, msgs in cases(a.versions):
-        tools = native_tools(name.split(":", 1)[0])                     # the case's own arm, its exact tool list
+    for name, msgs in cases(a.versions, a.guards):
+        tools = native_tools(name.split(":", 1)[0], a.guards)                     # the case's own arm, its exact tool list
         clear()
         chat = _post(url, "/api/chat", {"model": a.model, "messages": native_messages(msgs), "tools": tools,
                                         "stream": False, "options": opts})

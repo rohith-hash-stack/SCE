@@ -27,7 +27,7 @@ import tempfile
 
 from harness.experiments.r3.dryrun import Script, edits_for
 
-ARMS = ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP")
+ARMS = ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP", "PRISM_GW")
 
 
 def gold_contents(clone: str, task: dict, patch: str) -> dict[str, tuple[str | None, str | None]]:
@@ -63,7 +63,7 @@ def gold_calls(task: dict, contents: dict, arm: str) -> list[dict]:
                   {"tool": "semantic_search", "args": {"query": q.rsplit('.', 1)[-1].replace("_", " ")}},
                   {"tool": "ast_search", "args": {"pattern": f"$X.{q.rsplit('.', 1)[-1]}($$$A)"}},
                   {"tool": "run_shell", "args": {"command": f"git log --oneline -3 -- {f} | cat"}}]
-    elif arm in ("PRISM", "INJECTED", "PRISM_LSP"):
+    elif arm in ("PRISM", "INJECTED", "PRISM_LSP", "PRISM_GW"):
         calls.append({"tool": "prism_change_context", "args": {"symbol": task["anchor_qname"]}})
     for path, (old, new) in sorted(contents.items()):
         calls += [{"tool": "edit_file", "args": e} for e in edits_for(old, new, path)]
@@ -82,6 +82,7 @@ def main(argv=None) -> int:
     p.add_argument("--ids", nargs="*")
     p.add_argument("--arms", nargs="*", default=list(ARMS))
     p.add_argument("--turn-cap", type=int, default=60)
+    p.add_argument("--guards", action="store_true", help="POC 2: the Layer 1 guards, every arm")
     a = p.parse_args(argv)
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
     from harness.experiments.r3.runner import run_task
@@ -96,7 +97,8 @@ def main(argv=None) -> int:
         runs = [(arm, "gold", 42) for arm in a.arms] + [(b, "empty", 43) for b in ("BASELINE", "BASELINE_LSP") if b in a.arms][:1]
         for arm, kind, seed in runs:
             model = Script(gold_calls(t, contents, arm) if kind == "gold" else [])
-            res = run_task(t, arm, seed, clone, a.out, a.cache, model, a.turn_cap, ledger=True, feedback=True)
+            res = run_task(t, arm, seed, clone, a.out, a.cache, model, a.turn_cap, ledger=True, feedback=True,
+                           guards=a.guards)
             ok = res.get("outcome") == "resolved" if kind == "gold" else res.get("outcome") in ("unresolved",
                                                                                                  "stuck_done")
             bad += not ok
@@ -109,7 +111,10 @@ def main(argv=None) -> int:
                               "first_tool": (first or {}).get("tool"),
                               "first_output": str((first or {}).get("output_head", ""))[:160],
                               "turns": res.get("turns"), "derived_check": sc.get("derived_check"),
-                              "injected": (res.get("injected") or {}).get("tool")}), flush=True)
+                              "injected": (res.get("injected") or {}).get("tool"),
+                              **({"gateway": {k: v for k, v in res["gateway"].items() if k != "log"},
+                                  "gateway_log": [(x["type"], x["outcome"]) for x in res["gateway"]["log"]]}
+                                 if res.get("gateway") else {})}), flush=True)
     return 1 if bad else 0
 
 

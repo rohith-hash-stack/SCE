@@ -8,6 +8,12 @@ shaped the way it is.
 Nothing is pushed into the agent's context, no read or edit is intercepted, and none will be. The question is whether
 the agent, given the choice, picks PRISM's map over a language server and grep, and whether it does better for it.
 
+**POC 2 (the user's decision, 2026-11-23, after POC 1's NO-GO):** the pull framing stays for PRISM_LSP. A new arm,
+PRISM_GW, adds PRISM's gateway (`src/prism/gateway`): on every turn it checks the agent's call against PRISM's graph,
+can refuse an edit or `done` (each refusal overridable), and adds what the graph knows to the answer. Every intervention
+and its outcome is logged, so that the gateway's effect (PRISM_GW − PRISM_LSP) can be told apart from the tools'
+(PRISM_LSP − BASELINE_LSP). Every arm also gets harness guards against POC 1's failures. See AMENDMENTS "Phase 3, POC 2".
+
 ## The problem
 
 Even with `grep`, `read_file` and a language server, coding agents tend to change the file the user named and stop.

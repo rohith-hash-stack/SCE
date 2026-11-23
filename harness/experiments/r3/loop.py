@@ -159,13 +159,16 @@ PARAM_SCHEMAS = {
 # injected up front, and the same tools). BASELINE has `related_code` instead.
 # PRISM_ONLY (Phase 2 D3; support only, run only under its own pre-registration): PRISM's tools with `prism_search`
 # and `prism_read` in place of `grep` and `read_file`, to test whether PRISM can replace standard search.
-PRISM_ARMS = ("PRISM", "INJECTED", "PRISM_ONLY", "PRISM_LSP")
-ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP")
+PRISM_ARMS = ("PRISM", "INJECTED", "PRISM_ONLY", "PRISM_LSP", "PRISM_GW")
+ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP", "PRISM_GW")
 #: Phase 3's arms (the user's decision, 2026-11-22). BASELINE_LSP: the shared tools and an IDE agent's tools (a
 #: language server's references, semantic search, ast-grep, a read-only shell). PRISM_LSP: the shared tools and all of
 #: PRISM's tools, `prism_find_references` among them (not the language server's). PRISM_ONLY: PRISM's tools, with
 #: `prism_find_references`, without `grep` and `read_file`.
 PHASE3_ARMS = ("BASELINE_LSP", "PRISM_LSP", "PRISM_ONLY")
+#: POC 2's arms (AMENDMENTS.md, "Phase 3, POC 2"; every arm with `--guards`). PRISM_GW: PRISM_LSP's prompt and tools,
+#: and PRISM's gateway (`prism.gateway`) on every call. PRISM_GW against PRISM_LSP is the gateway's own effect.
+POC2_ARMS = ("BASELINE_LSP", "PRISM_LSP", "PRISM_GW")
 #: the shared tools an arm does without
 REMOVED_SHARED = {"PRISM_ONLY": ("read_file", "grep")}
 
@@ -173,7 +176,7 @@ REMOVED_SHARED = {"PRISM_ONLY": ("read_file", "grep")}
 def index_doc(version: str) -> dict:
     if version == "BASELINE_LSP":
         return dict(LSP_DOC)
-    if version in ("PRISM_LSP", "PRISM_ONLY"):
+    if version in ("PRISM_LSP", "PRISM_ONLY", "PRISM_GW"):
         return {**PRISM_DOC, **PRISM_REFS_DOC}
     return PRISM_DOC if version in PRISM_ARMS else BASELINE_DOC
 
@@ -694,8 +697,16 @@ class AgentRun:
                 tool, args = call
                 rec.update(tool=tool, args=args)
                 t = time.time()
-                res = self.execute(tool, args)
-                if self.repeats is not None and tool != "done":
+                blocked = False
+                if self.gateway is not None:              # POC 2, PRISM_GW: PRISM's gateway sees the call first
+                    decision = self.gateway.before(turn, tool, args)
+                    blocked = decision.block
+                if blocked:
+                    res = {"output": decision.message, "gateway_blocked": True}
+                else:
+                    run_args = {k: v for k, v in args.items() if k != "confirm"} if self.gateway is not None else args
+                    res = self.execute(tool, run_args)
+                if self.repeats is not None and tool != "done" and not blocked:
                     earlier = self.repeats.same(turn, tool, args, res["output"])
                     if earlier and self.guards and len(earlier) >= 2:
                         # POC 2 loop breaker: the third identical call with the identical answer is not answered again
@@ -711,7 +722,12 @@ class AgentRun:
                         res = {**res, "edit_left_syntax_error": True}
                     if tool == "run_tests" and "first error in the output:" in res["output"]:
                         res = {**res, "first_error_shown": True}
-                if tool == "done" and self.gate is not None:
+                if self.gateway is not None:              # and adds what the graph knows to the answer
+                    res = {**res, "output": res["output"] + self.gateway.after(turn, tool, args, res["output"], blocked)}
+                    ivs = self.gateway.new_interventions()
+                    if ivs:
+                        res["gateway"] = ivs
+                if tool == "done" and self.gate is not None and not blocked:
                     ok, verdict = self.gate.check()
                     res = {**res, "gate": {"accepted": ok, "message": verdict[:1500]}}
                     if not ok:
@@ -735,7 +751,7 @@ class AgentRun:
                 history += [{"role": "assistant", "content": json.dumps(said)},
                             {"role": "user", "content": res["output"], "tool_output": True, "tool": tool,
                              "args": args, "turn": turn}]
-                if tool == "done" and not (res.get("gate") and not res["gate"]["accepted"]):
+                if tool == "done" and not blocked and not (res.get("gate") and not res["gate"]["accepted"]):
                     end = "done"
                     break
                 if rejected_in_a_row >= STUCK_DONE_REJECTIONS:
@@ -745,7 +761,8 @@ class AgentRun:
                    "end": end, "done_called": end == "done", "stop": stop_kind(end), "used_tokens": used,
                    "seconds": round(time.time() - t0, 1), "done_summary": self.shared.done_summary,
                    "turn_cap": self.turn_cap, **turn_counts(log_path),
-                   **({"gate_rejections": rejections} if self.gate is not None else {})}
+                   **({"gate_rejections": rejections} if self.gate is not None else {}),
+                   **({"gateway": self.gateway.finish()} if self.gateway is not None else {})}
         with open(summary_path, "w") as fh:
             json.dump(summary, fh, indent=1)
         return summary

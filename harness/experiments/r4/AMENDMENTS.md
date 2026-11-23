@@ -1748,3 +1748,144 @@ the Phase 2 code.
 - **The user's decision, before any outcome was read:** keep all 45 runs as they are. The broken run counts as
   whatever it scored. No run is repeated or dropped. The verdict is computed by `rebaseline_report.go_no_go` on all
   three shards merged, and shard 2's health-check failure is reported beside it.
+
+## Phase 3, POC 2: harness guards for every arm and PRISM's gateway (pre-registered 2026-11-23, before any run of this design)
+
+**The user's decisions (2026-11-23, after POC 1's NO-GO and its failure investigation, `PHASE3_POC_RESULTS.md`):**
+"Go with option 1, both layers on fresh tasks". Layer 1 is a set of harness guards that every arm gets. Layer 2 is a
+gateway that is part of PRISM, not of the harness: on each turn it checks the call the agent is about to make, says
+which tool to use, and supplies the graph's knowledge. Its effect is measured on its own: "Gateway intervention
+effectiveness. Record: How many times the gateway intervened. How many incorrect tool calls it prevented. How many
+incorrect edits it prevented. How many times its guidance was ignored. Whether each intervention contributed to
+successful task completion. This will help distinguish actual PRISM improvements from improvements caused by
+additional guidance."
+
+**What this changes in the framing:** PRISM_LSP stays what Phase 3 tested, a suite of tools the agent must choose to
+call (pull). PRISM_GW adds the gateway, which volunteers PRISM's graph on every turn and can refuse a call (push).
+PRISM_GW − PRISM_LSP is the gateway's own effect; PRISM_LSP − BASELINE_LSP is the tools' effect.
+
+**Layer 1: the guards** (`--guards`, every arm alike, commit `2f26d119`; each answers one of POC 1's failures):
+- **Loop breaker** (the litestar run that read `link.py:1-10` 29 times):
+  - the third identical call (same tool, same arguments) that would get the identical answer again is not answered;
+  - the agent gets "not answered again: you made this exact call at turns …", logged as `loop_refused`;
+  - a different answer in between starts the count again.
+- **Reference lists kept whole** (the fastmcp runs: compaction cut PRISM's 30-line list to 12, and line 305 was output
+  line 13): compaction never summarises `find_references` or `prism_find_references` outputs. The window rule still
+  applies to them.
+- **`edit_file(occurrence=k)`** (the pydantic runs, whose edits of repeated code were refused again and again): when
+  `old` occurs several times, `occurrence` picks the k-th in file order. Overlapping occurrences are refused.
+  - The refusal of an ambiguous edit says so, as it already listed the occurrences' lines.
+  - The only prompt change: `edit_file`'s line in the tool list gains the `occurrence` argument, in every arm.
+
+**Layer 2: the gateway** (`src/prism/gateway/gateway.py`; arm PRISM_GW only). It sees every call before it runs and
+every answer after. It knows the task's target from the prompt (`infer_target`) and, from PRISM's graph on the start
+tree, every place that uses it (exactly `prism_find_references`' places). It also knows every other line where the
+name is a code token (look-alikes). Tracked lines follow edits (a `difflib` line map per applied edit).
+
+A place is **pending** while its line still holds more uses of the name than its look-alike uses. A look-alike is
+**changed** when its line holds fewer name tokens than at the start, or was deleted.
+
+| intervention | when | what the agent is told | blocks |
+|---|---|---|---|
+| `suggest_tool` | after the first call, and after a search for the name before `prism_find_references` was asked (at most 2) | how many places and look-alikes; that `prism_find_references` lists each | no |
+| `search_augment` | a search whose hits include tracked lines | which hits are the target's places, which belong to other objects (listed) | no |
+| `wrong_target` | a PRISM query about another object of the same name | that it is not the task's target | no |
+| `worklist` | after every applied edit to a Python file | the places still pending (up to 12 listed), look-alikes changed | no |
+| `stall` | 5 calls without an applied edit while places are pending, or a loop refusal | the next 5 pending places | no |
+| `block_lookalike` | an edit that would change a look-alike | not applied; the lines and why | yes |
+| `block_syntax` | an edit that would leave a Python file that parsed unparseable (an emptied branch) | not applied; why | yes |
+| `block_done` | `done` while places are pending or look-alikes changed | not accepted; what is left | yes |
+
+- **Overrides:** a block is overridden by sending the same call again with `"confirm": true`. The harness removes
+  `confirm` before the tool runs.
+- **Prompt:** PRISM_GW's system prompt and tool schemas are exactly PRISM_LSP's (tested). The gateway speaks only
+  inside answers, each message starting "PRISM gateway:".
+- **Which tasks:** only a rename says that every use must change. On any other task (the control, a deletion, whose
+  real fix leaves uses that its tests drop) the gateway makes only the syntax check.
+  - Found while validating on `r4s-delete-09`'s real commit: without this rule, the gateway would have refused `done`
+    on the correct fix.
+
+**The measurement, per intervention** (`gateway.finish()` in every PRISM_GW run's summary; aggregated by
+`rebaseline_report.gateway_effectiveness`; `WINDOW = 3` calls):
+- **Intervened:** every intervention, by type, counted once (a block repeated for the same call counts as one).
+- **Incorrect tool calls prevented:** `block_done` not overridden.
+- **Incorrect edits prevented:** `block_lookalike` and `block_syntax` not overridden. A block counts as prevented when
+  no override follows within `WINDOW` calls, or before the run ends.
+- **Guidance ignored:**
+  - blocks overridden;
+  - `suggest_tool` / `wrong_target` not followed by `prism_find_references` on the target within `WINDOW` calls;
+  - `worklist` / `stall` not followed within `WINDOW` calls by an applied edit that lowers the pending count;
+  - `search_augment` whose listed look-alikes were later changed.
+- **Contributed to success:** an intervention prevented or followed, whose named places are correct in the final tree
+  (`places_ok`, or it named none), in a run that was solved.
+- **Also reported:**
+  - the solve rate of PRISM_GW runs that acted on at least one intervention, against those that acted on none;
+  - per task, the interventions and contributions;
+  - the gateway's message characters per run.
+
+  These are descriptive, not causal.
+- **For every arm:** loop refusals per run (`process.loop_refused_per_run`).
+
+**Validated before any run:**
+- the full suite;
+- 17 gateway tests, among them the agent loop end to end with blocks and overrides;
+- 14 guard tests and 2 report tests;
+- the existing goldens: `prism_find_references`' output is byte-identical after `reference_places` was extracted for
+  the gateway;
+- a dry run of the gateway on all 20 Phase 3 candidates' answer keys (`phase2_dryrun --arms PRISM_GW --guards`): each
+  must end resolved, with nothing pending, no look-alike changed and no block;
+- `r4s-delete-09`'s real commit.
+
+**Arms** (`loop.POC2_ARMS`), every one with `--guards`:
+- BASELINE_LSP, PRISM_LSP: as in POC 1;
+- PRISM_GW: PRISM_LSP plus the gateway.
+
+PRISM_ONLY is dropped.
+
+**Tasks: fresh** (`phase3_poc2_tasks.py` → `phase3/poc2.json`):
+- **The hidden tasks:** the candidates no Phase 3 run has seen, i.e. in neither `poc.json` nor `tasks.json` (8 of the
+  20). They are ranked by Phase 3's rule (`rank_key`): the top 4, at most one per repository:
+  - `p3-hidden-06` (fastmcp, `get_access_token`);
+  - `p3-hidden-13` (aiohttp, `WebSocketResponse.send_bytes`, 23 look-alikes);
+  - `p3-hidden-15` (litestar, `SessionMiddleware`);
+  - `p3-hidden-16` (pydantic-ai, `ToolReturn`).
+- **The control:** `r4s-delete-09` (litestar, remove `Dependency`), a Python control that Phase 3 neither ran nor
+  studied. The confirmatory set's tasks and controls stay unseen.
+- **One correction:** each prompt's "You have 28 turns in total" now says 60.
+  - **A defect found after POC 1:** Phase 3's task files kept Phase 2's sentence after amendment 3 raised the cap to
+    60. POC 1's agents were told 28 in the task, while the progress ledger said "turn N of 60" on every turn.
+  - `tasks.json` (confirmatory) has the same sentence and needs the same correction before any use.
+
+**Run settings:** seeds 201, 202, 203: 5 tasks × 3 arms × 3 seeds = 45 runs, one shard per seed, in
+`reports/r4/phase3_poc2_seed<SEED>`. Otherwise as POC 1: devstral-small-2, `--raw-tools --phase1 --ledger --feedback`,
+turn cap 60, budget 1,000,000, the done gate, and the same health check.
+
+**Go/no-go** (`rebaseline_report.go_no_go`, design `poc2`, `go_arms` PRISM_LSP and PRISM_GW; the constants
+unchanged):
+- **GO** when at most 2 runs are missing or dead, and PRISM_LSP or PRISM_GW solves at least 3 more of its 12 hidden
+  runs than BASELINE_LSP, with BASELINE_LSP's mean score higher on at most 1 of the 4 hidden tasks.
+- **NO-GO** otherwise.
+- **What GO means:** a confirmatory stage with these arms, proposed as its own amendment. The registered confirmatory
+  stage has other arms.
+- **Not in the verdict, reported beside it:**
+  - PRISM_GW − PRISM_LSP in solved runs (the gateway's own effect);
+  - the gateway-effectiveness record above;
+  - the control.
+
+**Readings fixed now:**
+- **PRISM_GW > PRISM_LSP, with interventions that contributed:** the graph's knowledge helps when delivered, and the
+  pull design left it unused.
+- **PRISM_GW > PRISM_LSP, with contributions only from `block_syntax` or `stall`:** the gain is guidance that needs no
+  graph, which a non-PRISM gateway could give the baseline.
+- **PRISM_LSP > BASELINE_LSP with the guards:** POC 1's tie came from the harness failures the guards remove.
+- **No difference:** neither the tools nor the gateway help devstral-small-2 on these tasks.
+
+**A limit, stated now:** the gateway's places come from the same PRISM data the answer keys were built from. Its
+`block_done` and `worklist` tell the agent where the remaining places are, which the done gate never does.
+PRISM_GW − BASELINE_LSP therefore measures "PRISM's graph, delivered", not "the tools, chosen".
+
+The cleaner control for "guidance alone" would be the same gateway running on the language server's references for
+BASELINE_LSP. It is not in this POC.
+
+**Fixed for the runs:** the code commit, its `src`/`harness` trees and `poc2.json`'s sha256, pinned in
+`kaggle/r4_phase3_poc2_cell.py`.

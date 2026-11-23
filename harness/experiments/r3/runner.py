@@ -275,9 +275,15 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
             from harness.experiments.r4.progress_ledger import ProgressLedger
             progress = ProgressLedger(turn_cap, gate, task, shared)
         agent_task = {**task, "prompt": block + task["prompt"]} if injected is not None else task
+        gateway = None
+        if version == "PRISM_GW":                         # POC 2: PRISM's gateway, built on the start state
+            stage = "gateway"
+            from prism.gateway import Gateway
+            gateway = Gateway(work, task["prompt"], layer.reference_places)
+            stage = "loop"
         summary = AgentRun(agent_task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
                            gate=gate, ledger=progress, record_full=record_full, hygiene=hygiene,
-                           compact=compact, feedback=feedback, guards=guards).run(out)
+                           compact=compact, feedback=feedback, guards=guards, gateway=gateway).run(out)
         result = {**summary, **({"injected": injected} if injected is not None else {})}
         if score_run:
             stage = "review"
@@ -316,7 +322,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     p.add_argument("task")
-    p.add_argument("version", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP"))
+    p.add_argument("version", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP",
+                                       "PRISM_GW"))
     p.add_argument("seed", type=int)
     p.add_argument("--clone", required=True)
     p.add_argument("--out", required=True)
