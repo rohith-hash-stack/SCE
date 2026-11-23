@@ -1736,3 +1736,15 @@ the Phase 2 code.
   (`seeds` in the task file: 42-44) says INCOMPLETE, not NO-GO. The verdict is the merged analysis's.
 - **The dry run of the 4 POC tasks:** the answer key replayed through the runner resolves in all 3 arms (18-26 turns,
   under the 60-turn cap), and the unchanged start is rejected by the done gate (`stuck_done`) for each task.
+
+### Phase 3 POC: shard 2's failed health check (decided 2026-11-23, after all 45 runs, before any outcome was read)
+
+- **What happened:** all 45 POC runs finished and none died on infrastructure. Shard 2 (seed 43) failed its health
+  check with parse errors on 5.7% of its turns (40 of 698), above the 2% limit. 38 of the 40 come from one run,
+  `p3-hidden-04 × PRISM_LSP × 43`: after an `edit_file` call missing an argument, the model's replies stopped being
+  readable tool calls. Shards 1 and 3 passed (0.1% and 1.6%).
+- **The pre-registration** says a failed shard is reported and the cell stops; it does not say how the shard counts
+  in the verdict.
+- **The user's decision, before any outcome was read:** keep all 45 runs as they are. The broken run counts as
+  whatever it scored. No run is repeated or dropped. The verdict is computed by `rebaseline_report.go_no_go` on all
+  three shards merged, and shard 2's health-check failure is reported beside it.
