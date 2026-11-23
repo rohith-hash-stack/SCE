@@ -39,21 +39,26 @@ default.
 **Why asking explicitly works:** the user supplies the missing piece. "Also fix the callers" turns an unknown unknown
 into a known question the agent can pull on. The capability was there all along; the trigger was not.
 
-## What PRISM changes
+## What PRISM changes, and what it does not (yet)
 
-- **Push, not pull:** `prism_change_context` lists the dependents up front, before the agent thinks to ask.
-- **Signal, not noise:** `prism_find_references` returns only the real uses, each at its line and labelled (call,
-  import, type annotation, subclass, `__all__`...) with the function it is in. Look-alikes are counted, not listed.
-  Calls PRISM could not resolve by type are listed apart, for the agent to check.
-- **"Done" checked against the whole change:** the harness's done gate checks every place that has to change, not
-  only the local tests, and says what is still missing.
+- **One question returns the whole map:** `prism_change_context` (callers, dependencies, labelled other uses) and
+  `prism_find_references` (every real use, at its line and labelled: call, import, type annotation, subclass,
+  `__all__`...; look-alikes counted, not listed; calls PRISM could not resolve by type listed apart). A pull agent
+  needs to ask several right questions to assemble that picture; a PRISM agent needs to ask one.
+- **"Done" checked against the whole change:** the harness's done gate (every arm) checks every place that has to
+  change, not only the local tests, and says how many are still wrong (never where).
+- **Not push in the full sense:** today the agent must still call PRISM's tools. `read_file` is not intercepted,
+  `prism_read` adds only a one-line list of the definitions it shows, and `edit_file` warns only when an edit leaves a
+  file unparseable. Pushing the dependents map on every read of a definition, or warning on an edit that breaks a
+  downstream connection in the graph ("intent interception"), is not built. Phase 1-2's INJECTED arm pushed the change
+  context once, before the first turn; Phase 3 does not have it.
 
 ## How Phase 3 tests it
 
 **The arms** compare push against pull, each at its best:
 - **BASELINE_LSP:** an IDE agent's tools: `grep`, `read_file`, a language server's `find_references` (jedi),
   `semantic_search`, `ast_search`, a read-only shell. It pulls.
-- **PRISM_LSP:** the standard tools and PRISM's tools, `prism_find_references` among them. PRISM pushes.
+- **PRISM_LSP:** the standard tools and PRISM's tools, `prism_find_references` among them. One call returns the map.
 - **PRISM_ONLY:** PRISM's tools without `grep` and `read_file`.
 
 **The tasks:** renaming a method, function or class with 15-30 places in 3+ files. Every answer key is built from
@@ -64,5 +69,5 @@ solves at least 3 more of its 12 hidden-task runs than BASELINE_LSP, while losin
 
 **What would count against the hypothesis:** with a language server, a pull agent that asks the right question
 already gets exact places, cheaply (166 tokens for `find_references`, 287 for `prism_find_references`, on the same
-task). If BASELINE_LSP asks that question as reliably as the PRISM arms receive the answer, push buys nothing on
+task). If BASELINE_LSP asks that question as reliably as the PRISM arms ask theirs, PRISM's richer map buys nothing on
 these tasks. The proof of concept is built to tell the two apart.
