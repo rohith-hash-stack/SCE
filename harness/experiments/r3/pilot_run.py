@@ -52,6 +52,7 @@ def main(argv=None) -> int:
     p.add_argument("--phase1", action="store_true")                               # Phase 1 items 2 and 3
     p.add_argument("--raw-tools", action="store_true")                            # Phase 1, re-baseline fix (A)
     p.add_argument("--feedback", action="store_true")                             # Phase 2 C1-C3, every arm
+    p.add_argument("--guards", action="store_true")                               # POC 2 guards, every arm
     p.add_argument("--versions", nargs="+", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP"), default=list(VERSIONS),
                    help="the arms to run, in this order within a task (the 3-arm re-baseline adds INJECTED)")
     a = p.parse_args(argv)
@@ -62,7 +63,8 @@ def main(argv=None) -> int:
              + (["--reasoning-effort", a.reasoning_effort] if a.reasoning_effort else [])
              + (["--timeout", str(a.timeout)] if a.timeout else []) + (["--no-json-format"] if a.no_json_format else [])
              + (["--native-tools"] if a.native_tools else []) + (["--phase1"] if a.phase1 else [])
-             + (["--raw-tools"] if a.raw_tools else []) + (["--feedback"] if a.feedback else []))
+             + (["--raw-tools"] if a.raw_tools else []) + (["--feedback"] if a.feedback else [])
+             + (["--guards"] if a.guards else []))
     from harness.experiments.r3.memtest import leftovers
     clones = dict(r.split("=", 1) for r in a.repos)
     tasks = json.load(open(a.tasks))["tasks"]

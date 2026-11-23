@@ -116,7 +116,8 @@ class SharedTools:
     NAMES = ("read_file", "list_dir", "grep", "edit_file", "run_tests", "done")
 
     def __init__(self, workdir: str, env, visible_tests: list[str], tokenizer_path: str | None = None,
-                 explicit: bool = False, expected: dict[str, list[str]] | None = None, feedback: bool = False):
+                 explicit: bool = False, expected: dict[str, list[str]] | None = None, feedback: bool = False,
+                 guards: bool = False):
         """`explicit`: amendment R4-SANITY-3's tool messages (a cut read says so and where to continue; edit errors show
         the closest lines, the duplicates' lines, and what an empty `old` means). Off for R3a and sanity runs 1-2."""
         self.work, self.env, self.visible = os.path.abspath(workdir), env, list(visible_tests)
@@ -124,6 +125,9 @@ class SharedTools:
         # Phase 2 C1-C2 (`r3/feedback.py`; every arm): edit_file warns when an edit leaves a file that does not parse
         # (the edit is applied), and run_tests shows the first real error of a failing run. Off for earlier runs.
         self.feedback = feedback
+        # POC 2 guards (every arm): `edit_file(occurrence=k)` replaces the k-th of several identical spans (the Phase 3
+        # POC's pydantic runs could not edit one of several identical blocks). Off for every earlier run.
+        self.guards = guards
         # R4-SANITY-4 (bug 3): the tests each visible file ran at the start (delete: visible_start_pass; feature: the
         # listed tests), and the most each file has reported in this run, so that tests which stop running are named
         self.expected = expected or {}
@@ -216,7 +220,9 @@ class SharedTools:
         more = f"\n... ({len(lines) - GREP_MAX_LINES} more lines)" if len(lines) > GREP_MAX_LINES else ""
         return "\n".join(lines[:GREP_MAX_LINES]) + more
 
-    def _edit_file(self, path: str, old: str, new: str) -> str:
+    def _edit_file(self, path: str, old: str, new: str, occurrence: int | None = None) -> str:
+        if occurrence is not None and not self.guards:
+            raise TypeError("_edit_file() got an unexpected keyword argument 'occurrence'")
         p = self._path(path)
         if old == "":
             if os.path.exists(p):
@@ -255,16 +261,37 @@ class SharedTools:
             if self.explicit:
                 raise ToolCallError(f"the text to replace was not found in {path}. " + closest_lines(text, old))
             raise ToolCallError(f"the text to replace was not found in {path}")
-        if n > 1:
+        at_i = text.index(old)
+        if occurrence is not None:
+            try:
+                k = int(occurrence)
+            except (TypeError, ValueError):
+                raise ToolCallError(f"`occurrence` must be a number from 1 to {n}")
+            if not 1 <= k <= n:
+                raise ToolCallError(f"the text to replace occurs {n} time{'s' if n > 1 else ''} in {path}; "
+                                    f"`occurrence` must be 1{f' to {n}' if n > 1 else ''}")
+            starts = [at_i]
+            while len(starts) < n:
+                starts.append(text.find(old, starts[-1] + 1))
+            if any(b - a < len(old) for a, b in zip(starts, starts[1:])):
+                raise ToolCallError(f"the text to replace occurs {n} times in {path}, and some of them overlap; give a "
+                                    f"longer span instead of `occurrence`")
+            at_i = starts[k - 1]
+        if n > 1 and occurrence is None:
+            if self.guards:
+                at = match_lines(text, old)
+                raise ToolCallError(f"the text to replace occurs {n} times in {path}, at lines "
+                                    f"{', '.join(map(str, at[:20]))}. Include a line before or after it to pick one, "
+                                    f"or give `occurrence` (1 = the first)")
             if self.explicit:
                 at = match_lines(text, old)
                 raise ToolCallError(f"the text to replace occurs {n} times in {path}, at lines "
                                     f"{', '.join(map(str, at[:20]))}. Include a line before or after it to pick one")
             raise ToolCallError(f"the text to replace occurs {n} times in {path}; give a longer, unique span")
-        after = text.replace(old, new, 1)
+        after = text[:at_i] + new + text[at_i + len(old):]
         with open(p, "w", encoding="utf8") as fh:
             fh.write(after)
-        line = text[:text.index(old)].count("\n") + 1
+        line = text[:at_i].count("\n") + 1
         return (f"edited {path} at line {line}: replaced {old.count(chr(10)) + 1} lines with {new.count(chr(10)) + 1}"
                 + self._edit_warning(path, text, after))
 

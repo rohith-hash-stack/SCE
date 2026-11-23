@@ -52,6 +52,10 @@ SHARED_DOC = {
     "run_tests": ('{"files": [str] | null}', "Run test files (default: the task's tests). Reports failures."),
     "done": ('{"summary": str}', "Finish: your changes are complete."),
 }
+#: POC 2 guards (`--guards`, every arm): `edit_file` can pick one of several identical spans by its occurrence
+GUARDED_EDIT_DOC = ('{"path": str, "old": str, "new": str, "occurrence": int | null}',
+                    "Replace one exact, unique span of a file with new text. With old = \"\", create a new file. If "
+                    "`old` occurs more than once, `occurrence` (1 = the first, in file order) picks the one to replace.")
 PRISM_DOC = {
     "prism_change_context": ('{"symbol": str}', "Everything to read before changing a function: its callers and what "
                              "each does with it, its dependencies, the style to follow, the callers' code, the wider "
@@ -174,31 +178,36 @@ def index_doc(version: str) -> dict:
     return PRISM_DOC if version in PRISM_ARMS else BASELINE_DOC
 
 
-def shared_doc(version: str) -> dict:
-    return {k: v for k, v in SHARED_DOC.items() if k not in REMOVED_SHARED.get(version, ())}
+def shared_doc(version: str, guards: bool = False) -> dict:
+    docs = {k: v for k, v in SHARED_DOC.items() if k not in REMOVED_SHARED.get(version, ())}
+    if guards and "edit_file" in docs:
+        docs["edit_file"] = GUARDED_EDIT_DOC
+    return docs
 
 
-def native_tools(version: str) -> list[dict]:
+def native_tools(version: str, guards: bool = False) -> list[dict]:
     """The version's tools in the OpenAI function-calling format, in the text prompt's order and with its
     descriptions."""
-    docs = {**shared_doc(version), **index_doc(version)}
+    docs = {**shared_doc(version, guards), **index_doc(version)}
     out = []
     for name, (_sig, what) in docs.items():
         props, required = PARAM_SCHEMAS[name]
+        if guards and name == "edit_file":
+            props = {**props, "occurrence": {"type": ["integer", "null"]}}
         out.append({"type": "function", "function": {
             "name": name, "description": what,
             "parameters": {"type": "object", "properties": props, "required": required}}})
     return out
 
 
-def tool_docs(version: str) -> str:
-    docs = {**shared_doc(version), **index_doc(version)}
+def tool_docs(version: str, guards: bool = False) -> str:
+    docs = {**shared_doc(version, guards), **index_doc(version)}
     return "\n".join(f"- {name} {sig}: {what}" for name, (sig, what) in docs.items())
 
 
-def system_prompt(version: str, plan: bool = False) -> str:
+def system_prompt(version: str, plan: bool = False, guards: bool = False) -> str:
     """Identical in both versions except the tool list (parity table)."""
-    return (SYSTEM + (PLAN_ADDENDUM if plan else "")).format(tools=tool_docs(version))
+    return (SYSTEM + (PLAN_ADDENDUM if plan else "")).format(tools=tool_docs(version, guards))
 
 
 DEGENERATE_TAIL_CHARS = 400   # Phase 1 item 3: a reply ending in this many characters of whitespace / escaped newlines
@@ -536,14 +545,19 @@ class AgentRun:
     def __init__(self, task: dict, version: str, seed: int, model, shared, index_tools=None,
                  tokenizer_path: str | None = None, turn_cap: int = DEFAULT_TURN_CAP, plan: bool = False,
                  gate=None, ledger=None, record_full: bool = False, hygiene: bool = False, compact: bool = False,
-                 feedback: bool = False):
+                 feedback: bool = False, guards: bool = False, gateway=None):
         """`gate`: amendment R4-SANITY-2's verification at done (`r4/done_gate.DoneGate`), or None (R3a).
         `ledger`: amendment R4-SANITY-4's per-turn progress summary (`r4/progress_ledger.ProgressLedger`), or None.
         `hygiene` (Phase 1 item 3, both arms): a reply that is not one tool call goes back into the history cut to
         PARSE_ERROR_KEEP_CHARS; a call the server returned without token counts is counted with the tokenizer.
         `compact` (Phase 1 item 2, both arms): the history compaction rules (`r3/compaction.py`) before the window
         rule.
-        The prompts are the same with native tool calling (`OllamaChat(tools=...)`): no wording is added for it."""
+        The prompts are the same with native tool calling (`OllamaChat(tools=...)`): no wording is added for it.
+        `guards` (POC 2, every arm; needs `feedback`): the third identical call that would get the identical answer
+        again has its answer withheld (`loop_refused` in the turn log); compaction keeps reference-tool outputs whole;
+        `edit_file` takes `occurrence`.
+        `gateway` (POC 2, the PRISM_GW arm only): PRISM's per-turn gateway (`prism.gateway.Gateway`), which sees every
+        call before it runs and every answer after; its interventions are logged per turn."""
         """`shared`: SharedTools. `index_tools`: the ToolLayer (PRISM's six tools, or `related_code`)."""
         self.task, self.version, self.seed, self.model = task, version, seed, model
         self.shared, self.index_tools, self.turn_cap, self.plan = shared, index_tools, turn_cap, plan
@@ -553,12 +567,13 @@ class AgentRun:
         # Phase 2 C3 (`r3/feedback.py`; every arm, every tool): a note when a call repeats an earlier identical call
         # and gets the identical answer
         self.repeats = None
-        if feedback:
+        self.guards, self.gateway = guards, gateway
+        if feedback or guards:
             from harness.experiments.r3.feedback import Repeats
             self.repeats = Repeats()
         from tokenizers import Tokenizer
         self.tok = Tokenizer.from_file(tokenizer_path) if tokenizer_path else None
-        self.allowed = set(shared_doc(version)) | set(index_doc(version))
+        self.allowed = set(shared_doc(version, guards)) | set(index_doc(version))
 
     def n(self, text: str) -> int:
         return len(self.tok.encode(text).ids) if self.tok else len(text) // 4
@@ -612,7 +627,7 @@ class AgentRun:
             with open(summary_path) as fh:
                 return json.load(fh)
         log_path = os.path.join(out_dir, run_id + ".jsonl")
-        system, task_msg = system_prompt(self.version, self.plan), self.task["prompt"]
+        system, task_msg = system_prompt(self.version, self.plan, self.guards), self.task["prompt"]
         history: list[dict] = []
         used, turn, end = 0, 0, None
         rejected_in_a_row = rejections = 0
@@ -625,8 +640,9 @@ class AgentRun:
                 tail = self.ledger.render(turn + 1) if self.ledger is not None and history else ""
                 shown, compaction = history, None
                 if self.compact:                                     # Phase 1 item 2: before the window rule
-                    from harness.experiments.r3.compaction import compact
-                    shown, compaction = compact(history, self.n)
+                    from harness.experiments.r3.compaction import REFERENCE_TOOLS, compact
+                    shown, compaction = compact(history, self.n,
+                                                whole=REFERENCE_TOOLS if self.guards else ())
                 msgs, stubbed = self.window(system, task_msg, shown, tail)
                 est = sum(self.n(m["content"]) for m in msgs) + ANSWER_TOKENS
                 if used + est > BUDGET_TOKENS:
@@ -680,9 +696,14 @@ class AgentRun:
                 t = time.time()
                 res = self.execute(tool, args)
                 if self.repeats is not None and tool != "done":
-                    prev = self.repeats.check(turn, tool, args, res["output"])
-                    if prev is not None:
-                        res = {**res, "output": res["output"] + self.repeats.note(prev), "repeat_of_turn": prev}
+                    earlier = self.repeats.same(turn, tool, args, res["output"])
+                    if earlier and self.guards and len(earlier) >= 2:
+                        # POC 2 loop breaker: the third identical call with the identical answer is not answered again
+                        res = {**res, "output": self.repeats.refusal(earlier), "repeat_of_turn": earlier[-1],
+                               "loop_refused": True}
+                    elif earlier:
+                        res = {**res, "output": res["output"] + self.repeats.note(earlier[-1]),
+                               "repeat_of_turn": earlier[-1]}
                 if self.repeats is not None:          # Phase 2 feedback in the turn log (outputs are kept only in part)
                     if tool == "edit_file" and "no longer parses" in res["output"]:
                         res = {**res, "edit_broke_syntax": True}

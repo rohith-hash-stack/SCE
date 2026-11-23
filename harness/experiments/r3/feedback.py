@@ -107,6 +107,7 @@ class Repeats:
 
     def __init__(self):
         self.seen: dict[str, tuple[int, str]] = {}
+        self.streak: dict[str, tuple[str, list[int]]] = {}     # key -> (answer digest, the turns that got it in a row)
 
     @staticmethod
     def _key(tool: str, args: dict) -> str:
@@ -118,6 +119,24 @@ class Repeats:
         prev = self.seen.get(key)
         self.seen[key] = (turn, digest)
         return prev[0] if prev is not None and prev[1] == digest else None
+
+    def same(self, turn: int, tool: str, args: dict, output: str) -> list[int]:
+        """The earlier turns, in order, at which this identical call got this identical answer with no different
+        answer in between (empty: none). A different answer starts the count again. Also updates `check`'s memory."""
+        key, digest = self._key(tool, args), hashlib.sha256(output.encode("utf8", "replace")).hexdigest()
+        self.seen[key] = (turn, digest)
+        prev = self.streak.get(key)
+        earlier = list(prev[1]) if prev is not None and prev[0] == digest else []
+        self.streak[key] = (digest, earlier + [turn])
+        return earlier
+
+    @staticmethod
+    def refusal(earlier: list[int]) -> str:
+        """POC 2 loop breaker (`AgentRun(guards=True)`): the answer to a call made a third time with nothing changed."""
+        turns = ", ".join(map(str, earlier))
+        return (f"not answered again: you made this exact call at turns {turns} and got the same answer each time; "
+                f"nothing it reads has changed since. Its answer is in your history. Do something different: read "
+                f"another part of the file, search for something else, make the edit, or run the tests.")
 
     @staticmethod
     def note(prev_turn: int) -> str:

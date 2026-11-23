@@ -230,7 +230,7 @@ def _restore(work: str, tree: str, files: list[str]) -> None:
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
              score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False,
-             hygiene: bool = False, compact: bool = False, feedback: bool = False) -> dict:
+             hygiene: bool = False, compact: bool = False, feedback: bool = False, guards: bool = False) -> dict:
     from harness.experiments.r3.loop import AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
@@ -258,7 +258,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER,
                              explicit=bool(task.get("explicit_tools")),      # R4-SANITY-3
                              expected=_expected_tests(task),                 # R4-SANITY-4 (bug 3)
-                             feedback=feedback)                              # Phase 2 C1-C2, every arm
+                             feedback=feedback,                              # Phase 2 C1-C2, every arm
+                             guards=guards)                                  # POC 2, every arm
         layer.shared = shared                             # Phase 2 D: prism_search / prism_read read the working files
         injected = None
         if version == "INJECTED":                         # the 3-arm re-baseline's Arm 3 (r4/inject.py)
@@ -276,7 +277,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         agent_task = {**task, "prompt": block + task["prompt"]} if injected is not None else task
         summary = AgentRun(agent_task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
                            gate=gate, ledger=progress, record_full=record_full, hygiene=hygiene,
-                           compact=compact, feedback=feedback).run(out)
+                           compact=compact, feedback=feedback, guards=guards).run(out)
         result = {**summary, **({"injected": injected} if injected is not None else {})}
         if score_run:
             stage = "review"
@@ -346,7 +347,13 @@ def main(argv=None) -> int:
     p.add_argument("--feedback", action="store_true",
                    help="Phase 2 C1-C3 (r3/feedback.py), every arm: edit_file warns when an edit leaves a file that does "
                         "not parse; run_tests shows the first real error; a note on repeated identical calls")
+    p.add_argument("--guards", action="store_true",
+                   help="POC 2 (AMENDMENTS.md), every arm; implies --feedback: the third identical call with the identical "
+                        "answer is not answered again; compaction keeps reference lists whole; edit_file takes "
+                        "`occurrence`")
     a = p.parse_args(argv)
+    if a.guards:
+        a.feedback = True
     from harness.experiments.r3.loop import ANSWER_TOKENS, MODEL, OllamaChat, OpenAIChat, native_tools
     task = json.load(open(a.task))
     if a.provider == "openai":
@@ -355,20 +362,20 @@ def main(argv=None) -> int:
         chat = OpenAIChat(a.base_url, a.model, a.api_key_env, timeout=a.timeout or 300,
                           answer_tokens=a.answer_tokens or ANSWER_TOKENS, reasoning_effort=a.reasoning_effort,
                           json_format=not a.no_json_format,
-                          tools=native_tools(a.version) if a.native_tools else None)
+                          tools=native_tools(a.version, a.guards) if a.native_tools else None)
         if a.native_tools and a.plan:
             p.error("--native-tools cannot carry the plan field (it lives in the JSON text reply)")
     elif a.raw_tools:
         from harness.experiments.r3.mistral_raw import OllamaRawChat
-        chat = OllamaRawChat(a.base_url, a.model or MODEL, native_tools(a.version),
+        chat = OllamaRawChat(a.base_url, a.model or MODEL, native_tools(a.version, a.guards),
                              answer_tokens=a.answer_tokens or ANSWER_TOKENS, **({"timeout": a.timeout} if a.timeout else {}))
     else:
         chat = OllamaChat(a.base_url, a.model or MODEL, think=None if a.think is None else a.think == "on",
                           answer_tokens=a.answer_tokens or ANSWER_TOKENS, json_format=not a.no_json_format,
-                          stream_cut=a.phase1, tools=native_tools(a.version) if a.native_tools else None,
+                          stream_cut=a.phase1, tools=native_tools(a.version, a.guards) if a.native_tools else None,
                           **({"timeout": a.timeout} if a.timeout else {}))
     res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan,
-                   ledger=a.ledger, hygiene=a.phase1, compact=a.phase1, feedback=a.feedback)
+                   ledger=a.ledger, hygiene=a.phase1, compact=a.phase1, feedback=a.feedback, guards=a.guards)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))
     return 0
 

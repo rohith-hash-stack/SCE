@@ -32,6 +32,9 @@ KEEP_RECENT = 6            # tool outputs kept in full, counting back from the n
 SUMMARY_LINES = {"grep": 8, "list_dir": 12, "index": 12}
 #: the non-PRISM tools summarised as index tools: R1's control and, since Phase 3, BASELINE_LSP's IDE-agent tools
 INDEX_TOOLS = ("related_code", "find_references", "semantic_search", "ast_search", "run_shell")
+#: POC 2 guards: reference lists are never cut to their first lines (`compact(whole=REFERENCE_TOOLS)`; the Phase 3 POC's
+#: fastmcp runs lost PRISM's 13th of 30 places to the 12-line summary)
+REFERENCE_TOOLS = ("find_references", "prism_find_references")
 #: reads of numbered file lines: `prism_read` (Phase 2 D2) is `read_file`'s output with a PRISM footer
 READS = ("read_file", "prism_read")
 FAILING_NAMES = 5
@@ -88,9 +91,10 @@ def _summary(tool: str, output: str, ntok) -> str | None:
     return "\n".join(lines[:n]) + f"\n(… older output of {tool}: {len(lines) - n} more lines, {ntok(output)} tokens in all, omitted)"
 
 
-def compact(history: list[dict], ntok, keep_recent: int = KEEP_RECENT) -> tuple[list[dict], dict]:
+def compact(history: list[dict], ntok, keep_recent: int = KEEP_RECENT, whole: tuple = ()) -> tuple[list[dict], dict]:
     """A compacted copy of `history` and counts of what was done. History entries are the loop's messages; tool
-    outputs carry `tool_output`, `tool`, `args` and `turn`."""
+    outputs carry `tool_output`, `tool`, `args` and `turn`. Outputs of the tools in `whole` are never summarised
+    (rule 4); the window rule still applies to them."""
     out = [dict(m) for m in history]
     idx = [i for i, m in enumerate(out) if m.get("tool_output")]
     counts = {"superseded": 0, "stale": 0, "repeated": 0, "summarised": 0}
@@ -125,7 +129,7 @@ def compact(history: list[dict], ntok, keep_recent: int = KEEP_RECENT) -> tuple[
             if k in later_keys and len(text) > SHORT_CHARS:
                 new, kind = f"(repeated: the same {tool} was run again at turn {later_keys[k]}; see below)", "repeated"
             later_keys.setdefault(k, turn)
-        if new is None and i not in recent:
+        if new is None and i not in recent and tool not in whole:
             s = _summary(tool, text, ntok)
             if s is not None:
                 new, kind = s, "summarised"
