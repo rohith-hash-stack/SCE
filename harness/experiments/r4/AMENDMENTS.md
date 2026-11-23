@@ -1889,3 +1889,71 @@ BASELINE_LSP. It is not in this POC.
 
 **Fixed for the runs:** the code commit, its `src`/`harness` trees and `poc2.json`'s sha256, pinned in
 `kaggle/r4_phase3_poc2_cell.py`.
+
+### POC 2 amendment 1: PRISM's historical references for the deletion control (decided 2026-11-23, before any POC 2 run)
+
+**The user's decisions (2026-11-23):**
+- **Tasks:** "Option A — Keep POC 2 as configured. Enable historical dependency recovery for delete-09 only. Report the
+  results descriptively, without claiming correctness improvements or using this task as evidence of general
+  deletion-recovery effectiveness."
+- **Scope:** "Deletion tasks only — Do not change rename-task behaviour."
+- **Delivery:** "Pull only — Implement historical fallback through `prism_find_references`. Do not introduce automatic
+  push notifications."
+
+**The gap:** the PRISM arms' index is rebuilt from the current tree before every PRISM call (`WorkingIndex._build`).
+Once the agent deletes a definition, PRISM's graph no longer has it, and `prism_find_references` answers "PRISM
+resolves nothing" about the deleted name.
+
+**The capability** (`src/prism/history.py`, `HistoricalGraph`):
+- **The snapshot:** at the start of a run, after the start index is built, the PRISM arms keep:
+  - that index (the builder object, which later rebuilds replace and never change);
+  - the text of every indexed file at the start.
+
+  A fingerprint (sha256 over the graph's nodes and edges and the files' hashes) is taken at capture and checked at
+  every read. A changed snapshot is an error, never an answer.
+- **The fallback:** `prism_find_references(symbol)` first asks the current graph, exactly as before. Only when the
+  symbol does not resolve there, and does resolve in the snapshot, it answers from the snapshot. The answer is
+  labelled as a historical answer, and each place's current state is given separately:
+  - **no longer present:** the place's line (followed through the edits by a line diff of the start text against the
+    current file) is gone or no longer holds the name;
+  - **still references the name (not verified):** the name is still on that line; this does not say it is broken;
+  - **confirmed broken:** the name is still there and the current code shows it cannot work: an import of the name
+    from the module that defined it while that module no longer defines it, or an undefined name in its file
+    (pyflakes), or a file that no longer parses (`ast`).
+
+  Look-alikes (other objects' uses of the name) are counted, never listed, as in the current answer. Current
+  references are what the tool's ordinary answer lists; that answer is unchanged.
+- **Scope:** built only for PRISM_LSP and PRISM_GW, only on deletion tasks (`family == "delete"`). In POC 2 that is
+  `r4s-delete-09` alone. On rename tasks nothing changes: no snapshot is built, and the tool answers exactly as
+  pre-registered.
+- **Pull only:** nothing is added to any answer unless the agent calls `prism_find_references`. No tool, prompt or
+  schema changes. The tool's description is unchanged.
+- **The gateway is unchanged.** It never reads the snapshot. On deletion tasks it still makes only the syntax check.
+- **BASELINE_LSP never gets the snapshot or anything derived from it.** It discovers and repairs dependencies with
+  its own tools, as pre-registered.
+- **No answer-key information:** the snapshot is the start-state index every PRISM arm already builds. No task field
+  (answer key, hidden patch, hidden tests, places, gold files, scoring data) is read.
+
+**Coverage, checked before implementation** (`r4s-delete-09`'s start tree; `Dependency` in `litestar/params.py`):
+- **PRISM:** 21 places, namely the definition, the `__all__` string, and 19 uses in 5 test files.
+- **jedi:** 20 references, all among PRISM's 21. PRISM's extra one is the `__all__` string.
+- **Neither:** 15 more lines with the word, which are the look-alike `litestar.di.Dependency` (a class), docstrings,
+  warning strings, and one test's `match=` text.
+- **Production code:** apart from `__all__`, no production code uses the target.
+
+**Recorded per run** (turn log `history`, run summary `history`):
+- the snapshot's capture time, size, and fingerprint time;
+- per historical read: its time, the places returned and their statuses;
+- at the end of the run, each historical place's status;
+- the run's outcome, from the scorer as before.
+
+**How it is reported, and what is not claimed:**
+- **Descriptive only:** the 6 runs (1 task × 3 seeds × 2 PRISM arms). It is not evidence of deletion-recovery
+  effectiveness, and no correctness improvement is claimed. Three reasons:
+  - `r4s-delete-09` is a control outside the go/no-go;
+  - every arm solved it in 10 of 10 Phase 2 runs;
+  - the scorer restores and replaces the 5 test files that hold 19 of its 21 places (`runner.score`, the hidden
+    patch), so the agent's repairs there never reach the score.
+- **What is reported:** how often the fallback was used, what it returned, and the places' end states.
+- **Nothing else changes:** the go/no-go, the task list and its sha256, the seeds, the turn cap, the budget, the
+  arms' prompts, and the evaluation.

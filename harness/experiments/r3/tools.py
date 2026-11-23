@@ -51,6 +51,12 @@ class ToolLayer:
         current bytes, the same path rules and caps as `read_file`/`grep`)."""
         self.wi = wi
         self.shared = shared
+        # POC 2 amendment 1: PRISM's historical snapshot (`prism.history.HistoricalGraph`), set by the runner for the
+        # PRISM arms on deletion tasks only; None everywhere else. `_view` is set only while an answer is computed from
+        # it, so that `reference_places` reads the snapshot's graph and text instead of the current ones.
+        self.history = None
+        self._view = None
+        self.last_history = None
         self._ctx_builder = None
         self._key = None
         self._tok = None
@@ -116,6 +122,7 @@ class ToolLayer:
     def call(self, tool: str, **args) -> str:
         refresh = self._sync()
         self.last_refresh = refresh
+        self.last_history = None
         try:
             body = getattr(self, "_" + tool)(**args)
         except ToolError as exc:
@@ -228,7 +235,7 @@ class ToolLayer:
     def _line_kinds(self, kinds: list[str], rel: str, line: int) -> list[str]:
         """An edge's kinds are per source, not per line: the kinds this line's own text shows (an import statement:
         `import`; an `__all__` line: `export`), else the edge's other kinds."""
-        lines = self._lines(os.path.join(self.wi.shadow, rel))
+        lines = self._src(os.path.join(self.wi.shadow, rel))
         text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
         stmt = text
         for i in range(line - 1, max(0, line - 40), -1):         # the statement a continuation line belongs to
@@ -298,8 +305,8 @@ class ToolLayer:
 
     def _def_line(self, q: str) -> int:
         """The line of a definition's `def`/`class` keyword (after its decorators)."""
-        s = self.wi.builder.symbol_table.get(q)
-        lines = self._lines(s.file)
+        s = self._bld().symbol_table.get(q)
+        lines = self._src(s.file)
         leaf = q.rsplit(".", 1)[-1]
         for i in range(s.line_range[0], min(s.line_range[1], len(lines)) + 1):
             if re.match(rf"\s*(async\s+)?(def|class)\s+{re.escape(leaf)}\b", lines[i - 1]):
@@ -314,7 +321,12 @@ class ToolLayer:
           reference graph's labelled edges, at their lines;
         - overrides in either direction.
         Grouped by file, production first; then how many uses of the same name belong to other objects."""
-        d = self.reference_places(symbol)
+        try:
+            d = self.reference_places(symbol)
+        except ToolError as exc:
+            if self.history is None:
+                raise
+            return self._historical_references(symbol, exc)        # POC 2 amendment 1: pull only, deletions only
         q, sym, leaf, rows, possible, truncated = (d["target"], d["sym"], d["leaf"], d["rows"], d["possible"],
                                                    d["truncated"])
         root, own = self.wi.shadow, d["file"]
@@ -367,8 +379,8 @@ class ToolLayer:
         `target` (the qualified name), `leaf`, `file` / `def_line` (the definition), `rows` ({(rel, line, byte col):
         (label, enclosing)}, the definition included) and `possible` (the same, for calls matched only by name)."""
         from prism.graph.references import references_to
-        b, root = self.wi.builder, self.wi.shadow
-        q = self._find_target(symbol)
+        b, root = self._bld(), self.wi.shadow
+        q = self._view.resolve(symbol) if self._view is not None else self._find_target(symbol)
         sym = b.symbol_table.get(q)
         leaf = q.rsplit(".", 1)[-1]
         rows = {}                                                  # (rel, line, col) -> (label, enclosing)
@@ -380,7 +392,7 @@ class ToolLayer:
             if rel is None or line is None:
                 return
             if col is None:
-                lines = self._lines(os.path.join(root, rel))
+                lines = self._src(os.path.join(root, rel))
                 text = lines[line - 1] if 0 < line <= len(lines) else ""
                 m = re.search(rf"\b{re.escape(leaf)}\b", text)
                 col = len(text[:m.start()].encode()) if m else 0
@@ -424,6 +436,84 @@ class ToolLayer:
         rows = {k: v for k, v in rows.items() if k not in possible}
         return {"target": q, "sym": sym, "leaf": leaf, "file": own, "def_line": self._def_line(q), "rows": rows,
                 "possible": possible, "truncated": truncated}
+
+    # ------------------------------------------------------------------ POC 2 amendment 1: historical references
+    def _bld(self):
+        return self._view.builder if self._view is not None else self.wi.builder
+
+    def _src(self, path: str) -> list[str]:
+        """A file's lines: the snapshot's while an answer comes from it, else the current shadow's."""
+        return self._view.lines_at(path) if self._view is not None else self._lines(path)
+
+    def _historical_references(self, symbol: str, current_error: ToolError) -> str:
+        """`prism_find_references` about a definition the current graph no longer has: the snapshot's places at the
+        start of the task, each with its current state (`prism.history`). Raises the current error if the snapshot
+        does not know the symbol either."""
+        import time
+        from prism.history import HistoryError
+        t0 = time.time()
+        snap = self.history
+        snap.verify()
+        self._view = snap
+        try:
+            d = self.reference_places(symbol)
+        except (HistoryError, ToolError):
+            raise current_error from None
+        finally:
+            self._view = None
+        q, sym, leaf, rows = d["target"], d["sym"], d["leaf"], d["rows"]
+        places = {(f, line) for (f, line, _c) in rows}
+        work = self.shared.work if self.shared is not None else self.wi.workdir
+        st = snap.status(places | {(f, line) for (f, line, _c) in d["possible"]}, leaf, d["file"], work)
+        counts = {k: sum(1 for (f, ln, _c) in rows if st[(f, ln)]["status"] == k) for k in
+                  ("gone", "still_references", "confirmed_broken")}
+        by_file: dict[str, list] = {}
+        for (f, line, col), (label, where) in rows.items():
+            by_file.setdefault(f, []).append((line, col, label, where))
+        files = sorted(by_file, key=lambda f: (self._is_test(f), f))
+        n = len(rows) - 1
+        out = [f"`{q}` is not in PRISM's current graph (no current definition resolves `{symbol}`). From PRISM's "
+               f"snapshot of the code at the start of the task: it was a {sym.kind} at {d['file']}:{d['def_line']}, "
+               f"with {n} reference(s) in {len([f for f in files if any(x[2] != 'definition' for x in by_file[f])])} "
+               f"file(s). These are historical references: where the code used it at the start, not a list of "
+               f"broken code.",
+               f"Their state now (checked against the current files; line numbers are now -> at the start): "
+               f"{counts['confirmed_broken']} confirmed broken, {counts['still_references']} still use the name "
+               f"(not verified as broken), {counts['gone']} no longer present."]
+        tag = {"gone": "no longer present", "still_references": "still uses the name",
+               "confirmed_broken": "confirmed broken"}
+        shown = 0
+        for f in files:
+            out.append(f + (" [test]" if self._is_test(f) else ""))
+            start = snap.lines_at(f)
+            for line, col, label, where in sorted(by_file[f]):
+                if shown >= SEARCH_MAX_LINES:
+                    break
+                s_ = st[(f, line)]
+                lab = self._ref_label(label.split(" ")[0]) + label[len(label.split(" ")[0]):]
+                text = start[line - 1].strip() if 0 < line <= len(start) else ""
+                at = f"{s_['now']} -> {line}" if s_["now"] else f"- -> {line}"
+                why = f" ({s_['why']})" if s_["status"] == "confirmed_broken" else ""
+                out.append(f"  {at} [{tag[s_['status']]}{why}] [{lab}] in `{where}`: {text}")
+                shown += 1
+        if shown < n + 1:
+            out.append(f"... ({n + 1 - shown} more)")
+        if d["possible"]:
+            out.append(f"Possible references at the start ({len(d['possible'])}): calls of `{leaf}` on a receiver "
+                       f"whose type PRISM could not determine; check each:")
+            for (f, line, col), (_l, where) in sorted(d["possible"].items()):
+                s_ = st[(f, line)]
+                out.append(f"  {f}:{line}:{col + 1} [{tag[s_['status']]}] in `{where}`")
+        other = snap.lookalikes(leaf, places | {(f, ln) for (f, ln, _c) in d["possible"]})
+        if other:
+            out.append(f"Not references: at the start, {other[0]} other use(s) of the name `{leaf}` in {other[1]} "
+                       f"file(s) belonged to other objects (not listed).")
+        snap.stats["reads"] += 1
+        snap.queried.setdefault(q, {"file": d["file"], "leaf": leaf, "places": sorted(places)})
+        self.last_history = {"target": q, "places": len(places), "references": n, "possible": len(d["possible"]),
+                             **{k: sum(1 for pl in places if st[pl]["status"] == k) for k in counts},
+                             "read_s": round(time.time() - t0, 3)}
+        return "\n".join(out)
 
     def _other_uses(self, leaf: str, listed: set) -> tuple[int, int] | None:
         """How many lines of Python files use the word `leaf` without being a listed reference, and in how many files."""

@@ -71,3 +71,26 @@ def test_gateway_effectiveness(tmp_path):
     assert g["per_task"]["p3-hidden-21"] == {"runs": 3, "solved": 2, "interventions": 15, "contributed": 2 + 2 + 1 + 2}
     assert g["runs_acted_on_guidance"] == 15 and g["solve_rate_runs_acted_on_guidance"] == 11 / 15
     assert "loop_refused_per_run" in rep["process"]["BASELINE_LSP"]
+
+
+def test_historical_references_section(tmp_path):
+    rep = _doc(tmp_path, {"BASELINE_LSP": {}, "PRISM_LSP": {}, "PRISM_GW": {}}, lambda *_: [])
+    assert "historical_references" not in rep                                  # no snapshot record: no section
+    d = tmp_path / "poc2"
+    for arm, given in (("BASELINE_LSP", False), ("PRISM_LSP", True)):
+        p = d / f"r4s-delete-08__{arm}__201.score.json"
+        doc = json.loads(p.read_text())
+        doc["history"] = {"given_to_agent": given, "fingerprint_ok": True,
+                          "snapshot": {"capture_s": 0.01, "reads": int(given)},
+                          "end_state": {"m.f": {"asked": given, "places": 21, "gone": 3, "still_references": 18,
+                                                "confirmed_broken": 0, "unresolved": ["a.py:1"]}}}
+        p.write_text(json.dumps(doc))
+    with open(d / "r4s-delete-08__PRISM_LSP__201.jsonl", "w") as fh:
+        fh.write(json.dumps({"turn": 1, "tool": "prism_find_references",
+                             "history": {"target": "m.f", "places": 21, "gone": 1}}) + "\n")
+    rep = R.analyse(str(d), str(tmp_path / "t.json"))
+    h = rep["historical_references"]
+    assert set(h) == {"BASELINE_LSP", "PRISM_LSP"}
+    assert h["BASELINE_LSP"]["given_to_agent"] == 0 and h["PRISM_LSP"]["runs_with_a_historical_answer"] == 1
+    run = h["PRISM_LSP"]["per_run"][0]
+    assert run["first_answer"]["target"] == "m.f" and "unresolved" not in run["end_state"]["m.f"]

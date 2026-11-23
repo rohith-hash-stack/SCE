@@ -228,7 +228,10 @@ def load_runs(results: str, tasks: dict, seeds: list[int] | None) -> list[dict]:
                      "review": s.get("review"),
                      # POC 2: the Layer 1 loop breaker (every arm) and the gateway's record (PRISM_GW)
                      "loop_refused": sum(1 for t in turns if t.get("loop_refused")),
-                     "gateway": s.get("gateway")})
+                     "gateway": s.get("gateway"),
+                     # POC 2 amendment 1: the historical snapshot's record, and its answers in the turn log
+                     "history": s.get("history"),
+                     "history_reads": [t["history"] for t in turns if t.get("history")]})
     return rows
 
 
@@ -402,6 +405,8 @@ def analyse(results: str, tasks_path: str, seeds: list[int] | None = None, root:
                                    go_arms=design.get("go_arms", ("PRISM_LSP", "PRISM_ONLY")))
     if any(r["gateway"] for r in rows):
         rep["gateway_effectiveness"] = gateway_effectiveness(rows)
+    if any(r.get("history") for r in rows):
+        rep["historical_references"] = historical_references(rows)
     rep["turn_efficiency"] = turn_efficiency(rows, per_task, arms, design["comparisons"])
     rep["code_review"] = code_review(rows, arms, design["comparisons"] + design["descriptive"])
     return rep
@@ -597,6 +602,31 @@ def gateway_effectiveness(rows: list[dict]) -> dict:
                            "contributed": sum(1 for r in xs for iv in r["gateway"].get("log", []) if contributed(r, iv))}
                      for tid in sorted({r["task"] for r in rs}) for xs in [[r for r in rs if r["task"] == tid]]},
     }
+
+
+def historical_references(rows: list[dict]) -> dict:
+    """POC 2 amendment 1, descriptive only (no test, no claim of correctness): per arm, over the runs with a snapshot
+    record (deletion tasks), what PRISM's snapshot cost, how often the agent got a historical answer and what it said,
+    the target's start-state places at the end of the run, and the scorer's outcome."""
+    out = {}
+    for arm in sorted({r["arm"] for r in rows if r.get("history")}):
+        rs = [r for r in rows if r["arm"] == arm and r.get("history")]
+        runs = []
+        for r in rs:
+            h = r["history"]
+            end = h.get("end_state") or {}
+            runs.append({
+                "run": r["run"], "given_to_agent": h.get("given_to_agent"), "fingerprint_ok": h.get("fingerprint_ok"),
+                "snapshot": {k: (h.get("snapshot") or {}).get(k) for k in ("capture_s", "fingerprint_s", "verify_s",
+                                                                        "files", "bytes", "nodes", "edges", "reads")},
+                "historical_answers": len(r["history_reads"]),
+                "first_answer": r["history_reads"][0] if r["history_reads"] else None,
+                "end_state": {q: {k: v for k, v in e.items() if k != "unresolved"} for q, e in end.items()},
+                "solved": r["solved"], "score": r["score"]})
+        out[arm] = {"runs": len(rs), "given_to_agent": sum(1 for x in runs if x["given_to_agent"]),
+                    "runs_with_a_historical_answer": sum(1 for x in runs if x["historical_answers"]),
+                    "solved": sum(1 for x in runs if x["solved"]), "per_run": runs}
+    return out
 
 
 def _mean_per_tool(rs: list[dict], key: str) -> dict:

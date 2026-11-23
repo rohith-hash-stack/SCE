@@ -228,6 +228,53 @@ def _restore(work: str, tree: str, files: list[str]) -> None:
             os.remove(os.path.join(work, f))
 
 
+#: POC 2 amendment 1: the arms whose `prism_find_references` falls back to PRISM's snapshot on deletion tasks, and the
+#: arms whose end state is measured against it
+HISTORY_ARMS = ("PRISM_LSP", "PRISM_GW")
+HISTORY_MEASURED = ("BASELINE_LSP", "PRISM_LSP", "PRISM_GW")
+
+
+def history_record(snapshot, task: dict, work: str, given: bool) -> dict:
+    """The run's historical-snapshot record (AMENDMENTS "POC 2 amendment 1"): the snapshot's costs, the historical
+    answers given, and, at the end of the run, the state of each start-state place of the task's target (the scorer's
+    `must_be_absent`, read here only to measure, after the run) and of every target the agent asked about."""
+    out = {"given_to_agent": given, "snapshot": dict(snapshot.stats), "fingerprint_ok": True}
+    try:
+        snapshot.verify()
+    except Exception as exc:
+        out["fingerprint_ok"] = False
+        out["error"] = str(exc)
+        return out
+    targets = dict(snapshot.queried)
+    absent = task.get("must_be_absent")
+    if absent and "::" in absent:
+        f, name = absent.split("::", 1)
+        try:
+            q = snapshot.resolve(f"{f.removesuffix('.py').replace('/', '.')}.{name}")
+        except Exception:
+            q = None
+        if q is not None and q not in targets:
+            b = snapshot.builder
+            from prism.graph.references import references_to
+            rel = lambda p: os.path.relpath(p, snapshot.root) if p and os.path.isabs(p) else p
+            places = {(rel(b.symbol_table.get(q).file), snapshot.def_line(q))}
+            for src, _d, e in b.graph.in_edges(q, data=True):
+                if e.get("relation") in ("CALLS", "INSTANTIATES") and (ss := b.symbol_table.get(src)) is not None:
+                    places |= {(rel(ss.file), ln) for ln, _c in (e.get("sites") or [(ss.line_range[0], 0)])}
+            for r in references_to(b, q):
+                places |= {(rel(r["file"]), ln) for ln in r["lines"]}
+            targets[q] = {"file": rel(b.symbol_table.get(q).file), "leaf": name, "places": sorted(places)}
+    out["end_state"] = {}
+    for q, t in targets.items():
+        st = snapshot.status(t["places"], t["leaf"], t["file"], work)
+        counts = {k: sum(1 for v in st.values() if v["status"] == k) for k in ("gone", "still_references",
+                                                                             "confirmed_broken")}
+        out["end_state"][q] = {"asked": q in snapshot.queried, "places": len(st), **counts,
+                               "unresolved": sorted(f"{f}:{ln}" for (f, ln), v in st.items() if v["status"] != "gone")}
+    out["snapshot"] = dict(snapshot.stats)
+    return out
+
+
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
              score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False,
              hygiene: bool = False, compact: bool = False, feedback: bool = False, guards: bool = False) -> dict:
@@ -275,6 +322,16 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
             from harness.experiments.r4.progress_ledger import ProgressLedger
             progress = ProgressLedger(turn_cap, gate, task, shared)
         agent_task = {**task, "prompt": block + task["prompt"]} if injected is not None else task
+        # POC 2 amendment 1: PRISM's historical snapshot of the start index, on deletion tasks only. It is built in
+        # every arm, so that each run's end state is measured the same way, but only the PRISM arms' tool layer gets it
+        # (`prism_find_references`' fallback); BASELINE_LSP's never does, and the gateway never reads it.
+        snapshot = None
+        if task.get("family") == "delete" and version in HISTORY_MEASURED:
+            stage = "snapshot"
+            from prism.history import HistoricalGraph
+            snapshot = HistoricalGraph(wi.builder, wi.shadow)
+            if version in HISTORY_ARMS:
+                layer.history = snapshot
         gateway = None
         if version == "PRISM_GW":                         # POC 2: PRISM's gateway, built on the start state
             stage = "gateway"
@@ -285,6 +342,9 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
                            gate=gate, ledger=progress, record_full=record_full, hygiene=hygiene,
                            compact=compact, feedback=feedback, guards=guards, gateway=gateway).run(out)
         result = {**summary, **({"injected": injected} if injected is not None else {})}
+        if snapshot is not None:                          # measured after the run; never shown to the agent
+            stage = "history"
+            result["history"] = history_record(snapshot, task, work, given=layer.history is snapshot)
         if score_run:
             stage = "review"
             # the code-review score (`r4/code_review.py`, descriptive): before `score`, which applies the hidden tests

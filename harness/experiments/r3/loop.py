@@ -619,6 +619,9 @@ class AgentRun:
         if out.startswith("⚠️"):
             notice = out.split("\n\n", 1)[0]
             rec["notice"], rec["notice_tokens"] = notice, self.n(notice)
+        h = getattr(self.index_tools, "last_history", None)
+        if h:                                             # POC 2 amendment 1: an answer from PRISM's snapshot
+            rec["history"] = h
         return rec
 
     # ------------------------------------------------------------------ the run
