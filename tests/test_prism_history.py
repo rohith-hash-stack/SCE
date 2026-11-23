@@ -237,7 +237,7 @@ def test_post_run_evaluation_in_its_own_process(tmp_path):
     es = rec["end_state"]["pkg.params.Dependency"]
     assert es["gone"] >= 3 and es["confirmed_broken"] >= 1                             # def + late.py; use.py:1
     assert "pkg/use.py:1" in es["unresolved"] and not any(u.startswith("pkg/late.py") for u in es["unresolved"])
-    assert rec["cost"]["total_s"] >= 0 and rec["cost"]["max_rss_mb"] > 0
+    assert rec["cost"]["total_s"] >= 0 and rec["cost"]["peak_mb"] > 0
     assert open(os.path.join(work, "pkg/late.py")).read().endswith("return None\n")       # the run's files untouched
     json.dumps(rec)
 

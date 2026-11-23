@@ -23,12 +23,23 @@ from __future__ import annotations
 
 import json
 import os
-import resource
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+
+
+def _own_peak_mb() -> int | None:
+    """This process's own peak resident memory (`VmHWM`, which starts again at exec). Not `ru_maxrss`: on Linux a
+    child started by fork and exec keeps its parent's peak there, so it would report the run's memory, not its own."""
+    try:
+        for ln in open("/proc/self/status"):
+            if ln.startswith("VmHWM:"):
+                return int(ln.split()[1]) // 1024
+    except OSError:
+        pass
+    return None
 
 
 def _extract(clone: str, tree: str, dest: str) -> None:
@@ -88,7 +99,7 @@ def evaluate(task: dict, clone: str, start_tree: str, final_tree: str) -> dict:
             out["error"] = "the task's target is not a definition of the start index"
         out["cost"] = {"extract_s": round(t1 - t0, 2), "index_s": round(t2 - t1, 2),
                        "total_s": round(time.time() - t0, 2),
-                       "max_rss_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024}
+                       "peak_mb": _own_peak_mb()}
         return out
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
