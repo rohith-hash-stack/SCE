@@ -14,7 +14,8 @@ PHASE3_STAGE = "poc"       # "poc" (45 runs, go/no-go only) or "confirmatory" (2
 # The Phase 1
 # harness: native tool calling read by the harness (--raw-tools: devstral's template rendered and its [TOOL_CALLS]
 # parsed by r3/mistral_raw.py, so no reply is discarded unseen), history hygiene + compaction (--phase1), ledger,
-# gate, turn cap 28, budget 300,000 (every prompt token counts). About 9 GPU-hours per seed (wave 1: ~9 min a run).
+# gate, turn cap 60, budget 1,000,000 (every prompt token counts; Phase 3 amendment 3). A run edits 15-30 places,
+# so expect roughly 15-25 minutes a run: about 4-6 GPU-hours per POC shard (15 runs).
 #
 # SEED SHARDS (as Phase 2's): one cell run = one shard = one seed's runs (every task x 3 arms), results in
 # reports/r4/phase3_poc_seed<SEED>. Shards can run in parallel in different Kaggle sessions: each pushes only its own
