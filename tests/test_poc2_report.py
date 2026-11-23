@@ -77,13 +77,14 @@ def test_historical_references_section(tmp_path):
     rep = _doc(tmp_path, {"BASELINE_LSP": {}, "PRISM_LSP": {}, "PRISM_GW": {}}, lambda *_: [])
     assert "historical_references" not in rep                                  # no snapshot record: no section
     d = tmp_path / "poc2"
-    for arm, given in (("BASELINE_LSP", False), ("PRISM_LSP", True)):
+    end = {"m.f": {"places": 21, "gone": 3, "still_references": 18, "confirmed_broken": 0, "unresolved": ["a.py:1"]}}
+    for arm in ("BASELINE_LSP", "PRISM_LSP"):
         p = d / f"r4s-delete-08__{arm}__201.score.json"
         doc = json.loads(p.read_text())
-        doc["history"] = {"given_to_agent": given, "fingerprint_ok": True,
-                          "snapshot": {"capture_s": 0.01, "reads": int(given)},
-                          "end_state": {"m.f": {"asked": given, "places": 21, "gone": 3, "still_references": 18,
-                                                "confirmed_broken": 0, "unresolved": ["a.py:1"]}}}
+        doc["history_eval"] = {"end_state": end, "cost": {"total_s": 40.0}}            # every arm: the evaluation
+        if arm == "PRISM_LSP":                                                         # the PRISM arm: its snapshot
+            doc["history"] = {"given_to_agent": True, "fingerprint_ok": True,
+                              "snapshot": {"capture_s": 0.01, "reads": 1}, "asked": ["m.f"]}
         p.write_text(json.dumps(doc))
     with open(d / "r4s-delete-08__PRISM_LSP__201.jsonl", "w") as fh:
         fh.write(json.dumps({"turn": 1, "tool": "prism_find_references",
@@ -94,3 +95,5 @@ def test_historical_references_section(tmp_path):
     assert h["BASELINE_LSP"]["given_to_agent"] == 0 and h["PRISM_LSP"]["runs_with_a_historical_answer"] == 1
     run = h["PRISM_LSP"]["per_run"][0]
     assert run["first_answer"]["target"] == "m.f" and "unresolved" not in run["end_state"]["m.f"]
+    base = h["BASELINE_LSP"]["per_run"][0]
+    assert base["snapshot"] is None and base["given_to_agent"] is False and base["end_state"]["m.f"]["gone"] == 3

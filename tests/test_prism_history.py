@@ -166,14 +166,17 @@ def test_without_a_snapshot_nothing_changes(layer):
 
 
 # ---------------------------------------------------------------------------------------------- arm isolation
-def test_runner_gives_the_snapshot_to_the_prism_arms_only():
+def test_runner_constructs_the_snapshot_in_the_prism_arms_only():
     from harness.experiments.r3 import runner as R
     assert R.HISTORY_ARMS == ("PRISM_LSP", "PRISM_GW")
     assert "BASELINE_LSP" not in R.HISTORY_ARMS and "BASELINE_LSP" in R.HISTORY_MEASURED
     src = open(R.__file__).read()
-    # built only on deletion tasks; attached to the tool layer only for HISTORY_ARMS
-    assert 'task.get("family") == "delete" and version in HISTORY_MEASURED' in src
-    assert "if version in HISTORY_ARMS:\n                layer.history = snapshot" in src
+    run_task = src[src.index("def run_task("):src.index("def main(")]
+    # one construction site, guarded by the PRISM arms and deletion tasks; the evaluation is a separate process
+    assert run_task.count("HistoricalGraph(") == 1
+    assert 'if task.get("family") == "delete" and version in HISTORY_ARMS:' in run_task
+    assert "version in HISTORY_MEASURED" in run_task and "history_eval(task, clone, start_tree, final_tree)" in run_task
+    assert run_task.index("final_tree = snapshot_tree(work)") < run_task.index('result["review"] = review(')
 
 
 def test_prompts_and_tools_are_unchanged():
@@ -211,14 +214,45 @@ def test_rename_task_behaviour_is_unchanged_without_a_snapshot(layer):
     assert out.startswith("error:")
 
 
-def test_history_record_end_state(layer):
+def _git(work, *args):
+    return subprocess.run(["git", "-C", work, *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_post_run_evaluation_in_its_own_process(tmp_path):
+    """The end state comes from a separate process given only two git trees: the start state and the final one."""
+    from harness.experiments.r3.runner import snapshot_tree
+    from harness.experiments.r4.history_eval import run as history_eval
+    work = str(tmp_path / "work")
+    for p, text in FILES.items():
+        os.makedirs(os.path.dirname(os.path.join(work, p)), exist_ok=True)
+        open(os.path.join(work, p), "w").write(text)
+    for cmd in (["init", "-q"], ["add", "-A"], ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "x"]):
+        subprocess.run(["git", *cmd], cwd=work, check=True)
+    start = snapshot_tree(work)
+    _edit(work, "pkg/params.py", DEF, "")
+    _edit(work, "pkg/late.py", "    from pkg.params import Dependency\n    return Dependency()\n", "    return None\n")
+    final = snapshot_tree(work)
+    rec = history_eval({"must_be_absent": "pkg/params.py::Dependency"}, work, start, final)
+    assert "error" not in rec, rec
+    es = rec["end_state"]["pkg.params.Dependency"]
+    assert es["gone"] >= 3 and es["confirmed_broken"] >= 1                             # def + late.py; use.py:1
+    assert "pkg/use.py:1" in es["unresolved"] and not any(u.startswith("pkg/late.py") for u in es["unresolved"])
+    assert rec["cost"]["total_s"] >= 0 and rec["cost"]["max_rss_mb"] > 0
+    assert open(os.path.join(work, "pkg/late.py")).read().endswith("return None\n")       # the run's files untouched
+    json.dumps(rec)
+
+
+def test_post_run_evaluation_failure_is_recorded_not_fatal(tmp_path):
+    from harness.experiments.r4.history_eval import run as history_eval
+    rec = history_eval({"must_be_absent": "a.py::f"}, str(tmp_path), "0" * 40, "0" * 40)
+    assert "error" in rec
+
+
+def test_in_run_record_has_no_end_state(layer):
     from harness.experiments.r3.runner import history_record
     lay, _, work = layer
     _edit(work, "pkg/params.py", DEF, "")
-    _edit(work, "pkg/late.py", "    from pkg.params import Dependency\n    return Dependency()\n", "    return None\n")
-    rec = history_record(lay.history, {"must_be_absent": "pkg/params.py::Dependency"}, work, given=True)
-    assert rec["given_to_agent"] and rec["fingerprint_ok"]
-    es = rec["end_state"]["pkg.params.Dependency"]
-    assert es["asked"] is False and es["gone"] >= 3                                    # def + both late.py lines
-    assert "pkg/use.py:1" in es["unresolved"] and not any(u.startswith("pkg/late.py") for u in es["unresolved"])
-    json.dumps(rec)
+    lay.call("prism_find_references", symbol="pkg.params.Dependency")
+    rec = history_record(lay.history)
+    assert rec["given_to_agent"] and rec["fingerprint_ok"] and rec["asked"] == ["pkg.params.Dependency"]
+    assert "end_state" not in rec and rec["snapshot"]["reads"] == 1

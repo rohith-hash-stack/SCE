@@ -1957,3 +1957,17 @@ resolves nothing" about the deleted name.
 - **What is reported:** how often the fallback was used, what it returned, and the places' end states.
 - **Nothing else changes:** the go/no-go, the task list and its sha256, the seeds, the turn cap, the budget, the
   arms' prompts, and the evaluation.
+
+**Correction (the user, 2026-11-23, before any POC 2 run):** "BASELINE_LSP must not construct or retain the
+historical dependency snapshot, even for end-state measurement."
+- **The snapshot:** constructed only in PRISM_LSP and PRISM_GW runs (`runner.HISTORY_ARMS`), on deletion tasks. It is
+  released when the agent's run ends. BASELINE_LSP's run never constructs or holds one.
+- **The end-state measurement** ("at the end of the run, each historical place's status" above) is a separate process
+  after the run (`r4/history_eval.py`), the same for all three arms:
+  - its inputs are only two git trees: the run's start state, and the agent's tree when the run ended (captured before
+    the review and the scorer change it);
+  - it builds PRISM's start index in its own process, finds the target (`must_be_absent`, read only there) and its
+    start-state places, and gives each place's state in the final tree;
+  - its record (`history_eval` in the run's score file) is written after the run, and no agent ever sees it.
+- **The PRISM arms' in-run record** (`history`) keeps only the snapshot's costs, its fingerprint check, and the
+  targets the agent asked about.
