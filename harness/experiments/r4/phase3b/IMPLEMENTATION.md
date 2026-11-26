@@ -113,6 +113,10 @@ them; that pass was discarded.
 
 **All the outputs:** `phase3b/verification/`, as `test*.json`.
 
+**The full regression suite** (`pytest tests`, on `f5b379ec`): **3562 passed, 62 skipped, 16 xfailed, 1 xpassed, 0
+failed**, in 1 h 46 min. The xpass is the Django feature-mask parity test, a known intermittent, non-strict xfail
+that predates Phase 3b.
+
 ## 4. The offline edit-fix replay
 
 **Inputs:**
