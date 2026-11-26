@@ -27,7 +27,8 @@ import tempfile
 
 from harness.experiments.r3.dryrun import Script, edits_for
 
-ARMS = ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP", "PRISM_GW")
+ARMS = ("BASELINE", "PRISM", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP", "PRISM_GW", "PRISM_GW_C",
+        "PRISM_GW_E")
 
 
 def gold_contents(clone: str, task: dict, patch: str) -> dict[str, tuple[str | None, str | None]]:
@@ -63,7 +64,7 @@ def gold_calls(task: dict, contents: dict, arm: str) -> list[dict]:
                   {"tool": "semantic_search", "args": {"query": q.rsplit('.', 1)[-1].replace("_", " ")}},
                   {"tool": "ast_search", "args": {"pattern": f"$X.{q.rsplit('.', 1)[-1]}($$$A)"}},
                   {"tool": "run_shell", "args": {"command": f"git log --oneline -3 -- {f} | cat"}}]
-    elif arm in ("PRISM", "INJECTED", "PRISM_LSP", "PRISM_GW"):
+    elif arm in ("PRISM", "INJECTED", "PRISM_LSP", "PRISM_GW", "PRISM_GW_C", "PRISM_GW_E"):
         calls.append({"tool": "prism_change_context", "args": {"symbol": task["anchor_qname"]}})
     for path, (old, new) in sorted(contents.items()):
         calls += [{"tool": "edit_file", "args": e} for e in edits_for(old, new, path)]
@@ -83,6 +84,8 @@ def main(argv=None) -> int:
     p.add_argument("--arms", nargs="*", default=list(ARMS))
     p.add_argument("--turn-cap", type=int, default=60)
     p.add_argument("--guards", action="store_true", help="POC 2: the Layer 1 guards, every arm")
+    p.add_argument("--empty-every-arm", action="store_true",
+                   help="Phase 3b: the empty script in every arm (default: one baseline arm only)")
     a = p.parse_args(argv)
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
     from harness.experiments.r3.runner import run_task
@@ -94,13 +97,17 @@ def main(argv=None) -> int:
             continue
         clone = os.path.abspath(clones[t["repo"]])
         contents = gold_contents(clone, t, open(os.path.join(a.gold_dir, f"{t['id']}.patch")).read())
-        runs = [(arm, "gold", 42) for arm in a.arms] + [(b, "empty", 43) for b in ("BASELINE", "BASELINE_LSP") if b in a.arms][:1]
+        runs = [(arm, "gold", 42) for arm in a.arms] + ([(arm, "empty", 43) for arm in a.arms] if a.empty_every_arm else
+                                                       [(b, "empty", 43) for b in ("BASELINE", "BASELINE_LSP")
+                                                        if b in a.arms][:1])
         for arm, kind, seed in runs:
             model = Script(gold_calls(t, contents, arm) if kind == "gold" else [])
             res = run_task(t, arm, seed, clone, a.out, a.cache, model, a.turn_cap, ledger=True, feedback=True,
                            guards=a.guards)
-            ok = res.get("outcome") == "resolved" if kind == "gold" else res.get("outcome") in ("unresolved",
-                                                                                                 "stuck_done")
+            # the empty script must not resolve: the done gate rejects it (`stuck_done`), or, in an arm with PRISM's
+            # gateway (Phase 3b, every arm), the gateway blocks `done` until the turn cap (`stuck`)
+            empty_ok = ("unresolved", "stuck_done", "stuck") if a.empty_every_arm else ("unresolved", "stuck_done")
+            ok = res.get("outcome") == "resolved" if kind == "gold" else res.get("outcome") in empty_ok
             bad += not ok
             sc = res.get("score") or {}
             first = None

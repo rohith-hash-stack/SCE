@@ -159,8 +159,23 @@ PARAM_SCHEMAS = {
 # injected up front, and the same tools). BASELINE has `related_code` instead.
 # PRISM_ONLY (Phase 2 D3; support only, run only under its own pre-registration): PRISM's tools with `prism_search`
 # and `prism_read` in place of `grep` and `read_file`, to test whether PRISM can replace standard search.
-PRISM_ARMS = ("PRISM", "INJECTED", "PRISM_ONLY", "PRISM_LSP", "PRISM_GW")
-ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP", "PRISM_GW")
+PRISM_ARMS = ("PRISM", "INJECTED", "PRISM_ONLY", "PRISM_LSP", "PRISM_GW", "PRISM_GW_C", "PRISM_GW_E")
+ARMS = ("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP", "PRISM_GW", "PRISM_GW_C",
+        "PRISM_GW_E")
+#: Phase 3b's two variants of PRISM_GW (AMENDMENTS "Phase 3b"). Each is PRISM_GW with one switch on, and is PRISM_GW
+#: everywhere else: the same prompt, tools and flags (`base_version`).
+#: - PRISM_GW_C (arm C): after a refused `edit_file`, the gateway adds the exact replacement for the nearest pending
+#:   place in that file (`Gateway(exact_fix=True)`).
+#: - PRISM_GW_E (arm E): PRISM's printed source lines keep their own indentation (`ToolLayer.keep_indent`,
+#:   `Gateway(keep_indent=True)`).
+GW_VARIANTS = {"PRISM_GW_C": "PRISM_GW", "PRISM_GW_E": "PRISM_GW"}
+GW_ARMS = ("PRISM_GW", "PRISM_GW_C", "PRISM_GW_E")
+PHASE3B_ARMS = ("PRISM_GW", "PRISM_GW_C", "PRISM_GW_E", "BASELINE_LSP")
+
+
+def base_version(version: str) -> str:
+    """The arm whose prompt and tools a version has (a Phase 3b variant: PRISM_GW's)."""
+    return GW_VARIANTS.get(version, version)
 #: Phase 3's arms (the user's decision, 2026-11-22). BASELINE_LSP: the shared tools and an IDE agent's tools (a
 #: language server's references, semantic search, ast-grep, a read-only shell). PRISM_LSP: the shared tools and all of
 #: PRISM's tools, `prism_find_references` among them (not the language server's). PRISM_ONLY: PRISM's tools, with
@@ -174,6 +189,7 @@ REMOVED_SHARED = {"PRISM_ONLY": ("read_file", "grep")}
 
 
 def index_doc(version: str) -> dict:
+    version = base_version(version)
     if version == "BASELINE_LSP":
         return dict(LSP_DOC)
     if version in ("PRISM_LSP", "PRISM_ONLY", "PRISM_GW"):
@@ -182,6 +198,7 @@ def index_doc(version: str) -> dict:
 
 
 def shared_doc(version: str, guards: bool = False) -> dict:
+    version = base_version(version)
     docs = {k: v for k, v in SHARED_DOC.items() if k not in REMOVED_SHARED.get(version, ())}
     if guards and "edit_file" in docs:
         docs["edit_file"] = GUARDED_EDIT_DOC

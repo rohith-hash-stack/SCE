@@ -49,6 +49,7 @@ from __future__ import annotations
 import ast
 import difflib
 import io
+import json
 import os
 import re
 import subprocess
@@ -152,10 +153,17 @@ def _simulate_edit(text: str, old: str, new: str, occurrence) -> str | None:
 
 
 class Gateway:
-    def __init__(self, root: str, prompt: str, refs, is_test=None):
+    def __init__(self, root: str, prompt: str, refs, is_test=None, exact_fix: bool = False, keep_indent: bool = False):
         """`root`: the agent's working tree. `refs(symbol)`: PRISM's places of a symbol (see the module doc); it may
-        raise when the symbol does not resolve."""
+        raise when the symbol does not resolve.
+
+        Phase 3b's two switches (AMENDMENTS "Phase 3b"), each off by default, never both on in one arm:
+        - `exact_fix` (arm C): after a refused `edit_file`, an `exact_fix` note (`_exact_fix`). It changes no file and
+          no decision; it is added after everything else the gateway says.
+        - `keep_indent` (arm E): the source lines the gateway quotes keep their own leading whitespace (`_shown`)."""
         self.root, self.refs = os.path.abspath(root), refs
+        self.exact_fix, self.keep_indent = exact_fix, keep_indent
+        self.new_name = None                         # arm C: the name the task renames the target to
         self.is_test = is_test or (lambda f: "test" in f.split("/")[-1] or f.startswith(("tests/", "test/")))
         self.interventions: list[dict] = []
         self.calls = 0                               # tool calls seen (the gateway's clock)
@@ -190,6 +198,9 @@ class Gateway:
             return
         self.error = None
         self.target, self.leaf = d["target"], d["leaf"]
+        if self.exact_fix:                           # "... to `NEW`.": the same split `infer_target` uses
+            m = re.match(r"([A-Za-z_]\w*)`", prompt.split(" to `", 1)[1]) if " to `" in prompt else None
+            self.new_name = m.group(1) if m else None
         places: dict[tuple[str, int], int] = {}
         for (f, line, _col) in d["rows"]:
             places[(f, line)] = places.get((f, line), 0) + 1
@@ -258,11 +269,19 @@ class Gateway:
                 moved[new] = e
         self.lines[f] = moved
 
+    def _shown(self, raw: str, cap: int = 100) -> str:
+        """A quoted source line: stripped and cut at `cap` (as before), with its own leading whitespace put back in
+        arm E (`keep_indent`)."""
+        text = raw.strip()[:cap]
+        if self.keep_indent and text:
+            return raw[:len(raw) - len(raw.lstrip())] + text
+        return text
+
     def _listing(self, items: list[tuple[str, int]]) -> str:
         out = []
         for f, line in items[:MAX_LISTED]:
             text = (self._text(f) or "").splitlines()
-            src = text[line - 1].strip()[:100] if 0 < line <= len(text) else ""
+            src = self._shown(text[line - 1]) if 0 < line <= len(text) else ""
             out.append(f"  {f}:{line}: {src}")
         if len(items) > MAX_LISTED:
             out.append(f"  ... and {len(items) - MAX_LISTED} more")
@@ -311,6 +330,17 @@ class Gateway:
                     self._resolve(iv["id"], "ignored")
             elif t == "search_augment":
                 if set(iv["_track_look"]) & set(self.changed()):
+                    self._resolve(iv["id"], "ignored")
+            elif t == "exact_fix":                    # arm C only: did the model send the exact text?
+                if applied_edit and tool == "edit_file" and str(args.get("old", "")).rstrip("\n") == iv["fix_old"] \
+                        and str(args.get("new", "")).rstrip("\n") == iv["fix_new"]:
+                    iv["response"] = "exact"
+                    self._resolve(iv["id"], "followed")
+                elif applied_edit and self._entry_done(iv):
+                    iv["response"] = "different"
+                    self._resolve(iv["id"], "followed")
+                elif age >= WINDOW:
+                    iv["response"] = "none"
                     self._resolve(iv["id"], "ignored")
 
     @staticmethod
@@ -457,7 +487,74 @@ class Gateway:
                    f"`{self.leaf}` for `{self.target}`. Next:\n{self._listing(pend[:5])}")
             self._add(turn, "stall", msg, places=pend[:5])
             extra.append(msg)
+        if self.exact_fix and tool == "edit_file" and output.startswith(("error", "not answered again")):
+            note = self._exact_fix(turn, args, output)        # arm C: after every other decision, changing none
+            if note:
+                extra.append(note)
         return ("\n\n" + "\n\n".join(extra)) if extra else ""
+
+    # ------------------------------------------------------------------ arm C: the exact replacement
+    def _exact_fix(self, turn: int, args: dict, output: str) -> str | None:
+        """Arm C (Phase 3b): after an `edit_file` the tool refused (its error, or the loop breaker's refusal of a
+        repeated call), the exact `old` and `new` for the nearest pending place in that file. Guidance only: no file
+        is changed and no other decision depends on it. None (no note) when no place qualifies unambiguously:
+        - a place qualifies when every use of the name on its line is the target's (no look-alike use to keep), its
+          whole line occurs exactly once in the file (so `old` matches once), and the task's new name is known;
+        - the reference point is the line the tool's error names ("at line N", "from line N"); for a loop refusal, the
+          line of the last note given for the same call; with neither, a note only if one place qualifies;
+        - two qualifying places at the same distance from the reference point: no note (ambiguous)."""
+        f = str(args.get("path", "")).replace("\\", "/").removeprefix("./")
+        key = self._key("edit_file", args)
+        text = self._text(f)
+        if self.new_name is None or text is None or f not in self.lines:
+            return None
+        lines = text.splitlines()
+        status = self._status(f, text)
+        cands = []
+        for line, s in sorted(status.items()):
+            e = self.lines[f][line]
+            if s != "pending" or e["kind"] != "place" or e["keep"] != 0 or not 0 < line <= len(lines):
+                continue
+            raw = lines[line - 1]
+            new = re.sub(rf"\b{re.escape(self.leaf)}\b", self.new_name, raw)
+            if new != raw and text.count(raw) == 1:
+                cands.append((line, raw, new))
+        if not cands:
+            return None
+        m = re.search(r"\b(?:at|from) line (\d+)", output)
+        ref = int(m.group(1)) if m else None
+        if ref is None:
+            prev = next((iv for iv in reversed(self.interventions) if iv["type"] == "exact_fix" and iv["key"] == key),
+                        None)
+            ref = int(prev["places"][0].rsplit(":", 1)[1]) if prev else None
+        if ref is None:
+            if len(cands) != 1:
+                return None
+            pick = cands[0]
+        else:
+            cands.sort(key=lambda c: (abs(c[0] - ref), c[0]))
+            if len(cands) > 1 and abs(cands[0][0] - ref) == abs(cands[1][0] - ref):
+                return None
+            pick = cands[0]
+        line, raw, new = pick
+        msg = (f"{PREFIX}the exact text for the nearest place that still uses `{self.leaf}` for `{self.target}`, "
+               f"{f}:{line}. To change it, call edit_file with exactly these as `old` and `new` (each is the whole "
+               f"line, its indentation included; the quotes are JSON's, not part of the text):\n"
+               f"old: {json.dumps(raw, ensure_ascii=False)}\nnew: {json.dumps(new, ensure_ascii=False)}")
+        i = self._add(turn, "exact_fix", msg, key=key, places=[(f, line)])
+        self.interventions[i].update({
+            "warning_type": "actionable_correction", "refusal": output[:300],
+            "refused_old": str(args.get("old", ""))[:300], "fix_old": raw, "fix_new": new, "response": None,
+            "_entry": self.lines[f][line], "_file": f})
+        return msg
+
+    def _entry_done(self, iv: dict) -> bool:
+        """Whether the place an `exact_fix` note named is done now (followed through edits by its tracked entry)."""
+        f = iv["_file"]
+        for line, e in self.lines.get(f, {}).items():
+            if e is iv["_entry"]:
+                return self._status(f).get(line) == "done"
+        return True                                   # the line was deleted
 
     def _suggest(self, turn: int) -> str:
         self.suggested += 1
@@ -477,6 +574,8 @@ class Gateway:
             if iv["outcome"] is None:
                 iv["outcome"] = "prevented" if iv["blocking"] else (
                     "followed" if iv["type"] == "search_augment" else "ignored")
+            if iv["type"] == "exact_fix" and iv.get("response") is None:
+                iv["response"] = "none"
             iv["places_ok"] = (not (set(iv["_track"]) & pend) and not (set(iv["_track_look"]) & chg)) \
                 if (iv["_track"] or iv["_track_look"]) else None
         ivs = [{k: v for k, v in iv.items() if not k.startswith("_")} for iv in self.interventions]

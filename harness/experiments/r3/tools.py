@@ -57,6 +57,10 @@ class ToolLayer:
         self.history = None
         self._view = None
         self.last_history = None
+        # Phase 3b, arm E (PRISM_GW_E) only: the source lines that `prism_find_references` and `prism_search` print keep
+        # their own leading spaces and tabs (`shown_line`). Off in every other arm, where they are printed stripped, as
+        # before. The deletion-only historical answers are never affected.
+        self.keep_indent = False
         self._ctx_builder = None
         self._key = None
         self._tok = None
@@ -232,6 +236,17 @@ class ToolLayer:
                    "callref": "used in a call",
                    "definition": "definition"}
 
+    def shown_line(self, raw: str, cap: int | None = None) -> str:
+        """A source line as these listings print it: stripped (the default), or, in arm E (`keep_indent`), with its own
+        leading whitespace before the same stripped text. `cap` applies to the text after the indentation, so the two
+        differ only by that leading whitespace."""
+        text = raw.strip()
+        if cap is not None:
+            text = text[:cap]
+        if self.keep_indent and text:
+            return raw[:len(raw) - len(raw.lstrip())] + text
+        return text
+
     def _line_kinds(self, kinds: list[str], rel: str, line: int) -> list[str]:
         """An edge's kinds are per source, not per line: the kinds this line's own text shows (an import statement:
         `import`; an `__all__` line: `export`), else the edge's other kinds."""
@@ -352,7 +367,7 @@ class ToolLayer:
             for line, col, label, where in sorted(by_file[f]):
                 if shown >= SEARCH_MAX_LINES:
                     break
-                text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+                text = self.shown_line(lines[line - 1]) if 0 < line <= len(lines) else ""
                 lab = self._ref_label(label.split(" ")[0]) + label[len(label.split(" ")[0]):]
                 out.append(f"  {line}:{col + 1} [{lab}] in `{where}`: {text}")
                 shown += 1
@@ -365,7 +380,7 @@ class ToolLayer:
                        f"not determine, matched by name; check each:")
             for (f, line, col), (_label, where) in sorted(possible.items()):
                 lines = self._lines(os.path.join(root, f))
-                text = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+                text = self.shown_line(lines[line - 1]) if 0 < line <= len(lines) else ""
                 out.append(f"  {f}:{line}:{col + 1} in `{where}`: {text}")
         listed = {(f, line) for (f, line, _c) in [*rows, *possible]}
         other = self._other_uses(leaf, listed)
@@ -598,7 +613,7 @@ class ToolLayer:
         out = [head]
         for f, line, fk, what, where, text in hits[:SEARCH_MAX_LINES]:
             label = "; ".join(x for x in (fk, what, f"in `{where}`" if where else None) if x)
-            out.append(f"{f}:{line}: [{label}] {text.strip()[:240]}")
+            out.append(f"{f}:{line}: [{label}] {self.shown_line(text, 240)}")
         if len(hits) > SEARCH_MAX_LINES:
             out.append(f"... ({len(hits) - SEARCH_MAX_LINES} more hits; narrow `path` or `kind`)")
         return "\n".join(out)

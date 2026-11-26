@@ -231,8 +231,8 @@ def _restore(work: str, tree: str, files: list[str]) -> None:
 #: POC 2 amendment 1: the only arms that construct PRISM's historical snapshot (and get `prism_find_references`'
 #: fallback to it), on deletion tasks. Every POC 2 arm's end state is measured afterwards by a separate process
 #: (`r4/history_eval.py`), the same way for all three; BASELINE_LSP's run never constructs or holds a snapshot.
-HISTORY_ARMS = ("PRISM_LSP", "PRISM_GW")
-HISTORY_MEASURED = ("BASELINE_LSP", "PRISM_LSP", "PRISM_GW")
+HISTORY_ARMS = ("PRISM_LSP", "PRISM_GW", "PRISM_GW_C", "PRISM_GW_E")     # Phase 3b's variants are PRISM_GW here
+HISTORY_MEASURED = ("BASELINE_LSP", "PRISM_LSP", "PRISM_GW", "PRISM_GW_C", "PRISM_GW_E")
 
 
 def history_record(snapshot) -> dict:
@@ -252,7 +252,7 @@ def history_record(snapshot) -> dict:
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
              score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False,
              hygiene: bool = False, compact: bool = False, feedback: bool = False, guards: bool = False) -> dict:
-    from harness.experiments.r3.loop import AgentRun
+    from harness.experiments.r3.loop import GW_ARMS, AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
     from harness.experiments.r3.working_index import WorkingIndex
@@ -306,11 +306,16 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
             snapshot = HistoricalGraph(wi.builder, wi.shadow)
             layer.history = snapshot
         gateway = None
-        if version == "PRISM_GW":                         # POC 2: PRISM's gateway, built on the start state
+        if version in GW_ARMS:                            # POC 2: PRISM's gateway, built on the start state
             stage = "gateway"
             from prism.gateway import Gateway
-            gateway = Gateway(work, task["prompt"], layer.reference_places)
+            if version == "PRISM_GW":                     # arm A: exactly POC 2's call
+                gateway = Gateway(work, task["prompt"], layer.reference_places)
+            else:                                         # Phase 3b: one switch on (arm C or arm E), never both
+                gateway = Gateway(work, task["prompt"], layer.reference_places,
+                                  exact_fix=version == "PRISM_GW_C", keep_indent=version == "PRISM_GW_E")
             stage = "loop"
+        layer.keep_indent = version == "PRISM_GW_E"       # Phase 3b arm E: PRISM's printed lines keep their indentation
         summary = AgentRun(agent_task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
                            gate=gate, ledger=progress, record_full=record_full, hygiene=hygiene,
                            compact=compact, feedback=feedback, guards=guards, gateway=gateway).run(out)
@@ -363,7 +368,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     p.add_argument("task")
     p.add_argument("version", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP",
-                                       "PRISM_GW"))
+                                       "PRISM_GW", "PRISM_GW_C", "PRISM_GW_E"))
     p.add_argument("seed", type=int)
     p.add_argument("--clone", required=True)
     p.add_argument("--out", required=True)

@@ -168,7 +168,8 @@ def test_without_a_snapshot_nothing_changes(layer):
 # ---------------------------------------------------------------------------------------------- arm isolation
 def test_runner_constructs_the_snapshot_in_the_prism_arms_only():
     from harness.experiments.r3 import runner as R
-    assert R.HISTORY_ARMS == ("PRISM_LSP", "PRISM_GW")
+    # POC 2's two arms, plus only Phase 3b's two PRISM_GW variants (each is PRISM_GW on deletion tasks)
+    assert R.HISTORY_ARMS == ("PRISM_LSP", "PRISM_GW", "PRISM_GW_C", "PRISM_GW_E")
     assert "BASELINE_LSP" not in R.HISTORY_ARMS and "BASELINE_LSP" in R.HISTORY_MEASURED
     src = open(R.__file__).read()
     run_task = src[src.index("def run_task("):src.index("def main(")]
