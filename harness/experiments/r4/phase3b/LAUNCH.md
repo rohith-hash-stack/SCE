@@ -1,9 +1,9 @@
-# Phase 3b: launch instructions (prepared 2026-11-26; NOT yet authorized to run)
+# Phase 3b: launch instructions (prepared 2026-11-26; the 80 runs authorized by the user 2026-11-26)
 
 **Authority:**
 - the design: `AMENDMENTS.md`, "Phase 3b: the whitespace root cause …", and its "Phase 3b note 1";
 - the cell: `kaggle/r4_phase3b_cell.py`, pinned to code commit **`f77411d4`**.
-- **Do not start a shard until the user authorizes the 80 runs.**
+- **Authorized:** the user gave the go-ahead for the 80 runs on 2026-11-26, on this cell and commit unchanged.
 
 ## 1. What is pinned
 
