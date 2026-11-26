@@ -18,7 +18,7 @@ hidden-dependency tasks, ≤1 such task lost, and ≤2 infrastructure deaths.
 | **PRISM_GW** | **10** | **+8** | 1 (p3-hidden-15) | **GO** |
 
 The gateway arm (PRISM's reference graph plus a per-turn validator that keeps a worklist of the places still to
-change) solved hidden dependencies that the IDE-tools baseline did not: p3-hidden-06, -13 and -16, in 8 of 9 runs. The
+change) solved hidden dependencies that the IDE-tools baseline did not: p3-hidden-06, -13 and -16, in 9 of 9 runs. The
 baseline solved none of those 9 runs.
 
 This is a **proof of concept, not a confirmed effect.** It rests on 4 hidden-dependency tasks, all renames, all in
@@ -134,3 +134,12 @@ redesigned: 109 of 111 were ignored.
      seed-identity checks, sized so that a task-level test can reach significance.
   3. Measure the gateway against a frontier model in an MCP client. The 24B model here may benefit more from guidance
      than the clients' own models.
+
+## Erratum (2026-11-26)
+
+- **The correction:** the verdict paragraph said PRISM_GW solved p3-hidden-06, -13 and -16 "in 8 of 9 runs". It is
+  **9 of 9** (3 of 3 on each task). The sentence is corrected above.
+- **How it was found:** recounting the 45 score files (`phase3b/ADMISSION.md` section 1). PRISM_GW resolved 13 of 15
+  runs, PRISM_LSP 9 of 15 and BASELINE_LSP 5 of 15.
+- **What it affected:** nothing else. The tables, the go/no-go and the tests above were computed from the score files
+  and were already correct. The score files, the ledger and the report JSON are unchanged.
