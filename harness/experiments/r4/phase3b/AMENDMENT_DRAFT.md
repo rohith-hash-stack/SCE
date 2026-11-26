@@ -98,8 +98,11 @@ or last.
 
 ## 4. Outcome definitions (frozen)
 
-**Target places:** the start-side lines that the task's answer key changes and that contain the old name.
-- This is the same rule for all three tasks; p2-rename-04 has no `places` field.
+**Target places:** the task's recorded `places`, plus the definition's line.
+- **Checked:** this equals the start-side lines that the answer key changes and that contain the old name:
+  - p3-hidden-15: 16 lines;
+  - p3-hidden-03: 17 lines;
+  - the two rules differ only by the definition line.
 - It is read after the run, for analysis only.
 
 **Reconstruction:** after each run, the file state after every turn is rebuilt from the task's start tree by
