@@ -1,14 +1,19 @@
-# Phase 3b amendment (draft, awaiting approval)
+# Phase 3b amendment (final draft: built and verified; awaiting the user's approval to launch)
 
-**Status:** draft for review.
-- On approval it is copied unchanged into `AMENDMENTS.md` as "Phase 3b", with the approval date, and frozen.
-- Nothing in it is built yet.
+**Status:**
+- The design was approved by the user (2026-11-26), and is built and verified (`phase3b/IMPLEMENTATION.md`).
+- On approval to launch, it is copied unchanged into `AMENDMENTS.md` as "Phase 3b", with that date, and frozen.
+- The cell is not pinned, and nothing has been run on Kaggle.
 
-**Basis:**
-- `DESIGN_PROPOSAL.md` (`339b591d`), as decided by the user (2026-11-26): option 1, arms A, C, E and BASELINE_LSP;
-- the recovery tasks' turn sentence corrected;
-- the historical answers left unchanged;
-- the edit fix offline only.
+**Basis, as the user decided (2026-11-26):**
+- option 1: arms A, C, E and BASELINE_LSP;
+- the approved 80 runs, with 15 seeds per arm on the primary task;
+- p2-rename-04 excluded;
+- the recovery task's turn sentence corrected;
+- the deletion-only historical answers left unchanged;
+- the edit fix offline only;
+- arm C's mechanics as below;
+- a trigger per target place.
 
 ## 1. Question
 
@@ -47,47 +52,48 @@ All arms run on one code commit, the devstral-small-2 24B model, and POC 2's fla
 - **Length caps:** counted on the text after the indentation.
 - **Rows:** each listed place stays one row; no lines are added.
 
-**C, precisely** (rename tasks, since the gateway acts only there):
-- **When:** after an `edit_file` call that the edit tool refuses with "not found" (either message) in a file that has
-  places still pending.
-- **The added message, after the tool's own error:**
-  - for the pending place in that file nearest the line the tool names (else the first pending place in that file);
-  - the file's exact line, with its indentation, as `old`;
-  - the same line with the target's name replaced at the places PRISM lists on that line, as `new`.
-- **Message type:** actionable correction.
-- **Unchanged:** the tool's error; no other message changes.
+**C, precisely** (rename tasks, since the gateway acts only there; `Gateway(exact_fix=True)`):
+- **When:** after an `edit_file` call that the edit tool refused (any `error`), or that the loop breaker refused as a
+  repeat, in a file that has places still pending.
+- **Which place qualifies:**
+  - every use of the name on its line is the target's (no look-alike use to keep);
+  - its whole line occurs exactly once in the file, so the `old` it gives matches once;
+  - the task's new name is known (from the prompt's "to `NEW`").
+- **Which place is named:**
+  - the qualifying place nearest the line the tool's error names ("at line N" / "from line N");
+  - for a loop refusal, the one nearest the place its last note for the same call named;
+  - with no line, a note only if exactly one place qualifies;
+  - **two qualifying places equally near: no note** (ambiguous).
+- **The note:**
+  - it comes after the tool's own error and after every other gateway message;
+  - it gives the file's exact line as `old` and the same line with every use of the old name renamed as `new`,
+    both JSON-quoted so the indentation is explicit.
+- **Message type:** actionable correction (`warning_type`).
+- **Recorded per note:** the refusal, the refused text, the place, the given `old` and `new`, and the model's
+  response:
+  - `exact`: its next applied edit sent that text;
+  - `different`: the place was fixed by other text;
+  - `none`.
+- **Guidance only:** no file is changed, and no other gateway decision depends on it.
 - **Why C is descriptive:** its text necessarily carries the right indentation, so C overlaps E's cause. It is
   compared with A descriptively only.
 
 ## 3. Tasks, seeds and runs
 
-**p2-rename-04 failed admission and is excluded** (section 9; no replacement is mined). Two allocations, for the
-user's decision:
-
-**Allocation 1: as approved, without p2-rename-04.**
-
-| Task | Role | Seeds | Runs (4 arms) |
-|---|---|---|---|
-| p3-hidden-15 (litestar) | primary: the stuck-run task | 301–310 | 40 |
-| p3-hidden-03 (werkzeug) | recovery (not a stuck-run case) | 301–305 | 20 |
-| **Total** | | | **60 runs, about 9.5 GPU hours** |
-
-- **Shards:** 5. Shard k holds seeds 2k−1 and 2k of p3-hidden-15 and seed k of p3-hidden-03, so 12 runs per shard.
-
-**Allocation 2 (recommended): the approved 80 runs, with the freed 20 on the primary task.**
+**p2-rename-04 failed admission and is excluded** (section 9; no replacement is mined).
 
 | Task | Role | Seeds | Runs (4 arms) |
 |---|---|---|---|
 | p3-hidden-15 (litestar) | primary: the stuck-run task | 301–315 | 60 |
 | p3-hidden-03 (werkzeug) | recovery (not a stuck-run case) | 301–305 | 20 |
-| **Total** | | | **80 runs, about 13 GPU hours** |
+| **Total** | | | **80 runs, about 12.7 GPU hours** |
 
-- **Shards:** 5. Shard k holds seeds 3k−2 to 3k of p3-hidden-15 and seed k of p3-hidden-03, so 16 runs per shard.
-- **Why:** the single test's simulated power for a large effect (0.67 → 0.10) rises from 0.59 to 0.85
-  (`ADMISSION.md` section 3).
+- **Shards:** 5. Shard k holds seeds 3k−2 to 3k of p3-hidden-15 and seed k of p3-hidden-03, so 16 runs per shard
+  (`phase3b_tasks.shard_order`; written into `phase3/phase3b.json`).
 
-**Order within a shard:** interleaved: task, seed, then arm, in a fixed rotation, so no arm runs systematically first
-or last.
+**Order within a shard:**
+- Each task-and-seed block runs every arm, and the arms' order rotates by one from block to block.
+- **Verified:** over the 80 runs, each arm holds each position in its block exactly 5 times.
 
 **Task text:**
 - p3-hidden-15 is POC 2's task, unchanged.
@@ -108,12 +114,14 @@ or last.
 **Reconstruction:** after each run, the file state after every turn is rebuilt from the task's start tree by
 replaying the run's own `edit_file` calls through the same edit tool. Nothing is added to the run.
 
-**Trigger** (per target place): the first `edit_file` request whose text does not match the file, refused as "not
-found" (whitespace-only or not), and that the tool locates at that place. The location is the line the tool's error
+**Trigger** (per target place; every place recorded separately): the first `edit_file` request whose text does not
+match the file, refused as "not found" (whitespace-only or not), and that the tool locates at that place. The location is the line the tool's error
 names (whitespace match or closest lines). Requests that cannot be located are counted separately.
 
 **Recovery:** within the next 5 model turns after the trigger, the place's line (followed through later edits by a
 line diff) no longer has the old name at the listed column(s) and has the new name there.
+
+**Places with no trigger:** prevention outcomes (`no_mismatch`), recorded with their final state, never as missing.
 
 **Run-level failure (primary outcome):** a run **fails** if any target place's trigger is not recovered within
 5 turns. A run with no trigger, or with every trigger recovered, does not fail. Defined in every arm.
@@ -149,10 +157,12 @@ line diff) no longer has the old name at the listed column(s) and has the new na
 - recovery mechanisms.
 
 **Limits stated in the report:**
-- The test is small. Simulated power for a large effect (failure rate 0.67 → 0.10) is 0.59 at 10 seeds per arm and
-  0.85 at 15 (allocation 2). For 0.67 → 0.33 it is 0.17 and 0.30.
-  - At 10 per arm: 7/10 against 1/10 gives p = 0.020; 6/10 against 1/10 gives p = 0.057.
-  - At 15 per arm: 9/15 against 2/15 gives p = 0.021; 9/15 against 3/15 gives p = 0.060.
+- The test is small. At 15 runs per arm (fewer, if identical transcripts are collapsed), simulated power is:
+  - 0.85 for a large effect (failure rate 0.67 → 0.10);
+  - 0.61 for 0.67 → 0.20;
+  - 0.30 for 0.67 → 0.33.
+  - Examples: 9/15 against 2/15 gives p = 0.021; 9/15 against 3/15 gives p = 0.060.
+- A's failure rate is estimated from 6 POC 2 runs, and is unknown at this commit.
 - A non-significant result is not evidence that E has no effect.
 - POC 2's runs are not a control: arm A is run alongside.
 
@@ -179,36 +189,43 @@ line diff) no longer has the old name at the listed column(s) and has the new na
 ## 7. The edit-tool fix (offline replay; no Kaggle arm)
 
 **Inputs:** every recorded `edit_file` call the tool refused with a whitespace-only mismatch:
-- 586 in all, about 485 under the current message;
+- 586 in all: 512 under the current message, 74 under the older one;
 - the two messages are reported separately.
+- (The earlier figure of about 485 was a rougher classification.)
 
 **The file state at each call:**
 1. the task's start commit;
-2. its `start_patch`;
+2. its `start_patch` and `after_index_patch`;
 3. the run's earlier applied edits, in order.
+4. **Check:** each rebuilt state must show the line the recorded error showed. **All 586 do.**
 
-**The rule** (pinned before replay; no tuning on its results):
+**The rule, as replayed** (`phase3b_edit_replay.py`, v2):
 - **Applies only when:**
-  - `old` and `new` are each one line;
+  - `old` and `new` are each one line, one trailing newline aside;
   - and `old` with its leading whitespace removed equals exactly one whole line of the file with its leading
     whitespace removed.
-- **What is applied:** that line is replaced by `new`, with `new`'s leading whitespace replaced by the file line's
-  own.
+- **What is applied:**
+  - that line (and its newline, if `old` ended with one) is replaced by `new`, with `new`'s leading whitespace
+    replaced by the file line's own;
+  - an empty `new` deletes the line.
 - **Refused, never applied:**
   - several matching lines (ambiguous);
-  - a part of a line;
+  - a part of a line, or more than leading whitespace different (out of scope);
   - anything multi-line.
 
-**Reported:**
-- applied, ambiguous or out of scope;
-- the text sent, the source text, the text applied, and the resulting file;
-- the outcome:
-  - **intended:** it equals the model's later successful edit at that line, or the answer key's line;
-  - **unintended:** it differs from both;
-  - **undetermined:** neither exists;
-- whether the file still parses;
-- single-line against multi-line;
-- a variant that writes `new` as given, to show what re-basing the indentation prevents.
+**v1, the rule as first pinned, mishandled two cases. The first replay showed them; this is disclosed, not tuned:**
+- **Deletion:** an empty `new` left the line's indentation behind, instead of deleting the line (4 events).
+- **Trailing newlines:** "one line" stripped every trailing newline, so an `old` followed by many blank lines
+  counted as one line (2 events).
+- v2 fixes exactly these two cases, and nothing else changed. Both passes are kept (`IMPLEMENTATION.md`).
+
+**Judged on the whole resulting file:**
+- **intended:** it equals the file the run's own later edit of that line produced, or, failing that, the answer
+  key's line;
+- **unintended:** it differs;
+- **undetermined:** neither exists.
+- **Also reported:** whether the file still parses, single-line against multi-line, and a variant that writes `new`
+  as given (no re-basing).
 
 ## 8. Environment
 
@@ -243,6 +260,8 @@ line diff) no longer has the old name at the listed column(s) and has the new na
      inputs.
    - This is checked by replaying the tool calls of the 15 POC 2 PRISM_GW transcripts against their recorded
      `output_sha`, plus the gold replays.
+   - The test environment's own outputs (`run_tests`, a gate-checked `done`) are compared apart, against the same
+     calls replayed locally on `d769d27c`.
 2. **E is formatting only:** on the same inputs, E's outputs equal A's once only the leading whitespace of each
    printed source line is removed.
 3. **C adds only its message:** C's outputs equal A's with C's added message removed. C's message appears only after
