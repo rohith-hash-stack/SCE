@@ -29,6 +29,7 @@ import collections
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -65,6 +66,48 @@ def gold_patch(clone: str, t: dict) -> str:
                           capture_output=True, text=True, check=True).stdout
 
 
+def redefines(patch: str, name: str) -> bool:
+    """The developer's change defines the target's name again outside the tests (a hoist, not a delete;
+    `breadth/GATEWAY.md`, section 5): such a commit is not a delete task."""
+    src = re.split(r"^diff --git ", patch, flags=re.M)
+    return any(re.search(rf"^\+\s*(async\s+)?(def|class)\s+{re.escape(name)}\b", d, re.M)
+               for d in src if d and not re.match(r"a/(tests?/|\S*/tests?/|\S*test_)", d))
+
+
+def build_spare(a, cands: dict, clones: dict) -> int:
+    commit, tid = a.one
+    gate = {r["commit"]: r for r in map(json.loads, open(a.gate)) if r.get("passed")}
+    full = next(c for c in gate if c.startswith(commit))
+    c, g = cands[full], gate[full]
+    clone = clones[c["repo"]]
+    scratch = tempfile.mkdtemp(prefix="bd_delete_")
+    try:
+        built = build_one("delete", c, g, clone, a.cache_py, scratch)
+        if not built.get("built"):
+            print(f"FAIL build: {built.get('reason', '')}")
+            return 1
+        task = {**built["task"], "id": tid, "source_commit": full}
+        up = upgrade(task, clone, a.cache_py, scratch)
+        if not up["rec"].get("ok"):
+            print(f"FAIL gate check: {json.dumps(up['rec'])[:300]}")
+            return 1
+        t = {**_turns(sanity3(up["task"], clone)), "id": tid}
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    patch = gold_patch(clone, t)
+    if redefines(patch, t["must_be_absent"].rsplit("::", 1)[1].rsplit(".", 1)[-1]):
+        print("FAIL: the developer's change defines the target again")
+        return 1
+    os.makedirs(a.gold_dir, exist_ok=True)
+    open(os.path.join(a.gold_dir, f"{tid}.patch"), "w").write(patch)
+    url = subprocess.run(["git", "-C", clone, "remote", "get-url", "origin"], capture_output=True,
+                         text=True).stdout.strip()
+    json.dump({"family": "delete", "tasks": [t], "repo_urls": {c["repo"]: url if url.endswith(".git") else url + ".git"}},
+              open(a.out, "w"), indent=1)
+    print(f"{c['repo']:14} {full[:10]} OK {tid} -> {a.out}")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     p.add_argument("candidates")
@@ -74,10 +117,14 @@ def main(argv=None) -> int:
     p.add_argument("repos", nargs="+", metavar="NAME=CLONE")
     p.add_argument("--cache-py", required=True)
     p.add_argument("--cache-js", required=True)
+    p.add_argument("--one", nargs=2, metavar=("COMMIT", "ID"),
+                   help="build one gated commit (a spare) as task ID, through the same steps; OUT holds that task alone")
     a = p.parse_args(argv)
     clones = dict(s.split("=", 1) for s in a.repos)
     doc = json.load(open(a.candidates))
     cands = {c["commit"]: c for c in (doc["candidates"] if isinstance(doc, dict) else doc)}
+    if a.one:
+        return build_spare(a, cands, clones)
     passed = [r for r in map(json.loads, open(a.gate)) if r.get("passed")]
     log_path = a.out + ".log.jsonl"
     done = {r["commit"]: r for r in map(json.loads, open(log_path))} if os.path.exists(log_path) else {}
