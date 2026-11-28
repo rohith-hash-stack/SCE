@@ -84,6 +84,7 @@ def main(argv=None) -> int:
     p.add_argument("--arms", nargs="*", default=list(ARMS))
     p.add_argument("--turn-cap", type=int, default=60)
     p.add_argument("--guards", action="store_true", help="POC 2: the Layer 1 guards, every arm")
+    p.add_argument("--edit-fix", action="store_true", help="the breadth study: the edit-fix rule, every arm")
     p.add_argument("--empty-every-arm", action="store_true",
                    help="Phase 3b: the empty script in every arm (default: one baseline arm only)")
     a = p.parse_args(argv)
@@ -103,7 +104,7 @@ def main(argv=None) -> int:
         for arm, kind, seed in runs:
             model = Script(gold_calls(t, contents, arm) if kind == "gold" else [])
             res = run_task(t, arm, seed, clone, a.out, a.cache, model, a.turn_cap, ledger=True, feedback=True,
-                           guards=a.guards)
+                           guards=a.guards, edit_fix=a.edit_fix)
             # the empty script must not resolve: the done gate rejects it (`stuck_done`), or, in an arm with PRISM's
             # gateway (Phase 3b, every arm), the gateway blocks `done` until the turn cap (`stuck`)
             empty_ok = ("unresolved", "stuck_done", "stuck") if a.empty_every_arm else ("unresolved", "stuck_done")

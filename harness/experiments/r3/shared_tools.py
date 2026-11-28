@@ -112,12 +112,37 @@ def whitespace_matches(text: str, old: str) -> list[int]:
     return hits
 
 
+def whitespace_fix(text: str, old: str, new: str) -> dict | None:
+    """The breadth study's edit-fix rule (rule v2 of `r4/phase3b_edit_replay.py`, validated offline on Phase 3b's
+    refused edits: 169 intended, 0 unintended, 0 parse breaks). For an `old` that is not found exactly:
+    - it applies only when `old` and `new` are each one line (one trailing newline aside) and `old`, with its leading
+      whitespace removed, equals exactly one whole file line with that line's leading whitespace removed;
+    - that line is replaced by `new` with `new`'s leading whitespace replaced by the file line's own; an empty `new`
+      deletes the line (and its newline, if `old` ended with one).
+    Returns {"line": N, "text": the new file text, "deleted": bool}, or None when the rule does not apply (several
+    matching lines, part of a line, other differences, or several lines): the edit is then refused as before."""
+    o, o_nl = (old[:-1], True) if old.endswith("\n") else (old, False)
+    n, n_nl = (new[:-1], True) if new.endswith("\n") else (new, False)
+    if "\n" in o or "\n" in n or not o.strip():
+        return None
+    lines = text.split("\n")
+    hits = [i for i, ln in enumerate(lines) if ln.lstrip() == o.lstrip()]
+    if len(hits) != 1:
+        return None
+    i = hits[0]
+    indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+    start = sum(len(ln) + 1 for ln in lines[:i])
+    span = len(lines[i]) + (1 if o_nl and i < len(lines) - 1 else 0)
+    repl = (indent + n.lstrip() if n.strip() else "") + ("\n" if o_nl and n_nl else "")
+    return {"line": i + 1, "text": text[:start] + repl + text[start + span:], "deleted": not n.strip()}
+
+
 class SharedTools:
     NAMES = ("read_file", "list_dir", "grep", "edit_file", "run_tests", "done")
 
     def __init__(self, workdir: str, env, visible_tests: list[str], tokenizer_path: str | None = None,
                  explicit: bool = False, expected: dict[str, list[str]] | None = None, feedback: bool = False,
-                 guards: bool = False):
+                 guards: bool = False, edit_fix: bool = False):
         """`explicit`: amendment R4-SANITY-3's tool messages (a cut read says so and where to continue; edit errors show
         the closest lines, the duplicates' lines, and what an empty `old` means). Off for R3a and sanity runs 1-2."""
         self.work, self.env, self.visible = os.path.abspath(workdir), env, list(visible_tests)
@@ -128,6 +153,10 @@ class SharedTools:
         # POC 2 guards (every arm): `edit_file(occurrence=k)` replaces the k-th of several identical spans (the Phase 3
         # POC's pydantic runs could not edit one of several identical blocks). Off for every earlier run.
         self.guards = guards
+        # The breadth study (every arm alike): a one-line edit whose `old` matches one file line apart from its leading
+        # whitespace is applied with the file's own indentation (`whitespace_fix`). Off for every earlier run.
+        self.edit_fix = edit_fix
+        self.edit_fixes = 0
         # R4-SANITY-4 (bug 3): the tests each visible file ran at the start (delete: visible_start_pass; feature: the
         # listed tests), and the most each file has reported in this run, so that tests which stop running are named
         self.expected = expected or {}
@@ -241,6 +270,16 @@ class SharedTools:
         with open(p, encoding="utf8", errors="replace") as fh:
             text = fh.read()
         n = occurrences(text, old)
+        if n == 0 and self.edit_fix:
+            fix = whitespace_fix(text, old, new)
+            if fix is not None:
+                with open(p, "w", encoding="utf8") as fh:
+                    fh.write(fix["text"])
+                self.edit_fixes += 1
+                what = "removed it" if fix["deleted"] else "kept the file's own indentation for `new`"
+                return (f"edited {path} at line {fix['line']}: replaced 1 lines with {0 if fix['deleted'] else 1}. "
+                        f"Your `old` matched line {fix['line']} except for its leading whitespace, so the edit "
+                        f"{what}." + self._edit_warning(path, text, fix["text"]))
         if n == 0:
             near = whitespace_matches(text, old)
             if len(near) == 1 and self.explicit:

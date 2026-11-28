@@ -251,7 +251,8 @@ def history_record(snapshot) -> dict:
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
              score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False,
-             hygiene: bool = False, compact: bool = False, feedback: bool = False, guards: bool = False) -> dict:
+             hygiene: bool = False, compact: bool = False, feedback: bool = False, guards: bool = False,
+             edit_fix: bool = False) -> dict:
     from harness.experiments.r3.loop import GW_ARMS, AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
@@ -280,7 +281,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
                              explicit=bool(task.get("explicit_tools")),      # R4-SANITY-3
                              expected=_expected_tests(task),                 # R4-SANITY-4 (bug 3)
                              feedback=feedback,                              # Phase 2 C1-C2, every arm
-                             guards=guards)                                  # POC 2, every arm
+                             guards=guards,                                  # POC 2, every arm
+                             edit_fix=edit_fix)                              # the breadth study, every arm
         layer.shared = shared                             # Phase 2 D: prism_search / prism_read read the working files
         injected = None
         if version == "INJECTED":                         # the 3-arm re-baseline's Arm 3 (r4/inject.py)
@@ -320,6 +322,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
                            gate=gate, ledger=progress, record_full=record_full, hygiene=hygiene,
                            compact=compact, feedback=feedback, guards=guards, gateway=gateway).run(out)
         result = {**summary, **({"injected": injected} if injected is not None else {})}
+        if edit_fix:                                      # the breadth study: how often the edit-fix rule applied
+            result["edit_fixes"] = shared.edit_fixes
         final_tree = None
         if task.get("family") == "delete" and version in HISTORY_MEASURED:
             final_tree = snapshot_tree(work)              # the agent's tree as the run ended, before review and scoring
@@ -403,6 +407,9 @@ def main(argv=None) -> int:
                    help="POC 2 (AMENDMENTS.md), every arm; implies --feedback: the third identical call with the identical "
                         "answer is not answered again; compaction keeps reference lists whole; edit_file takes "
                         "`occurrence`")
+    p.add_argument("--edit-fix", action="store_true",
+                   help="the breadth study, every arm: a one-line edit_file whose `old` matches one file line apart from "
+                        "its leading whitespace is applied with the file's own indentation (shared_tools.whitespace_fix)")
     a = p.parse_args(argv)
     if a.guards:
         a.feedback = True
@@ -427,7 +434,8 @@ def main(argv=None) -> int:
                           stream_cut=a.phase1, tools=native_tools(a.version, a.guards) if a.native_tools else None,
                           **({"timeout": a.timeout} if a.timeout else {}))
     res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan,
-                   ledger=a.ledger, hygiene=a.phase1, compact=a.phase1, feedback=a.feedback, guards=a.guards)
+                   ledger=a.ledger, hygiene=a.phase1, compact=a.phase1, feedback=a.feedback, guards=a.guards,
+                   edit_fix=a.edit_fix)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))
     return 0
 
