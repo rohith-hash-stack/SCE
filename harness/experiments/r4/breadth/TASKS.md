@@ -77,8 +77,9 @@ family, no repository has more than 2.
 - **Signature, move:** 49 candidates tried by `derive_tasks`. They failed on: the tests failing at the start; the
   reference failing the tests; no rewritable signature; a method of a class with an outside base; pydantic's
   environment failing to install.
-- **Delete:** 43 commits tried at the gate, 14 passed. Most failures were related tests already failing at the commit,
-  13 of them in pydantic-ai. Of the 14 passes, one, fastmcp `3b0660a686`, failed the gate check: the done gate
+- **Delete:** 43 commits tried at the gate, 14 passed. Of the 29 failures, 24 were related tests already failing at the
+  commit (15 in pydantic-ai, 6 in scrapy), 3 were installs failing and 2 had no related test file. pydantic-ai accounts for
+  18 of the 29. Of the 14 passes, one, fastmcp `3b0660a686`, failed the gate check: the done gate
   rejected the developer's own change. The first 8 others were taken; 5 are spares.
 
 ## 3. Departures from the design (decided while mining; for the user to accept or change before the freeze)
