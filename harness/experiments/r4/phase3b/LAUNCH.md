@@ -114,6 +114,6 @@ POC 2's run times on p3-hidden-15 averaged 10.1 min (PRISM_GW; at most 14.2) and
 - **Then the frozen analysis,** once, on all shards merged:
 
   ```
-  python -B -m harness.experiments.r4.phase3b_analysis 'reports/r4/phase3b_shard*' \
+  python -B -m harness.experiments.r4.phase3b_analysis 'reports/r4/phase3b_shard*/*.jsonl' \
       harness/experiments/r4/phase3/phase3b.json --clones DIR --out reports/r4/phase3b_analysis.json
   ```
