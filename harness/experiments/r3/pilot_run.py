@@ -54,6 +54,7 @@ def main(argv=None) -> int:
     p.add_argument("--feedback", action="store_true")                             # Phase 2 C1-C3, every arm
     p.add_argument("--guards", action="store_true")                               # POC 2 guards, every arm
     p.add_argument("--edit-fix", action="store_true")                             # the breadth study, every arm
+    p.add_argument("--gateway-families", action="store_true")                     # the breadth study, gateway arms
     p.add_argument("--versions", nargs="+", choices=("PRISM", "BASELINE", "INJECTED", "PRISM_ONLY", "BASELINE_LSP", "PRISM_LSP", "PRISM_GW",
                                                     "PRISM_GW_C", "PRISM_GW_E"), default=list(VERSIONS),
                    help="the arms to run, in this order within a task (the 3-arm re-baseline adds INJECTED)")
@@ -66,7 +67,8 @@ def main(argv=None) -> int:
              + (["--timeout", str(a.timeout)] if a.timeout else []) + (["--no-json-format"] if a.no_json_format else [])
              + (["--native-tools"] if a.native_tools else []) + (["--phase1"] if a.phase1 else [])
              + (["--raw-tools"] if a.raw_tools else []) + (["--feedback"] if a.feedback else [])
-             + (["--guards"] if a.guards else []) + (["--edit-fix"] if a.edit_fix else []))
+             + (["--guards"] if a.guards else []) + (["--edit-fix"] if a.edit_fix else [])
+             + (["--gateway-families"] if a.gateway_families else []))
     from harness.experiments.r3.memtest import leftovers
     clones = dict(r.split("=", 1) for r in a.repos)
     tasks = json.load(open(a.tasks))["tasks"]

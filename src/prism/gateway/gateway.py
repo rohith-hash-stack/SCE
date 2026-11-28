@@ -35,10 +35,21 @@ maps the file's old lines to its new ones (`difflib`), so the counts follow the 
 **pending** while it still holds more occurrences than its look-alike uses; a look-alike line is **changed** when it
 holds fewer name tokens than at the start, or was deleted.
 
-**Which tasks:** only a rename says what must change everywhere (every use of the target takes the new name), so the
-place tracking, the worklist, the look-alike blocks and the `done` block apply to tasks whose prompt starts with
-"Rename". On any other task (a deletion: its fix may leave uses that the task's tests drop) the gateway makes only the
+**Which tasks:** by default (POC 2, Phase 3b), only a rename: the place tracking, the worklist, the look-alike blocks
+and the `done` block apply to tasks whose prompt starts with "Rename". On any other task the gateway makes only the
 syntax check, and records why in `error`.
+
+**`families=True`** (the breadth study, `harness/experiments/r4/breadth/GATEWAY.md`) adds three task families, each
+with its own places. Everything else (the interventions, their outcomes, the overrides, `finish`) is the same:
+
+| family | prompt | a place | pending while |
+|---|---|---|---|
+| delete | "Remove ..." | as a rename: each line PRISM lists as a use of the target (its definition included); look-alikes tracked | the line still holds the name (more often than its look-alike uses), as for a rename |
+| signature | "Make the parameter `P` of ... keyword-only" | the definition, and each call site PRISM resolves to the target that passes `P` positionally | the definition still takes `P` positionally; a call to the name on that line still passes more positional arguments than come before `P` (no `*args`) |
+| move | "Move the function `N` from `OLD` ... into a new module `NEW`" | the definition in `OLD`, each `from OLD import N` (and `OLD.N` through `import OLD`) in any file, and `N` being defined in `NEW` | `OLD` still defines `N` at its top level; the line still imports `N` from `OLD`; `NEW` does not define `N` yet |
+
+A signature or move place is checked by parsing the file (`ast`), never by the name's text; these families track no
+look-alikes (their edits keep the name). The exact-text note (arm C) stays a rename's.
 
 The gateway has no harness code in it. It reads the working tree (`root`) and asks `refs(symbol)` (a callable
 returning `prism_find_references`' places as data: `target`, `leaf`, `rows`, `possible`; the harness passes
@@ -66,6 +77,100 @@ QUERY_TOOLS = ("prism_find_references", "prism_change_context", "prism_blast_rad
 PREFIX = "PRISM gateway: "
 _HIT = re.compile(r"^([^\s:]+\.py):(\d+):", re.M)
 RENAME = re.compile(r"\s*Rename\b")
+REMOVE = re.compile(r"\s*Remove\b")
+SIGNATURE = re.compile(r"\s*Make the parameter `(\w+)` of .*?\bkeyword-only", re.S)
+MOVE = re.compile(r"\s*Move the function `(\w+)` from `([\w./-]+\.py)`.*?\binto a new module `([\w./-]+\.py)`", re.S)
+
+
+def family_of(prompt: str, families: bool) -> str | None:
+    """The task family the gateway tracks places for (None: the syntax check only)."""
+    if RENAME.match(prompt):
+        return "rename"
+    if not families:
+        return None
+    if REMOVE.match(prompt):
+        return "delete"
+    if SIGNATURE.match(prompt):
+        return "signature"
+    if MOVE.match(prompt):
+        return "move"
+    return None
+
+
+def _module_names(rel: str) -> set[str]:
+    """The dotted names a file can be imported by (with and without a leading `src.` / `lib.`)."""
+    m = rel[:-3].replace("/", ".")
+    m = m[:-9] if m.endswith(".__init__") else m
+    return {m} | {m[len(p):] for p in ("src.", "lib.") if m.startswith(p)}
+
+
+def _find_def(tree, qualname: str):
+    """The `def`/`class` node at `qualname` (`Class.method`) within a module, and whether its parent is a class."""
+    body, node, in_class = (tree.body if tree is not None else []), None, False
+    for part in qualname.split("."):
+        in_class = isinstance(node, ast.ClassDef)
+        node = next((n for n in body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                     and n.name == part), None)
+        if node is None:
+            return None, False
+        body = node.body
+    return node, in_class
+
+
+def _tree(text: str | None):
+    if text is None:
+        return None
+    try:
+        return ast.parse(text)
+    except (SyntaxError, ValueError, RecursionError):
+        return None
+
+
+def _positional_lines(tree, name: str, limit: int) -> set[int]:
+    """The lines of calls to `name` (`name(...)`, `x.name(...)`) passing more than `limit` positional arguments and no
+    `*args`: the call's own line and its name's line."""
+    out: set[int] = set()
+    for c in ast.walk(tree) if tree is not None else ():
+        if isinstance(c, ast.Call):
+            f = c.func
+            callee = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else None
+            if callee == name and len(c.args) > limit and not any(isinstance(a, ast.Starred) for a in c.args):
+                out |= {c.lineno, f.end_lineno or c.lineno}
+    return out
+
+
+def _resolve_from(rel: str, module: str | None, level: int) -> str:
+    """The absolute module a `from` import in file `rel` names."""
+    if level == 0:
+        return module or ""
+    pkg = rel[:-3].replace("/", ".").split(".")[:-1]
+    base = pkg[:len(pkg) - (level - 1)] if level > 1 else pkg
+    return ".".join(base + ([module] if module else []))
+
+
+def _old_import_lines(tree, rel: str, old: set[str], name: str) -> set[int]:
+    """Lines importing `name` from a module in `old`: `from <old> import name`, and `<alias>.name` through
+    `import <old> [as alias]` or `from <pkg> import <old's last part>`."""
+    out, aliases = set(), set()
+    for node in ast.walk(tree) if tree is not None else ():
+        if isinstance(node, ast.ImportFrom):
+            mod = _resolve_from(rel, node.module, node.level)
+            for a in node.names:
+                if mod in old and a.name == name:
+                    out.add(getattr(a, "lineno", None) or node.lineno)
+                if f"{mod}.{a.name}" in old:
+                    aliases.add(a.asname or a.name)
+        elif isinstance(node, ast.Import):
+            aliases |= {a.asname or a.name for a in node.names if a.name in old}
+    for node in ast.walk(tree) if tree is not None and aliases else ():
+        if isinstance(node, ast.Attribute) and node.attr == name:
+            try:
+                recv = ast.unparse(node.value)
+            except Exception:
+                continue
+            if recv in aliases:
+                out.add(node.lineno)
+    return out
 
 
 @dataclass
@@ -153,15 +258,22 @@ def _simulate_edit(text: str, old: str, new: str, occurrence) -> str | None:
 
 
 class Gateway:
-    def __init__(self, root: str, prompt: str, refs, is_test=None, exact_fix: bool = False, keep_indent: bool = False):
+    def __init__(self, root: str, prompt: str, refs, is_test=None, exact_fix: bool = False, keep_indent: bool = False,
+                 families: bool = False):
         """`root`: the agent's working tree. `refs(symbol)`: PRISM's places of a symbol (see the module doc); it may
         raise when the symbol does not resolve.
 
         Phase 3b's two switches (AMENDMENTS "Phase 3b"), each off by default, never both on in one arm:
         - `exact_fix` (arm C): after a refused `edit_file`, an `exact_fix` note (`_exact_fix`). It changes no file and
           no decision; it is added after everything else the gateway says.
-        - `keep_indent` (arm E): the source lines the gateway quotes keep their own leading whitespace (`_shown`)."""
+        - `keep_indent` (arm E): the source lines the gateway quotes keep their own leading whitespace (`_shown`).
+
+        `families` (the breadth study): delete, signature and move tasks get their own places too (module doc)."""
         self.root, self.refs = os.path.abspath(root), refs
+        self.families = families
+        self.family = family_of(prompt, families)
+        self.param = self.limit = self.qual = self.own = None   # signature: the parameter, positional args before it
+        self.move = None                                         # move: {"name", "old", "new", "old_modules"}
         self.exact_fix, self.keep_indent = exact_fix, keep_indent
         self.new_name = None                         # arm C: the name the task renames the target to
         self.is_test = is_test or (lambda f: "test" in f.split("/")[-1] or f.startswith(("tests/", "test/")))
@@ -181,7 +293,10 @@ class Gateway:
 
     # ------------------------------------------------------------------ the start state
     def _start(self, prompt: str):
-        if not RENAME.match(prompt):
+        if self.family is None and self.families:
+            self.error = "not a task family the gateway tracks: only the syntax check applies"
+            return
+        if self.family is None:
             # what must change is known only for a rename (every use of the target takes the new name); a deletion's
             # fix may leave uses that the task's tests drop. Any other task gets the syntax check only.
             self.error = "not a rename task: only the syntax check applies"
@@ -198,7 +313,10 @@ class Gateway:
             return
         self.error = None
         self.target, self.leaf = d["target"], d["leaf"]
-        if self.exact_fix:                           # "... to `NEW`.": the same split `infer_target` uses
+        if self.family in ("signature", "move"):
+            self._start_ast(prompt, d)
+            return
+        if self.exact_fix and self.family == "rename":                           # "... to `NEW`.": the same split `infer_target` uses
             m = re.match(r"([A-Za-z_]\w*)`", prompt.split(" to `", 1)[1]) if " to `" in prompt else None
             self.new_name = m.group(1) if m else None
         places: dict[tuple[str, int], int] = {}
@@ -222,6 +340,114 @@ class Gateway:
                     self.lines.setdefault(f, {})[line] = {"kind": "lookalike", "keep": names[line], "start": line}
         self.places_total = sum(1 for f in self.lines for e in self.lines[f].values() if e["kind"] == "place")
 
+    def enable_families(self, prompt: str):
+        """`families=True` after construction (the harness's switch): a task the default gateway does not track (it
+        made no place, `target` is None) is started again as its family. A rename is unchanged."""
+        self.families = True
+        if self.family is not None:
+            return
+        self.family, self.error, self.target, self.leaf, self.lines = family_of(prompt, True), None, None, None, {}
+        self._start(prompt)
+
+    def _start_ast(self, prompt: str, d: dict):
+        """A signature or move task's places (module doc), found by parsing the files."""
+        if self.family == "signature":
+            self.param = SIGNATURE.match(prompt).group(1)
+            self.own = d.get("file")
+            text = self._text(self.own) if self.own else None
+            q = d["target"]
+            for m in sorted(_module_names(self.own), key=len, reverse=True) if self.own else ():
+                if q.startswith(m + "."):
+                    q = q[len(m) + 1:]
+                    break
+            self.qual = q
+            node, in_class = _find_def(_tree(text), q)
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                self.target = None
+                self.error = f"signature: `{q}` is not a function in {self.own}"
+                return
+            params = [a.arg for a in node.args.posonlyargs + node.args.args]
+            if in_class and not any(isinstance(x, ast.Name) and x.id == "staticmethod" for x in node.decorator_list):
+                params = params[1:]
+            if self.param not in params:
+                self.target = None
+                self.error = f"signature: `{self.param}` is not a positional parameter of `{q}`"
+                return
+            self.limit = params.index(self.param)
+            self.lines.setdefault(self.own, {})[node.lineno] = {"kind": "place", "sub": "def", "place": 1, "keep": 0,
+                                                                "start": node.lineno}
+            possible = {(f, line) for (f, line, _c) in d.get("possible", {})}
+            calls = {(f, line) for (f, line, _c) in d["rows"] if (f, line) not in possible and f.endswith(".py")}
+            trees: dict = {}
+            for f, line in sorted(calls):
+                if f not in trees:
+                    trees[f] = _positional_lines(_tree(self._text(f)), self.leaf, self.limit)
+                if line in trees[f] and line not in self.lines.get(f, {}):
+                    self.lines.setdefault(f, {})[line] = {"kind": "place", "sub": "call", "place": 1, "keep": 0,
+                                                          "start": line}
+        else:
+            name, old, new = MOVE.match(prompt).groups()
+            self.move = {"name": name, "old": old, "new": new, "old_modules": _module_names(old)}
+            node, _ = _find_def(_tree(self._text(old)), name)
+            if node is None:
+                self.target = None
+                self.error = f"move: `{name}` is not defined in {old}"
+                return
+            self.lines.setdefault(old, {})[node.lineno] = {"kind": "place", "sub": "def", "place": 1, "keep": 0,
+                                                           "start": node.lineno}
+            for f in sorted(self._files_with_word()):
+                if f == new:
+                    continue
+                for line in sorted(_old_import_lines(_tree(self._text(f)), f, self.move["old_modules"], name)):
+                    self.lines.setdefault(f, {}).setdefault(line, {"kind": "place", "sub": "import", "place": 1,
+                                                                   "keep": 0, "start": line})
+        self.places_total = sum(1 for f in self.lines for e in self.lines[f].values() if e["kind"] == "place") + (
+            1 if self.family == "move" else 0)
+
+    def _status_ast(self, f: str, text: str | None) -> dict[int, str]:
+        """A signature or move file's tracked lines now: "pending" / "done" (module doc)."""
+        entries = self.lines.get(f, {})
+        if text is None:
+            return {line: "done" for line in entries}
+        tree = _tree(text)
+        if tree is None:                                  # unparseable: nothing counts as done there yet
+            return {line: "pending" for line in entries}
+        out = {}
+        if self.family == "signature":
+            calls = _positional_lines(tree, self.leaf, self.limit)
+            for line, e in entries.items():
+                if e["sub"] == "def":
+                    node, _ = _find_def(tree, self.qual)
+                    still = isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and self.param in [
+                        a.arg for a in node.args.posonlyargs + node.args.args]
+                    out[line] = "pending" if still else "done"
+                else:
+                    out[line] = "pending" if line in calls else "done"
+        else:
+            imports = _old_import_lines(tree, f, self.move["old_modules"], self.move["name"])
+            for line, e in entries.items():
+                if e["sub"] == "def":
+                    out[line] = "pending" if _find_def(tree, self.move["name"])[0] is not None else "done"
+                else:
+                    out[line] = "pending" if line in imports else "done"
+        return out
+
+    def _new_defined(self) -> bool:
+        """Move: `N` is defined at the top level of the new module."""
+        return _find_def(_tree(self._text(self.move["new"])), self.move["name"])[0] is not None
+
+    def _phrase(self, n: int) -> str:
+        """`n` of the task's places, as the worklist and the done block say it (a rename: as before)."""
+        if self.family == "signature":
+            return (f"{n} of {self.places_total} place(s) still take or pass `{self.param}` positionally for "
+                    f"`{self.target}`")
+        if self.family == "move":
+            return (f"{n} of {self.places_total} place(s) still define or import `{self.move['name']}` from "
+                    f"`{self.move['old']}`, or the new module `{self.move['new']}` does not define it yet")
+        if self.family == "delete":
+            return f"{n} of {self.places_total} place(s) still use `{self.leaf}` for `{self.target}`, which is removed"
+        return f"{n} of {self.places_total} place(s) still use `{self.leaf}` for `{self.target}`"
+
     def _files_with_word(self) -> set[str]:
         r = subprocess.run(["git", "-C", self.root, "grep", "-l", "-w", "-I", "--untracked", "-e", self.leaf, "--",
                             "*.py"], capture_output=True, text=True, errors="replace")
@@ -235,6 +461,8 @@ class Gateway:
     def _status(self, f: str, text: str | None = None) -> dict[int, str]:
         """Each tracked line of `f` now: "pending" / "done" (places), "intact" / "changed" (look-alikes)."""
         text = self._text(f) if text is None else text
+        if self.family in ("signature", "move"):
+            return self._status_ast(f, text)
         if text is None:
             return {line: ("done" if e["kind"] == "place" else "changed") for line, e in self.lines.get(f, {}).items()}
         words = _word_counts(text, self.leaf)
@@ -249,7 +477,10 @@ class Gateway:
         return out
 
     def pending(self) -> list[tuple[str, int]]:
-        return sorted((f, line) for f in self.lines for line, s in self._status(f).items() if s == "pending")
+        out = sorted((f, line) for f in self.lines for line, s in self._status(f).items() if s == "pending")
+        if self.family == "move" and self.target is not None and not self._new_defined():
+            out.append((self.move["new"], 0))             # line 0: "not defined there yet"
+        return out
 
     def changed(self) -> list[tuple[str, int]]:
         out = [(f, line) for f in self.lines for line, s in self._status(f).items() if s == "changed"]
@@ -280,6 +511,9 @@ class Gateway:
     def _listing(self, items: list[tuple[str, int]]) -> str:
         out = []
         for f, line in items[:MAX_LISTED]:
+            if line == 0:                                 # move: the new module, which must define the function
+                out.append(f"  {f}: `{self.move['name']}` is not defined there yet")
+                continue
             text = (self._text(f) or "").splitlines()
             src = self._shown(text[line - 1]) if 0 < line <= len(text) else ""
             out.append(f"  {f}:{line}: {src}")
@@ -404,7 +638,9 @@ class Gateway:
             pend, chg = self.pending(), self.changed()
             if pend or chg:
                 parts = []
-                if pend:
+                if pend and self.family != "rename":
+                    parts.append(f"{self._phrase(len(pend))}:\n{self._listing(pend)}")
+                elif pend:
                     parts.append(f"{len(pend)} of {self.places_total} place(s) still use `{self.leaf}` where it means "
                                  f"`{self.target}`:\n{self._listing(pend)}")
                 if chg:
@@ -458,7 +694,7 @@ class Gateway:
             return ""
         if applied and str(args.get("path", "")).endswith(".py"):
             chg = self.changed()
-            msg = f"{PREFIX}{len(pend)} of {self.places_total} place(s) still use `{self.leaf}` for `{self.target}`"
+            msg = PREFIX + self._phrase(len(pend))
             msg += (":\n" + self._listing(pend)) if pend else "."
             if chg:
                 msg += (f"\n{len(chg)} use(s) of `{self.leaf}` that belong to other objects were changed (restore "
@@ -483,11 +719,14 @@ class Gateway:
         if pend and not applied and (output.startswith("not answered again") or (
                 self.since_edit >= STALL_CALLS and self.calls - self.last_stall >= STALL_CALLS)):
             self.last_stall = self.calls
-            msg = (f"{PREFIX}no change has been made for {self.since_edit} call(s); {len(pend)} place(s) still use "
-                   f"`{self.leaf}` for `{self.target}`. Next:\n{self._listing(pend[:5])}")
+            what = (f"{len(pend)} place(s) still use `{self.leaf}` for `{self.target}`" if self.family == "rename" else
+                    self._phrase(len(pend)))
+            msg = (f"{PREFIX}no change has been made for {self.since_edit} call(s); {what}. Next:\n"
+                   f"{self._listing(pend[:5])}")
             self._add(turn, "stall", msg, places=pend[:5])
             extra.append(msg)
-        if self.exact_fix and tool == "edit_file" and output.startswith(("error", "not answered again")):
+        if self.exact_fix and self.family == "rename" and tool == "edit_file" and \
+                output.startswith(("error", "not answered again")):
             note = self._exact_fix(turn, args, output)        # arm C: after every other decision, changing none
             if note:
                 extra.append(note)
@@ -560,9 +799,13 @@ class Gateway:
         self.suggested += 1
         files = len({f for f in self.lines for e in self.lines[f].values() if e["kind"] == "place"})
         looks = sum(1 for f in self.lines for e in self.lines[f].values() if e["kind"] == "lookalike")
-        msg = (f"{PREFIX}`{self.target}` is used at {self.places_total} place(s) in {files} file(s); {looks} other "
-               f"line(s) use the name `{self.leaf}` for other objects. prism_find_references(\"{self.target}\") lists "
-               f"every one of its uses, each at its line.")
+        if self.family in ("signature", "move"):
+            msg = (f"{PREFIX}this task changes {self.places_total} place(s) in {files} file(s) for `{self.target}`. "
+                   f"prism_find_references(\"{self.target}\") lists every one of its uses, each at its line.")
+        else:
+            msg = (f"{PREFIX}`{self.target}` is used at {self.places_total} place(s) in {files} file(s); {looks} other "
+                   f"line(s) use the name `{self.leaf}` for other objects. prism_find_references(\"{self.target}\") "
+                   f"lists every one of its uses, each at its line.")
         self._add(turn, "suggest_tool", msg)
         return msg
 

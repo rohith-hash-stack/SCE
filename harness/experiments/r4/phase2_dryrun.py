@@ -93,8 +93,14 @@ def main(argv=None) -> int:
     p.add_argument("--turn-cap", type=int, default=60)
     p.add_argument("--guards", action="store_true", help="POC 2: the Layer 1 guards, every arm")
     p.add_argument("--edit-fix", action="store_true", help="the breadth study: the edit-fix rule, every arm")
+    p.add_argument("--gateway-families", action="store_true",
+                   help="the breadth study: the gateway tracks delete, signature and move places too")
     p.add_argument("--empty-every-arm", action="store_true",
                    help="Phase 3b: the empty script in every arm (default: one baseline arm only)")
+    p.add_argument("--partial", action="store_true",
+                   help="the breadth study's gateway check: in each gateway arm, also a script that replays the answer "
+                        "key in the first half of its files only (sorted), then calls done; the gateway must block done "
+                        "and list no place in a file the script finished")
     p.add_argument("--all-families", action="store_true",
                    help="the breadth study: every task in the file, delete tasks too (default: derived tasks only)")
     a = p.parse_args(argv)
@@ -111,14 +117,29 @@ def main(argv=None) -> int:
         runs = [(arm, "gold", 42) for arm in a.arms] + ([(arm, "empty", 43) for arm in a.arms] if a.empty_every_arm else
                                                        [(b, "empty", 43) for b in ("BASELINE", "BASELINE_LSP")
                                                         if b in a.arms][:1])
+        files = sorted(contents)
+        finished = set(files[:len(files) // 2])
+        if a.partial:
+            runs += [(arm, "partial", 44) for arm in a.arms if arm.startswith("PRISM_GW")]
         for arm, kind, seed in runs:
-            model = Script(gold_calls(t, contents, arm) if kind == "gold" else [])
+            calls = gold_calls(t, contents, arm) if kind == "gold" else gold_calls(
+                t, {f: v for f, v in contents.items() if f in finished}, arm) if kind == "partial" else []
+            model = Script(calls)
             res = run_task(t, arm, seed, clone, a.out, a.cache, model, a.turn_cap, ledger=True, feedback=True,
-                           guards=a.guards, edit_fix=a.edit_fix)
+                           guards=a.guards, edit_fix=a.edit_fix,
+                           gateway_families=a.gateway_families)
             # the empty script must not resolve: the done gate rejects it (`stuck_done`), or, in an arm with PRISM's
             # gateway (Phase 3b, every arm), the gateway blocks `done` until the turn cap (`stuck`)
             empty_ok = ("unresolved", "stuck_done", "stuck") if a.empty_every_arm else ("unresolved", "stuck_done")
-            ok = res.get("outcome") == "resolved" if kind == "gold" else res.get("outcome") in empty_ok
+            gw = res.get("gateway") or {}
+            last = next((x for x in reversed(gw.get("log", [])) if x["type"] == "block_done"), None)
+            listed = sorted({p.rsplit(":", 1)[0] for p in (last or {}).get("places", [])})
+            if kind == "gold":
+                ok = res.get("outcome") == "resolved"
+            elif kind == "partial":     # done blocked, and no listed place in a file the script finished
+                ok = last is not None and not (set(listed) & finished)
+            else:
+                ok = res.get("outcome") in empty_ok
             bad += not ok
             sc = res.get("score") or {}
             first = None
@@ -130,6 +151,8 @@ def main(argv=None) -> int:
                               "first_output": str((first or {}).get("output_head", ""))[:160],
                               "turns": res.get("turns"), "derived_check": sc.get("derived_check"),
                               "injected": (res.get("injected") or {}).get("tool"),
+                              **({"finished_files": sorted(finished), "listed_files": listed}
+                                 if kind == "partial" else {}),
                               **({"gateway": {k: v for k, v in res["gateway"].items() if k != "log"},
                                   "gateway_log": [(x["type"], x["outcome"]) for x in res["gateway"]["log"]]}
                                  if res.get("gateway") else {})}), flush=True)

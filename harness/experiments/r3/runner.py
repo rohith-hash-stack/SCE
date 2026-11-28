@@ -252,7 +252,7 @@ def history_record(snapshot) -> dict:
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
              score_run: bool = True, plan: bool = False, ledger: bool = False, record_full: bool = False,
              hygiene: bool = False, compact: bool = False, feedback: bool = False, guards: bool = False,
-             edit_fix: bool = False) -> dict:
+             edit_fix: bool = False, gateway_families: bool = False) -> dict:
     from harness.experiments.r3.loop import GW_ARMS, AgentRun
     from harness.experiments.r3.shared_tools import SharedTools, make_env
     from harness.experiments.r3.tools import ToolLayer
@@ -316,6 +316,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
             else:                                         # Phase 3b: one switch on (arm C or arm E), never both
                 gateway = Gateway(work, task["prompt"], layer.reference_places,
                                   exact_fix=version == "PRISM_GW_C", keep_indent=version == "PRISM_GW_E")
+            if gateway_families:                          # the breadth study: delete, signature, move places too
+                gateway.enable_families(task["prompt"])
             stage = "loop"
         layer.keep_indent = version == "PRISM_GW_E"       # Phase 3b arm E: PRISM's printed lines keep their indentation
         summary = AgentRun(agent_task, version, seed, model, shared, layer, TOKENIZER, turn_cap, plan=plan,
@@ -410,6 +412,9 @@ def main(argv=None) -> int:
     p.add_argument("--edit-fix", action="store_true",
                    help="the breadth study, every arm: a one-line edit_file whose `old` matches one file line apart from "
                         "its leading whitespace is applied with the file's own indentation (shared_tools.whitespace_fix)")
+    p.add_argument("--gateway-families", action="store_true",
+                   help="the breadth study, the gateway arms: PRISM's gateway tracks delete, signature and move tasks' "
+                        "places too (prism.gateway, families=True)")
     a = p.parse_args(argv)
     if a.guards:
         a.feedback = True
@@ -435,7 +440,7 @@ def main(argv=None) -> int:
                           **({"timeout": a.timeout} if a.timeout else {}))
     res = run_task(task, a.version, a.seed, os.path.abspath(a.clone), a.out, a.cache, chat, a.turn_cap, plan=a.plan,
                    ledger=a.ledger, hygiene=a.phase1, compact=a.phase1, feedback=a.feedback, guards=a.guards,
-                   edit_fix=a.edit_fix)
+                   edit_fix=a.edit_fix, gateway_families=a.gateway_families)
     print(json.dumps({k: res.get(k) for k in ("run", "turns", "end", "used_tokens")}, default=str))
     return 0
 
