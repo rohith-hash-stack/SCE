@@ -57,7 +57,7 @@ def sanity3(t: dict, clone: str) -> dict:
 
 
 def gold_patch(clone: str, t: dict) -> str:
-    files = sorted(set(t.get("source_files") or []) | set(t["test_files"]))
+    files = sorted(set(t["gold_files"]) | set(t["test_files"]))          # the developer's source and test changes
     if not files:
         files = [p for p in subprocess.run(["git", "-C", clone, "diff", "--name-only", "--no-renames", t["parent"],
                                             t["commit"]], capture_output=True, text=True).stdout.split("\n") if p]
