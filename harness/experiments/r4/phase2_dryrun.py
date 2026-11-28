@@ -50,11 +50,19 @@ def gold_contents(clone: str, task: dict, patch: str) -> dict[str, tuple[str | N
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _qname(task: dict) -> str:
+    """The target's dotted name: the derived tasks record it; for a delete task, its file's module and the name."""
+    if task.get("anchor_qname"):
+        return task["anchor_qname"]
+    f, _, q = task["must_be_absent"].partition("::")
+    return f[:-3].replace("/", ".") + "." + q
+
+
 def gold_calls(task: dict, contents: dict, arm: str) -> list[dict]:
     calls = []
-    f, _, q = task["anchor"].partition("::")
+    f, _, q = (task.get("must_be_absent") or task["anchor"]).partition("::")     # a delete task: its target
     if arm in ("PRISM_LSP", "PRISM_ONLY"):                  # Phase 3: PRISM's own Find All References first
-        calls.append({"tool": "prism_find_references", "args": {"symbol": task["anchor_qname"]}})
+        calls.append({"tool": "prism_find_references", "args": {"symbol": _qname(task)}})
     if arm == "PRISM_ONLY":
         calls += [{"tool": "prism_search", "args": {"pattern": rf"\b{q.rsplit('.', 1)[-1]}\b"}},
                   {"tool": "prism_read", "args": {"path": f, "start": max(1, task["target_line"] - 5),
@@ -65,7 +73,7 @@ def gold_calls(task: dict, contents: dict, arm: str) -> list[dict]:
                   {"tool": "ast_search", "args": {"pattern": f"$X.{q.rsplit('.', 1)[-1]}($$$A)"}},
                   {"tool": "run_shell", "args": {"command": f"git log --oneline -3 -- {f} | cat"}}]
     elif arm in ("PRISM", "INJECTED", "PRISM_LSP", "PRISM_GW", "PRISM_GW_C", "PRISM_GW_E"):
-        calls.append({"tool": "prism_change_context", "args": {"symbol": task["anchor_qname"]}})
+        calls.append({"tool": "prism_change_context", "args": {"symbol": _qname(task)}})
     for path, (old, new) in sorted(contents.items()):
         calls += [{"tool": "edit_file", "args": e} for e in edits_for(old, new, path)]
     calls.append({"tool": "run_tests", "args": {"files": task["visible_tests"][:1]}})
@@ -87,6 +95,8 @@ def main(argv=None) -> int:
     p.add_argument("--edit-fix", action="store_true", help="the breadth study: the edit-fix rule, every arm")
     p.add_argument("--empty-every-arm", action="store_true",
                    help="Phase 3b: the empty script in every arm (default: one baseline arm only)")
+    p.add_argument("--all-families", action="store_true",
+                   help="the breadth study: every task in the file, delete tasks too (default: derived tasks only)")
     a = p.parse_args(argv)
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
     from harness.experiments.r3.runner import run_task
@@ -94,7 +104,7 @@ def main(argv=None) -> int:
     os.makedirs(a.out, exist_ok=True)
     bad = 0
     for t in json.load(open(a.tasks))["tasks"]:
-        if not t.get("derived") or (a.ids and t["id"] not in a.ids):
+        if not (t.get("derived") or a.all_families) or (a.ids and t["id"] not in a.ids):
             continue
         clone = os.path.abspath(clones[t["repo"]])
         contents = gold_contents(clone, t, open(os.path.join(a.gold_dir, f"{t['id']}.patch")).read())
