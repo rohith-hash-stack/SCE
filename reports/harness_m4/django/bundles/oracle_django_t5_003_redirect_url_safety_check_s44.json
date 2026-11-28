@@ -1,0 +1,136 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "django_t5_003_redirect_url_safety_check",
+  "items": [
+   {
+    "source_id": "django/contrib/auth/views.py:78-90",
+    "content": "# django/contrib/auth/views.py:78-90  (django.contrib.auth.views.LoginView.dispatch)\n    @method_decorator(sensitive_post_parameters())\n    @method_decorator(csrf_protect)\n    @method_decorator(never_cache)\n    def dispatch(self, request, *args, **kwargs):\n        if self.redirect_authenticated_user and self.request.user.is_authenticated:\n            redirect_to = self.get_success_url()\n            if redirect_to == self.request.path:\n                raise ValueError(\n                    \"Redirection loop for authenticated user detected. Check that \"\n                    \"your LOGIN_REDIRECT_URL doesn't point to a login page.\"\n                )\n            return HttpResponseRedirect(redirect_to)\n        return super().dispatch(request, *args, **kwargs)",
+    "token_count": 146,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.views.LoginView.dispatch"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 146
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:107-110",
+    "content": "# django/contrib/auth/views.py:107-110  (django.contrib.auth.views.LoginView.form_valid)\n    def form_valid(self, form):\n        \"\"\"Security check complete. Log the user in.\"\"\"\n        auth_login(self.request, form.get_user())\n        return HttpResponseRedirect(self.get_success_url())",
+    "token_count": 63,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.views.LoginView.form_valid"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:112-123",
+    "content": "# django/contrib/auth/views.py:112-123  (django.contrib.auth.views.LoginView.get_context_data)\n    def get_context_data(self, **kwargs):\n        context = super().get_context_data(**kwargs)\n        current_site = get_current_site(self.request)\n        context.update(\n            {\n                self.redirect_field_name: self.get_redirect_url(),\n                \"site\": current_site,\n                \"site_name\": current_site.name,\n                **(self.extra_context or {}),\n            }\n        )\n        return context",
+    "token_count": 106,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.views.LoginView.get_context_data"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 106
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:149-157",
+    "content": "# django/contrib/auth/views.py:149-157  (django.contrib.auth.views.LogoutView.post)\n    @method_decorator(csrf_protect)\n    def post(self, request, *args, **kwargs):\n        \"\"\"Logout may be done via POST.\"\"\"\n        auth_logout(request)\n        redirect_to = self.get_success_url()\n        if redirect_to != request.get_full_path():\n            # Redirect to target page once the session has been cleared.\n            return HttpResponseRedirect(redirect_to)\n        return super().get(request, *args, **kwargs)",
+    "token_count": 114,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.views.LogoutView.post"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:45-55",
+    "content": "# django/contrib/auth/views.py:45-55  (django.contrib.auth.views.RedirectURLMixin.get_redirect_url)\n    def get_redirect_url(self):\n        \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n        redirect_to = self.request.POST.get(\n            self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n        )\n        url_is_safe = url_has_allowed_host_and_scheme(\n            url=redirect_to,\n            allowed_hosts=self.get_success_url_allowed_hosts(),\n            require_https=self.request.is_secure(),\n        )\n        return redirect_to if url_is_safe else \"\"",
+    "token_count": 121,
+    "rank": 5,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin.get_redirect_url"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 121
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:42-43",
+    "content": "# django/contrib/auth/views.py:42-43  (django.contrib.auth.views.RedirectURLMixin.get_success_url)\n    def get_success_url(self):\n        return self.get_redirect_url() or self.get_default_redirect_url()",
+    "token_count": 47,
+    "rank": 6,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin.get_success_url"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:19-63",
+    "content": "# django/views/i18n.py:19-63  (django.views.i18n.set_language)\ndef set_language(request):\n    \"\"\"\n    Redirect to a given URL while setting the chosen language in the session\n    (if enabled) and in a cookie. The URL and the language code need to be\n    specified in the request parameters.\n\n    Since this view changes how the user will see the rest of the site, it must\n    only be accessed as a POST request. If called as a GET request, it will\n    redirect to the page in the request (the 'next' parameter) without changing\n    any state.\n    \"\"\"\n    next_url = request.POST.get(\"next\", request.GET.get(\"next\"))\n    if (\n        next_url or request.accepts(\"text/html\")\n    ) and not url_has_allowed_host_and_scheme(\n        url=next_url,\n        allowed_hosts={request.get_host()},\n        require_https=request.is_secure(),\n    ):\n        next_url = request.META.get(\"HTTP_REFERER\")\n        if not url_has_allowed_host_and_scheme(\n            url=next_url,\n            allowed_hosts={request.get_host()},\n            require_https=request.is_secure(),\n        ):\n            next_url = \"/\"\n    response = HttpResponseRedirect(next_url) if next_url else HttpResponse(status=204)\n    if request.method == \"POST\":\n        lang_code = request.POST.get(LANGUAGE_QUERY_PARAMETER)\n        if lang_code and check_for_language(lang_code):\n            if next_url:\n                next_trans = translate_url(next_url, lang_code)\n                if next_trans != next_url:\n                    response = HttpResponseRedirect(next_trans)\n            response.set_cookie(\n                settings.LANGUAGE_COOKIE_NAME,\n                lang_code,\n                max_age=settings.LANGUAGE_COOKIE_AGE,\n                path=settings.LANGUAGE_COOKIE_PATH,\n                domain=settings.LANGUAGE_COOKIE_DOMAIN,\n                secure=settings.LANGUAGE_COOKIE_SECURE,\n                httponly=settings.LANGUAGE_COOKIE_HTTPONLY,\n                samesite=settings.LANGUAGE_COOKIE_SAMESITE,\n            )\n    return response",
+    "token_count": 409,
+    "rank": 7,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.views.i18n.set_language"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 409
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1006,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "What breaks if `django.utils.http.url_has_allowed_host_and_scheme` changes?",
+   "task_type": "T5_blast_radius",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 7,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1006,
+   "prompt_tokens": 1148,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1161,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/auth/views.py:78-90  (django.contrib.auth.views.LoginView.dispatch)\n    @method_decorator(sensitive_post_parameters())\n    @method_decorator(csrf_protect)\n    @method_decorator(never_cache)\n    def dispatch(self, request, *args, **kwargs):\n        if self.redirect_authenticated_user and self.request.user.is_authenticated:\n            redirect_to = self.get_success_url()\n            if redirect_to == self.request.path:\n                raise ValueError(\n                    \"Redirection loop for authenticated user detected. Check that \"\n                    \"your LOGIN_REDIRECT_URL doesn't point to a login page.\"\n                )\n            return HttpResponseRedirect(redirect_to)\n        return super().dispatch(request, *args, **kwargs)\n\n# django/contrib/auth/views.py:107-110  (django.contrib.auth.views.LoginView.form_valid)\n    def form_valid(self, form):\n        \"\"\"Security check complete. Log the user in.\"\"\"\n        auth_login(self.request, form.get_user())\n        return HttpResponseRedirect(self.get_success_url())\n\n# django/contrib/auth/views.py:112-123  (django.contrib.auth.views.LoginView.get_context_data)\n    def get_context_data(self, **kwargs):\n        context = super().get_context_data(**kwargs)\n        current_site = get_current_site(self.request)\n        context.update(\n            {\n                self.redirect_field_name: self.get_redirect_url(),\n                \"site\": current_site,\n                \"site_name\": current_site.name,\n                **(self.extra_context or {}),\n            }\n        )\n        return context\n\n# django/contrib/auth/views.py:149-157  (django.contrib.auth.views.LogoutView.post)\n    @method_decorator(csrf_protect)\n    def post(self, request, *args, **kwargs):\n        \"\"\"Logout may be done via POST.\"\"\"\n        auth_logout(request)\n        redirect_to = self.get_success_url()\n        if redirect_to != request.get_full_path():\n            # Redirect to target page once the session has been cleared.\n            return HttpResponseRedirect(redirect_to)\n        return super().get(request, *args, **kwargs)\n\n# django/contrib/auth/views.py:45-55  (django.contrib.auth.views.RedirectURLMixin.get_redirect_url)\n    def get_redirect_url(self):\n        \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n        redirect_to = self.request.POST.get(\n            self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n        )\n        url_is_safe = url_has_allowed_host_and_scheme(\n            url=redirect_to,\n            allowed_hosts=self.get_success_url_allowed_hosts(),\n            require_https=self.request.is_secure(),\n        )\n        return redirect_to if url_is_safe else \"\"\n\n# django/contrib/auth/views.py:42-43  (django.contrib.auth.views.RedirectURLMixin.get_success_url)\n    def get_success_url(self):\n        return self.get_redirect_url() or self.get_default_redirect_url()\n\n# django/views/i18n.py:19-63  (django.views.i18n.set_language)\ndef set_language(request):\n    \"\"\"\n    Redirect to a given URL while setting the chosen language in the session\n    (if enabled) and in a cookie. The URL and the language code need to be\n    specified in the request parameters.\n\n    Since this view changes how the user will see the rest of the site, it must\n    only be accessed as a POST request. If called as a GET request, it will\n    redirect to the page in the request (the 'next' parameter) without changing\n    any state.\n    \"\"\"\n    next_url = request.POST.get(\"next\", request.GET.get(\"next\"))\n    if (\n        next_url or request.accepts(\"text/html\")\n    ) and not url_has_allowed_host_and_scheme(\n        url=next_url,\n        allowed_hosts={request.get_host()},\n        require_https=request.is_secure(),\n    ):\n        next_url = request.META.get(\"HTTP_REFERER\")\n        if not url_has_allowed_host_and_scheme(\n            url=next_url,\n            allowed_hosts={request.get_host()},\n            require_https=request.is_secure(),\n        ):\n            next_url = \"/\"\n    response = HttpResponseRedirect(next_url) if next_url else HttpResponse(status=204)\n    if request.method == \"POST\":\n        lang_code = request.POST.get(LANGUAGE_QUERY_PARAMETER)\n        if lang_code and check_for_language(lang_code):\n            if next_url:\n                next_trans = translate_url(next_url, lang_code)\n                if next_trans != next_url:\n                    response = HttpResponseRedirect(next_trans)\n            response.set_cookie(\n                settings.LANGUAGE_COOKIE_NAME,\n                lang_code,\n                max_age=settings.LANGUAGE_COOKIE_AGE,\n                path=settings.LANGUAGE_COOKIE_PATH,\n                domain=settings.LANGUAGE_COOKIE_DOMAIN,\n                secure=settings.LANGUAGE_COOKIE_SECURE,\n                httponly=settings.LANGUAGE_COOKIE_HTTPONLY,\n                samesite=settings.LANGUAGE_COOKIE_SAMESITE,\n            )\n    return response\n\n## Task\n\nWhat breaks if `django.utils.http.url_has_allowed_host_and_scheme` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

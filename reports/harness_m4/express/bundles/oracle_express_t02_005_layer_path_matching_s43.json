@@ -1,0 +1,61 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "express_t02_005_layer_path_matching",
+  "items": [
+   {
+    "source_id": "lib/router/layer.js:110-156",
+    "content": "# lib/router/layer.js:110-156  (lib.router.layer.match)\nLayer.prototype.match = function match(path) {\n  var match\n\n  if (path != null) {\n    // fast path non-ending match for / (any path matches)\n    if (this.regexp.fast_slash) {\n      this.params = {}\n      this.path = ''\n      return true\n    }\n\n    // fast path for * (everything matched in a param)\n    if (this.regexp.fast_star) {\n      this.params = {'0': decode_param(path)}\n      this.path = path\n      return true\n    }\n\n    // match the path\n    match = this.regexp.exec(path)\n  }\n\n  if (!match) {\n    this.params = undefined;\n    this.path = undefined;\n    return false;\n  }\n\n  // store values\n  this.params = {};\n  this.path = match[0]\n\n  var keys = this.keys;\n  var params = this.params;\n\n  for (var i = 1; i < match.length; i++) {\n    var key = keys[i - 1];\n    var prop = key.name;\n    var val = decode_param(match[i])\n\n    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {\n      params[prop] = val;\n    }\n  }\n\n  return true;\n};",
+    "token_count": 277,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.router.layer.match"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 277
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:166-181",
+    "content": "# lib/router/layer.js:166-181  (lib.router.layer.decode_param)\nfunction decode_param(val) {\n  if (typeof val !== 'string' || val.length === 0) {\n    return val;\n  }\n\n  try {\n    return decodeURIComponent(val);\n  } catch (err) {\n    if (err instanceof URIError) {\n      err.message = 'Failed to decode param \\'' + val + '\\'';\n      err.status = err.statusCode = 400;\n    }\n\n    throw err;\n  }\n}",
+    "token_count": 112,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.router.layer.decode_param"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 112
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 389,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how an Express route Layer decides whether it matches an incoming request path, in lib/router/layer.js. Starting from `match`, trace the exact causal pipeline for a successful match with captured path parameters: what happens to each raw captured value before it is stored on `this.params`.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.layer.match\", \"lib.router.layer.decode_param\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 2,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 389,
+   "prompt_tokens": 660,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 673,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/router/layer.js:110-156  (lib.router.layer.match)\nLayer.prototype.match = function match(path) {\n  var match\n\n  if (path != null) {\n    // fast path non-ending match for / (any path matches)\n    if (this.regexp.fast_slash) {\n      this.params = {}\n      this.path = ''\n      return true\n    }\n\n    // fast path for * (everything matched in a param)\n    if (this.regexp.fast_star) {\n      this.params = {'0': decode_param(path)}\n      this.path = path\n      return true\n    }\n\n    // match the path\n    match = this.regexp.exec(path)\n  }\n\n  if (!match) {\n    this.params = undefined;\n    this.path = undefined;\n    return false;\n  }\n\n  // store values\n  this.params = {};\n  this.path = match[0]\n\n  var keys = this.keys;\n  var params = this.params;\n\n  for (var i = 1; i < match.length; i++) {\n    var key = keys[i - 1];\n    var prop = key.name;\n    var val = decode_param(match[i])\n\n    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {\n      params[prop] = val;\n    }\n  }\n\n  return true;\n};\n\n# lib/router/layer.js:166-181  (lib.router.layer.decode_param)\nfunction decode_param(val) {\n  if (typeof val !== 'string' || val.length === 0) {\n    return val;\n  }\n\n  try {\n    return decodeURIComponent(val);\n  } catch (err) {\n    if (err instanceof URIError) {\n      err.message = 'Failed to decode param \\'' + val + '\\'';\n      err.status = err.statusCode = 400;\n    }\n\n    throw err;\n  }\n}\n\n## Task\n\nYou are investigating how an Express route Layer decides whether it matches an incoming request path, in lib/router/layer.js. Starting from `match`, trace the exact causal pipeline for a successful match with captured path parameters: what happens to each raw captured value before it is stored on `this.params`.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.layer.match\", \"lib.router.layer.decode_param\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

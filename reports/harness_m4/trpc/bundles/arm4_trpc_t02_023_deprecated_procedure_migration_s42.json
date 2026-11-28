@@ -1,0 +1,225 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "trpc_t02_023_deprecated_procedure_migration",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \".\", \"pattern\": \"migrateProcedure\"})\ndeprecated/interop.ts:171:function migrateProcedure<\ndeprecated/interop.ts:210:    queries[name] = migrateProcedure(procedure as any, 'query');\ndeprecated/interop.ts:214:    mutations[name] = migrateProcedure(procedure as any, 'mutation');\ndeprecated/interop.ts:220:    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');",
+    "token_count": 104,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "migrateProcedure",
+      "path": "."
+     },
+     "engine_token_count": 104
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (glob {\"pattern\": \"**/deprecated/interop.ts\"})\ndeprecated/interop.ts",
+    "token_count": 22,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "glob",
+     "args": {
+      "pattern": "**/deprecated/interop.ts"
+     },
+     "engine_token_count": 22
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 225, \"path\": \"deprecated/interop.ts\", \"start_line\": 170})\n170: \n171: function migrateProcedure<\n172:   TProcedure extends AnyOldProcedure,\n173:   TType extends ProcedureType,\n174: >(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n175:   const def = oldProc._def();\n176: \n177:   const inputParser = getParseFnOrPassThrough(def.inputParser);\n178:   const outputParser = getParseFnOrPassThrough(def.outputParser);\n179: \n180:   const inputMiddleware = createInputMiddleware(inputParser);\n181: \n182:   const builder = createBuilder({\n183:     inputs: [def.inputParser],\n184:     middlewares: [\n185:       ...(def.middlewares as any),\n186:       inputMiddleware,\n187:       createOutputMiddleware(outputParser),\n188:     ],\n189:     meta: def.meta,\n190:     output: def.outputParser,\n191:     mutation: type === 'mutation',\n192:     query: type === 'query',\n193:     subscription: type === 'subscription',\n194:   });\n195: \n196:   const proc = builder[type]((opts) => def.resolver(opts as any));\n197: \n198:   return proc as any;\n199: }\n200: export function migrateRouter<TOldRouter extends AnyOldRouter>(\n201:   oldRouter: TOldRouter,\n202: ): MigrateOldRouter<TOldRouter> {\n203:   const errorFormatter = oldRouter._def.errorFormatter;\n204:   const transformer = oldRouter._def.transformer;\n205: \n206:   const queries: NewProcedureRecord = {};\n207:   const mutations: NewProcedureRecord = {};\n208:   const subscriptions: NewProcedureRecord = {};\n209:   for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n210:     queries[name] = migrateProcedure(procedure as any, 'query');\n211:   }\n212: \n213:   for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n214:     mutations[name] = migrateProcedure(procedure as any, 'mutation');\n215:   }\n216: \n217:   for (const [name, procedure] of Object.entries(\n218:     oldRouter._def.subscriptions,\n219:   )) {\n220:     subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n221:   }\n222: \n223:   const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n224: \n225:   const newRouter = createRouterFactory<any>({\n[lines 170-225 of 233]",
+    "token_count": 702,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "deprecated/interop.ts",
+      "start_line": 170,
+      "end_line": 225
+     },
+     "engine_token_count": 702
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 828,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating how tRPC migrates a single legacy (v9-shaped) procedure into the modern procedure-builder shape, starting from `migrateProcedure` in deprecated/interop.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"deprecated.interop.migrateProcedure\", \"core.internals.getParseFn.getParseFnOrPassThrough\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"migrateProcedure\", \"path\": \".\"}}</tools>\n<tools>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/deprecated/interop.ts\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "migrateProcedure",
+        "path": "."
+       }
+      },
+      {
+       "name": "glob",
+       "arguments": {
+        "pattern": "**/deprecated/interop.ts"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "migrateProcedure",
+        "path": "."
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "glob",
+       "args": {
+        "pattern": "**/deprecated/interop.ts"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 51,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"deprecated/interop.ts\", \"start_line\": 170, \"end_line\": 225}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "deprecated/interop.ts",
+        "start_line": 170,
+        "end_line": 225
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "deprecated/interop.ts",
+        "start_line": 170,
+        "end_line": 225
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 41,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "```json\n[\"deprecated.interop.migrateProcedure\", \"core.internals.getParseFn.getParseFnOrPassThrough\", \"core.internals.createInputMiddleware\", \"core.internals.createBuilder\", \"core.internals.createOutputMiddleware\", \"core.internals.createRouterFactory\"]\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 58,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     3953.583672,
+     2882.716971,
+     4968.200519
+    ],
+    "L_tool_exec": [
+     7.808969,
+     1.097521,
+     0.340853
+    ],
+    "L_retrieve": [
+     11846.047218
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1668,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"\", \"symbols\": [\"deprecated.interop.migrateProcedure\", \"core.internals.getParseFn.getParseFnOrPassThrough\", \"core.internals.createInputMiddleware\", \"core.internals.createBuilder\", \"core.internals.createOutputMiddleware\", \"core.internals.createRouterFactory\"]}\n```",
+    "generation_tokens": 58,
+    "latency_seconds": 4.968055800999537,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1701,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 828,
+   "prompt_tokens": 1668,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1701,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

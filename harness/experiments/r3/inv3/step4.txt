@@ -1,0 +1,388 @@
+
+===== r3a-B-22__PRISM__42 repo=svelte outcome=unresolved turns=2
+gold functions: ['packages/svelte/src/compiler/phases/1-parse/utils/html.js::decode_character_references'] | changed_callers: ['packages.svelte.src.compiler.phases.1-parse.utils.html.decode_character_references']
+agent functions: [] | f2p passed 0 / 3 | p2p broken 0
+tool sequence: run_tests > done
+  GOLD (developer, gold files):
+    diff --git a/.changeset/tricky-donkeys-clap.md b/.changeset/tricky-donkeys-clap.md
+    new file mode 100644
+    index 00000000..b363b4ff
+    --- /dev/null
+    +++ b/.changeset/tricky-donkeys-clap.md
+    @@ -0,0 +1,5 @@
+    +---
+    +'svelte': patch
+    +---
+    +
+    +fix: preserve line feed character references in attribute values
+    diff --git a/packages/svelte/src/compiler/phases/1-parse/utils/html.js b/packages/svelte/src/compiler/phases/1-parse/utils/html.js
+    index 1d660298..ccb20050 100644
+    --- a/packages/svelte/src/compiler/phases/1-parse/utils/html.js
+    +++ b/packages/svelte/src/compiler/phases/1-parse/utils/html.js
+    @@ -62,3 +62,3 @@ export function decode_character_references(html, is_attribute_value) {
+     
+    -			return String.fromCodePoint(validate_code(code));
+    +			return String.fromCodePoint(validate_code(code, is_attribute_value));
+     		}
+    @@ -77,6 +77,11 @@ const NUL = 0;
+     
+    -/** @param {number} code */
+    -function validate_code(code) {
+    -	// line feed becomes generic whitespace
+    -	if (code === 10) {
+    +/**
+    + * @param {number} code
+
+===== r3a-B-27__PRISM__42 repo=packaging outcome=budget turns=24
+gold functions: ['src/packaging/dependency_groups.py::DependencyGroupResolver.__init__', 'src/packaging/dependency_groups.py::DependencyGroupResolver._validate', 'src/packaging/dependency_groups.py::DependencyGroupResolver.resolve'] | changed_callers: ['src.packaging.dependency_groups.DependencyGroupResolver.resolve']
+agent functions: [] | f2p passed 0 / 33 | p2p broken 0
+tool sequence: run_tests > prism_change_context > prism_blast_radius > run_tests > prism_change_context > prism_blast_radius > run_tests > prism_change_context > prism_blast_radius > run_tests > prism_change_context > prism_blast_radius > run_tests > prism_change_context > prism_blast_radius > run_tests > prism_change_context > prism_blast_radius > run_tests > prism_change_context > prism_blast_radius > run_tests > prism_change_context > prism_blast_radius
+  GOLD (developer, gold files):
+    diff --git a/src/packaging/dependency_groups.py b/src/packaging/dependency_groups.py
+    index ec8f2c4..56f50ec 100644
+    --- a/src/packaging/dependency_groups.py
+    +++ b/src/packaging/dependency_groups.py
+    @@ -125,4 +125,2 @@ class DependencyGroupResolver:
+             ] = {}
+    -        # a map of group names to their ancestors, used for cycle detection
+    -        self._include_graph_ancestors: dict[str, tuple[str, ...]] = {}
+             # a cache of completed resolutions to Requirement lists
+    @@ -154,8 +152,11 @@ class DependencyGroupResolver:
+     
+    -        with _ErrorCollector().on_exit(
+    -            f"[dependency-groups] data for {group!r} was malformed"
+    -        ) as errors:
+    -            return self._resolve(group, group, errors, set())
+    +        if group not in self._resolve_cache:
+    +            with _ErrorCollector().on_exit(
+    +                f"[dependency-groups] data for {group!r} was malformed"
+    +            ) as errors:
+    +                self._validate(group, group, [], set(), errors)
+     
+    -    def _resolve(
+    +        return self._resolve(group)
+    +
+    +    def _validate(
+             self,
+    @@ -163,40 +164,23 @@ class DependencyGroupResolver:
+             requested_group: str,
+
+===== r3a-B-11__PRISM__1001 repo=poetry outcome=unresolved turns=5
+gold functions: ['src/poetry/console/commands/show.py::ShowCommand._display_packages_information', 'src/poetry/console/commands/show.py::ShowCommand._required_locked_packages', 'src/poetry/console/commands/show.py::ShowCommand.handle'] | changed_callers: ['src.poetry.console.commands.show.ShowCommand.handle']
+agent functions: [] | f2p passed 0 / 11 | p2p broken 0
+tool sequence: run_tests > prism_change_context > edit_file > grep > done
+  EDIT T3 tests/console/commands/test_show.py -> error: the text to replace was not found in tests/console/commands/test_show.py
+    OLD: 'result = self._display_single_package_information(package, locked_repo)'
+    NEW: 'result = self._display_single_package_information(package, locked_repo, root)'
+  GOLD (developer, gold files):
+    diff --git a/src/poetry/console/commands/show.py b/src/poetry/console/commands/show.py
+    index 9dd097cc..ad79e13e 100644
+    --- a/src/poetry/console/commands/show.py
+    +++ b/src/poetry/console/commands/show.py
+    @@ -156,7 +156,6 @@ lists all packages available."""
+             locked_repo = self.poetry.locker.locked_repository()
+    +        root = self.project_with_activated_groups_only()
+     
+             if package:
+    -            return self._display_single_package_information(package, locked_repo)
+    -
+    -        root = self.project_with_activated_groups_only()
+    +            return self._display_single_package_information(package, locked_repo, root)
+     
+    @@ -175,3 +174,3 @@ lists all packages available."""
+         def _display_single_package_information(
+    -        self, package: str, locked_repository: Repository
+    +        self, package: str, locked_repository: Repository, root: ProjectPackage
+         ) -> int:
+    @@ -179,12 +178,21 @@ lists all packages available."""
+             canonicalized_package = canonicalize_name(package)
+    -        pkg = None
+    -
+    -        for locked in locked_packages:
+    -            if locked.name == canonicalized_package:
+    -                pkg = locked
+    -                break
+    +        matches = [
+
+===== r3a-B-64__PRISM__42 repo=sqlglot outcome=unresolved turns=9
+gold functions: ['sqlglot/parser.py::Parser._parse_group', 'sqlglot/parser.py::Parser._parse_grouping_set'] | changed_callers: ['sqlglot.parser.Parser._parse_group']
+agent functions: ['sqlglot/parser.py::Parser._parse_group'] | f2p passed 0 / 3 | p2p broken 0
+tool sequence: run_tests > edit_file > edit_file > run_tests > edit_file > edit_file > edit_file > run_tests > done
+  EDIT T2 sqlglot/parser.py -> edited sqlglot/parser.py at line 4591: replaced 1 lines with 1
+    OLD: 'self._parse_cube_or_rollup(exp.Rollup, with_prefix=with_prefix)'
+    NEW: 'self._parse_cube_or_rollup(with_prefix=with_prefix)'
+  EDIT T3 sqlglot/parser.py -> edited sqlglot/parser.py at line 4595: replaced 1 lines with 1
+    OLD: 'self._parse_cube_or_rollup(exp.Cube, with_prefix=with_prefix)'
+    NEW: 'self._parse_cube_or_rollup(with_prefix=with_prefix)'
+  EDIT T5 sqlglot/parser.py -> error: the text to replace occurs 2 times in sqlglot/parser.py; give a longer, u
+    OLD: 'self._parse_cube_or_rollup(with_prefix=with_prefix)'
+    NEW: 'self._parse_cube_or_rollup(kind=exp.Rollup, with_prefix=with_prefix)'
+  EDIT T6 sqlglot/parser.py -> error: the text to replace was not found in sqlglot/parser.py
+    OLD: 'self._parse_cube_or_rollup(exp.Rollup, with_prefix=with_prefix)'
+    NEW: 'self._parse_cube_or_rollup(kind=exp.Rollup, with_prefix=with_prefix)'
+  EDIT T7 sqlglot/parser.py -> error: the text to replace was not found in sqlglot/parser.py
+    OLD: 'self._parse_cube_or_rollup(exp.Cube, with_prefix=with_prefix)'
+    NEW: 'self._parse_cube_or_rollup(kind=exp.Cube, with_prefix=with_prefix)'
+  GOLD (developer, gold files):
+    diff --git a/sqlglot/parser.py b/sqlglot/parser.py
+    index 5c571765d..98509e0df 100644
+    --- a/sqlglot/parser.py
+    +++ b/sqlglot/parser.py
+    @@ -4588,10 +4588,6 @@ class Parser(metaclass=_Parser):
+     
+    -            if self._match(TokenType.ROLLUP):
+    -                elements["rollup"].append(
+    -                    self._parse_cube_or_rollup(exp.Rollup, with_prefix=with_prefix)
+    -                )
+    -            elif self._match(TokenType.CUBE):
+    -                elements["cube"].append(
+    -                    self._parse_cube_or_rollup(exp.Cube, with_prefix=with_prefix)
+    -                )
+    +            cube_or_rollup = self._parse_cube_or_rollup(with_prefix=with_prefix)
+    +            if cube_or_rollup:
+    +                key = "rollup" if isinstance(cube_or_rollup, exp.Rollup) else "cube"
+    +                elements[key].append(cube_or_rollup)
+                 elif self._match(TokenType.GROUPING_SETS):
+    @@ -4615,3 +4611,10 @@ class Parser(metaclass=_Parser):
+     
+    -    def _parse_cube_or_rollup(self, kind: t.Type[E], with_prefix: bool = False) -> E:
+    +    def _parse_cube_or_rollup(self, with_prefix: bool = False) -> t.Optional[exp.Cube | exp.Rollup]:
+    +        if self._match(TokenType.CUBE):
+    +            kind: t.Type[exp.Cube | exp.Rollup] = exp.Cube
+    +        elif self._match(TokenType.ROLLUP):
+    +            kind = exp.Rollup
+    +        else:
+
+===== r3a-B-37__PRISM__42 repo=nitro outcome=unresolved turns=4
+gold functions: ['src/build/virtual/database.ts::genConnectorOptions', 'src/build/virtual/storage.ts::genDriverOptions', 'src/config/resolvers/builder.ts::resolveBuilder', 'src/utils/dep.ts::ensureDep', 'src/utils/dep.ts::ensureLibDeps'] | changed_callers: ['src.config.resolvers.builder.resolveBuilder']
+agent functions: [] | f2p passed 0 / 1 | p2p broken 0
+tool sequence: run_tests > run_tests > run_tests > done
+  GOLD (developer, gold files):
+    diff --git a/src/build/virtual/database.ts b/src/build/virtual/database.ts
+    index 2e9b921e..4762d2bb 100644
+    --- a/src/build/virtual/database.ts
+    +++ b/src/build/virtual/database.ts
+    @@ -48,3 +48,3 @@ function genConnectorOptions(nitro: Nitro, connection: DatabaseConnection) {
+             connection.options[dep.option] === undefined &&
+    -        isDepInstalled(dep.name, nitro.options.rootDir)
+    +        isDepInstalled(dep.name, { dir: nitro.options.rootDir, projectOnly: true })
+         )
+    diff --git a/src/build/virtual/storage.ts b/src/build/virtual/storage.ts
+    index f5304ff5..e154090f 100644
+    --- a/src/build/virtual/storage.ts
+    +++ b/src/build/virtual/storage.ts
+    @@ -50,3 +50,3 @@ function genDriverOptions(nitro: Nitro, mount: ReturnType<typeof resolveStorageM
+             mount.options[dep.option] === undefined &&
+    -        isDepInstalled(dep.name, nitro.options.rootDir)
+    +        isDepInstalled(dep.name, { dir: nitro.options.rootDir, projectOnly: true })
+         )
+    diff --git a/src/config/resolvers/builder.ts b/src/config/resolvers/builder.ts
+    index 99281849..b069d1e5 100644
+    --- a/src/config/resolvers/builder.ts
+    +++ b/src/config/resolvers/builder.ts
+    @@ -40,3 +40,3 @@ export async function resolveBuilder(options: NitroOptions) {
+       // Auto-detect: check for vite.config with nitro() plugin
+    -  if (isDepInstalled("vite", options.rootDir) && hasNitroViteConfig(options)) {
+    +  if (isDepInstalled("vite", { dir: options.rootDir }) && hasNitroViteConfig(options)) {
+         options.builder = "vite";
+    diff --git a/src/utils/dep.ts b/src/utils/dep.ts
+
+===== r3a-B-44__BASELINE__1001 repo=nitro outcome=unresolved turns=4
+gold functions: ['src/scan.ts::scanFiles', 'src/scan.ts::scanModules'] | changed_callers: ['src.scan.scanFiles']
+agent functions: ['src/scan.ts::scanFiles'] | f2p passed 0 / 1 | p2p broken 0
+tool sequence: grep > edit_file > run_tests > done
+  EDIT T2 src/scan.ts -> edited src/scan.ts at line 141: replaced 1 lines with 1
+    OLD: 'nitro.options.scanDirs.map((dir) => scanDir(nitro, dir, name))'
+    NEW: 'nitro.options.scanDirs.map((dir) => scanDir(nitro, dir, name, nitro.options.scanPatterns))'
+  GOLD (developer, gold files):
+    diff --git a/docs/1.docs/55.modules.md b/docs/1.docs/55.modules.md
+    index bbafa2ea..44f79e7a 100644
+    --- a/docs/1.docs/55.modules.md
+    +++ b/docs/1.docs/55.modules.md
+    @@ -71,2 +71,9 @@ Files in the `modules/` directory are automatically registered as modules (like
+     
+    +Only two patterns are auto-registered (with any supported extension: `.ts`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`, `.tsx`, `.jsx`):
+    +
+    +- `modules/*.ts` (a single-file module)
+    +- `modules/*/index.ts` (a directory module)
+    +
+    +Any other file inside `modules/` that does not match these patterns (for example a module's own `runtime/` files) is ignored by the scanner.
+    +
+     Modules referenced by path or package name are resolved and installed **only once**; duplicate entries pointing to the same file are skipped.
+    diff --git a/src/scan.ts b/src/scan.ts
+    index b1808262..e70692f8 100644
+    --- a/src/scan.ts
+    +++ b/src/scan.ts
+    @@ -6,2 +6,9 @@ import { withBase, withLeadingSlash, withoutTrailingSlash } from "ufo";
+     export const GLOB_SCAN_PATTERN = "**/*.{js,mjs,cjs,ts,mts,cts,tsx,jsx}";
+    +
+    +// Modules are only auto-registered from `modules/*` and `modules/*/index` (any supported
+    +// extension) so that a module's own nested files are not registered as modules themselves.
+    +const GLOB_MODULES_SCAN_PATTERN = [
+    +  "*.{js,mjs,cjs,ts,mts,cts,tsx,jsx}",
+    +  "*/index.{js,mjs,cjs,ts,mts,cts,tsx,jsx}",
+    +];
+     type FileInfo = { path: string; fullPath: string };
+
+===== r3a-B-15__BASELINE__1001 repo=yarl outcome=unresolved turns=2
+gold functions: ['tools/conformance/compare.py::Case.bucket', 'tools/conformance/compare.py::case_row', 'tools/conformance/compare.py::render', 'yarl/_url.py::URL.build', 'yarl/_url.py::URL.with_host', 'yarl/_url.py::_check_rfc_authority', 'yarl/_url.py::_encode_host', 'yarl/_url.py::_encode_url', 'yarl/_url.py::_idna2003_host_error', 'yarl/_url.py::_idna_encode'] | changed_callers: ['tools.conformance.compare.render']
+agent functions: [] | f2p passed 0 / 10 | p2p broken 0
+tool sequence: run_tests > done
+  GOLD (developer, gold files):
+    diff --git a/AGENTS.md b/AGENTS.md
+    index 6918c86..7eae860 100644
+    --- a/AGENTS.md
+    +++ b/AGENTS.md
+    @@ -388,9 +388,17 @@ vendored JSON files.
+     
+    +The report runs every case through yarl twice, once in the
+    +default WHATWG mode and once in RFC 3986 mode (`mode="rfc"`).
+    +The goal is that every case ends up in one of two sections:
+    +*RFC 3986, WHATWG and yarl in both modes agree*, or, where the
+    +standards differ, *yarl follows each standard in its mode*
+    +(WHATWG mode gives the WHATWG result, RFC mode the RFC 3986
+    +one).
+    +
+     The report section *yarl differs, RFC 3986 and WHATWG agree*
+     lists every case where both standards give the same result and
+    -yarl does something else. **A change that adds a row to that
+    -section is rejected**, whether it is new functionality, a
+    -refactor or a bug fix for something else. There is no
+    -"acceptable trade-off" exception: if both standards agree,
+    -yarl follows them.
+    +yarl, in either mode, does something else. **A change that adds
+    +a row to that section is rejected**, whether it is new
+    +functionality, a refactor or a bug fix for something else. There
+    +is no "acceptable trade-off" exception: if both standards agree,
+    +yarl follows them in both modes.
+     
+    @@ -403,6 +411,11 @@ yarl follows them.
+
+===== r3a-B-10__BASELINE__1001 repo=unstorage outcome=unresolved turns=6
+gold functions: ['src/drivers/netlify-blobs.ts::driver', 'src/drivers/netlify-blobs.ts::driver.getItem', 'src/drivers/netlify-blobs.ts::driver.getItemRaw', 'src/drivers/netlify-blobs.ts::driver.getMeta', 'src/drivers/netlify-blobs.ts::driver.hasItem', 'src/drivers/netlify-blobs.ts::driver.k', 'src/drivers/netlify-blobs.ts::driver.removeItem', 'src/drivers/netlify-blobs.ts::driver.setItem', 'src/drivers/netlify-blobs.ts::driver.setItemRaw', 'src/drivers/redis.ts::driver', 'src/drivers/redis.ts::driver.clear', 'src/drivers/redis.ts::driver.getKeys', 'src/drivers/redis.ts::driver.m', 'src/drivers/upstash.ts::driver', 'src/drivers/upstash.ts::driver.clear', 'src/drivers/upstash.ts::driver.getKeys', 'src/drivers/upstash.ts::driver.m', 'src/drivers/utils/index.ts::assertURLPathKey', 'src/drivers/utils/index.ts::escapeRedisGlob', 'src/drivers/vercel-runtime-cache.ts::driver', 'src/drivers/vercel-runtime-cache.ts::driver.r'] | changed_callers: ['src.drivers.cloudflare-kv-http.driver']
+agent functions: ['src/drivers/cloudflare-kv-http.ts::driver', 'src/drivers/cloudflare-kv-http.ts::driver.clear', 'src/drivers/cloudflare-kv-http.ts::driver.getItem', 'src/drivers/cloudflare-kv-http.ts::driver.getKeys', 'src/drivers/cloudflare-kv-http.ts::driver.hasItem', 'src/drivers/cloudflare-kv-http.ts::driver.keyPath', 'src/drivers/cloudflare-kv-http.ts::driver.r', 'src/drivers/cloudflare-kv-http.ts::driver.removeItem', 'src/drivers/cloudflare-kv-http.ts::driver.setItem', 'src/drivers/cloudflare-kv-http.ts::getKeys', 'src/drivers/cloudflare-kv-http.ts::if', 'src/drivers/cloudflare-kv-http.ts::r', 'src/drivers/cloudflare-kv-http.ts::setItem'] | f2p passed 0 / 29 | p2p broken 5
+tool sequence: run_tests > grep > read_file > edit_file > run_tests > done
+  EDIT T4 src/drivers/cloudflare-kv-http.ts -> edited src/drivers/cloudflare-kv-http.ts at line 123: replaced 1 lines with 1
+    OLD: 'if (!normalizeKey(key)) {'
+    NEW: "if (!normalizeKey(key) || key.includes('..') || key.includes('/..') || key.includes('\\..\\') || key.includes('//..//') || key.includes(':..:')) {"
+  GOLD (developer, gold files):
+    diff --git a/src/drivers/cloudflare-kv-http.ts b/src/drivers/cloudflare-kv-http.ts
+    index 477549e..9918e0c 100644
+    --- a/src/drivers/cloudflare-kv-http.ts
+    +++ b/src/drivers/cloudflare-kv-http.ts
+    @@ -6,2 +6,3 @@ import {
+       joinKeys,
+    +  normalizeKey,
+     } from "./utils/index.ts";
+    @@ -120,3 +121,9 @@ const driver: DriverFactory<KVHTTPOptions> = (opts) => {
+       // `/values/` or `/metadata/` (Cloudflare expects percent-encoded key names)
+    -  const keyPath = (key: string) => encodeURLSegment(DRIVER_NAME, r(key), key);
+    +  const keyPath = (key: string) => {
+    +    // Without this, an empty key would target the key named exactly `base`
+    +    if (!normalizeKey(key)) {
+    +      throw createError(DRIVER_NAME, `Invalid key: ${JSON.stringify(key)}`);
+    +    }
+    +    return encodeURLSegment(DRIVER_NAME, r(key), key);
+    +  };
+     
+    diff --git a/src/drivers/netlify-blobs.ts b/src/drivers/netlify-blobs.ts
+    index ad81629..225ff19 100644
+    --- a/src/drivers/netlify-blobs.ts
+    +++ b/src/drivers/netlify-blobs.ts
+    @@ -1,2 +1,3 @@
+     import {
+    +  assertURLPathKey,
+       createError,
+    @@ -81,2 +82,5 @@ const driver: DriverFactory<NetlifyStoreOptions, Promise<Store>> = (options) =>
+
+===== r3a-B-09__BASELINE__42 repo=pydantic outcome=unresolved turns=11
+gold functions: ['pydantic/_internal/_fields.py::resolve_default_value', 'pydantic/_internal/_model_construction.py::init_private_attributes', 'pydantic/_internal/_utils.py::smart_deepcopy', 'pydantic/fields.py::ModelPrivateAttr.__init__', 'pydantic/fields.py::ModelPrivateAttr.default_factory_takes_validated_data'] | changed_callers: ['pydantic._internal._model_construction.init_private_attributes']
+agent functions: ['pydantic/fields.py::ModelPrivateAttr.__getattr__'] | f2p passed 0 / 50 | p2p broken 79
+tool sequence: run_tests > grep > edit_file > run_tests > edit_file > run_tests > edit_file > run_tests > edit_file > run_tests > done
+  EDIT T3 pydantic/fields.py -> edited pydantic/fields.py at line 1475: replaced 1 lines with 1
+    OLD: '_fields.resolve_default_value'
+    NEW: 'self.resolve_default_value'
+  EDIT T5 pydantic/fields.py -> edited pydantic/fields.py at line 1442: replaced 1 lines with 1
+    OLD: "raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')"
+    NEW: "if item == 'resolve_default_value': return self.get_default; raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')"
+  EDIT T7 pydantic/fields.py -> edited pydantic/fields.py at line 1475: replaced 1 lines with 1
+    OLD: 'return self.resolve_default_value('
+    NEW: 'return self.get_default('
+  EDIT T9 pydantic/fields.py -> edited pydantic/fields.py at line 1475: replaced 1 lines with 1
+    OLD: 'return self.get_default('
+    NEW: 'return self.get_default()'
+  GOLD (developer, gold files):
+    diff --git a/docs/concepts/fields.md b/docs/concepts/fields.md
+    index 9c7fcc33..b04b20db 100644
+    --- a/docs/concepts/fields.md
+    +++ b/docs/concepts/fields.md
+    @@ -188,2 +188,6 @@ Default factories can take already validated data as an argument.
+     
+    +/// version-added | v2.13
+    +Default factories for [private attributes](./models.md#private-model-attributes) can take the validated data as an argument.
+    +///
+    +
+     ## Validate default values
+    diff --git a/docs/concepts/models.md b/docs/concepts/models.md
+    index 3808e05c..a4f360a9 100644
+    --- a/docs/concepts/models.md
+    +++ b/docs/concepts/models.md
+    @@ -1640,2 +1640,6 @@ Private attribute names must start with underscore to prevent conflicts with mod
+     
+    +/// version-added | v2.13
+    +Default factories can take the validated model data as an argument.
+    +///
+    +
+     ## Model signature
+    diff --git a/pydantic/_internal/_fields.py b/pydantic/_internal/_fields.py
+    index 3e65fa31..9a2a96b9 100644
+    --- a/pydantic/_internal/_fields.py
+    +++ b/pydantic/_internal/_fields.py
+    @@ -10,3 +10,3 @@ from inspect import Parameter, ismethoddescriptor
+     from re import Pattern
+
+===== r3a-B-05__BASELINE__42 repo=svelte outcome=unresolved turns=13
+gold functions: ['packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js::apply_selector', 'packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js::attribute_matches', 'packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js::every_is_global', 'packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js::relative_selector_might_apply_to_node'] | changed_callers: ['packages.svelte.src.compiler.phases.2-analyze.css.css-prune.apply_selector']
+agent functions: ['packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js::apply_selector'] | f2p passed 0 / 90 | p2p broken 90
+tool sequence: run_tests > grep > edit_file > run_tests > grep > edit_file > run_tests > grep > edit_file > grep > edit_file > run_tests > done
+  EDIT T3 packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js -> edited packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js at line 24
+    OLD: 'apply_combinator(relative_selector, rest_selectors, rule, element, direction);'
+    NEW: 'apply_combinator(relative_selector, relative_selectors, 0, relative_selectors.length, rule, element, direction);'
+  EDIT T6 packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js -> edited packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js at line 24
+    OLD: 'function apply_selector(relative_selectors, rule, element, direction)'
+    NEW: 'function apply_selector(relative_selectors, rule, element, direction, from = 0, to = relative_selectors.length)'
+  EDIT T9 packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js -> error: the text to replace occurs 9 times in packages/svelte/src/compiler/phases
+    OLD: 'apply_selector('
+    NEW: 'apply_selector(relative_selectors, rule, element, direction, 0, relative_selectors.length,'
+  EDIT T11 packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js -> edited packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js at line 24
+    OLD: 'apply_selector(relative_selectors, rule, element, direction,'
+    NEW: 'apply_selector(relative_selectors, rule, element, direction, 0, relative_selectors.length,'
+  GOLD (developer, gold files):
+    diff --git a/.changeset/fast-css-prune.md b/.changeset/fast-css-prune.md
+    new file mode 100644
+    index 00000000..7b52272f
+    --- /dev/null
+    +++ b/.changeset/fast-css-prune.md
+    @@ -0,0 +1,5 @@
+    +---
+    +'svelte': patch
+    +---
+    +
+    +perf: optimize CSS selector pruning
+    diff --git a/packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js b/packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js
+    index 24da276e..39f485a9 100644
+    --- a/packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js
+    +++ b/packages/svelte/src/compiler/phases/2-analyze/css/css-prune.js
+    @@ -238,12 +238,32 @@ function truncate(node) {
+      * @param {Direction} direction
+    + * @param {number} [from]
+    + * @param {number} [to]
+      * @returns {boolean}
+      */
+    -function apply_selector(relative_selectors, rule, element, direction) {
+    -	const rest_selectors = relative_selectors.slice();
+    -	const relative_selector = direction === FORWARD ? rest_selectors.shift() : rest_selectors.pop();
+    +function apply_selector(
+    +	relative_selectors,
+    +	rule,
+    +	element,

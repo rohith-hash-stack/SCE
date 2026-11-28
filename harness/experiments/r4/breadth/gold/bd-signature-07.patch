@@ -1,0 +1,252 @@
+diff --git a/noxfile.py b/noxfile.py
+index e1bfcf0..2548b30 100644
+--- a/noxfile.py
++++ b/noxfile.py
+@@ -429,7 +429,7 @@ def release(session: nox.Session) -> None:
+     try:
+         release_version = _get_version_from_arguments(session.posargs)
+     except ValueError as e:
+-        session.error(f"Invalid arguments: {e}")
++        session.error(error=f"Invalid arguments: {e}")
+         return
+ 
+     # Check state of working directory and git.
+@@ -482,7 +482,7 @@ def release_build(session: nox.Session) -> None:
+         release_version = _get_version_from_arguments(session.posargs)
+     except ValueError as e:
+         if session.posargs:
+-            session.error(f"Invalid arguments: {e}")
++            session.error(error=f"Invalid arguments: {e}")
+ 
+         release_version = session.run(
+             "git", "describe", "--exact-match", silent=True, external=True
+@@ -505,7 +505,7 @@ def release_build(session: nox.Session) -> None:
+     )
+     if result.stdout:
+         print(result.stdout, end="", file=sys.stderr)
+-        session.error("The working tree has uncommitted changes")
++        session.error(error="The working tree has uncommitted changes")
+ 
+     # Check out the Git tag, if provided.
+     if checkout:
+@@ -598,7 +598,7 @@ def _build_and_check(
+             expected, files, fromfile="expected", tofile="got", lineterm=""
+         )
+         diff = "\n".join(diff_generator)
+-        session.error(f"Got the wrong files:\n{diff}")
++        session.error(error=f"Got the wrong files:\n{diff}")
+ 
+     # Check distribution files.
+     session.run("twine", "check", "--strict", *files)
+@@ -638,7 +638,7 @@ def _check_working_directory_state(session: nox.Session) -> None:
+ 
+     bad_existing_paths = list(filter(os.path.exists, should_not_exist))
+     if bad_existing_paths:
+-        session.error(f"Remove {', '.join(bad_existing_paths)} and try again")
++        session.error(error=f"Remove {', '.join(bad_existing_paths)} and try again")
+ 
+ 
+ def _check_git_state(session: nox.Session, version_tag: str) -> None:
+@@ -655,7 +655,7 @@ def _check_git_state(session: nox.Session, version_tag: str) -> None:
+         encoding="utf-8",
+     )
+     if result.stdout.rstrip() not in allowed_upstreams:
+-        session.error(f"git remote `upstream` is not one of {allowed_upstreams}")
++        session.error(error=f"git remote `upstream` is not one of {allowed_upstreams}")
+     # Ensure we're on main branch for cutting a release.
+     result = subprocess.run(
+         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+@@ -664,7 +664,7 @@ def _check_git_state(session: nox.Session, version_tag: str) -> None:
+         encoding="utf-8",
+     )
+     if result.stdout != "main\n":
+-        session.error(f"Not on main branch: {result.stdout!r}")
++        session.error(error=f"Not on main branch: {result.stdout!r}")
+ 
+     # Ensure there are no uncommitted changes.
+     result = subprocess.run(
+@@ -675,7 +675,7 @@ def _check_git_state(session: nox.Session, version_tag: str) -> None:
+     )
+     if result.stdout:
+         print(result.stdout, end="", file=sys.stderr)
+-        session.error("The working tree has uncommitted changes")
++        session.error(error="The working tree has uncommitted changes")
+ 
+     # Ensure this tag doesn't exist already.
+     result = subprocess.run(
+@@ -685,7 +685,7 @@ def _check_git_state(session: nox.Session, version_tag: str) -> None:
+         encoding="utf-8",
+     )
+     if not result.returncode:
+-        session.error(f"Tag already exists! {version_tag} -- {result.stdout!r}")
++        session.error(error=f"Tag already exists! {version_tag} -- {result.stdout!r}")
+ 
+     # Back up the current git reference, in a tag that's easy to clean up.
+     _release_backup_tag = "auto/release-start-" + str(int(time.time()))
+diff --git a/src/packaging/dependency_groups.py b/src/packaging/dependency_groups.py
+index ec8f2c4..121fcd5 100644
+--- a/src/packaging/dependency_groups.py
++++ b/src/packaging/dependency_groups.py
+@@ -200,7 +200,7 @@ class DependencyGroupResolver:
+                 # presence of errors
+                 if include_group in self._include_graph_ancestors.get(group, ()):
+                     errors.error(
+-                        CyclicDependencyGroup(
++                        error=CyclicDependencyGroup(
+                             requested_group, group, item.include_group
+                         )
+                     )
+@@ -237,13 +237,13 @@ class DependencyGroupResolver:
+             return self._parsed_groups[group]
+ 
+         if group not in self.dependency_groups:
+-            errors.error(LookupError(f"Dependency group '{group}' not found"))
++            errors.error(error=LookupError(f"Dependency group '{group}' not found"))
+             return ()
+ 
+         raw_group = self.dependency_groups[group]
+         if isinstance(raw_group, str):
+             errors.error(
+-                TypeError(
++                error=TypeError(
+                     f"Dependency group {group!r} contained a string rather than a list."
+                 )
+             )
+@@ -251,7 +251,7 @@ class DependencyGroupResolver:
+ 
+         if not isinstance(raw_group, Sequence):
+             errors.error(
+-                TypeError(f"Dependency group {group!r} is not a sequence type.")
++                error=TypeError(f"Dependency group {group!r} is not a sequence type.")
+             )
+             return ()
+ 
+@@ -267,7 +267,7 @@ class DependencyGroupResolver:
+             elif isinstance(item, Mapping):
+                 if tuple(item.keys()) != ("include-group",):
+                     errors.error(
+-                        InvalidDependencyGroupObject(
++                        error=InvalidDependencyGroupObject(
+                             f"Invalid dependency group item: {item!r}"
+                         )
+                     )
+@@ -278,13 +278,13 @@ class DependencyGroupResolver:
+                             "Dependency group include-group value is not a string: "
+                             f"{item!r}"
+                         )
+-                        errors.error(TypeError(msg))
++                        errors.error(error=TypeError(msg))
+                     else:
+                         elements.append(
+                             DependencyGroupInclude(include_group=include_group)
+                         )
+             else:
+-                errors.error(TypeError(f"Invalid dependency group item: {item!r}"))
++                errors.error(error=TypeError(f"Invalid dependency group item: {item!r}"))
+ 
+         # If errors were detected while parsing this group, present the
+         # group as empty and do not cache the result.
+@@ -343,7 +343,7 @@ def _normalize_group_names(
+     for normed_name, names in original_names.items():
+         if len(names) > 1:
+             errors.error(
+-                DuplicateGroupNames(
++                error=DuplicateGroupNames(
+                     "Duplicate dependency group names: "
+                     f"{normed_name} ({', '.join(names)})"
+                 )
+diff --git a/src/packaging/errors.py b/src/packaging/errors.py
+index 912da38..ca569e3 100644
+--- a/src/packaging/errors.py
++++ b/src/packaging/errors.py
+@@ -88,7 +88,7 @@ class _ErrorCollector:
+ 
+     def error(
+         self,
+-        error: Exception,
++        *, error: Exception,
+     ) -> None:
+         """Add an error to the list."""
+         self.errors.append(error)
+diff --git a/src/packaging/metadata.py b/src/packaging/metadata.py
+index b94c2a2..f5b9e5f 100644
+--- a/src/packaging/metadata.py
++++ b/src/packaging/metadata.py
+@@ -863,7 +863,7 @@ class Metadata:
+                             field_metadata_version = cls.__dict__[key].added
+                         except KeyError:
+                             exc = InvalidMetadata(key, f"unrecognized field: {key!r}")
+-                            collector.error(exc)
++                            collector.error(error=exc)
+                             continue
+                         field_age = _VALID_METADATA_VERSIONS.index(
+                             field_metadata_version
+@@ -875,11 +875,11 @@ class Metadata:
+                                 f"{field} introduced in metadata version "
+                                 f"{field_metadata_version}, not {metadata_version}",
+                             )
+-                            collector.error(exc)
++                            collector.error(error=exc)
+                             continue
+                     getattr(ins, key)
+                 except InvalidMetadata as exc:
+-                    collector.error(exc)
++                    collector.error(error=exc)
+ 
+             collector.finalize("invalid metadata")
+ 
+@@ -901,7 +901,7 @@ class Metadata:
+                         message = f"{unparsed_key!r} has invalid data"
+                     else:
+                         message = f"unrecognized field: {unparsed_key!r}"
+-                    collector.error(InvalidMetadata(unparsed_key, message))
++                    collector.error(error=InvalidMetadata(unparsed_key, message))
+                 try:
+                     validated = cls.from_raw(raw, validate=validate)
+                 except ExceptionGroup as exc_group:
+@@ -915,7 +915,7 @@ class Metadata:
+                             and exc.field in unparsed
+                             and _EMAIL_TO_RAW_MAPPING.get(exc.field) not in raw
+                         ):
+-                            collector.error(exc)
++                            collector.error(error=exc)
+                 else:
+                     if not collector.errors:  # pragma: no branch
+                         return validated
+diff --git a/tests/test_errors.py b/tests/test_errors.py
+index 7a543dd..36bf9b5 100644
+--- a/tests/test_errors.py
++++ b/tests/test_errors.py
+@@ -12,7 +12,7 @@ def test_error_collector_collect() -> None:
+     with collector.collect():
+         raise KeyError("second error")
+ 
+-    collector.error(TypeError("third error"))
++    collector.error(error=TypeError("third error"))
+ 
+     with pytest.raises(packaging.errors.ExceptionGroup) as exc_info:
+         collector.finalize("collected errors")
+@@ -65,7 +65,7 @@ def test_error_collector_on_exit() -> None:
+         pytest.raises(packaging.errors.ExceptionGroup) as exc_info,
+         collector.on_exit("exiting"),
+     ):
+-        collector.error(ValueError("an error"))
++        collector.error(error=ValueError("an error"))
+ 
+     exception_group = exc_info.value
+     assert exception_group.message == "exiting"
+diff --git a/tests/test_phase2_signature_error.py b/tests/test_phase2_signature_error.py
+new file mode 100644
+index 0000000..e6164a2
+--- /dev/null
++++ b/tests/test_phase2_signature_error.py
+@@ -0,0 +1,9 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_error():
++    owner = importlib.import_module('packaging.errors')
++    owner = getattr(owner, '_ErrorCollector')
++    p = inspect.signature(getattr(owner, 'error')).parameters['error']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY

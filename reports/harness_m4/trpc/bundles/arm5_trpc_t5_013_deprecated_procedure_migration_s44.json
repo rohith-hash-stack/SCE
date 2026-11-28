@@ -1,0 +1,214 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t5_013_deprecated_procedure_migration",
+  "items": [
+   {
+    "source_id": "deprecated/interop.ts:171-199",
+    "content": "# deprecated/interop.ts:171-199  (deprecated.interop.migrateProcedure)\nfunction migrateProcedure<\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n>(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n  const def = oldProc._def();\n\n  const inputParser = getParseFnOrPassThrough(def.inputParser);\n  const outputParser = getParseFnOrPassThrough(def.outputParser);\n\n  const inputMiddleware = createInputMiddleware(inputParser);\n\n  const builder = createBuilder({\n    inputs: [def.inputParser],\n    middlewares: [\n      ...(def.middlewares as any),\n      inputMiddleware,\n      createOutputMiddleware(outputParser),\n    ],\n    meta: def.meta,\n    output: def.outputParser,\n    mutation: type === 'mutation',\n    query: type === 'query',\n    subscription: type === 'subscription',\n  });\n\n  const proc = builder[type]((opts) => def.resolver(opts as any));\n\n  return proc as any;\n}",
+    "token_count": 220,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.interop.migrateProcedure"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 198,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/getParseFn.ts:49-56",
+    "content": "# core/internals/getParseFn.ts:49-56  (core.internals.getParseFn.getParseFnOrPassThrough)\nexport function getParseFnOrPassThrough<TType>(\n  procedureParser: Parser | undefined,\n): ParseFn<TType> {\n  if (!procedureParser) {\n    return (v) => v as TType;\n  }\n  return getParseFn(procedureParser);\n}",
+    "token_count": 85,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.getParseFn.getParseFnOrPassThrough"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 56,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:207-282",
+    "content": "# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}",
+    "token_count": 521,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 494,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/middleware.ts:227-257",
+    "content": "# core/middleware.ts:227-257  (core.middleware.createInputMiddleware)\nexport function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n  const inputMiddleware: ProcedureBuilderMiddleware = async ({\n    next,\n    rawInput,\n    input,\n  }) => {\n    let parsedInput: ReturnType<typeof parse>;\n    try {\n      parsedInput = await parse(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n\n    // Multiple input parsers\n    const combinedInput =\n      isPlainObject(input) && isPlainObject(parsedInput)\n        ? {\n            ...input,\n            ...parsedInput,\n          }\n        : parsedInput;\n\n    // TODO fix this typing?\n    return next({ input: combinedInput } as any);\n  };\n  inputMiddleware._type = 'input';\n  return inputMiddleware;\n}",
+    "token_count": 190,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.middleware.createInputMiddleware"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 169,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/middleware.ts:262-285",
+    "content": "# core/middleware.ts:262-285  (core.middleware.createOutputMiddleware)\nexport function createOutputMiddleware<TOutput>(parse: ParseFn<TOutput>) {\n  const outputMiddleware: ProcedureBuilderMiddleware = async ({ next }) => {\n    const result = await next();\n    if (!result.ok) {\n      // pass through failures without validating\n      return result;\n    }\n    try {\n      const data = await parse(result.data);\n      return {\n        ...result,\n        data,\n      };\n    } catch (cause) {\n      throw new TRPCError({\n        message: 'Output validation failed',\n        code: 'INTERNAL_SERVER_ERROR',\n        cause,\n      });\n    }\n  };\n  outputMiddleware._type = 'output';\n  return outputMiddleware;\n}",
+    "token_count": 158,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.middleware.createOutputMiddleware"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 137,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/internals/procedure.ts:101-281",
+    "content": "# deprecated/internals/procedure.ts:101-281  (deprecated.internals.procedure.Procedure)\nexport class Procedure<\n  TInputContext,\n  TContext,\n  TMeta,\n  TInput,\n  TParsedInput,\n  TOutput,\n  TParsedOutput,\n  TFinalOutput = unknown extends TParsedOutput ? TOutput : TParsedOutput,\n> {\n  private middlewares: Readonly<MiddlewareFunction<any, any, any>[]>;\n  private resolver: ProcedureResolver<TContext, TParsedInput, TOutput>;\n  private readonly inputParser: ProcedureParser<TParsedInput>;\n  private parseInputFn: ParseFn<TParsedInput>;\n  private readonly outputParser: ProcedureParser<TFinalOutput>;\n  private parseOutputFn: ParseFn<TFinalOutput>;\n  public readonly meta: TMeta;\n\n  constructor(\n    opts: ProcedureOptions<\n      TContext,\n      TMeta,\n      TParsedInput,\n      TOutput,\n      TFinalOutput\n    >,\n  ) {\n    this.middlewares = opts.middlewares;\n    this.resolver = opts.resolver;\n    this.inputParser = opts.inputParser;\n    this.parseInputFn = getParseFn(this.inputParser);\n    this.outputParser = opts.outputParser;\n    this.parseOutputFn = getParseFn(this.outputParser);\n    this.meta = opts.meta;\n  }\n\n  public _def() {\n    return {\n      middlewares: this.middlewares,\n      resolver: this.resolver,\n      inputParser: this.inputParser,\n      outputParser: this.outputParser,\n      meta: this.meta,\n    };\n  }\n\n  private async parseInput(rawInput: unknown): Promise<TParsedInput> {\n    try {\n      return await this.parseInputFn(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n  }\n\n  private async parseOutput(rawOutput: TOutput): Promise<TFinalOutput> {\n    try {\n      return await this.parseOutputFn(rawOutput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'INTERNAL_SERVER_ERROR',\n        cause,\n        message: 'Output validation failed',\n      });\n    }\n  }\n\n  /**\n   * Trigger middlewares in order, parse raw input, call resolver & parse raw output\n   * @internal\n   */\n  public async call(\n    opts: ProcedureCallOptions<TInputContext>,\n  ): Promise<TFinalOutput> {\n    // wrap the actual resolver and treat as the last \"middleware\"\n    const middlewaresWithResolver = this.middlewares.concat([\n      async ({ ctx }: { ctx: any }) => {\n        const input = await this.parseInput(opts.rawInput);\n        const rawOutput = await this.resolver({\n          ...opts,\n          ctx,\n          input,\n        });\n        const data = await this.parseOutput(rawOutput);\n        return {\n          marker: middlewareMarker,\n          ok: true,\n          data,\n          ctx,\n        } as const;\n      },\n    ]);\n\n    // run the middlewares recursively with the resolver as the last one\n    const callRecursive = async (\n      callOpts: { ctx: any; index: number } = {\n        index: 0,\n        ctx: opts.ctx,\n      },\n    ): Promise<MiddlewareResult<any>> => {\n      try {\n        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n        const result = await middlewaresWithResolver[callOpts.index]!({\n          ctx: callOpts.ctx,\n          type: opts.type,\n          path: opts.path,\n          rawInput: opts.rawInput,\n          meta: this.meta,\n          next: async (nextOpts?: { ctx: any }) => {\n            return await callRecursive({\n              index: callOpts.index + 1,\n              ctx: nextOpts ? nextOpts.ctx : callOpts.ctx,\n            });\n          },\n        });\n        return result;\n      } catch (cause) {\n        return {\n          ctx: callOpts.ctx,\n          ok: false,\n          error: getTRPCErrorFromUnknown(cause),\n          marker: middlewareMarker,\n        };\n      }\n    };\n\n    // there's always at least one \"next\" since we wrap this.resolver in a middleware\n    const result = await callRecursive();\n    if (!result) {\n      throw new TRPCError({\n        code: 'INTERNAL_SERVER_ERROR',\n        message:\n          'No result from middlewares - did you forget to `return next()`?',\n      });\n    }\n    if (!result.ok) {\n      // re-throw original error\n      throw result.error;\n    }\n\n    return result.data as TFinalOutput;\n  }\n\n  /**\n   * Create new procedure with passed middlewares\n   * @param middlewares\n   */\n  public inheritMiddlewares(\n    middlewares: MiddlewareFunction<TInputContext, TContext, TMeta>[],\n  ): this {\n    const Constructor: new (\n      opts: ProcedureOptions<\n        TContext,\n        TMeta,\n        TParsedInput,\n        TOutput,\n        TFinalOutput\n      >,\n    ) => Procedure<\n      TInputContext,\n      TContext,\n      TMeta,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TParsedOutput\n    > = (this as any).constructor;\n\n    const instance = new Constructor({\n      middlewares: [...middlewares, ...this.middlewares],\n      resolver: this.resolver,\n      inputParser: this.inputParser,\n      outputParser: this.outputParser,\n      meta: this.meta,\n    });\n\n    return instance as any;\n  }\n}",
+    "token_count": 1144,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.internals.procedure.Procedure"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 1119,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/internals/procedure.ts:137-145",
+    "content": "# deprecated/internals/procedure.ts:137-145  (deprecated.internals.procedure.Procedure._def)\n  public _def() {\n    return {\n      middlewares: this.middlewares,\n      resolver: this.resolver,\n      inputParser: this.inputParser,\n      outputParser: this.outputParser,\n      meta: this.meta,\n    };\n  }",
+    "token_count": 77,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.internals.procedure.Procedure._def"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 50,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/interop.ts:200-232",
+    "content": "# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}",
+    "token_count": 272,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.interop.migrateRouter"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 250,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2667,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `deprecated.interop.migrateProcedure` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "deprecated.interop.migrateProcedure",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 11,
+   "manifest_candidates_unfiltered": 11,
+   "requested_symbols": [
+    "deprecated.interop.migrateProcedure",
+    "core.internals.getParseFn.getParseFnOrPassThrough",
+    "core.internals.procedureBuilder.createBuilder",
+    "core.middleware.createInputMiddleware",
+    "core.middleware.createOutputMiddleware",
+    "deprecated.internals.procedure.Procedure._def",
+    "deprecated.interop.migrateRouter",
+    "core.internals.mergeWithoutOverrides.mergeWithoutOverrides",
+    "core.router.createRouterFactory"
+   ],
+   "turn1_requested_count": 9,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "core.internals.mergeWithoutOverrides.mergeWithoutOverrides",
+    "core.router.createRouterFactory"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"If `deprecated.interop.migrateProcedure` changes, it could break the execution flow of the code that relies on it. This function is a seed function and is called by `deprecated.interop.migrateRouter`, which in turn is a caller function. Any changes to `deprecated.interop.migrateProcedure` could affect the behavior of `deprecated.interop.migrateRouter` and potentially other functions that depend on it.\",\n  \"requested_symbols\": [\n    \"deprecated.interop.migrateProcedure\",\n    \"core.internals.getParseFn.getParseFnOrPassThrough\",\n    \"core.internals.procedureBuilder.createBuilder\",\n    \"core.middleware.createInputMiddleware\",\n    \"core.middleware.createOutputMiddleware\",\n    \"deprecated.internals.procedure.Procedure._def\",\n    \"deprecated.interop.migrateRouter\",\n    \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\",\n    \"core.router.createRouterFactory\"\n  ]\n}\n```",
+     "prompt_tokens": 669,
+     "completion_tokens": 197,
+     "latency_seconds": 13.23288287700052,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     5.572798
+    ],
+    "L_turn2_hydrate": [
+     30.811874
+    ],
+    "L_retrieve": [
+     13277.476762
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2667,
+   "prompt_tokens": 2804,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2817,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# deprecated/interop.ts:171-199  (deprecated.interop.migrateProcedure)\nfunction migrateProcedure<\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n>(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n  const def = oldProc._def();\n\n  const inputParser = getParseFnOrPassThrough(def.inputParser);\n  const outputParser = getParseFnOrPassThrough(def.outputParser);\n\n  const inputMiddleware = createInputMiddleware(inputParser);\n\n  const builder = createBuilder({\n    inputs: [def.inputParser],\n    middlewares: [\n      ...(def.middlewares as any),\n      inputMiddleware,\n      createOutputMiddleware(outputParser),\n    ],\n    meta: def.meta,\n    output: def.outputParser,\n    mutation: type === 'mutation',\n    query: type === 'query',\n    subscription: type === 'subscription',\n  });\n\n  const proc = builder[type]((opts) => def.resolver(opts as any));\n\n  return proc as any;\n}\n\n# core/internals/getParseFn.ts:49-56  (core.internals.getParseFn.getParseFnOrPassThrough)\nexport function getParseFnOrPassThrough<TType>(\n  procedureParser: Parser | undefined,\n): ParseFn<TType> {\n  if (!procedureParser) {\n    return (v) => v as TType;\n  }\n  return getParseFn(procedureParser);\n}\n\n# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}\n\n# core/middleware.ts:227-257  (core.middleware.createInputMiddleware)\nexport function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n  const inputMiddleware: ProcedureBuilderMiddleware = async ({\n    next,\n    rawInput,\n    input,\n  }) => {\n    let parsedInput: ReturnType<typeof parse>;\n    try {\n      parsedInput = await parse(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n\n    // Multiple input parsers\n    const combinedInput =\n      isPlainObject(input) && isPlainObject(parsedInput)\n        ? {\n            ...input,\n            ...parsedInput,\n          }\n        : parsedInput;\n\n    // TODO fix this typing?\n    return next({ input: combinedInput } as any);\n  };\n  inputMiddleware._type = 'input';\n  return inputMiddleware;\n}\n\n# core/middleware.ts:262-285  (core.middleware.createOutputMiddleware)\nexport function createOutputMiddleware<TOutput>(parse: ParseFn<TOutput>) {\n  const outputMiddleware: ProcedureBuilderMiddleware = async ({ next }) => {\n    const result = await next();\n    if (!result.ok) {\n      // pass through failures without validating\n      return result;\n    }\n    try {\n      const data = await parse(result.data);\n      return {\n        ...result,\n        data,\n      };\n    } catch (cause) {\n      throw new TRPCError({\n        message: 'Output validation failed',\n        code: 'INTERNAL_SERVER_ERROR',\n        cause,\n      });\n    }\n  };\n  outputMiddleware._type = 'output';\n  return outputMiddleware;\n}\n\n# deprecated/internals/procedure.ts:101-281  (deprecated.internals.procedure.Procedure)\nexport class Procedure<\n  TInputContext,\n  TContext,\n  TMeta,\n  TInput,\n  TParsedInput,\n  TOutput,\n  TParsedOutput,\n  TFinalOutput = unknown extends TParsedOutput ? TOutput : TParsedOutput,\n> {\n  private middlewares: Readonly<MiddlewareFunction<any, any, any>[]>;\n  private resolver: ProcedureResolver<TContext, TParsedInput, TOutput>;\n  private readonly inputParser: ProcedureParser<TParsedInput>;\n  private parseInputFn: ParseFn<TParsedInput>;\n  private readonly outputParser: ProcedureParser<TFinalOutput>;\n  private parseOutputFn: ParseFn<TFinalOutput>;\n  public readonly meta: TMeta;\n\n  constructor(\n    opts: ProcedureOptions<\n      TContext,\n      TMeta,\n      TParsedInput,\n      TOutput,\n      TFinalOutput\n    >,\n  ) {\n    this.middlewares = opts.middlewares;\n    this.resolver = opts.resolver;\n    this.inputParser = opts.inputParser;\n    this.parseInputFn = getParseFn(this.inputParser);\n    this.outputParser = opts.outputParser;\n    this.parseOutputFn = getParseFn(this.outputParser);\n    this.meta = opts.meta;\n  }\n\n  public _def() {\n    return {\n      middlewares: this.middlewares,\n      resolver: this.resolver,\n      inputParser: this.inputParser,\n      outputParser: this.outputParser,\n      meta: this.meta,\n    };\n  }\n\n  private async parseInput(rawInput: unknown): Promise<TParsedInput> {\n    try {\n      return await this.parseInputFn(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n  }\n\n  private async parseOutput(rawOutput: TOutput): Promise<TFinalOutput> {\n    try {\n      return await this.parseOutputFn(rawOutput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'INTERNAL_SERVER_ERROR',\n        cause,\n        message: 'Output validation failed',\n      });\n    }\n  }\n\n  /**\n   * Trigger middlewares in order, parse raw input, call resolver & parse raw output\n   * @internal\n   */\n  public async call(\n    opts: ProcedureCallOptions<TInputContext>,\n  ): Promise<TFinalOutput> {\n    // wrap the actual resolver and treat as the last \"middleware\"\n    const middlewaresWithResolver = this.middlewares.concat([\n      async ({ ctx }: { ctx: any }) => {\n        const input = await this.parseInput(opts.rawInput);\n        const rawOutput = await this.resolver({\n          ...opts,\n          ctx,\n          input,\n        });\n        const data = await this.parseOutput(rawOutput);\n        return {\n          marker: middlewareMarker,\n          ok: true,\n          data,\n          ctx,\n        } as const;\n      },\n    ]);\n\n    // run the middlewares recursively with the resolver as the last one\n    const callRecursive = async (\n      callOpts: { ctx: any; index: number } = {\n        index: 0,\n        ctx: opts.ctx,\n      },\n    ): Promise<MiddlewareResult<any>> => {\n      try {\n        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n        const result = await middlewaresWithResolver[callOpts.index]!({\n          ctx: callOpts.ctx,\n          type: opts.type,\n          path: opts.path,\n          rawInput: opts.rawInput,\n          meta: this.meta,\n          next: async (nextOpts?: { ctx: any }) => {\n            return await callRecursive({\n              index: callOpts.index + 1,\n              ctx: nextOpts ? nextOpts.ctx : callOpts.ctx,\n            });\n          },\n        });\n        return result;\n      } catch (cause) {\n        return {\n          ctx: callOpts.ctx,\n          ok: false,\n          error: getTRPCErrorFromUnknown(cause),\n          marker: middlewareMarker,\n        };\n      }\n    };\n\n    // there's always at least one \"next\" since we wrap this.resolver in a middleware\n    const result = await callRecursive();\n    if (!result) {\n      throw new TRPCError({\n        code: 'INTERNAL_SERVER_ERROR',\n        message:\n          'No result from middlewares - did you forget to `return next()`?',\n      });\n    }\n    if (!result.ok) {\n      // re-throw original error\n      throw result.error;\n    }\n\n    return result.data as TFinalOutput;\n  }\n\n  /**\n   * Create new procedure with passed middlewares\n   * @param middlewares\n   */\n  public inheritMiddlewares(\n    middlewares: MiddlewareFunction<TInputContext, TContext, TMeta>[],\n  ): this {\n    const Constructor: new (\n      opts: ProcedureOptions<\n        TContext,\n        TMeta,\n        TParsedInput,\n        TOutput,\n        TFinalOutput\n      >,\n    ) => Procedure<\n      TInputContext,\n      TContext,\n      TMeta,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TParsedOutput\n    > = (this as any).constructor;\n\n    const instance = new Constructor({\n      middlewares: [...middlewares, ...this.middlewares],\n      resolver: this.resolver,\n      inputParser: this.inputParser,\n      outputParser: this.outputParser,\n      meta: this.meta,\n    });\n\n    return instance as any;\n  }\n}\n\n# deprecated/internals/procedure.ts:137-145  (deprecated.internals.procedure.Procedure._def)\n  public _def() {\n    return {\n      middlewares: this.middlewares,\n      resolver: this.resolver,\n      inputParser: this.inputParser,\n      outputParser: this.outputParser,\n      meta: this.meta,\n    };\n  }\n\n# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}\n\n## Task\n\nWhat breaks if `deprecated.interop.migrateProcedure` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

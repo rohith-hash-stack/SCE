@@ -1,0 +1,208 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t02_008_procedure_builder_input_validation",
+  "items": [
+   {
+    "source_id": "core/internals/procedureBuilder.ts:207-282",
+    "content": "# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}",
+    "token_count": 521,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 494,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:226-232",
+    "content": "# core/internals/procedureBuilder.ts:226-232  (core.internals.procedureBuilder.createBuilder.input)\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },",
+    "token_count": 76,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder.input"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 48,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/getParseFn.ts:5-43",
+    "content": "# core/internals/getParseFn.ts:5-43  (core.internals.getParseFn.getParseFn)\nexport function getParseFn<TType>(procedureParser: Parser): ParseFn<TType> {\n  const parser = procedureParser as any;\n\n  if (typeof parser === 'function') {\n    // ParserCustomValidatorEsque\n    return parser;\n  }\n\n  if (typeof parser.parseAsync === 'function') {\n    // ParserZodEsque\n    return parser.parseAsync.bind(parser);\n  }\n\n  if (typeof parser.parse === 'function') {\n    // ParserZodEsque\n    // ParserValibotEsque (<= v0.12.X)\n    return parser.parse.bind(parser);\n  }\n\n  if (typeof parser.validateSync === 'function') {\n    // ParserYupEsque\n    return parser.validateSync.bind(parser);\n  }\n\n  if (typeof parser.create === 'function') {\n    // ParserSuperstructEsque\n    return parser.create.bind(parser);\n  }\n\n  if (typeof parser.assert === 'function') {\n    // ParserScaleEsque\n    return (value) => {\n      parser.assert(value);\n      return value as TType;\n    };\n  }\n\n  throw new Error('Could not find a validator fn');\n}",
+    "token_count": 264,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.getParseFn.getParseFn"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 238,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/middleware.ts:227-257",
+    "content": "# core/middleware.ts:227-257  (core.middleware.createInputMiddleware)\nexport function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n  const inputMiddleware: ProcedureBuilderMiddleware = async ({\n    next,\n    rawInput,\n    input,\n  }) => {\n    let parsedInput: ReturnType<typeof parse>;\n    try {\n      parsedInput = await parse(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n\n    // Multiple input parsers\n    const combinedInput =\n      isPlainObject(input) && isPlainObject(parsedInput)\n        ? {\n            ...input,\n            ...parsedInput,\n          }\n        : parsedInput;\n\n    // TODO fix this typing?\n    return next({ input: combinedInput } as any);\n  };\n  inputMiddleware._type = 'input';\n  return inputMiddleware;\n}",
+    "token_count": 190,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.middleware.createInputMiddleware"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 169,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:351-375",
+    "content": "# core/internals/procedureBuilder.ts:351-375  (core.internals.procedureBuilder.callRecursive.next)\n          next(_nextOpts?: any) {\n            const nextOpts = _nextOpts as\n              | {\n                  ctx?: Record<string, unknown>;\n                  input?: unknown;\n                  rawInput?: unknown;\n                }\n              | undefined;\n\n            return callRecursive({\n              index: callOpts.index + 1,\n              ctx:\n                nextOpts && 'ctx' in nextOpts\n                  ? { ...callOpts.ctx, ...nextOpts.ctx }\n                  : callOpts.ctx,\n              input:\n                nextOpts && 'input' in nextOpts\n                  ? nextOpts.input\n                  : callOpts.input,\n              rawInput:\n                nextOpts && 'rawInput' in nextOpts\n                  ? nextOpts.rawInput\n                  : callOpts.rawInput,\n            });\n          },",
+    "token_count": 183,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.callRecursive.next"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 155,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/middleware.ts:219-221",
+    "content": "# core/middleware.ts:219-221  (core.middleware.isPlainObject)\nfunction isPlainObject(obj: unknown) {\n  return obj && typeof obj === 'object' && !Array.isArray(obj);\n}",
+    "token_count": 47,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.middleware.isPlainObject"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 26,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:26-52",
+    "content": "# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}",
+    "token_count": 244,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "error.TRPCError.TRPCError"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 218,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:192-205",
+    "content": "# core/internals/procedureBuilder.ts:192-205  (core.internals.procedureBuilder.createNewBuilder)\nfunction createNewBuilder(\n  def1: AnyProcedureBuilderDef,\n  def2: Partial<AnyProcedureBuilderDef>,\n) {\n  const { middlewares = [], inputs, meta, ...rest } = def2;\n\n  // TODO: maybe have a fn here to warn about calls\n  return createBuilder({\n    ...mergeWithoutOverrides(def1, rest),\n    inputs: [...def1.inputs, ...(inputs ?? [])],\n    middlewares: [...def1.middlewares, ...middlewares],\n    meta: def1.meta && meta ? { ...def1.meta, ...meta } : meta ?? def1.meta,\n  });\n}",
+    "token_count": 154,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createNewBuilder"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 127,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1679,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how tRPC validates a procedure's input schema when `.input(schema)` is called during procedure definition, starting from the `input` method on the builder object `createBuilder` returns, in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.internals.procedureBuilder.createBuilder.input\", \"core.internals.getParseFn.getParseFn\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "anchor": "core.internals.procedureBuilder.createBuilder.input",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 11,
+   "manifest_candidates_unfiltered": 11,
+   "requested_symbols": [
+    "core.internals.procedureBuilder.createBuilder.input",
+    "core.internals.getParseFn.getParseFn",
+    "core.middleware.createInputMiddleware",
+    "core.internals.procedureBuilder.callRecursive.next",
+    "core.middleware.isPlainObject",
+    "error.TRPCError.TRPCError"
+   ],
+   "turn1_requested_count": 6,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The pipeline starts with the `input` method on the builder object, which uses `getParseFn` to create a parser function from the provided schema. This parser function is then used to validate the input data.\",\n  \"requested_symbols\": [\n    \"core.internals.procedureBuilder.createBuilder.input\",\n    \"core.internals.getParseFn.getParseFn\",\n    \"core.middleware.createInputMiddleware\",\n    \"core.internals.procedureBuilder.callRecursive.next\",\n    \"core.middleware.isPlainObject\",\n    \"error.TRPCError.TRPCError\"\n  ]\n}\n```",
+     "prompt_tokens": 805,
+     "completion_tokens": 126,
+     "latency_seconds": 9.660197356000936,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     5.023709
+    ],
+    "L_turn2_hydrate": [
+     25.390018
+    ],
+    "L_retrieve": [
+     9696.149352
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1679,
+   "prompt_tokens": 1958,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1971,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}\n\n# core/internals/procedureBuilder.ts:226-232  (core.internals.procedureBuilder.createBuilder.input)\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n\n# core/internals/getParseFn.ts:5-43  (core.internals.getParseFn.getParseFn)\nexport function getParseFn<TType>(procedureParser: Parser): ParseFn<TType> {\n  const parser = procedureParser as any;\n\n  if (typeof parser === 'function') {\n    // ParserCustomValidatorEsque\n    return parser;\n  }\n\n  if (typeof parser.parseAsync === 'function') {\n    // ParserZodEsque\n    return parser.parseAsync.bind(parser);\n  }\n\n  if (typeof parser.parse === 'function') {\n    // ParserZodEsque\n    // ParserValibotEsque (<= v0.12.X)\n    return parser.parse.bind(parser);\n  }\n\n  if (typeof parser.validateSync === 'function') {\n    // ParserYupEsque\n    return parser.validateSync.bind(parser);\n  }\n\n  if (typeof parser.create === 'function') {\n    // ParserSuperstructEsque\n    return parser.create.bind(parser);\n  }\n\n  if (typeof parser.assert === 'function') {\n    // ParserScaleEsque\n    return (value) => {\n      parser.assert(value);\n      return value as TType;\n    };\n  }\n\n  throw new Error('Could not find a validator fn');\n}\n\n# core/middleware.ts:227-257  (core.middleware.createInputMiddleware)\nexport function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n  const inputMiddleware: ProcedureBuilderMiddleware = async ({\n    next,\n    rawInput,\n    input,\n  }) => {\n    let parsedInput: ReturnType<typeof parse>;\n    try {\n      parsedInput = await parse(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n\n    // Multiple input parsers\n    const combinedInput =\n      isPlainObject(input) && isPlainObject(parsedInput)\n        ? {\n            ...input,\n            ...parsedInput,\n          }\n        : parsedInput;\n\n    // TODO fix this typing?\n    return next({ input: combinedInput } as any);\n  };\n  inputMiddleware._type = 'input';\n  return inputMiddleware;\n}\n\n# core/internals/procedureBuilder.ts:351-375  (core.internals.procedureBuilder.callRecursive.next)\n          next(_nextOpts?: any) {\n            const nextOpts = _nextOpts as\n              | {\n                  ctx?: Record<string, unknown>;\n                  input?: unknown;\n                  rawInput?: unknown;\n                }\n              | undefined;\n\n            return callRecursive({\n              index: callOpts.index + 1,\n              ctx:\n                nextOpts && 'ctx' in nextOpts\n                  ? { ...callOpts.ctx, ...nextOpts.ctx }\n                  : callOpts.ctx,\n              input:\n                nextOpts && 'input' in nextOpts\n                  ? nextOpts.input\n                  : callOpts.input,\n              rawInput:\n                nextOpts && 'rawInput' in nextOpts\n                  ? nextOpts.rawInput\n                  : callOpts.rawInput,\n            });\n          },\n\n# core/middleware.ts:219-221  (core.middleware.isPlainObject)\nfunction isPlainObject(obj: unknown) {\n  return obj && typeof obj === 'object' && !Array.isArray(obj);\n}\n\n# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}\n\n# core/internals/procedureBuilder.ts:192-205  (core.internals.procedureBuilder.createNewBuilder)\nfunction createNewBuilder(\n  def1: AnyProcedureBuilderDef,\n  def2: Partial<AnyProcedureBuilderDef>,\n) {\n  const { middlewares = [], inputs, meta, ...rest } = def2;\n\n  // TODO: maybe have a fn here to warn about calls\n  return createBuilder({\n    ...mergeWithoutOverrides(def1, rest),\n    inputs: [...def1.inputs, ...(inputs ?? [])],\n    middlewares: [...def1.middlewares, ...middlewares],\n    meta: def1.meta && meta ? { ...def1.meta, ...meta } : meta ?? def1.meta,\n  });\n}\n\n## Task\n\nYou are investigating how tRPC validates a procedure's input schema when `.input(schema)` is called during procedure definition, starting from the `input` method on the builder object `createBuilder` returns, in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.internals.procedureBuilder.createBuilder.input\", \"core.internals.getParseFn.getParseFn\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

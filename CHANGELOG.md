@@ -4,6 +4,26 @@ This file starts tracking from the post-audit remediation batch below - it
 is not a retroactive reconstruction of this project's full commit
 history (see `git log` for that), only a forward record from here on.
 
+## Purpose search shipped: automatic routing in `prism.ask`
+
+- `prism summarize` (`prism.summaries.pipeline`): the locked offline
+  summarizer (14B Ollama model, card v2, v2 prompt, lint + repair) writes
+  `.prism/summaries.json`; incremental, `--from-cache` installs a harness
+  cache card by card, `--dry-run` counts.
+- `prism.ask` / `prism ask` choose the summary weight by rule: 0.5 when
+  the index was built by the locked pipeline and covers >= 95% of the
+  functions (each summary valid only while its function's source is
+  unchanged), else 0. Set-4 ship decision: `reports/purpose_search_set4`.
+- Deterministic route classifier (`prism.query.route`): `identifier` and
+  `mixed` queries pin exact qualified-name matches first (`pinned: true`).
+- `intent` gains `route` and `summary_weight`; hits gain `pinned`;
+  `get_graph_status` / `reindex_repo` report `summary_index`.
+- The card builder and lint moved from the harness to `prism.summaries`
+  (the harness imports them). Guardrails: `tests/test_query_routing.py`
+  (blast-radius byte-identity, production field == harness FIELD arm) and
+  `harness/experiments/purpose_search/equivalence.py` on sets 2-4.
+  Capabilities and limits: `docs/capabilities_and_routing.md`.
+
 ## Phase 1B — causal path block
 
 Added `<causal_path>` envelope element. Neutral in A/B test

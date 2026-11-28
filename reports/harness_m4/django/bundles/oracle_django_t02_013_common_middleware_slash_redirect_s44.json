@@ -1,0 +1,121 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "django_t02_013_common_middleware_slash_redirect",
+  "items": [
+   {
+    "source_id": "django/middleware/common.py:100-115",
+    "content": "# django/middleware/common.py:100-115  (django.middleware.common.CommonMiddleware.process_response)\n    def process_response(self, request, response):\n        \"\"\"\n        When the status code of the response is 404, it may redirect to a path\n        with an appended slash if should_redirect_with_slash() returns True.\n        \"\"\"\n        # If the given URL is \"Not Found\", then check if we should redirect to\n        # a path with a slash appended.\n        if response.status_code == 404 and self.should_redirect_with_slash(request):\n            return self.response_redirect_class(self.get_full_path_with_slash(request))\n\n        # Add the Content-Length header to non-streaming responses if not\n        # already set.\n        if not response.streaming and not response.has_header(\"Content-Length\"):\n            response.headers[\"Content-Length\"] = str(len(response.content))\n\n        return response",
+    "token_count": 186,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.process_response"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 186
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:62-74",
+    "content": "# django/middleware/common.py:62-74  (django.middleware.common.CommonMiddleware.should_redirect_with_slash)\n    def should_redirect_with_slash(self, request):\n        \"\"\"\n        Return True if settings.APPEND_SLASH is True and appending a slash to\n        the request path turns an invalid path into a valid one.\n        \"\"\"\n        if settings.APPEND_SLASH and not request.path_info.endswith(\"/\"):\n            urlconf = getattr(request, \"urlconf\", None)\n            if not is_valid_path(request.path_info, urlconf):\n                match = is_valid_path(\"%s/\" % request.path_info, urlconf)\n                if match:\n                    view = match.func\n                    return getattr(view, \"should_append_slash\", True)\n        return False",
+    "token_count": 154,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.should_redirect_with_slash"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 154
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:76-98",
+    "content": "# django/middleware/common.py:76-98  (django.middleware.common.CommonMiddleware.get_full_path_with_slash)\n    def get_full_path_with_slash(self, request):\n        \"\"\"\n        Return the full path of the request with a trailing slash appended.\n\n        Raise a RuntimeError if settings.DEBUG is True and request.method is\n        POST, PUT, or PATCH.\n        \"\"\"\n        new_path = request.get_full_path(force_append_slash=True)\n        # Prevent construction of scheme relative urls.\n        new_path = escape_leading_slashes(new_path)\n        if settings.DEBUG and request.method in (\"POST\", \"PUT\", \"PATCH\"):\n            raise RuntimeError(\n                \"You called this URL via %(method)s, but the URL doesn't end \"\n                \"in a slash and you have APPEND_SLASH set. Django can't \"\n                \"redirect to the slash URL while maintaining %(method)s data. \"\n                \"Change your form to point to %(url)s (note the trailing \"\n                \"slash), or set APPEND_SLASH=False in your Django settings.\"\n                % {\n                    \"method\": request.method,\n                    \"url\": request.get_host() + new_path,\n                }\n            )\n        return new_path",
+    "token_count": 247,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.get_full_path_with_slash"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 247
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:32-32",
+    "content": "# django/middleware/common.py:32-32  (django.middleware.common.CommonMiddleware.response_redirect_class)\n    response_redirect_class = HttpResponsePermanentRedirect",
+    "token_count": 31,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.response_redirect_class"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 31
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:13-115",
+    "content": "# django/middleware/common.py:13-115  (django.middleware.common.CommonMiddleware)\nclass CommonMiddleware(MiddlewareMixin):\n    \"\"\"\n    \"Common\" middleware for taking care of some basic operations:\n\n        - Forbid access to User-Agents in settings.DISALLOWED_USER_AGENTS\n\n        - URL rewriting: Based on the APPEND_SLASH and PREPEND_WWW settings,\n          append missing slashes and/or prepends missing \"www.\"s.\n\n            - If APPEND_SLASH is set and the initial URL doesn't end with a\n              slash, and it is not found in urlpatterns, form a new URL by\n              appending a slash at the end. If this new URL is found in\n              urlpatterns, return an HTTP redirect to this new URL; otherwise\n              process the initial URL as usual.\n\n          This behavior can be customized by subclassing CommonMiddleware and\n          overriding the response_redirect_class attribute.\n    \"\"\"\n\n    response_redirect_class = HttpResponsePermanentRedirect\n\n    def process_request(self, request):\n        \"\"\"\n        Check for denied User-Agents and rewrite the URL based on\n        settings.APPEND_SLASH and settings.PREPEND_WWW\n        \"\"\"\n\n        # Check for denied User-Agents\n        user_agent = request.META.get(\"HTTP_USER_AGENT\")\n        if user_agent is not None:\n            for user_agent_regex in settings.DISALLOWED_USER_AGENTS:\n                if user_agent_regex.search(user_agent):\n                    raise PermissionDenied(\"Forbidden user agent\")\n\n        # Check for a redirect based on settings.PREPEND_WWW\n        host = request.get_host()\n\n        if settings.PREPEND_WWW and host and not host.startswith(\"www.\"):\n            # Check if we also need to append a slash so we can do it all\n            # with a single redirect. (This check may be somewhat expensive,\n            # so we only do it if we already know we're sending a redirect,\n            # or in process_response if we get a 404.)\n            if self.should_redirect_with_slash(request):\n                path = self.get_full_path_with_slash(request)\n            else:\n                path = request.get_full_path()\n\n            return self.response_redirect_class(f\"{request.scheme}://www.{host}{path}\")\n\n    def should_redirect_with_slash(self, request):\n        \"\"\"\n        Return True if settings.APPEND_SLASH is True and appending a slash to\n        the request path turns an invalid path into a valid one.\n        \"\"\"\n        if settings.APPEND_SLASH and not request.path_info.endswith(\"/\"):\n            urlconf = getattr(request, \"urlconf\", None)\n            if not is_valid_path(request.path_info, urlconf):\n                match = is_valid_path(\"%s/\" % request.path_info, urlconf)\n                if match:\n                    view = match.func\n                    return getattr(view, \"should_append_slash\", True)\n        return False\n\n    def get_full_path_with_slash(self, request):\n        \"\"\"\n        Return the full path of the request with a trailing slash appended.\n\n        Raise a RuntimeError if settings.DEBUG is True and request.method is\n        POST, PUT, or PATCH.\n        \"\"\"\n        new_path = request.get_full_path(force_append_slash=True)\n        # Prevent construction of scheme relative urls.\n        new_path = escape_leading_slashes(new_path)\n        if settings.DEBUG and request.method in (\"POST\", \"PUT\", \"PATCH\"):\n            raise RuntimeError(\n                \"You called this URL via %(method)s, but the URL doesn't end \"\n                \"in a slash and you have APPEND_SLASH set. Django can't \"\n                \"redirect to the slash URL while maintaining %(method)s data. \"\n                \"Change your form to point to %(url)s (note the trailing \"\n                \"slash), or set APPEND_SLASH=False in your Django settings.\"\n                % {\n                    \"method\": request.method,\n                    \"url\": request.get_host() + new_path,\n                }\n            )\n        return new_path\n\n    def process_response(self, request, response):\n        \"\"\"\n        When the status code of the response is 404, it may redirect to a path\n        with an appended slash if should_redirect_with_slash() returns True.\n        \"\"\"\n        # If the given URL is \"Not Found\", then check if we should redirect to\n        # a path with a slash appended.\n        if response.status_code == 404 and self.should_redirect_with_slash(request):\n            return self.response_redirect_class(self.get_full_path_with_slash(request))\n\n        # Add the Content-Length header to non-streaming responses if not\n        # already set.\n        if not response.streaming and not response.has_header(\"Content-Length\"):\n            response.headers[\"Content-Length\"] = str(len(response.content))\n\n        return response",
+    "token_count": 975,
+    "rank": 5,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 975
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:34-60",
+    "content": "# django/middleware/common.py:34-60  (django.middleware.common.CommonMiddleware.process_request)\n    def process_request(self, request):\n        \"\"\"\n        Check for denied User-Agents and rewrite the URL based on\n        settings.APPEND_SLASH and settings.PREPEND_WWW\n        \"\"\"\n\n        # Check for denied User-Agents\n        user_agent = request.META.get(\"HTTP_USER_AGENT\")\n        if user_agent is not None:\n            for user_agent_regex in settings.DISALLOWED_USER_AGENTS:\n                if user_agent_regex.search(user_agent):\n                    raise PermissionDenied(\"Forbidden user agent\")\n\n        # Check for a redirect based on settings.PREPEND_WWW\n        host = request.get_host()\n\n        if settings.PREPEND_WWW and host and not host.startswith(\"www.\"):\n            # Check if we also need to append a slash so we can do it all\n            # with a single redirect. (This check may be somewhat expensive,\n            # so we only do it if we already know we're sending a redirect,\n            # or in process_response if we get a 404.)\n            if self.should_redirect_with_slash(request):\n                path = self.get_full_path_with_slash(request)\n            else:\n                path = request.get_full_path()\n\n            return self.response_redirect_class(f\"{request.scheme}://www.{host}{path}\")",
+    "token_count": 282,
+    "rank": 6,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.process_request"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 282
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1875,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are debugging Django's automatic append-slash redirect in\ndjango/middleware/common.py. Starting from\n`CommonMiddleware.process_response`, trace the real causal pipeline\nthat produces a slash-appended redirect response, in the order each\nstage is actually reached, up to and including the call that\nconstructs the actual redirect response. Assume the response being\nprocessed has a 404 status code, and that `should_redirect_with_slash`\ndetermines a slash-appended redirect is warranted.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.middleware.common.CommonMiddleware.process_response\", \"django.middleware.common.CommonMiddleware.should_redirect_with_slash\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 6,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1875,
+   "prompt_tokens": 2205,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2218,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/middleware/common.py:100-115  (django.middleware.common.CommonMiddleware.process_response)\n    def process_response(self, request, response):\n        \"\"\"\n        When the status code of the response is 404, it may redirect to a path\n        with an appended slash if should_redirect_with_slash() returns True.\n        \"\"\"\n        # If the given URL is \"Not Found\", then check if we should redirect to\n        # a path with a slash appended.\n        if response.status_code == 404 and self.should_redirect_with_slash(request):\n            return self.response_redirect_class(self.get_full_path_with_slash(request))\n\n        # Add the Content-Length header to non-streaming responses if not\n        # already set.\n        if not response.streaming and not response.has_header(\"Content-Length\"):\n            response.headers[\"Content-Length\"] = str(len(response.content))\n\n        return response\n\n# django/middleware/common.py:62-74  (django.middleware.common.CommonMiddleware.should_redirect_with_slash)\n    def should_redirect_with_slash(self, request):\n        \"\"\"\n        Return True if settings.APPEND_SLASH is True and appending a slash to\n        the request path turns an invalid path into a valid one.\n        \"\"\"\n        if settings.APPEND_SLASH and not request.path_info.endswith(\"/\"):\n            urlconf = getattr(request, \"urlconf\", None)\n            if not is_valid_path(request.path_info, urlconf):\n                match = is_valid_path(\"%s/\" % request.path_info, urlconf)\n                if match:\n                    view = match.func\n                    return getattr(view, \"should_append_slash\", True)\n        return False\n\n# django/middleware/common.py:76-98  (django.middleware.common.CommonMiddleware.get_full_path_with_slash)\n    def get_full_path_with_slash(self, request):\n        \"\"\"\n        Return the full path of the request with a trailing slash appended.\n\n        Raise a RuntimeError if settings.DEBUG is True and request.method is\n        POST, PUT, or PATCH.\n        \"\"\"\n        new_path = request.get_full_path(force_append_slash=True)\n        # Prevent construction of scheme relative urls.\n        new_path = escape_leading_slashes(new_path)\n        if settings.DEBUG and request.method in (\"POST\", \"PUT\", \"PATCH\"):\n            raise RuntimeError(\n                \"You called this URL via %(method)s, but the URL doesn't end \"\n                \"in a slash and you have APPEND_SLASH set. Django can't \"\n                \"redirect to the slash URL while maintaining %(method)s data. \"\n                \"Change your form to point to %(url)s (note the trailing \"\n                \"slash), or set APPEND_SLASH=False in your Django settings.\"\n                % {\n                    \"method\": request.method,\n                    \"url\": request.get_host() + new_path,\n                }\n            )\n        return new_path\n\n# django/middleware/common.py:32-32  (django.middleware.common.CommonMiddleware.response_redirect_class)\n    response_redirect_class = HttpResponsePermanentRedirect\n\n# django/middleware/common.py:13-115  (django.middleware.common.CommonMiddleware)\nclass CommonMiddleware(MiddlewareMixin):\n    \"\"\"\n    \"Common\" middleware for taking care of some basic operations:\n\n        - Forbid access to User-Agents in settings.DISALLOWED_USER_AGENTS\n\n        - URL rewriting: Based on the APPEND_SLASH and PREPEND_WWW settings,\n          append missing slashes and/or prepends missing \"www.\"s.\n\n            - If APPEND_SLASH is set and the initial URL doesn't end with a\n              slash, and it is not found in urlpatterns, form a new URL by\n              appending a slash at the end. If this new URL is found in\n              urlpatterns, return an HTTP redirect to this new URL; otherwise\n              process the initial URL as usual.\n\n          This behavior can be customized by subclassing CommonMiddleware and\n          overriding the response_redirect_class attribute.\n    \"\"\"\n\n    response_redirect_class = HttpResponsePermanentRedirect\n\n    def process_request(self, request):\n        \"\"\"\n        Check for denied User-Agents and rewrite the URL based on\n        settings.APPEND_SLASH and settings.PREPEND_WWW\n        \"\"\"\n\n        # Check for denied User-Agents\n        user_agent = request.META.get(\"HTTP_USER_AGENT\")\n        if user_agent is not None:\n            for user_agent_regex in settings.DISALLOWED_USER_AGENTS:\n                if user_agent_regex.search(user_agent):\n                    raise PermissionDenied(\"Forbidden user agent\")\n\n        # Check for a redirect based on settings.PREPEND_WWW\n        host = request.get_host()\n\n        if settings.PREPEND_WWW and host and not host.startswith(\"www.\"):\n            # Check if we also need to append a slash so we can do it all\n            # with a single redirect. (This check may be somewhat expensive,\n            # so we only do it if we already know we're sending a redirect,\n            # or in process_response if we get a 404.)\n            if self.should_redirect_with_slash(request):\n                path = self.get_full_path_with_slash(request)\n            else:\n                path = request.get_full_path()\n\n            return self.response_redirect_class(f\"{request.scheme}://www.{host}{path}\")\n\n    def should_redirect_with_slash(self, request):\n        \"\"\"\n        Return True if settings.APPEND_SLASH is True and appending a slash to\n        the request path turns an invalid path into a valid one.\n        \"\"\"\n        if settings.APPEND_SLASH and not request.path_info.endswith(\"/\"):\n            urlconf = getattr(request, \"urlconf\", None)\n            if not is_valid_path(request.path_info, urlconf):\n                match = is_valid_path(\"%s/\" % request.path_info, urlconf)\n                if match:\n                    view = match.func\n                    return getattr(view, \"should_append_slash\", True)\n        return False\n\n    def get_full_path_with_slash(self, request):\n        \"\"\"\n        Return the full path of the request with a trailing slash appended.\n\n        Raise a RuntimeError if settings.DEBUG is True and request.method is\n        POST, PUT, or PATCH.\n        \"\"\"\n        new_path = request.get_full_path(force_append_slash=True)\n        # Prevent construction of scheme relative urls.\n        new_path = escape_leading_slashes(new_path)\n        if settings.DEBUG and request.method in (\"POST\", \"PUT\", \"PATCH\"):\n            raise RuntimeError(\n                \"You called this URL via %(method)s, but the URL doesn't end \"\n                \"in a slash and you have APPEND_SLASH set. Django can't \"\n                \"redirect to the slash URL while maintaining %(method)s data. \"\n                \"Change your form to point to %(url)s (note the trailing \"\n                \"slash), or set APPEND_SLASH=False in your Django settings.\"\n                % {\n                    \"method\": request.method,\n                    \"url\": request.get_host() + new_path,\n                }\n            )\n        return new_path\n\n    def process_response(self, request, response):\n        \"\"\"\n        When the status code of the response is 404, it may redirect to a path\n        with an appended slash if should_redirect_with_slash() returns True.\n        \"\"\"\n        # If the given URL is \"Not Found\", then check if we should redirect to\n        # a path with a slash appended.\n        if response.status_code == 404 and self.should_redirect_with_slash(request):\n            return self.response_redirect_class(self.get_full_path_with_slash(request))\n\n        # Add the Content-Length header to non-streaming responses if not\n        # already set.\n        if not response.streaming and not response.has_header(\"Content-Length\"):\n            response.headers[\"Content-Length\"] = str(len(response.content))\n\n        return response\n\n# django/middleware/common.py:34-60  (django.middleware.common.CommonMiddleware.process_request)\n    def process_request(self, request):\n        \"\"\"\n        Check for denied User-Agents and rewrite the URL based on\n        settings.APPEND_SLASH and settings.PREPEND_WWW\n        \"\"\"\n\n        # Check for denied User-Agents\n        user_agent = request.META.get(\"HTTP_USER_AGENT\")\n        if user_agent is not None:\n            for user_agent_regex in settings.DISALLOWED_USER_AGENTS:\n                if user_agent_regex.search(user_agent):\n                    raise PermissionDenied(\"Forbidden user agent\")\n\n        # Check for a redirect based on settings.PREPEND_WWW\n        host = request.get_host()\n\n        if settings.PREPEND_WWW and host and not host.startswith(\"www.\"):\n            # Check if we also need to append a slash so we can do it all\n            # with a single redirect. (This check may be somewhat expensive,\n            # so we only do it if we already know we're sending a redirect,\n            # or in process_response if we get a 404.)\n            if self.should_redirect_with_slash(request):\n                path = self.get_full_path_with_slash(request)\n            else:\n                path = request.get_full_path()\n\n            return self.response_redirect_class(f\"{request.scheme}://www.{host}{path}\")\n\n## Task\n\nYou are debugging Django's automatic append-slash redirect in\ndjango/middleware/common.py. Starting from\n`CommonMiddleware.process_response`, trace the real causal pipeline\nthat produces a slash-appended redirect response, in the order each\nstage is actually reached, up to and including the call that\nconstructs the actual redirect response. Assume the response being\nprocessed has a 404 status code, and that `should_redirect_with_slash`\ndetermines a slash-appended redirect is warranted.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.middleware.common.CommonMiddleware.process_response\", \"django.middleware.common.CommonMiddleware.should_redirect_with_slash\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

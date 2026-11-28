@@ -1,0 +1,341 @@
+{
+ "repo": "pluggy",
+ "split": "heldout",
+ "tasks": {
+  "pluggy-heldout-001": {
+   "NO4": {
+    "base_tokens": 2956,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 2973,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 2808,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`src.pluggy._result._Result.from_call` (src/pluggy/_result.py:28)\n```\n    @classmethod\n    def from_call(cls, func):\n        __tracebackhide__ = True\n        result = excinfo = None\n        try:\n            result = func()\n        except BaseException:\n            excinfo = sys.exc_info()\n\n        return cls(result, excinfo)\n```",
+    "items": [
+     "src.pluggy._result._Result.from_call"
+    ],
+    "partial": null,
+    "tokens": 2908,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 2810,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`src.pluggy._result._Result.from_call` (src/pluggy/_result.py:28)\n```\n    @classmethod\n    def from_call(cls, func):\n        __tracebackhide__ = True\n        result = excinfo = None\n        try:\n            result = func()\n        except BaseException:\n            excinfo = sys.exc_info()\n\n        return cls(result, excinfo)\n```",
+    "items": [
+     "src.pluggy._result._Result.from_call"
+    ],
+    "partial": null,
+    "tokens": 2910,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 2898,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`src.pluggy._result._Result.from_call` (src/pluggy/_result.py:28)\n```\n    @classmethod\n    def from_call(cls, func):\n        __tracebackhide__ = True\n        result = excinfo = None\n        try:\n            result = func()\n        except BaseException:\n            excinfo = sys.exc_info()\n\n        return cls(result, excinfo)\n```",
+    "items": [
+     "src.pluggy._result._Result.from_call"
+    ],
+    "partial": null,
+    "tokens": 2998,
+    "within": true
+   },
+   "context": "# Change context: `src.pluggy.callers._multicall`\nsrc/pluggy/callers.py, lines 9-60\n\n## 1. Codebase\n96 functions in 6 directories; 0 registered entry points; languages: python 96\n\nLargest directories (functions, entry points):\n- `src/pluggy`: 75 functions\n- `docs/examples/eggsample/eggsample`: 10 functions\n- `scripts`: 5 functions\n- `docs/examples`: 3 functions\n- `docs/examples/eggsample-spam`: 2 functions\n- `.`: 1 functions\n\n## 2. Group `src/pluggy`\n75 functions, 13 classes in 6 files.\n\n## 3. Anchor\n```python\ndef _multicall(hook_impls, caller_kwargs, firstresult=False):\n    \"\"\"Execute a call into multiple python functions/methods and return the\n    result(s).\n\n    ``caller_kwargs`` comes from _HookCaller.__call__().\n    \"\"\"\n    __tracebackhide__ = True\n    results = []\n    excinfo = None\n    try:  # run impl and wrapper setup functions in a loop\n        teardowns = []\n        try:\n            for hook_impl in reversed(hook_impls):\n                try:\n                    args = [caller_kwargs[argname] for argname in hook_impl.argnames]\n                except KeyError:\n                    for argname in hook_impl.argnames:\n                        if argname not in caller_kwargs:\n                            raise HookCallError(\n                                \"hook call must provide argument %r\" % (argname,)\n                            )\n\n                if hook_impl.hookwrapper:\n                    try:\n                        gen = hook_impl.function(*args)\n                        next(gen)  # first yield\n                        teardowns.append(gen)\n                    except StopIteration:\n                        _raise_wrapfail(gen, \"did not yield\")\n                else:\n                    res = hook_impl.function(*args)\n                    if res is not None:\n                        results.append(res)\n                        if firstresult:  # halt further impl calls\n                            break\n        except BaseException:\n            excinfo = sys.exc_info()\n    finally:\n        if firstresult:  # first result hooks return a single value\n            outcome = _Result(results[0] if results else None, excinfo)\n        else:\n            outcome = _Result(results, excinfo)\n\n        # run all wrapper post-yield blocks\n        for gen in reversed(teardowns):\n            try:\n                gen.send(outcome)\n                _raise_wrapfail(gen, \"has second yield\")\n            except StopIteration:\n                pass\n\n        return outcome.get_result()\n```\n\nDigest (what its code does, line by line):\n```\nL9 parameters (hook_impls, caller_kwargs, firstresult=False)\nL15 __tracebackhide__ = True\nL16 results = []\nL17 excinfo = None\nL19 teardowns = []\nwhen for each hook_impl in reversed(hook_impls):\n  L23 args = [caller_kwargs[argname] for argname in hook_impl.argnames]\n  L24-29 catches KeyError: raises\n  when on KeyError:\n    when for each argname in hook_impl.argnames:\n      when argname not in caller_kwargs:\n        L27-29 raise HookCallError( \"hook call must provide argument %r\" % (argname,) ) [calls: HookCallError() -> src.pluggy._result.HookCallError]\n  when hook_impl.hookwrapper:\n    L33 gen = hook_impl.function(*args) [calls: function() -> src.pluggy.hooks.HookImpl.function?]\n    L34 call next(gen) -> builtin\n    L35 call teardowns.append(gen) -> ?\n    L36-37 catches StopIteration: calls\n    when on StopIteration:\n      L37 call _raise_wrapfail(gen, \"did not yield\") -> src.pluggy._result._raise_wrapfail\n  when not (hook_impl.hookwrapper):\n    L39 res = hook_impl.function(*args) [calls: function() -> src.pluggy.hooks.HookImpl.function?]\n    when res is not None:\n      L41 call results.append(res) -> ?\n      when firstresult:\n        L43 leave the loop\nL44-45 catches BaseException: calls, assigns\nwhen on BaseException:\n  L45 excinfo = sys.exc_info()\nwhen finally (always):\n  when firstresult:\n    L48 outcome = _Result(results[0] if results else None, excinfo) [calls: _Result() -> src.pluggy._result._Result]\n  when not (firstresult):\n    L50 outcome = _Result(results, excinfo) [calls: _Result() -> src.pluggy._result._Result]\n  when for each gen in reversed(teardowns):\n    L55 call gen.send(outcome) -> ?\n    L56 call _raise_wrapfail(gen, \"has second yield\") -> src.pluggy._result._raise_wrapfail\n    L57-58 catches StopIteration: ignores the error\n  L60 return outcome.get_result() [calls: get_result() -> src.pluggy._result._Result.get_result]\n```\n\n## 4. Who depends on it\n- `src.pluggy.manager.PluginManager.__init__` (src/pluggy/manager.py)\n  - L74 result: uses the result in an expression\n  - L74 errors: does not catch `HookCallError` raised by it: the error propagates to this function's callers\n  - L74 arguments: passes 2 positional arguments, keywords `firstresult`\n\n## 5. What it depends on\n- L60 errors: `src.pluggy._result._Result.get_result` can raise `ex`; this function does not catch it\n- L37 errors: `src.pluggy._result._raise_wrapfail` can raise `RuntimeError`; this function catches it\n\n## 6. Style to follow\nConventions in `src/pluggy`:\n- errors are raised as `ValueError` (4 of 10 raises here)\n- function names are snake_case (59 of 59 multi-word names)\n\nSibling `src.pluggy.manager.PluginManager.after` (src/pluggy/manager.py:335; same directory, shares 1 callee):\n```python\n        def after(outcome, hook_name, methods, kwargs):\n            if outcome.excinfo is None:\n                hooktrace(\"finish\", hook_name, \"-->\", outcome.get_result())\n            hooktrace.root.indent -= 1\n```\n\nSibling `src.pluggy.manager.PluginManager.traced_hookexec` (src/pluggy/manager.py:314; same directory, shares 1 callee):\n```python\n        def traced_hookexec(hook, hook_impls, kwargs):\n            before(hook.name, hook_impls, kwargs)\n            outcome = _Result.from_call(lambda: oldcall(hook, hook_impls, kwargs))\n            after(outcome, hook.name, hook_impls, kwargs)\n            return outcome.get_result()\n```\n\n## 7. Callers' code\n`src.pluggy.manager.PluginManager.__init__` (src/pluggy/manager.py):\n```python\n    def __init__(self, project_name):\n        self.project_name = project_name\n        self._name2plugin = {}\n        self._plugin2hookcallers = {}\n        self._plugin_distinfo = []\n        self.trace = _tracing.TagTracer().get(\"pluginmanage\")\n        self.hook = _HookRelay()\n        self._inner_hookexec = lambda hook, methods, kwargs: _multicall(\n            methods,\n            kwargs,\n            firstresult=hook.spec.opts.get(\"firstresult\") if hook.spec else False,\n        )\n```\n\n## 8. Wider impact\n1 transitive callers; by distance: 1 hop: 1\n",
+   "context_sha": "c591c6534103818005d910dcec63fd66eba7606b4b187516a02be678939d88f8",
+   "context_tokens_prism": 2298,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 3046
+  },
+  "pluggy-heldout-002": {
+   "NO4": {
+    "base_tokens": 4606,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 4623,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 4004,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`pluggy.Hookimpl.__call__` (pluggy.py:122)\n```\n    def __call__(self, function=None, hookwrapper=False, optionalhook=False,\n                 tryfirst=False, trylast=False):\n\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to register().  If passed no function,\n        returns a decorator which can be applied to a function later using\n        the attributes supplied.\n\n        If optionalhook is True a missing matching hook specification will not result\n        in an error (by default it is an error if no matching spec is found).\n\n        If tryfirst is True this hook implementation will run as early as possible\n        in the chain of N hook implementations for a specfication.\n\n        If trylast is True this hook implementation will run as late as possible\n        in the chain of N hook implementations.\n\n        If hookwrapper is True the hook implementations needs to execute exactly\n        one \"yield\".  The code before the yield is run early before any non-hookwrapper\n        function is run.  The code after the yield is run after all non-hookwrapper\n        function have run.  The yield receives an ``_CallOutcome`` object representing\n        the exception or result outcome of the inner calls (including other hookwrapper\n        calls).\n\n        \"\"\"\n        def setattr_hookimpl_opts(func):\n            setattr(func, self.system_name + \"_impl\",\n                   dict(hookwrapper=hookwrapper, optionalhook=optionalhook,\n                        tryfirst=tryfirst, trylast=trylast))\n            return func\n\n        if function is None:\n            return setattr_hookimpl_opts\n        else:\n            return setattr_hookimpl_opts(function)\n```\n\n`pluggy.Hookspec.__call__` (pluggy.py:86)\n```\n    def __call__(self, function=None, firstresult=False, historic=False):\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to add_hookspecs().  If passed no\n        function, returns a decorator which can be applied to a function\n        later using the attributes supplied.\n\n        If firstresult is True the 1:N hook call (N being the number of registered\n        hook implementation functions) will stop at I<=N when the I'th function\n        returns a non-None result.\n\n        If historic is True calls to a hook will be memorized and replayed\n        on later registered plugins.\n\n        \"\"\"\n        def setattr_hookspec_opts(func):\n            if historic and firstresult:\n                raise ValueError(\"cannot have a historic firstresult hook\")\n            setattr(func, self.system_name + \"_spec\",\n                   dict(firstresult=firstresult, historic=historic))\n            return func\n\n        if function is not None:\n            return setattr_hookspec_opts(function)\n        else:\n            return setattr_hookspec_opts\n```\n\n`pluggy._TagTracer.processmessage` (pluggy.py:186)\n```\n    def processmessage(self, tags, args):\n        if self.writer is not None and args:\n            lines = self.format_message(tags, args)\n            self.writer(''.join(lines))\n        try:\n            self._tag2proc[tags](tags, args)\n        except KeyError:\n            pass\n```",
+    "items": [
+     "pluggy.Hookimpl.__call__",
+     "pluggy.Hookspec.__call__",
+     "pluggy._TagTracer.processmessage"
+    ],
+    "partial": null,
+    "tokens": 4699,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 4303,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`pluggy.Hookimpl.__call__` (pluggy.py:122)\n```\n    def __call__(self, function=None, hookwrapper=False, optionalhook=False,\n                 tryfirst=False, trylast=False):\n\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to register().  If passed no function,\n        returns a decorator which can be applied to a function later using\n        the attributes supplied.\n\n        If optionalhook is True a missing matching hook specification will not result\n        in an error (by default it is an error if no matching spec is found).\n\n        If tryfirst is True this hook implementation will run as early as possible\n        in the chain of N hook implementations for a specfication.\n\n        If trylast is True this hook implementation will run as late as possible\n        in the chain of N hook implementations.\n\n        If hookwrapper is True the hook implementations needs to execute exactly\n        one \"yield\".  The code before the yield is run early before any non-hookwrapper\n        function is run.  The code after the yield is run after all non-hookwrapper\n        function have run.  The yield receives an ``_CallOutcome`` object representing\n        the exception or result outcome of the inner calls (including other hookwrapper\n        calls).\n\n        \"\"\"\n        def setattr_hookimpl_opts(func):\n            setattr(func, self.system_name + \"_impl\",\n                   dict(hookwrapper=hookwrapper, optionalhook=optionalhook,\n                        tryfirst=tryfirst, trylast=trylast))\n            return func\n\n        if function is None:\n            return setattr_hookimpl_opts\n        else:\n            return setattr_hookimpl_opts(function)\n```",
+    "items": [
+     "pluggy.Hookimpl.__call__"
+    ],
+    "partial": null,
+    "tokens": 4673,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 4152,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`pluggy.Hookimpl.__call__` (pluggy.py:122)\n```\n    def __call__(self, function=None, hookwrapper=False, optionalhook=False,\n                 tryfirst=False, trylast=False):\n\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to register().  If passed no function,\n        returns a decorator which can be applied to a function later using\n        the attributes supplied.\n\n        If optionalhook is True a missing matching hook specification will not result\n        in an error (by default it is an error if no matching spec is found).\n\n        If tryfirst is True this hook implementation will run as early as possible\n        in the chain of N hook implementations for a specfication.\n\n        If trylast is True this hook implementation will run as late as possible\n        in the chain of N hook implementations.\n\n        If hookwrapper is True the hook implementations needs to execute exactly\n        one \"yield\".  The code before the yield is run early before any non-hookwrapper\n        function is run.  The code after the yield is run after all non-hookwrapper\n        function have run.  The yield receives an ``_CallOutcome`` object representing\n        the exception or result outcome of the inner calls (including other hookwrapper\n        calls).\n\n        \"\"\"\n        def setattr_hookimpl_opts(func):\n            setattr(func, self.system_name + \"_impl\",\n                   dict(hookwrapper=hookwrapper, optionalhook=optionalhook,\n                        tryfirst=tryfirst, trylast=trylast))\n            return func\n\n        if function is None:\n            return setattr_hookimpl_opts\n        else:\n            return setattr_hookimpl_opts(function)\n```",
+    "items": [
+     "pluggy.Hookimpl.__call__"
+    ],
+    "partial": null,
+    "tokens": 4522,
+    "within": true
+   },
+   "context": "# Change context: `pluggy.PluginManager._verify_hook`\npluggy.py, lines 483-498\n\n## 1. Codebase\n67 functions in 1 directories; 0 registered entry points; languages: python 67\n\nLargest directories (functions, entry points):\n- `.`: 67 functions\n\n## 2. Group `.`\n67 functions, 12 classes in 2 files.\n\n## 3. Anchor\n```python\n    def _verify_hook(self, hook, hookmethod):\n        pluginname = self.get_name(hookmethod.plugin)\n\n        if hook.is_historic() and hookmethod.hookwrapper:\n            raise PluginValidationError(\n                \"Plugin %r\\nhook %r\\nhistoric incompatible to hookwrapper\" %\n                (pluginname, hook.name))\n\n        for arg in hookmethod.argnames:\n            if arg not in hook.argnames:\n                raise PluginValidationError(\n                    \"Plugin %r\\nhook %r\\nargument %r not available\\n\"\n                    \"plugin definition: %s\\n\"\n                    \"available hookargs: %s\" %\n                    (pluginname, hook.name, arg, _formatdef(hookmethod.function),\n                     \", \".join(hook.argnames)))\n```\n\nDigest (what its code does, line by line):\n```\nL483 parameters (self, hook, hookmethod)\nL484 pluginname = self.get_name(hookmethod.plugin) [calls: get_name() -> pluggy.PluginManager.get_name]\nL486 calls inside: is_historic() -> pluggy._HookCaller.is_historic?\nwhen hook.is_historic() and hookmethod.hookwrapper:\n  L487-489 raise PluginValidationError( \"Plugin %r\\nhook %r\\nhistoric incompatible to hookwrapper\" % (plug\u2026 [calls: PluginValidationError() -> pluggy.PluginValidationError]\nwhen for each arg in hookmethod.argnames:\n  when arg not in hook.argnames:\n    L493-498 raise PluginValidationError( \"Plugin %r\\nhook %r\\nargument %r not available\\n\" \"plugin definiti\u2026 [calls: PluginValidationError() -> pluggy.PluginValidationError; _formatdef() -> pluggy._formatdef]\n```\n\n## 4. Who depends on it\n- `pluggy.PluginManager.addhooks` (pluggy.py)\n  - L451 result: ignores the return value\n  - L451 errors: does not catch `PluginValidationError` raised by it: the error propagates to this function's callers\n  - L451 arguments: passes 2 positional arguments\n- `pluggy.PluginManager.register` (pluggy.py)\n  - L388 result: ignores the return value\n  - L388 errors: does not catch `PluginValidationError` raised by it: the error propagates to this function's callers\n  - L388 arguments: passes 2 positional arguments\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `.`:\n- errors are raised as `ValueError` (5 of 9 raises here)\n- function names are snake_case (49 of 49 multi-word names)\n\nSibling `pluggy.PluginManager.unregister` (pluggy.py:408; same class, shares 1 callee):\n```python\n    def unregister(self, plugin=None, name=None):\n        \"\"\" unregister a plugin object and all its contained hook implementations\n        from internal data structures. \"\"\"\n        if name is None:\n            assert plugin is not None, \"one of name or plugin needs to be specified\"\n            name = self.get_name(plugin)\n\n        if plugin is None:\n            plugin = self.get_plugin(name)\n\n        # if self._name2plugin[name] == None registration was blocked: ignore\n        if self._name2plugin.get(name):\n            del self._name2plugin[name]\n\n        for hookcaller in self._plugin2hookcallers.pop(plugin, []):\n            hookcaller._remove_plugin(plugin)\n\n        return plugin\n```\n\nSibling `pluggy.PluginManager.subset_hook_caller` (pluggy.py:342; same class, name words: hook):\n```python\n    def subset_hook_caller(self, name, remove_plugins):\n        \"\"\" Return a new _HookCaller instance for the named method\n        which manages calls to all registered plugins except the\n        ones from remove_plugins. \"\"\"\n        orig = getattr(self.hook, name)\n        plugins_to_remove = [plug for plug in remove_plugins if hasattr(plug, name)]\n        if plugins_to_remove:\n            hc = _HookCaller(orig.name, orig._hookexec, orig._specmodule_or_class,\n                             orig.spec_opts)\n            for hookmethod in (orig._wrappers + orig._nonwrappers):\n                plugin = hookmethod.plugin\n                if plugin not in plugins_to_remove:\n                    hc._add_hookmethod(hookmethod)\n                    # we also keep track of this hook caller so it\n                    # gets properly removed on plugin unregistration\n                    self._plugin2hookcallers.setdefault(plugin, []).append(hc)\n            return hc\n        return orig\n```\n\n## 7. Callers' code\n`pluggy.PluginManager.addhooks` (pluggy.py):\n```python\n    def addhooks(self, module_or_class):\n        \"\"\" add new hook definitions from the given module_or_class using\n        the prefix/excludefunc with which the PluginManager was initialized. \"\"\"\n        names = []\n        for name in dir(module_or_class):\n            spec_opts = self.get_hookspec_opts(module_or_class, name)\n            if spec_opts is not None:\n                hc = getattr(self.hook, name, None)\n                if hc is None:\n                    hc = _HookCaller(name, self._hookexec, module_or_class, spec_opts)\n                    setattr(self.hook, name, hc)\n                else:\n                    # plugins registered this hook without knowing the spec\n                    hc.set_specification(module_or_class, spec_opts)\n                    for hookfunction in (hc._wrappers + hc._nonwrappers):\n                        self._verify_hook(hc, hookfunction)\n                names.append(name)\n\n        if not names:\n            raise ValueError(\"did not find any %r hooks in %r\" %\n                             (self.system_name, module_or_class))\n```\n`pluggy.PluginManager.register` (pluggy.py):\n```python\n    def register(self, plugin, name=None):\n        \"\"\" Register a plugin and return its canonical name or None if the name\n        is blocked from registering.  Raise a ValueError if the plugin is already\n        registered. \"\"\"\n        plugin_name = name or self.get_canonical_name(plugin)\n\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\n            if self._name2plugin.get(plugin_name, -1) is None:\n                return  # blocked plugin, return None to indicate no registration\n            raise ValueError(\"Plugin already registered: %s=%s\\n%s\" %\n                            (plugin_name, plugin, self._name2plugin))\n\n        # XXX if an error happens we should make sure no state has been\n        # changed at point of return\n        self._name2plugin[plugin_name] = plugin\n\n        # register matching hook implementations of the plugin\n        self._plugin2hookcallers[plugin] = hookcallers = []\n        for name in dir(plugin):\n            hookimpl_opts = self.get_hookimpl_opts(plugin, name)\n            if hookimpl_opts is not None:\n                hookmethod = _HookFunction(plugin, getattr(plugin, name), hookimpl_opts)\n                hook = getattr(self.hook, name, None)\n                if hook is None:\n                    hook = _HookCaller(name, self._hookexec)\n                    setattr(self.hook, name, hook)\n                elif hook.has_spec():\n                    self._verify_hook(hook, hookmethod)\n                    hook._maybe_apply_history(hookmethod)\n                hook._add_hookmethod(hookmethod)\n                hookcallers.append(hook)\n        return plugin_name\n```\n\n## 8. Wider impact\n3 transitive callers; by distance: 1 hop: 2, 2 hops: 1\n",
+   "context_sha": "8461ea305a1121a3040e143bb56c914bc6cce125f0cb0a318a11ce80a2363b1d",
+   "context_tokens_prism": 2581,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 4754
+  },
+  "pluggy-heldout-003": {
+   "NO4": {
+    "base_tokens": 5099,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 5117,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 4861,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`pluggy.HookimplMarker.__call__` (pluggy.py:126)\n```\n    def __call__(self, function=None, hookwrapper=False, optionalhook=False,\n                 tryfirst=False, trylast=False):\n\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to register().  If passed no function,\n        returns a decorator which can be applied to a function later using\n        the attributes supplied.\n\n        If optionalhook is True a missing matching hook specification will not result\n        in an error (by default it is an error if no matching spec is found).\n\n        If tryfirst is True this hook implementation will run as early as possible\n        in the chain of N hook implementations for a specfication.\n\n        If trylast is True this hook implementation will run as late as possible\n        in the chain of N hook implementations.\n\n        If hookwrapper is True the hook implementations needs to execute exactly\n        one \"yield\".  The code before the yield is run early before any non-hookwrapper\n        function is run.  The code after the yield is run after all non-hookwrapper\n        function have run.  The yield receives an ``_CallOutcome`` object representing\n        the exception or result outcome of the inner calls (including other hookwrapper\n        calls).\n\n        \"\"\"\n        def setattr_hookimpl_opts(func):\n            setattr(func, self.project_name + \"_impl\",\n                   dict(hookwrapper=hookwrapper, optionalhook=optionalhook,\n                        tryfirst=tryfirst, trylast=trylast))\n            return func\n\n        if function is None:\n            return setattr_hookimpl_opts\n```",
+    "items": [],
+    "partial": "pluggy.HookimplMarker.__call__",
+    "tokens": 5222,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 4411,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`pluggy.HookimplMarker.__call__` (pluggy.py:126)\n```\n    def __call__(self, function=None, hookwrapper=False, optionalhook=False,\n                 tryfirst=False, trylast=False):\n\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to register().  If passed no function,\n        returns a decorator which can be applied to a function later using\n        the attributes supplied.\n\n        If optionalhook is True a missing matching hook specification will not result\n        in an error (by default it is an error if no matching spec is found).\n\n        If tryfirst is True this hook implementation will run as early as possible\n        in the chain of N hook implementations for a specfication.\n\n        If trylast is True this hook implementation will run as late as possible\n        in the chain of N hook implementations.\n\n        If hookwrapper is True the hook implementations needs to execute exactly\n        one \"yield\".  The code before the yield is run early before any non-hookwrapper\n        function is run.  The code after the yield is run after all non-hookwrapper\n        function have run.  The yield receives an ``_CallOutcome`` object representing\n        the exception or result outcome of the inner calls (including other hookwrapper\n        calls).\n\n        \"\"\"\n        def setattr_hookimpl_opts(func):\n            setattr(func, self.project_name + \"_impl\",\n                   dict(hookwrapper=hookwrapper, optionalhook=optionalhook,\n                        tryfirst=tryfirst, trylast=trylast))\n            return func\n\n        if function is None:\n            return setattr_hookimpl_opts\n        else:\n            return setattr_hookimpl_opts(function)\n```\n\n`pluggy.PluginManager.parse_hookimpl_opts` (pluggy.py:376)\n```\n    def parse_hookimpl_opts(self, plugin, name):\n        method = getattr(plugin, name)\n        try:\n            res = getattr(method, self.project_name + \"_impl\", None)\n        except Exception:\n            res = {}\n        if res is not None and not isinstance(res, dict):\n            # false positive\n            res = None\n        elif res is None and self._implprefix and name.startswith(self._implprefix):\n            res = {}\n        return res\n```\n\n`pluggy.PluginManager.add_hookspecs` (pluggy.py:417)\n```\n    def add_hookspecs(self, module_or_class):\n        \"\"\" add new hook specifications defined in the given module_or_class.\n        Functions are recognized if they have been decorated accordingly. \"\"\"\n        names = []\n        for name in dir(module_or_class):\n            spec_opts = self.parse_hookspec_opts(module_or_class, name)\n            if spec_opts is not None:\n                hc = getattr(self.hook, name, None)\n                if hc is None:\n                    hc = _HookCaller(name, self._hookexec, module_or_class, spec_opts)\n                    setattr(self.hook, name, hc)\n                else:\n                    # plugins registered this hook without knowing the spec\n                    hc.set_specification(module_or_class, spec_opts)\n                    for hookfunction in (hc._wrappers + hc._nonwrappers):\n                        self._verify_hook(hc, hookfunction)\n                names.append(name)\n\n        if not names:\n            raise ValueError(\"did not find any %r hooks in %r\" %\n                             (self.project_name, module_or_class))\n```",
+    "items": [
+     "pluggy.HookimplMarker.__call__",
+     "pluggy.PluginManager.parse_hookimpl_opts",
+     "pluggy.PluginManager.add_hookspecs"
+    ],
+    "partial": null,
+    "tokens": 5134,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 4985,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 5003,
+    "within": true
+   },
+   "context": "# Change context: `pluggy.varnames`\npluggy.py, lines 630-673\n\n## 1. Codebase\n73 functions in 1 directories; 0 registered entry points; languages: python 73\n\nLargest directories (functions, entry points):\n- `.`: 73 functions\n\n## 2. Group `.`\n73 functions, 13 classes in 2 files.\n\n## 3. Anchor\n```python\ndef varnames(func, startindex=None):\n    \"\"\" return argument name tuple for a function, method, class or callable.\n\n    In case of a class, its \"__init__\" method is considered.\n    For methods the \"self\" parameter is not included unless you are passing\n    an unbound method with Python3 (which has no supports for unbound methods)\n    \"\"\"\n    cache = getattr(func, \"__dict__\", {})\n    try:\n        return cache[\"_varnames\"]\n    except KeyError:\n        pass\n    if inspect.isclass(func):\n        try:\n            func = func.__init__\n        except AttributeError:\n            return ()\n        startindex = 1\n    else:\n        if not inspect.isfunction(func) and not inspect.ismethod(func):\n            try:\n                func = getattr(func, '__call__', func)\n            except Exception:\n                return ()\n        if startindex is None:\n            startindex = int(inspect.ismethod(func))\n\n    try:\n        rawcode = func.__code__\n    except AttributeError:\n        return ()\n    try:\n        x = rawcode.co_varnames[startindex:rawcode.co_argcount]\n    except AttributeError:\n        x = ()\n    else:\n        defaults = func.__defaults__\n        if defaults:\n            x = x[:-len(defaults)]\n    try:\n        cache[\"_varnames\"] = x\n    except TypeError:\n        pass\n    return x\n```\n\nDigest (what its code does, line by line):\n```\nL630 parameters (func, startindex=None)\nL637 dynamic: looks up attribute '__dict__' of func by name -> unknown | code: cache = getattr(func, \"__dict__\", {})\nL637 cache = getattr(func, \"__dict__\", {})\nL639 return cache[\"_varnames\"]\nL640-641 catches KeyError: ignores the error\nwhen inspect.isclass(func):\n  L644 func = func.__init__\n  L645-646 catches AttributeError: returns\n  when on AttributeError:\n    L646 return ()\n  L647 startindex = 1\nwhen not (inspect.isclass(func)):\n  when not inspect.isfunction(func) and not inspect.ismethod(func):\n    L651 dynamic: looks up attribute '__call__' of func by name -> unknown | code: func = getattr(func, '__call__', func)\n    L651 func = getattr(func, '__call__', func)\n    L652-653 catches Exception: returns\n    when on Exception:\n      L653 return ()\n  when startindex is None:\n    L655 startindex = int(inspect.ismethod(func))\nL658 rawcode = func.__code__\nL659-660 catches AttributeError: returns\nwhen on AttributeError:\n  L660 return ()\nL662 x = rawcode.co_varnames[startindex:rawcode.co_argcount]\nL663-664 catches AttributeError: assigns\nwhen on AttributeError:\n  L664 x = ()\nwhen no exception was raised:\n  L666 defaults = func.__defaults__\n  when defaults:\n    L668 x = x[:-len(defaults)]\nL670 cache[\"_varnames\"] = x\nL671-672 catches TypeError: ignores the error\nL673 return x\n```\n\n## 4. Who depends on it\n- `pluggy.HookImpl.__init__` (pluggy.py)\n  - L776 result: stores the result in `self.argnames`\n  - L776 arguments: passes 1 positional argument\n- `pluggy._HookCaller.set_specification` (pluggy.py)\n  - L703 result: stores the result in `argnames`, then checks `\"self\" not in argnames`; passes it to `list()`\n  - L703 arguments: passes 1 positional argument, keywords `startindex`\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `.`:\n- errors are raised as `ValueError` (5 of 11 raises here)\n- errors are raised as `PluginValidationError` (3 of 11 raises here)\n- function names are snake_case (55 of 55 multi-word names)\n\nSibling `pluggy.HookimplMarker.__call__` (pluggy.py:126; same file):\n```python\n    def __call__(self, function=None, hookwrapper=False, optionalhook=False,\n                 tryfirst=False, trylast=False):\n\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to register().  If passed no function,\n        returns a decorator which can be applied to a function later using\n        the attributes supplied.\n\n        If optionalhook is True a missing matching hook specification will not result\n        in an error (by default it is an error if no matching spec is found).\n\n        If tryfirst is True this hook implementation will run as early as possible\n        in the chain of N hook implementations for a specfication.\n\n        If trylast is True this hook implementation will run as late as possible\n        in the chain of N hook implementations.\n\n        If hookwrapper is True the hook implementations needs to execute exactly\n        one \"yield\".  The code before the yield is run early before any non-hookwrapper\n        function is run.  The code after the yield is run after all non-hookwrapper\n        function have run.  The yield receives an ``_CallOutcome`` object representing\n        the exception or result outcome of the inner calls (including other hookwrapper\n        calls).\n\n        \"\"\"\n        def setattr_hookimpl_opts(func):\n            setattr(func, self.project_name + \"_impl\",\n                   dict(hookwrapper=hookwrapper, optionalhook=optionalhook,\n                        tryfirst=tryfirst, trylast=trylast))\n            return func\n\n        if function is None:\n            return setattr_hookimpl_opts\n        else:\n            return setattr_hookimpl_opts(function)\n```\n\nSibling `pluggy.PluginManager.register` (pluggy.py:341; same file):\n```python\n    def register(self, plugin, name=None):\n        \"\"\" Register a plugin and return its canonical name or None if the name\n        is blocked from registering.  Raise a ValueError if the plugin is already\n        registered. \"\"\"\n        plugin_name = name or self.get_canonical_name(plugin)\n\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\n            if self._name2plugin.get(plugin_name, -1) is None:\n                return  # blocked plugin, return None to indicate no registration\n            raise ValueError(\"Plugin already registered: %s=%s\\n%s\" %\n                            (plugin_name, plugin, self._name2plugin))\n\n        # XXX if an error happens we should make sure no state has been\n        # changed at point of return\n        self._name2plugin[plugin_name] = plugin\n\n        # register matching hook implementations of the plugin\n        self._plugin2hookcallers[plugin] = hookcallers = []\n        for name in dir(plugin):\n            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)\n            if hookimpl_opts is not None:\n                normalize_hookimpl_opts(hookimpl_opts)\n                method = getattr(plugin, name)\n                hookimpl = HookImpl(plugin, plugin_name, method, hookimpl_opts)\n                hook = getattr(self.hook, name, None)\n                if hook is None:\n                    hook = _HookCaller(name, self._hookexec)\n                    setattr(self.hook, name, hook)\n                elif hook.has_spec():\n                    self._verify_hook(hook, hookimpl)\n                    hook._maybe_apply_history(hookimpl)\n                hook._add_hookimpl(hookimpl)\n                hookcallers.append(hook)\n        return plugin_name\n```\n\n## 7. Callers' code\n`pluggy.HookImpl.__init__` (pluggy.py):\n```python\n    def __init__(self, plugin, plugin_name, function, hook_impl_opts):\n        self.function = function\n        self.argnames = varnames(self.function)\n        self.plugin = plugin\n        self.opts = hook_impl_opts\n        self.plugin_name = plugin_name\n        self.__dict__.update(hook_impl_opts)\n```\n`pluggy._HookCaller.set_specification` (pluggy.py):\n```python\n    def set_specification(self, specmodule_or_class, spec_opts):\n        assert not self.has_spec()\n        self._specmodule_or_class = specmodule_or_class\n        specfunc = getattr(specmodule_or_class, self.name)\n        argnames = varnames(specfunc, startindex=inspect.isclass(specmodule_or_class))\n        assert \"self\" not in argnames  # sanity check\n        self.argnames = [\"__multicall__\"] + list(argnames)\n        self.spec_opts = spec_opts\n        if spec_opts.get(\"historic\"):\n            self._call_history = []\n```\n\n## 8. Wider impact\n10 transitive callers; by distance: 1 hop: 2, 2 hops: 6, 3 hops: 2\nTests that reach it (2): `testing.test_pluggy.TestAddMethodOrdering.wrap`, `testing.test_pluggy.Test_MultiCall.MC`\n",
+   "context_sha": "04a62163b263156bab60248fc84a1b94ccffeaff37a472ac8dbbfd3f1bd3521b",
+   "context_tokens_prism": 2983,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 5223
+  },
+  "pluggy-heldout-004": {
+   "NO4": {
+    "base_tokens": 2241,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 2258,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 2036,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`downstream.run_downstream.format_validation_error` (downstream/run_downstream.py:173)\n```\ndef format_validation_error(path_name: str, err: ValidationError) -> str:\n    lines = [f\"{path_name}: recipe validation failed\"]\n    for e in err.errors():\n        loc = \".\".join(str(x) for x in e[\"loc\"])\n        msg = e[\"msg\"]\n        lines.append(f\"  {loc}: {msg}\")\n    return \"\\n\".join(lines)\n```\n\n`src.pluggy._manager._static_hook_attr` (src/pluggy/_manager.py:65)\n```\ndef _static_hook_attr(\n    obj: object, name: str\n) -> tuple[object, Callable[..., object]] | None:\n    \"\"\"Return ``(marker_holder, function)`` for ``name`` on ``obj``, else None.\n\n    Lookup avoids ``getattr()`` so that properties, ``cached_property`` and\n    other descriptors are skipped instead of being evaluated -- hooks provided\n    through such a descriptor (or only through ``__getattr__``) are not\n    supported. Only plain functions, :class:`classmethod`, :class:`staticmethod`\n```",
+    "items": [
+     "downstream.run_downstream.format_validation_error"
+    ],
+    "partial": "src.pluggy._manager._static_hook_attr",
+    "tokens": 2297,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 2102,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`downstream.run_downstream.format_validation_error` (downstream/run_downstream.py:173)\n```\ndef format_validation_error(path_name: str, err: ValidationError) -> str:\n    lines = [f\"{path_name}: recipe validation failed\"]\n    for e in err.errors():\n        loc = \".\".join(str(x) for x in e[\"loc\"])\n        msg = e[\"msg\"]\n        lines.append(f\"  {loc}: {msg}\")\n    return \"\\n\".join(lines)\n```",
+    "items": [
+     "downstream.run_downstream.format_validation_error"
+    ],
+    "partial": null,
+    "tokens": 2223,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 2100,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`downstream.run_downstream.format_validation_error` (downstream/run_downstream.py:173)\n```\ndef format_validation_error(path_name: str, err: ValidationError) -> str:\n    lines = [f\"{path_name}: recipe validation failed\"]\n    for e in err.errors():\n        loc = \".\".join(str(x) for x in e[\"loc\"])\n        msg = e[\"msg\"]\n        lines.append(f\"  {loc}: {msg}\")\n    return \"\\n\".join(lines)\n```",
+    "items": [
+     "downstream.run_downstream.format_validation_error"
+    ],
+    "partial": null,
+    "tokens": 2221,
+    "within": true
+   },
+   "context": "# Change context: `src.pluggy._tracing._format_block`\nsrc/pluggy/_tracing.py, lines 56-58\n\n## 1. Codebase\n142 functions in 7 directories; 0 registered entry points; languages: python 142\n\nLargest directories (functions, entry points):\n- `src/pluggy`: 102 functions\n- `downstream`: 16 functions\n- `docs/examples/eggsample/eggsample`: 10 functions\n- `scripts`: 6 functions\n- `docs`: 3 functions\n- `docs/examples`: 3 functions\n- `docs/examples/eggsample-spam`: 2 functions\n\n## 2. Group `src/pluggy`\n102 functions, 18 classes in 13 files.\n\n## 3. Anchor\n```python\ndef _format_block(indent: str, text: str) -> list[str]:\n    \"\"\"Indent a multi line value under its key, so it reads as one value.\"\"\"\n    return [f\"{indent}      {line}\\n\" for line in text.split(\"\\n\")]\n```\n\nDigest (what its code does, line by line):\n```\nL56 parameters (indent: str, text: str) -> list[str]\nL58 return [f\"{indent} {line}\\n\" for line in text.split(\"\\n\")]\n```\n\n## 4. Who depends on it\n- `src.pluggy._tracing.TagTracer._format_message` (src/pluggy/_tracing.py)\n  - L112 result: passes the result to `lines.extend()`\n  - L112 arguments: passes 2 positional arguments\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `src/pluggy`:\n- errors are raised as `ValueError` (5 of 13 raises here)\n- function names are snake_case (83 of 83 multi-word names)\n\nSibling `src.pluggy._tracing.TagTracerSub.__init__` (src/pluggy/_tracing.py:136; same file):\n```python\n    def __init__(self, root: TagTracer, tags: tuple[str, ...]) -> None:\n        self.root = root\n        self.tags = tags\n```\n\nSibling `src.pluggy._tracing._is_plain_token` (src/pluggy/_tracing.py:51; same file):\n```python\ndef _is_plain_token(text: str) -> bool:\n    \"\"\"Whether ``text`` can be shown bare, without quotes around it.\"\"\"\n    return bool(text) and text.isprintable() and \" \" not in text\n```\n\n## 7. Callers' code\n`src.pluggy._tracing.TagTracer._format_message` (src/pluggy/_tracing.py):\n```python\n    def _format_message(self, tags: Sequence[str], args: Sequence[object]) -> str:\n        if isinstance(args[-1], dict):\n            extra = args[-1]\n            args = args[:-1]\n        else:\n            extra = {}\n\n        content = \" \".join(map(_safe_str, args))\n        indent = \"  \" * self.indent\n\n        lines = [f\"{indent}{content} [{':'.join(tags)}]\\n\"]\n\n        for name, value in extra.items():\n            rendered = _render_value(value)\n            if \"\\n\" in rendered:\n                lines.append(f\"{indent}    {name}:\\n\")\n                lines.extend(_format_block(indent, rendered))\n            else:\n                lines.append(f\"{indent}    {name}: {rendered}\\n\")\n\n        return \"\".join(lines)\n```\n\n## 8. Wider impact\n3 transitive callers; by distance: 1 hop: 1, 2 hops: 1, 3 hops: 1\n",
+   "context_sha": "83cefac69b8cf09e848681eacc5029db090ae6ec36fed903bc8adc30ae1b26ef",
+   "context_tokens_prism": 968,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 2305
+  },
+  "pluggy-heldout-005": {
+   "NO4": {
+    "base_tokens": 3871,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 3888,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 3496,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`pluggy._HookCaller.call_extra` (pluggy.py:689)\n```\n    def call_extra(self, methods, kwargs):\n        \"\"\" Call the hook with some additional temporarily participating\n        methods using the specified kwargs as call parameters. \"\"\"\n        old = list(self._nonwrappers), list(self._wrappers)\n        for method in methods:\n            opts = dict(hookwrapper=False, trylast=False, tryfirst=False)\n            hookimpl = _HookImpl(None, \"<temp>\", method, opts)\n            self._add_hookimpl(hookimpl)\n        try:\n            return self(**kwargs)\n        finally:\n            self._nonwrappers, self._wrappers = old\n```\n\n`pluggy.Hookimpl.__call__` (pluggy.py:122)\n```\n    def __call__(self, function=None, hookwrapper=False, optionalhook=False,\n                 tryfirst=False, trylast=False):\n\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to register().  If passed no function,\n        returns a decorator which can be applied to a function later using\n        the attributes supplied.\n\n        If optionalhook is True a missing matching hook specification will not result\n        in an error (by default it is an error if no matching spec is found).\n\n        If tryfirst is True this hook implementation will run as early as possible\n        in the chain of N hook implementations for a specfication.\n\n        If trylast is True this hook implementation will run as late as possible\n        in the chain of N hook implementations.\n\n        If hookwrapper is True the hook implementations needs to execute exactly\n        one \"yield\".  The code before the yield is run early before any non-hookwrapper\n        function is run.  The code after the yield is run after all non-hookwrapper\n        function have run.  The yield receives an ``_CallOutcome`` object representing\n        the exception or result outcome of the inner calls (including other hookwrapper\n        calls).\n\n        \"\"\"\n```",
+    "items": [
+     "pluggy._HookCaller.call_extra"
+    ],
+    "partial": "pluggy.Hookimpl.__call__",
+    "tokens": 3936,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 3714,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`pluggy._HookCaller.call_extra` (pluggy.py:689)\n```\n    def call_extra(self, methods, kwargs):\n        \"\"\" Call the hook with some additional temporarily participating\n        methods using the specified kwargs as call parameters. \"\"\"\n        old = list(self._nonwrappers), list(self._wrappers)\n        for method in methods:\n            opts = dict(hookwrapper=False, trylast=False, tryfirst=False)\n            hookimpl = _HookImpl(None, \"<temp>\", method, opts)\n            self._add_hookimpl(hookimpl)\n        try:\n            return self(**kwargs)\n        finally:\n            self._nonwrappers, self._wrappers = old\n```",
+    "items": [
+     "pluggy._HookCaller.call_extra"
+    ],
+    "partial": null,
+    "tokens": 3875,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 3567,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`pluggy._HookCaller.call_extra` (pluggy.py:689)\n```\n    def call_extra(self, methods, kwargs):\n        \"\"\" Call the hook with some additional temporarily participating\n        methods using the specified kwargs as call parameters. \"\"\"\n        old = list(self._nonwrappers), list(self._wrappers)\n        for method in methods:\n            opts = dict(hookwrapper=False, trylast=False, tryfirst=False)\n            hookimpl = _HookImpl(None, \"<temp>\", method, opts)\n            self._add_hookimpl(hookimpl)\n        try:\n            return self(**kwargs)\n        finally:\n            self._nonwrappers, self._wrappers = old\n```\n\n`pluggy.Hookimpl.__call__` (pluggy.py:122)\n```\n    def __call__(self, function=None, hookwrapper=False, optionalhook=False,\n                 tryfirst=False, trylast=False):\n\n        \"\"\" if passed a function, directly sets attributes on the function\n        which will make it discoverable to register().  If passed no function,\n        returns a decorator which can be applied to a function later using\n        the attributes supplied.\n\n        If optionalhook is True a missing matching hook specification will not result\n        in an error (by default it is an error if no matching spec is found).\n\n        If tryfirst is True this hook implementation will run as early as possible\n        in the chain of N hook implementations for a specfication.\n\n        If trylast is True this hook implementation will run as late as possible\n        in the chain of N hook implementations.\n\n        If hookwrapper is True the hook implementations needs to execute exactly\n```",
+    "items": [
+     "pluggy._HookCaller.call_extra"
+    ],
+    "partial": "pluggy.Hookimpl.__call__",
+    "tokens": 3929,
+    "within": true
+   },
+   "context": "# Change context: `pluggy.PluginManager.parse_hookimpl_opts`\npluggy.py, lines 395-400\n\n## 1. Codebase\n67 functions in 1 directories; 0 registered entry points; languages: python 67\n\nLargest directories (functions, entry points):\n- `.`: 67 functions\n\n## 2. Group `.`\n67 functions, 12 classes in 2 files.\n\n## 3. Anchor\n```python\n    def parse_hookimpl_opts(self, method):\n        res = getattr(method, self.system_name + \"_impl\", None)\n        if res is not None and not isinstance(res, dict):\n            # false positive\n            res = None\n        return res\n```\n\nDigest (what its code does, line by line):\n```\nL395 parameters (self, method)\nL396 dynamic: looks up an attribute of method named at runtime -> unknown | code: res = getattr(method, self.system_name + \"_impl\", None)\nL396 res = getattr(method, self.system_name + \"_impl\", None)\nwhen res is not None and not isinstance(res, dict):\n  L399 res = None\nL400 return res\n```\n\n## 4. Who depends on it\n- `pluggy.PluginManager.register` (pluggy.py)\n  - L381 result: stores the result in `hookimpl_opts`, then checks `hookimpl_opts is not None`; passes it to `_HookImpl()`\n  - L381 arguments: passes 1 positional argument\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `.`:\n- errors are raised as `ValueError` (5 of 9 raises here)\n- function names are snake_case (49 of 49 multi-word names)\n\nSibling `pluggy.PluginManager.parse_hookspec_opts` (pluggy.py:402; same class, name words: opts, parse):\n```python\n    def parse_hookspec_opts(self, module_or_class, name):\n        return getattr(getattr(module_or_class, name),\n                       self.system_name + \"_spec\", None)\n```\n\nSibling `pluggy.PluginManager.get_canonical_name` (pluggy.py:467; same class):\n```python\n    def get_canonical_name(self, plugin):\n        \"\"\" Return canonical name for a plugin object. Note that a plugin\n        may be registered under a different name which was specified\n        by the caller of register(plugin, name). To obtain the name\n        of an registered plugin use ``get_name(plugin)`` instead.\"\"\"\n        return getattr(plugin, \"__name__\", None) or str(id(plugin))\n```\n\n## 7. Callers' code\n`pluggy.PluginManager.register` (pluggy.py):\n```python\n    def register(self, plugin, name=None):\n        \"\"\" Register a plugin and return its canonical name or None if the name\n        is blocked from registering.  Raise a ValueError if the plugin is already\n        registered. \"\"\"\n        plugin_name = name or self.get_canonical_name(plugin)\n\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\n            if self._name2plugin.get(plugin_name, -1) is None:\n                return  # blocked plugin, return None to indicate no registration\n            raise ValueError(\"Plugin already registered: %s=%s\\n%s\" %\n                            (plugin_name, plugin, self._name2plugin))\n\n        # XXX if an error happens we should make sure no state has been\n        # changed at point of return\n        self._name2plugin[plugin_name] = plugin\n\n        # register matching hook implementations of the plugin\n        self._plugin2hookcallers[plugin] = hookcallers = []\n        for name in dir(plugin):\n            method = getattr(plugin, name)\n            hookimpl_opts = self.parse_hookimpl_opts(method)\n            if hookimpl_opts is not None:\n                hookimpl = _HookImpl(plugin, plugin_name, method, hookimpl_opts)\n                hook = getattr(self.hook, name, None)\n                if hook is None:\n                    hook = _HookCaller(name, self._hookexec)\n                    setattr(self.hook, name, hook)\n                elif hook.has_spec():\n                    self._verify_hook(hook, hookimpl)\n                    hook._maybe_apply_history(hookimpl)\n                hook._add_hookimpl(hookimpl)\n                hookcallers.append(hook)\n        return plugin_name\n```\n\n## 8. Wider impact\n2 transitive callers; by distance: 1 hop: 1, 2 hops: 1\n",
+   "context_sha": "0e8da8a73d5492c1eaf1c53b9bb4dc22c1c76753bb0cea840f8b4757ef355fd3",
+   "context_tokens_prism": 1400,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 3942
+  }
+ }
+}

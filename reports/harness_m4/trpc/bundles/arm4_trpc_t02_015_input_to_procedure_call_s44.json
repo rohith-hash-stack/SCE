@@ -1,0 +1,333 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "trpc_t02_015_input_to_procedure_call",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"glob\": \"*.ts\", \"pattern\": \"inputToProcedureCall\"})\nhttp/resolveHTTPResponse.ts:132:async function inputToProcedureCall<\nhttp/resolveHTTPResponse.ts:334:      inputToProcedureCall({ opts, ctx, type, input: inputs[index], path }),",
+    "token_count": 70,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "inputToProcedureCall",
+      "glob": "*.ts"
+     },
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"glob\": \"*.ts\", \"pattern\": \"callProcedure\"})\nhttp/resolveHTTPResponse.ts:7:import { callProcedure } from '../core';\nhttp/resolveHTTPResponse.ts:147:    const data = await callProcedure({\nadapters/ws.ts:4:import { callProcedure } from '../core';\nadapters/ws.ts:97:        const result = await callProcedure({\ncore/router.ts:282:export function callProcedure(\ncore/router.ts:312:          return callProcedure({\ncore/index.ts:10:export { callProcedure, createCallerFactory } from './router';",
+    "token_count": 136,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "callProcedure",
+      "glob": "*.ts"
+     },
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.3",
+    "content": "# r1.3  (glob {\"pattern\": \"**/http/resolveHTTPResponse.ts\"})\nhttp/resolveHTTPResponse.ts",
+    "token_count": 26,
+    "rank": 3,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.3",
+     "tool": "glob",
+     "args": {
+      "pattern": "**/http/resolveHTTPResponse.ts"
+     },
+     "engine_token_count": 26
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.4",
+    "content": "# r1.4  (glob {\"pattern\": \"**/core/router.ts\"})\ncore/router.ts",
+    "token_count": 20,
+    "rank": 4,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.4",
+     "tool": "glob",
+     "args": {
+      "pattern": "**/core/router.ts"
+     },
+     "engine_token_count": 20
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 150, \"path\": \"http/resolveHTTPResponse.ts\", \"start_line\": 130})\n130: }\n131: \n132: async function inputToProcedureCall<\n133:   TRouter extends AnyRouter,\n134:   TRequest extends HTTPRequest,\n135: >(procedureOpts: {\n136:   opts: Pick<\n137:     ResolveHTTPRequestOptions<TRouter, TRequest>,\n138:     'onError' | 'req' | 'router'\n139:   >;\n140:   ctx: inferRouterContext<TRouter> | undefined;\n141:   type: 'mutation' | 'query';\n142:   input: unknown;\n143:   path: string;\n144: }): Promise<TRPCResponse<unknown, inferRouterError<TRouter>>> {\n145:   const { opts, ctx, type, input, path } = procedureOpts;\n146:   try {\n147:     const data = await callProcedure({\n148:       procedures: opts.router._def.procedures,\n149:       path,\n150:       rawInput: input,\n[lines 130-150 of 458]",
+    "token_count": 294,
+    "rank": 5,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "http/resolveHTTPResponse.ts",
+      "start_line": 130,
+      "end_line": 150
+     },
+     "engine_token_count": 294
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.2",
+    "content": "# r2.2  (read {\"end_line\": 315, \"path\": \"core/router.ts\", \"start_line\": 280})\n280:  * @internal\n281:  */\n282: export function callProcedure(\n283:   opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n284: ) {\n285:   const { type, path } = opts;\n286: \n287:   if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n288:     throw new TRPCError({\n289:       code: 'NOT_FOUND',\n290:       message: `No \"${type}\"-procedure on path \"${path}\"`,\n291:     });\n292:   }\n293: \n294:   const procedure = opts.procedures[path] as AnyProcedure;\n295: \n296:   return procedure(opts);\n297: }\n298: \n299: export function createCallerFactory<TConfig extends AnyRootConfig>() {\n300:   return function createCallerInner<\n301:     TRouter extends Router<AnyRouterDef<TConfig>>,\n302:   >(router: TRouter): RouterCaller<TRouter['_def']> {\n303:     const def = router._def;\n304: \n305:     return function createCaller(ctx) {\n306:       const proxy = createRecursiveProxy(({ path, args }) => {\n307:         // interop mode\n308:         if (\n309:           path.length === 1 &&\n310:           procedureTypes.includes(path[0] as ProcedureType)\n311:         ) {\n312:           return callProcedure({\n313:             procedures: def.procedures,\n314:             path: args[0] as string,\n315:             rawInput: args[1],\n[lines 280-315 of 343]",
+    "token_count": 449,
+    "rank": 6,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.2",
+     "tool": "read",
+     "args": {
+      "path": "core/router.ts",
+      "start_line": 280,
+      "end_line": 315
+     },
+     "engine_token_count": 449
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 995,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating how tRPC dispatches a single HTTP-level query or mutation request, starting from `inputToProcedureCall` in http/resolveHTTPResponse.ts. Trace the real causal pipeline it runs through, including its own error path.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"http.resolveHTTPResponse.inputToProcedureCall\", \"core.router.callProcedure\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 6,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"inputToProcedureCall\", \"glob\": \"*.ts\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"callProcedure\", \"glob\": \"*.ts\"}}</tools>\n<tools>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/http/resolveHTTPResponse.ts\"}}</tools>\n<tools>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/core/router.ts\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "inputToProcedureCall",
+        "glob": "*.ts"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "callProcedure",
+        "glob": "*.ts"
+       }
+      },
+      {
+       "name": "glob",
+       "arguments": {
+        "pattern": "**/http/resolveHTTPResponse.ts"
+       }
+      },
+      {
+       "name": "glob",
+       "arguments": {
+        "pattern": "**/core/router.ts"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 4,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "inputToProcedureCall",
+        "glob": "*.ts"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "callProcedure",
+        "glob": "*.ts"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "glob",
+       "args": {
+        "pattern": "**/http/resolveHTTPResponse.ts"
+       },
+       "msg_id": "r1.3",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "glob",
+       "args": {
+        "pattern": "**/core/router.ts"
+       },
+       "msg_id": "r1.4",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 106,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"http/resolveHTTPResponse.ts\", \"start_line\": 130, \"end_line\": 150}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"core/router.ts\", \"start_line\": 280, \"end_line\": 315}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "http/resolveHTTPResponse.ts",
+        "start_line": 130,
+        "end_line": 150
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "core/router.ts",
+        "start_line": 280,
+        "end_line": 315
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "http/resolveHTTPResponse.ts",
+        "start_line": 130,
+        "end_line": 150
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "core/router.ts",
+        "start_line": 280,
+        "end_line": 315
+       },
+       "msg_id": "r2.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 82,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "```json\n{\n  \"reasoning\": \"The pipeline starts with `inputToProcedureCall` in `http/resolveHTTPResponse.ts`, which calls `callProcedure` in `core/router.ts` to dispatch the HTTP-level query or mutation request. The error path is handled within `callProcedure` where it throws a `TRPCError` if the procedure is not found.\",\n  \"symbols\": [\n    \"http.resolveHTTPResponse.inputToProcedureCall\",\n    \"core.router.callProcedure\"\n  ]\n}\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 105,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     7339.41581,
+     5676.860308,
+     8065.576443
+    ],
+    "L_tool_exec": [
+     7.896821,
+     8.137181,
+     0.864876,
+     0.795106,
+     0.381702,
+     0.20545
+    ],
+    "L_retrieve": [
+     21137.145426
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1961,
+   "agent_answer": {
+    "text": "```json\n{\n  \"reasoning\": \"The pipeline starts with `inputToProcedureCall` in `http/resolveHTTPResponse.ts`, which calls `callProcedure` in `core/router.ts` to dispatch the HTTP-level query or mutation request. The error path is handled within `callProcedure` where it throws a `TRPCError` if the procedure is not found.\",\n  \"symbols\": [\n    \"http.resolveHTTPResponse.inputToProcedureCall\",\n    \"core.router.callProcedure\"\n  ]\n}\n```",
+    "generation_tokens": 105,
+    "latency_seconds": 8.065346256997145,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1994,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 995,
+   "prompt_tokens": 1961,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1994,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

@@ -1,0 +1,135 @@
+diff --git a/arrow/arrow.py b/arrow/arrow.py
+index eecf232..536206c 100644
+--- a/arrow/arrow.py
++++ b/arrow/arrow.py
+@@ -1159,7 +1159,7 @@ class Arrow:
+         """
+ 
+         locale_name = locale
+-        locale = locales.get_locale(locale)
++        locale = locales.get_locale(name=locale)
+ 
+         if other is None:
+             utc = dt_datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+@@ -1368,7 +1368,7 @@ class Arrow:
+         """
+ 
+         # Create a locale object based off given local
+-        locale_obj = locales.get_locale(locale)
++        locale_obj = locales.get_locale(name=locale)
+ 
+         # Check to see if locale is supported
+         normalized_locale_name = locale.lower().replace("_", "-")
+diff --git a/arrow/formatter.py b/arrow/formatter.py
+index 6c6a718..4c4f82f 100644
+--- a/arrow/formatter.py
++++ b/arrow/formatter.py
+@@ -32,7 +32,7 @@ class DateTimeFormatter:
+     locale: locales.Locale
+ 
+     def __init__(self, locale: str = DEFAULT_LOCALE) -> None:
+-        self.locale = locales.get_locale(locale)
++        self.locale = locales.get_locale(name=locale)
+ 
+     def format(cls, dt: datetime, fmt: str) -> str:
+         # FIXME: _format_token() is nullable
+diff --git a/arrow/locales.py b/arrow/locales.py
+index 757df48..8d9e25c 100644
+--- a/arrow/locales.py
++++ b/arrow/locales.py
+@@ -43,7 +43,7 @@ _TimeFrameElements = Union[
+ _locale_map: Dict[str, Type["Locale"]] = {}
+ 
+ 
+-def get_locale(name: str) -> "Locale":
++def get_locale(*, name: str) -> "Locale":
+     """Returns an appropriate :class:`Locale <arrow.locales.Locale>`
+     corresponding to an input locale name.
+ 
+diff --git a/arrow/parser.py b/arrow/parser.py
+index fc3774b..93b884d 100644
+--- a/arrow/parser.py
++++ b/arrow/parser.py
+@@ -216,7 +216,7 @@ class DateTimeParser:
+         :param cache_size: the size of the LRU cache used for regular expressions. Defaults to 0.
+         :type cache_size: int
+         """
+-        self.locale = locales.get_locale(locale)
++        self.locale = locales.get_locale(name=locale)
+         self._input_re_map = self._BASE_INPUT_RE_MAP.copy()
+         self._input_re_map.update(
+             {
+diff --git a/tests/test_arrow.py b/tests/test_arrow.py
+index b595e4e..bf0e6ac 100644
+--- a/tests/test_arrow.py
++++ b/tests/test_arrow.py
+@@ -2920,7 +2920,7 @@ class TestArrowDehumanize:
+             arw = arrow.Arrow(2000, 6, 18, 5, 55, 0)
+ 
+             # Ensures we pass the first stage of checking whether relative units exist
+-            locale_obj = locales.get_locale(lang)
++            locale_obj = locales.get_locale(name=lang)
+             empty_past_string = locale_obj.past
+             empty_future_string = locale_obj.future
+ 
+diff --git a/tests/test_locales.py b/tests/test_locales.py
+index 3d7120e..2be86ad 100644
+--- a/tests/test_locales.py
++++ b/tests/test_locales.py
+@@ -55,19 +55,19 @@ class TestModule:
+         mock_locale_cls.return_value = mock_locale
+ 
+         with pytest.raises(ValueError):
+-            arrow.locales.get_locale("locale-name")
++            arrow.locales.get_locale(name="locale-name")
+ 
+         cls_dict = arrow.locales._locale_map
+         mocker.patch.dict(cls_dict, {"locale-name": mock_locale_cls})
+ 
+-        result = arrow.locales.get_locale("locale_name")
++        result = arrow.locales.get_locale(name="locale_name")
+         assert result == mock_locale
+ 
+         # Capitalization and hyphenation should still yield the same locale
+-        result = arrow.locales.get_locale("locale-name")
++        result = arrow.locales.get_locale(name="locale-name")
+         assert result == mock_locale
+ 
+-        result = arrow.locales.get_locale("locale-NAME")
++        result = arrow.locales.get_locale(name="locale-NAME")
+         assert result == mock_locale
+ 
+     def test_get_locale_by_class_name(self, mocker):
+@@ -95,14 +95,14 @@ class TestCustomLocale:
+         class CustomLocale1(locales.Locale):
+             names = ["foo", "foo-BAR"]
+ 
+-        assert locales.get_locale("foo") is not None
+-        assert locales.get_locale("foo-BAR") is not None
+-        assert locales.get_locale("foo_bar") is not None
++        assert locales.get_locale(name="foo") is not None
++        assert locales.get_locale(name="foo-BAR") is not None
++        assert locales.get_locale(name="foo_bar") is not None
+ 
+         class CustomLocale2(locales.Locale):
+             names = ["underscores_ok"]
+ 
+-        assert locales.get_locale("underscores_ok") is not None
++        assert locales.get_locale(name="underscores_ok") is not None
+ 
+ 
+ @pytest.mark.usefixtures("lang_locale")
+diff --git a/tests/test_phase2_signature_get_locale.py b/tests/test_phase2_signature_get_locale.py
+new file mode 100644
+index 0000000..b54768d
+--- /dev/null
++++ b/tests/test_phase2_signature_get_locale.py
+@@ -0,0 +1,8 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_name():
++    owner = importlib.import_module('arrow.locales')
++    p = inspect.signature(getattr(owner, 'get_locale')).parameters['name']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY

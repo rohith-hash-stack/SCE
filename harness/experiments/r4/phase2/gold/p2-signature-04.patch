@@ -1,0 +1,121 @@
+diff --git a/instructor/v2/dsl/json_tracker.py b/instructor/v2/dsl/json_tracker.py
+index 1d2aca9..873b615 100644
+--- a/instructor/v2/dsl/json_tracker.py
++++ b/instructor/v2/dsl/json_tracker.py
+@@ -54,7 +54,7 @@ class JsonCompleteness:
+     def __init__(self) -> None:
+         self._complete_paths: set[str] = set()
+ 
+-    def analyze(self, json_str: str) -> None:
++    def analyze(self, *, json_str: str) -> None:
+         """Analyze a JSON string and determine completeness of each path."""
+         self._complete_paths = set()
+ 
+diff --git a/instructor/v2/dsl/partial.py b/instructor/v2/dsl/partial.py
+index 3e5695a..25c0b72 100644
+--- a/instructor/v2/dsl/partial.py
++++ b/instructor/v2/dsl/partial.py
+@@ -114,7 +114,7 @@ def process_potential_object(potential_object, partial_mode, partial_model, **kw
+     parsed = from_json(json_str.encode(), partial_mode=partial_mode)
+ 
+     tracker = JsonCompleteness()
+-    tracker.analyze(json_str)
++    tracker.analyze(json_str=json_str)
+ 
+     # Get original model for validation
+     original_model = getattr(partial_model, "_original_model", None)
+diff --git a/tests/coverage/test_dsl_partial_coverage.py b/tests/coverage/test_dsl_partial_coverage.py
+index 0317563..366475c 100644
+--- a/tests/coverage/test_dsl_partial_coverage.py
++++ b/tests/coverage/test_dsl_partial_coverage.py
+@@ -104,7 +104,7 @@ def test_partial_builder_validates_complete_nested_values_and_keeps_open_values(
+ ):
+     tracker = JsonCompleteness()
+     tracker.analyze(
+-        '{"optional_note":null,"metadata":{"source":"stream","attempt":2},'
++        json_str='{"optional_note":null,"metadata":{"source":"stream","attempt":2},'
+         '"featured":{"number":"7","state":"ready"},'
+         '"items":[{"number":"8","state":"pending"},'
+         '{"number":"9","state":"rea'
+@@ -141,7 +141,7 @@ def test_partial_builder_validates_complete_nested_values_and_keeps_open_values(
+ 
+ def test_partial_builder_recurses_into_open_nested_model_and_handles_scalars() -> None:
+     tracker = JsonCompleteness()
+-    tracker.analyze('{"featured":{"number":"12","state":"pen')
++    tracker.analyze(json_str='{"featured":{"number":"12","state":"pen')
+ 
+     result = _build_partial_object(
+         {"featured": {"number": "12", "state": "pen"}}, Envelope, tracker, ""
+@@ -160,7 +160,7 @@ def test_partial_builder_recurses_into_open_nested_model_and_handles_scalars() -
+ 
+ def test_partial_list_preserves_untyped_and_unknown_fields() -> None:
+     tracker = JsonCompleteness()
+-    tracker.analyze('[{"number":"3","state":"ready"}]')
++    tracker.analyze(json_str='[{"number":"3","state":"ready"}]')
+     raw_item = {"number": "3", "state": "ready"}
+ 
+     assert _build_partial_list([raw_item], None, "items", tracker, "") == [raw_item]
+@@ -174,7 +174,7 @@ def test_partial_list_preserves_untyped_and_unknown_fields() -> None:
+ 
+ def test_partial_builder_preserves_bare_containers_and_complete_scalar_items() -> None:
+     tracker = JsonCompleteness()
+-    tracker.analyze('{"metadata":{"source":"stream"},"values":["raw"],"counts":[1]}')
++    tracker.analyze(json_str='{"metadata":{"source":"stream"},"values":["raw"],"counts":[1]}')
+ 
+     result = _build_partial_object(
+         {"metadata": {"source": "stream"}, "values": ["raw"], "counts": [1]},
+diff --git a/tests/coverage/test_dsl_small_coverage.py b/tests/coverage/test_dsl_small_coverage.py
+index 35da3d8..430161a 100644
+--- a/tests/coverage/test_dsl_small_coverage.py
++++ b/tests/coverage/test_dsl_small_coverage.py
+@@ -69,7 +69,7 @@ def test_is_json_complete_handles_empty_complete_and_partial_values(
+ 
+ def test_json_tracker_marks_every_nested_path_and_returns_a_copy() -> None:
+     tracker = JsonCompleteness()
+-    tracker.analyze('{"user": {"name": "Ada"}, "items": [{"id": 1}, 2]}')
++    tracker.analyze(json_str='{"user": {"name": "Ada"}, "items": [{"id": 1}, 2]}')
+ 
+     expected = {
+         "",
+@@ -88,7 +88,7 @@ def test_json_tracker_marks_every_nested_path_and_returns_a_copy() -> None:
+     returned.clear()
+     assert tracker.get_complete_paths() == expected
+ 
+-    tracker.analyze(" \n ")
++    tracker.analyze(json_str=" \n ")
+     assert not tracker.is_root_complete()
+     assert tracker.get_complete_paths() == set()
+ 
+@@ -96,7 +96,7 @@ def test_json_tracker_marks_every_nested_path_and_returns_a_copy() -> None:
+ def test_json_tracker_uses_siblings_for_partial_lists_and_objects() -> None:
+     tracker = JsonCompleteness()
+     tracker.analyze(
+-        '{"done": true, "items": [{"name": "A"}, {"name": "B", "unfinished": "hel'
++        json_str='{"done": true, "items": [{"name": "A"}, {"name": "B", "unfinished": "hel'
+     )
+ 
+     assert tracker.get_complete_paths() == {
+@@ -110,7 +110,7 @@ def test_json_tracker_uses_siblings_for_partial_lists_and_objects() -> None:
+     assert not tracker.is_path_complete("items[1]")
+     assert not tracker.is_path_complete("items[1].unfinished")
+ 
+-    tracker.analyze("}")
++    tracker.analyze(json_str="}")
+     assert tracker.get_complete_paths() == set()
+ 
+ 
+diff --git a/tests/coverage/test_phase2_signature_analyze.py b/tests/coverage/test_phase2_signature_analyze.py
+new file mode 100644
+index 0000000..4b65e3b
+--- /dev/null
++++ b/tests/coverage/test_phase2_signature_analyze.py
+@@ -0,0 +1,9 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_json_str():
++    owner = importlib.import_module('instructor.v2.dsl.json_tracker')
++    owner = getattr(owner, 'JsonCompleteness')
++    p = inspect.signature(getattr(owner, 'analyze')).parameters['json_str']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY

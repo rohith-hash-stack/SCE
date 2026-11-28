@@ -1,0 +1,94 @@
+{
+ "schema_version": "layer4.task.v1",
+ "task_id": "p3b_fwd_django_0014",
+ "family": "forward_blast",
+ "corpus": "django",
+ "pinned_commit": "3396992e837d5146270ea8112bb622c83fa4a919",
+ "focal": {
+  "qname": "django.contrib.admin.utils.get_deleted_objects",
+  "file": "django/contrib/admin/utils.py",
+  "line": 106,
+  "index_file": "django/contrib/admin/utils.py",
+  "language": "python",
+  "signature": "def get_deleted_objects(objs, request, admin_site):",
+  "is_async": false,
+  "definition_sha256": "1ffa90af7765127ab14c1ec81330c020283e0e783d9373ecbdf07e4b48a5324c"
+ },
+ "prompt": "In the django repository, `django.contrib.admin.utils.get_deleted_objects` (in `django/contrib/admin/utils.py`) is about to change: get_deleted_objects() gains a required keyword-only argument `context` (a mapping of per-call settings); calls that do not pass it raise TypeError. Which functions and methods of the repository are affected - the code that calls `get_deleted_objects` at runtime, directly or through at most 2 calls in between counting the direct call as one, and would have to be reviewed or adapted? Also name the database side effects that happen while it runs and the tables it touches.",
+ "provenance": {
+  "tracer": "trace_django",
+  "sce_commit": "cb9273b",
+  "authored_at": "2026-10-24"
+ },
+ "change": {
+  "kind": "signature",
+  "description": "get_deleted_objects() gains a required keyword-only argument `context` (a mapping of per-call settings); calls that do not pass it raise TypeError."
+ },
+ "answer_contract": "forward_json_v1",
+ "arm_view": {
+  "seed_symbol": "django.contrib.admin.utils.get_deleted_objects",
+  "task_type": "blast",
+  "oracle_symbols": [
+   "django.contrib.admin.utils.get_deleted_objects",
+   "django.contrib.admin.options.ModelAdmin.get_deleted_objects",
+   "django.contrib.admin.options.ModelAdmin._delete_view",
+   "django.contrib.admin.utils.NestedObjects._nested",
+   "django.contrib.admin.utils.NestedObjects.nested",
+   "django.contrib.admin.actions.delete_selected"
+  ],
+  "oracle_required_context": [],
+  "root_imports": [],
+  "mask": {
+   "symbols": [],
+   "mode": "none"
+  },
+  "exclude_paths": []
+ },
+ "gold": {
+  "source": "runtime_trace",
+  "direction": "upstream",
+  "affected_symbols": [
+   "django.contrib.admin.options.ModelAdmin.get_deleted_objects",
+   "django.contrib.admin.options.ModelAdmin._delete_view",
+   "django.contrib.admin.utils.NestedObjects._nested",
+   "django.contrib.admin.utils.NestedObjects.nested",
+   "django.contrib.admin.actions.delete_selected"
+  ],
+  "side_effects": [
+   "DB_READ"
+  ],
+  "tables": [
+   "auth_group",
+   "auth_group_permissions",
+   "auth_user",
+   "auth_user_groups",
+   "auth_user_user_permissions",
+   "django_admin_log"
+  ],
+  "trace_manifest": "benchmarks/layer4_p3b/manifests/p3b_fwd_django_0014.json",
+  "trace_command": [
+   "{python}",
+   "-m",
+   "harness.experiments.layer4.trace_django",
+   "--in-tests-only",
+   "--root",
+   ".",
+   "--focal",
+   "django.contrib.admin.utils.get_deleted_objects",
+   "--",
+   "admin_views",
+   "modeladmin"
+  ],
+  "min_count": 1,
+  "max_depth": 2
+ },
+ "validity": {
+  "trace_exit_code": 0,
+  "async_window": false,
+  "contamination": {
+   "arm0_score": null,
+   "flagged": null,
+   "seeds": []
+  }
+ }
+}

@@ -53,6 +53,7 @@ import sqlite3
 from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder, outer_definition_node
+from prism.graph.js_test_blocks import find_test_blocks
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo, SymbolRole
 from prism.parser.lang_config import find_all
 from prism.parser.queries import run_query
@@ -96,7 +97,10 @@ except ImportError:  # pragma: no cover - networkx is a hard dependency elsewher
 #: ...)` fallback on the read side alone would have silently kept
 #: masking the same bug for any repo whose cache was written before
 #: this fix landed.
-_SCHEMA_VERSION = 3
+#: Bumped 4 -> 5 for `SymbolInfo.nested_in_function`, for the same
+#: hand-listed-fields reason: it decides whether a symbol enters Rule D's
+#: bare-name index, so a cached build must restore it exactly.
+_SCHEMA_VERSION = 12  # 12: an import or `__all__` reference keeps the name's own line; 11: reference edges keep up to 64 lines; 10: call edges keep their call sites (`sites`, Phase 3 prism_find_references); 9: test-file rule (spec/ JS/TS/Ruby only; test.py by content); 8: reference edges keep their lines, module nodes their file; 7: the reference graph and its aliases (Phase B sub-pass 2d); 6: SymbolInfo.aliases
 
 
 def index_cache_path(repo_root: str) -> Path:
@@ -252,6 +256,15 @@ def save_pipeline_to_cache(
         graph_data["nodes"] = [_jsonable_attrs(n) for n in graph_data["nodes"]]
         edge_key = "edges" if "edges" in graph_data else "links"
         graph_data[edge_key] = [_jsonable_attrs(e) for e in graph_data[edge_key]]
+        # Phase B: the reference graph and the module-level aliases ride in the same JSON (no column change)
+        ref = getattr(builder, "reference_graph", None)
+        if ref is not None:
+            ref_data = _node_link_data_compat(ref)
+            ref_key = "edges" if "edges" in ref_data else "links"
+            graph_data["prism_reference_graph"] = {
+                "nodes": [_jsonable_attrs(n) for n in ref_data["nodes"]],
+                "edges": [_jsonable_attrs(e) for e in ref_data[ref_key]]}
+        graph_data["prism_reference_aliases"] = dict(getattr(builder, "reference_aliases", {}) or {})
 
         symbols = [
             {
@@ -263,6 +276,8 @@ def save_pipeline_to_cache(
                 "module": s.module,
                 "enclosing_class": s.enclosing_class,
                 "role": s.role.value,
+                "nested_in_function": s.nested_in_function,
+                "aliases": list(s.aliases),
             }
             for s in builder.symbol_table
         ]
@@ -392,6 +407,11 @@ def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symb
     one line, since the Nth capture on a given line is always matched to
     the Nth symbol registered on that line.
     """
+    # Attributes never come from the definitions query (their own pass,
+    # `_rehydrate_attribute_def_nodes`, restores them); left in, one sharing a
+    # start line with a function (`const a = 1, f = () => {}`) could take the
+    # function's node.
+    symbols = [s for s in symbols if s.kind != "attribute"]
     if not symbols:
         return
     lang = parsed.language_id
@@ -427,6 +447,27 @@ _ATTRIBUTE_DEF_NODE_TYPES = {
     LanguageID.TYPESCRIPT: {"variable_declarator"},
     LanguageID.TSX: {"variable_declarator"},
 }
+
+
+def _rehydrate_js_test_block_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symbols: list) -> None:
+    """`_def_nodes` for JS/TS test/hook/fixture callbacks
+    (`prism.graph.js_test_blocks`), which the `definitions` query that
+    `_rehydrate_def_nodes` replays never captures. Same join as there: the
+    cached symbol's line range against a fresh `find_test_blocks` run."""
+    if parsed.language_id not in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+        return
+    pending = {
+        tuple(s.line_range): s.qualified_name
+        for s in symbols
+        if s.kind == "function" and s.qualified_name not in builder._def_nodes
+    }
+    if not pending:
+        return
+    module = builder._module_for_file(parsed)
+    for block in find_test_blocks(parsed.root_node, parsed.source, module):
+        key = pending.get((block.outer.start_point[0] + 1, block.outer.end_point[0] + 1))
+        if key is not None:
+            builder._def_nodes[key] = block.callback
 
 
 def _rehydrate_attribute_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symbols: list) -> None:
@@ -524,6 +565,8 @@ def load_pipeline_from_cache(
             return None
 
         graph_data = json.loads(graph_json)
+        ref_data = graph_data.pop("prism_reference_graph", None)
+        ref_aliases = graph_data.pop("prism_reference_aliases", {})
         graph_data["nodes"] = [_restore_attrs(n) for n in graph_data["nodes"]]
         edge_key = "edges" if "edges" in graph_data else "links"
         graph_data[edge_key] = [_restore_attrs(e) for e in graph_data[edge_key]]
@@ -531,6 +574,10 @@ def load_pipeline_from_cache(
 
         symbol_table = GlobalSymbolTable()
         for entry in json.loads(symbols_json):
+            # JS/TS test callbacks are registered without name indexing,
+            # as Pass 1 does (`ConcreteGraphBuilder._collect_js_test_blocks`).
+            node_attrs = graph.nodes[entry["qualified_name"]] if entry["qualified_name"] in graph else {}
+            js_test_block = node_attrs.get("test_block") in ("test", "hook", "fixture")
             symbol_table.add(
                 SymbolInfo(
                     qualified_name=entry["qualified_name"],
@@ -541,11 +588,25 @@ def load_pipeline_from_cache(
                     module=entry["module"],
                     enclosing_class=entry["enclosing_class"],
                     role=SymbolRole(entry["role"]),
-                )
+                    nested_in_function=entry["nested_in_function"],
+                    aliases=tuple(entry.get("aliases", ())),
+                ),
+                index_by_name=not js_test_block,
             )
 
         builder = ConcreteGraphBuilder(repo_root, symbol_table)
         builder.graph = graph
+        if ref_data is not None:
+            import networkx as _nx_ref
+            ref = _nx_ref.DiGraph()
+            for n in ref_data["nodes"]:
+                n = _restore_attrs(n)
+                ref.add_node(n.pop("id"), **n)
+            for e in ref_data["edges"]:
+                e = _restore_attrs(e)
+                ref.add_edge(e.pop("source"), e.pop("target"), **e)
+            builder.reference_graph = ref
+        builder.reference_aliases = ref_aliases
         builder.index_errors = json.loads(index_errors_json)
         builder._go_receiver_call_sites_total = go_total
         builder._go_receiver_call_sites_resolved = go_resolved
@@ -572,6 +633,7 @@ def load_pipeline_from_cache(
             if parsed is not None:
                 builder._parsed_files[file_path] = parsed
                 _rehydrate_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
+                _rehydrate_js_test_block_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
                 _rehydrate_attribute_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
                 _rehydrate_import_maps(builder, parsed)
 

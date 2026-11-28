@@ -1,0 +1,263 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t02_005_model_save_signals",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"django/db/models/base.py\", \"pattern\": \"def save\"})\n767:    def save(:\n835:    def save_base(:",
+    "token_count": 43,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def save",
+      "path": "django/db/models/base.py"
+     },
+     "engine_token_count": 43
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 835, \"path\": \"django/db/models/base.py\", \"start_line\": 767})\n767:     def save(\n768:         self, force_insert=False, force_update=False, using=None, update_fields=None\n769:     ):\n770:         \"\"\"\n771:         Save the current instance. Override this in a subclass if you want to\n772:         control the saving process.\n773: \n774:         The 'force_insert' and 'force_update' parameters can be used to insist\n775:         that the \"save\" must be an SQL insert or update (or equivalent for\n776:         non-SQL backends), respectively. Normally, they should not be set.\n777:         \"\"\"\n778:         self._prepare_related_fields_for_save(operation_name=\"save\")\n779: \n780:         using = using or router.db_for_write(self.__class__, instance=self)\n781:         if force_insert and (force_update or update_fields):\n782:             raise ValueError(\"Cannot force both insert and updating in model saving.\")\n783: \n784:         deferred_fields = self.get_deferred_fields()\n785:         if update_fields is not None:\n786:             # If update_fields is empty, skip the save. We do also check for\n787:             # no-op saves later on for inheritance cases. This bailout is\n788:             # still needed for skipping signal sending.\n789:             if not update_fields:\n790:                 return\n791: \n792:             update_fields = frozenset(update_fields)\n793:             field_names = self._meta._non_pk_concrete_field_names\n794:             non_model_fields = update_fields.difference(field_names)\n795: \n796:             if non_model_fields:\n797:                 raise ValueError(\n798:                     \"The following fields do not exist in this model, are m2m \"\n799:                     \"fields, or are non-concrete fields: %s\"\n800:                     % \", \".join(non_model_fields)\n801:                 )\n802: \n803:         # If saving to the same database, and this model is deferred, then\n804:         # automatically do an \"update_fields\" save on the loaded fields.\n805:         elif not force_insert and deferred_fields and using == self._state.db:\n806:             field_names = set()\n807:             for field in self._meta.concrete_fields:\n808:                 if not field.primary_key and not hasattr(field, \"through\"):\n809:                     field_names.add(field.attname)\n810:             loaded_fields = field_names.difference(deferred_fields)\n811:             if loaded_fields:\n812:                 update_fields = frozenset(loaded_fields)\n813: \n814:         self.save_base(\n815:             using=using,\n816:             force_insert=force_insert,\n817:             force_update=force_update,\n818:             update_fields=update_fields,\n819:         )\n820: \n821:     save.alters_data = True\n822: \n823:     async def asave(\n824:         self, force_insert=False, force_update=False, using=None, update_fields=None\n825:     ):\n826:         return await sync_to_async(self.save)(\n827:             force_insert=force_insert,\n828:             force_update=force_update,\n829:             using=using,\n830:             update_fields=update_fields,\n831:         )\n832: \n833:     asave.alters_data = True\n834: \n835:     def save_base(\n[lines 767-835 of 2532]",
+    "token_count": 891,
+    "rank": 2,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.db.models.base.Model",
+     "django.db.models.base.Model.save",
+     "django.db.models.base.Model.asave",
+     "django.db.models.base.Model.save_base"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "django/db/models/base.py",
+      "start_line": 767,
+      "end_line": 835
+     },
+     "engine_token_count": 891
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (read {\"end_line\": 1000, \"path\": \"django/db/models/base.py\", \"start_line\": 835})\n835:     def save_base(\n836:         self,\n837:         raw=False,\n838:         force_insert=False,\n839:         force_update=False,\n840:         using=None,\n841:         update_fields=None,\n842:     ):\n843:         \"\"\"\n844:         Handle the parts of saving which should be done only once per save,\n845:         yet need to be done in raw saves, too. This includes some sanity\n846:         checks and signal sending.\n847: \n848:         The 'raw' argument is telling save_base not to save any parent\n849:         models and not to do any changes to the values before save. This\n850:         is used by fixture loading.\n851:         \"\"\"\n852:         using = using or router.db_for_write(self.__class__, instance=self)\n853:         assert not (force_insert and (force_update or update_fields))\n854:         assert update_fields is None or update_fields\n855:         cls = origin = self.__class__\n856:         # Skip proxies, but keep the origin as the proxy model.\n857:         if cls._meta.proxy:\n858:             cls = cls._meta.concrete_model\n859:         meta = cls._meta\n860:         if not meta.auto_created:\n861:             pre_save.send(\n862:                 sender=origin,\n863:                 instance=self,\n864:                 raw=raw,\n865:                 using=using,\n866:                 update_fields=update_fields,\n867:             )\n868:         # A transaction isn't needed if one query is issued.\n869:         if meta.parents:\n870:             context_manager = transaction.atomic(using=using, savepoint=False)\n871:         else:\n872:             context_manager = transaction.mark_for_rollback_on_error(using=using)\n873:         with context_manager:\n874:             parent_inserted = False\n875:             if not raw:\n876:                 parent_inserted = self._save_parents(cls, using, update_fields)\n877:             updated = self._save_table(\n878:                 raw,\n879:                 cls,\n880:                 force_insert or parent_inserted,\n881:                 force_update,\n882:                 using,\n883:                 update_fields,\n884:             )\n885:         # Store the database on which the object was saved\n886:         self._state.db = using\n887:         # Once saved, this is no longer a to-be-added instance.\n888:         self._state.adding = False\n889: \n890:         # Signal that the save is complete\n891:         if not meta.auto_created:\n892:             post_save.send(\n893:                 sender=origin,\n894:                 instance=self,\n895:                 created=(not updated),\n896:                 update_fields=update_fields,\n897:                 raw=raw,\n898:                 using=using,\n899:             )\n900: \n901:     save_base.alters_data = True\n902: \n903:     def _save_parents(self, cls, using, update_fields):\n904:         \"\"\"Save all the parents of cls using values from self.\"\"\"\n905:         meta = cls._meta\n906:         inserted = False\n907:         for parent, field in meta.parents.items():\n908:             # Make sure the link fields are synced between parent and self.\n909:             if (\n910:                 field\n911:                 and getattr(self, parent._meta.pk.attname) is None\n912:                 and getattr(self, field.attname) is not None\n913:             ):\n914:                 setattr(self, parent._meta.pk.attname, getattr(self, field.attname))\n915:             parent_inserted = self._save_parents(\n916:                 cls=parent, using=using, update_fields=update_fields\n917:             )\n918:             updated = self._save_table(\n919:                 cls=parent,\n920:                 using=using,\n921:                 update_fields=update_fields,\n922:                 force_insert=parent_inserted,\n923:             )\n924:             if not updated:\n925:                 inserted = True\n926:             # Set the parent's PK value to self.\n927:             if field:\n928:                 setattr(self, field.attname, self._get_pk_val(parent._meta))\n929:                 # Since we didn't have an instance of the parent handy set\n930:                 # attname directly, bypassing the descriptor. Invalidate\n931:                 # the related object cache, in case it's been accidentally\n932:                 # populated. A fresh instance will be re-built from the\n933:                 # database if necessary.\n934:                 if field.is_cached(self):\n935:                     field.delete_cached_value(self)\n936:         return inserted\n937: \n938:     def _save_table(\n939:         self,\n940:         raw=False,\n941:         cls=None,\n942:         force_insert=False,\n943:         force_update=False,\n944:         using=None,\n945:         update_fields=None,\n946:     ):\n947:         \"\"\"\n948:         Do the heavy-lifting involved in saving. Update or insert the data\n949:         for a single table.\n950:         \"\"\"\n951:         meta = cls._meta\n952:         non_pks = [f for f in meta.local_concrete_fields if not f.primary_key]\n953: \n954:         if update_fields:\n955:             non_pks = [\n956:                 f\n957:                 for f in non_pks\n958:                 if f.name in update_fields or f.attname in update_fields\n959:             ]\n960: \n961:         pk_val = self._get_pk_val(meta)\n962:         if pk_val is None:\n963:             pk_val = meta.pk.get_pk_value_on_save(self)\n964:             setattr(self, meta.pk.attname, pk_val)\n965:         pk_set = pk_val is not None\n966:         if not pk_set and (force_update or update_fields):\n967:             raise ValueError(\"Cannot force an update in save() with no primary key.\")\n968:         updated = False\n969:         # Skip an UPDATE when adding an instance and primary key has a default.\n970:         if (\n971:             not raw\n972:             and not force_insert\n973:             and self._state.adding\n974:             and meta.pk.default\n975:             and meta.pk.default is not NOT_PROVIDED\n976:         ):\n977:             force_insert = True\n978:         # If possible, try an UPDATE. If that doesn't update anything, do an INSERT.\n979:         if pk_set and not force_insert:\n980:             base_qs = cls._base_manager.using(using)\n981:             values = [\n982:                 (\n983:                     f,\n984:                     None,\n[lines 835-984 of 2532]",
+    "token_count": 1762,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.db.models.base.Model",
+     "django.db.models.base.Model.save_base",
+     "django.db.models.base.Model._save_parents",
+     "django.db.models.base.Model._save_table"
+    ],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "read",
+     "args": {
+      "path": "django/db/models/base.py",
+      "start_line": 835,
+      "end_line": 1000
+     },
+     "engine_token_count": 1762
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2696,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are debugging Django model save behavior in\ndjango/db/models/base.py. Starting from `Model.save`, trace the real\ncausal pipeline of Model methods it calls that are responsible for\nactually persisting the instance and dispatching the `pre_save`/\n`post_save` signals.\n\nFirst give a short (2-4 sentence) explanation of the pipeline,\nnoting where the pre_save/post_save signal dispatch happens even\nthough Signal instances aren't themselves indexed method symbols.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified Model symbol names in that\ncausal order - only symbols actually present in the provided context\npackage may appear, e.g.:\n\n```json\n[\"django.db.models.base.Model.save\", \"django.db.models.base.Model.save_base\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 4,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To understand the pipeline of the `Model.save` method in Django, I'll start by searching for the `Model.save` method and then trace through the methods it calls to identify the causal pipeline responsible for persisting the instance and dispatching the `pre_save`/`post_save` signals.\n\nFirst, I'll use `grep` to find the `Model.save` method and trace its calls.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def save\", \"path\": \"django/db/models/base.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def save",
+        "path": "django/db/models/base.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def save",
+        "path": "django/db/models/base.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 113,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "Based on the `grep` results, the `Model.save` method calls `Model.save_base`. I'll now use `read` to inspect the `save` and `save_base` methods to understand their implementation and identify any calls to signal dispatch methods.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/db/models/base.py\", \"start_line\": 767, \"end_line\": 835}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/db/models/base.py",
+        "start_line": 767,
+        "end_line": 835
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/db/models/base.py",
+        "start_line": 767,
+        "end_line": 835
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 94,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "The `Model.save` method calls `Model.save_base`. I'll now use `read` to inspect the `save_base` method to understand its implementation and identify any calls to signal dispatch methods.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/db/models/base.py\", \"start_line\": 835, \"end_line\": 1000}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/db/models/base.py",
+        "start_line": 835,
+        "end_line": 1000
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/db/models/base.py",
+        "start_line": 835,
+        "end_line": 1000
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 83,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "raw_text": "The `Model.save_base` method dispatches the `pre_save` signal before saving the instance and the `post_save` signal after the instance is saved. The pipeline of methods responsible for persisting the instance and dispatching the signals is as follows:\n\n1. `django.db.models.base.Model.save`\n2. `django.db.models.base.Model.save_base`\n3. `django.db.models.signals.pre_save.send`\n4. `django.db.models.base.Model._save_parents`\n5. `django.db.models.base.Model._save_table`\n6. `django.db.models.signals.post_save.send`\n\n<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The Model.save method calls Model.save_base, which dispatches the pre_save signal, saves the instance using _save_parents and _save_table, and then dispatches the post_save signal.\\\", \\\"symbols\\\": [\\\"django.db.models.base.Model.save\\\", \\\"django.db.models.base.Model.save_base\\\", \\\"django.db.models.signals.pre_save.send\\\", \\\"django.db.models.base.Model._save_parents\\\", \\\"django.db.models.base.Model._save_table\\\", \\\"django.db.models.signals.post_save.send\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The Model.save method calls Model.save_base, which dispatches the pre_save signal, saves the instance using _save_parents and _save_table, and then dispatches the post_save signal.\", \"symbols\": [\"django.db.models.base.Model.save\", \"django.db.models.base.Model.save_base\", \"django.db.models.signals.pre_save.send\", \"django.db.models.base.Model._save_parents\", \"django.db.models.base.Model._save_table\", \"django.db.models.signals.post_save.send\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 247,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     7807.385829,
+     5945.882278,
+     6835.366655,
+     18292.6492
+    ],
+    "L_tool_exec": [
+     4.152899,
+     0.668702,
+     0.645423
+    ],
+    "L_retrieve": [
+     38954.978907
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 3776,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The Model.save method calls Model.save_base, which dispatches the pre_save signal, saves the instance using _save_parents and _save_table, and then dispatches the post_save signal.\", \"symbols\": [\"django.db.models.base.Model.save\", \"django.db.models.base.Model.save_base\", \"django.db.models.signals.pre_save.send\", \"django.db.models.base.Model._save_parents\", \"django.db.models.base.Model._save_table\", \"django.db.models.signals.post_save.send\"]}\n```",
+    "generation_tokens": 247,
+    "latency_seconds": 18.292459136000616,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 3819,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2696,
+   "prompt_tokens": 3776,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3819,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

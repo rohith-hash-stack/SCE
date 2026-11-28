@@ -1,0 +1,1031 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t02_010_i18n_catalog_translation",
+  "items": [
+   {
+    "source_id": "django/utils/translation/trans_real.py:142-186",
+    "content": "# django/utils/translation/trans_real.py:142-186  (django.utils.translation.trans_real.DjangoTranslation.__init__)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    def __init__(self, language, domain=None, localedirs=None):\n        \"\"\"Create a GNUTranslations() using many locale directories\"\"\"\n        gettext_module.GNUTranslations.__init__(self)\n        if domain is not None:\n            self.domain = domain\n\n        self.__language = language\n        self.__to_language = to_language(language)\n        self.__locale = to_locale(language)\n        self._catalog = None\n        # If a language doesn't have a catalog, use the Germanic default for\n        # pluralization: anything except one is pluralized.\n        self.plural = lambda n: int(n != 1)\n\n        if self.domain == \"django\":\n            if localedirs is not None:\n                # A module-level cache is used for caching 'django' translations\n                warnings.warn(\n                    \"localedirs is ignored when domain is 'django'.\", RuntimeWarning\n                )\n                localedirs = None\n            self._init_translation_catalog()\n\n        if localedirs:\n            for localedir in localedirs:\n                translation = self._new_gnu_trans(localedir)\n                self.merge(translation)\n        else:\n            self._add_installed_apps_translations()\n\n        self._add_local_translations()\n        if (\n            self.__language == settings.LANGUAGE_CODE\n            and self.domain == \"django\"\n            and self._catalog is None\n        ):\n            # default lang should have at least one translation file available.\n            raise OSError(\n                \"No translation files found for default language %s.\"\n                % settings.LANGUAGE_CODE\n            )\n        self._add_fallback(localedirs)\n        if self._catalog is None:\n            # No catalogs found for this language, set an empty catalog.\n            self._catalog = TranslationCatalog()",
+    "token_count": 402,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.DjangoTranslation.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 48,
+     "rerank_score": 1.8518025875091553,
+     "bm25_rank": 22,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 402
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:287-293",
+    "content": "# django/utils/translation/trans_real.py:287-293  (django.utils.translation.trans_real.translation)\ndef translation(language):\n    \"\"\"\n    Return a translation object in the default 'django' domain.\n    \"\"\"\n    if language not in _translations:\n        _translations[language] = DjangoTranslation(language)\n    return _translations[language]",
+    "token_count": 72,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.translation"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 29,
+     "rerank_score": 1.3646759986877441,
+     "bm25_rank": 8,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:325-334",
+    "content": "# django/utils/translation/trans_real.py:325-334  (django.utils.translation.trans_real.get_language)\ndef get_language():\n    \"\"\"Return the currently selected language.\"\"\"\n    t = getattr(_active, \"value\", None)\n    if t is not None:\n        try:\n            return t.to_language()\n        except AttributeError:\n            pass\n    # If we don't have a real translation object, assume it's the default language.\n    return settings.LANGUAGE_CODE",
+    "token_count": 98,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.get_language"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 46,
+     "rerank_score": 0.9457123279571533,
+     "bm25_rank": 20,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:206-211",
+    "content": "# django/utils/translation/trans_real.py:206-211  (django.utils.translation.trans_real.DjangoTranslation._init_translation_catalog)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    def _init_translation_catalog(self):\n        \"\"\"Create a base catalog using global django translations.\"\"\"\n        settingsfile = sys.modules[settings.__module__].__file__\n        localedir = os.path.join(os.path.dirname(settingsfile), \"locale\")\n        translation = self._new_gnu_trans(localedir)\n        self.merge(translation)",
+    "token_count": 111,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.DjangoTranslation._init_translation_catalog"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": 0.36025160551071167,
+     "bm25_rank": 13,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:352-365",
+    "content": "# django/utils/translation/trans_real.py:352-365  (django.utils.translation.trans_real.catalog)\ndef catalog():\n    \"\"\"\n    Return the current active catalog for further processing.\n    This can be used if you need to modify the catalog or want to access the\n    whole message catalog instead of just translating one string.\n    \"\"\"\n    global _default\n\n    t = getattr(_active, \"value\", None)\n    if t is not None:\n        return t\n    if _default is None:\n        _default = translation(settings.LANGUAGE_CODE)\n    return _default",
+    "token_count": 120,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.catalog"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 1,
+     "rerank_score": 0.21314844489097595,
+     "bm25_rank": 1,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 120
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:209-219",
+    "content": "# django/views/i18n.py:209-219  (django.views.i18n.JavaScriptCatalog.get)\nclass JavaScriptCatalog(View):\n    def get(self, request, *args, **kwargs):\n        locale = get_language()\n        domain = kwargs.get(\"domain\", self.domain)\n        # If packages are not provided, default to all installed packages, as\n        # DjangoTranslation without localedirs harvests them all.\n        packages = kwargs.get(\"packages\", \"\")\n        packages = packages.split(\"+\") if packages else self.packages\n        paths = self.get_paths(packages) if packages else None\n        self.translation = DjangoTranslation(locale, domain=domain, localedirs=paths)\n        context = self.get_context_data(**kwargs)\n        return self.render_to_response(context)",
+    "token_count": 166,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.i18n.JavaScriptCatalog.get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 35,
+     "rerank_score": -0.07209406793117523,
+     "bm25_rank": 80,
+     "dense_rank": 83,
+     "oversized_chunk": false,
+     "engine_token_count": 166
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:252-264",
+    "content": "# django/utils/translation/trans_real.py:252-264  (django.utils.translation.trans_real.DjangoTranslation.merge)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    def merge(self, other):\n        \"\"\"Merge another translation into this catalog.\"\"\"\n        if not getattr(other, \"_catalog\", None):\n            return  # NullTranslations() has no _catalog\n        if self._catalog is None:\n            # Take plural and _info from first catalog found (generally Django's).\n            self.plural = other.plural\n            self._info = other._info.copy()\n            self._catalog = TranslationCatalog(other)\n        else:\n            self._catalog.update(other)\n        if other._fallback:\n            self.add_fallback(other._fallback)",
+    "token_count": 155,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.DjangoTranslation.merge"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": -0.304008811712265,
+     "bm25_rank": 21,
+     "dense_rank": 68,
+     "oversized_chunk": false,
+     "engine_token_count": 155
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/signals.py:145-156",
+    "content": "# django/test/signals.py:145-156  (django.test.signals.language_changed)\n@receiver(setting_changed)\ndef language_changed(*, setting, **kwargs):\n    if setting in {\"LANGUAGES\", \"LANGUAGE_CODE\", \"LOCALE_PATHS\"}:\n        from django.utils.translation import trans_real\n\n        trans_real._default = None\n        trans_real._active = Local()\n    if setting in {\"LANGUAGES\", \"LOCALE_PATHS\"}:\n        from django.utils.translation import trans_real\n\n        trans_real._translations = {}\n        trans_real.check_for_language.cache_clear()",
+    "token_count": 123,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.signals.language_changed"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 40,
+     "rerank_score": -0.33221641182899475,
+     "bm25_rank": 14,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 123
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:114-120",
+    "content": "# django/utils/translation/trans_real.py:114-120  (django.utils.translation.trans_real.TranslationCatalog.get)\nclass TranslationCatalog:\n    def get(self, key, default=None):\n        missing = object()\n        for cat in self._catalogs:\n            result = cat.get(key, missing)\n            if result is not missing:\n                return result\n        return default",
+    "token_count": 79,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 27,
+     "rerank_score": -0.33995479345321655,
+     "bm25_rank": 6,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/i18n/sampleproject/update_catalogs.py:1-34",
+    "content": "# tests/i18n/sampleproject/update_catalogs.py:1-34  (tests.i18n.sampleproject.update_catalogs)\n#!/usr/bin/env python\n\n\"\"\"\nHelper script to update sampleproject's translation catalogs.\n\nWhen a bug has been identified related to i18n, this helps capture the issue\nby using catalogs created from management commands.\n\nExample:\n\nThe string \"Two %% Three %%%\" renders differently using translate and\nblocktranslate. This issue is difficult to debug, it could be a problem with\nextraction, interpolation, or both.\n\nHow this script helps:\n * Add {% translate \"Two %% Three %%%\" %} and blocktranslate equivalent to templates.\n * Run this script.\n * Test extraction - verify the new msgid in sampleproject's django.po.\n * Add a translation to sampleproject's django.po.\n * Run this script.\n * Test interpolation - verify templatetag rendering, test each in a template\n   that is rendered using an activated language from sampleproject's locale.\n * Tests should fail, issue captured.\n * Fix issue.\n * Run this script.\n * Tests all pass.\n\"\"\"\n\nimport os\nimport re\nimport sys\n\nproj_dir = os.path.dirname(os.path.abspath(__file__))\nsys.path.append(os.path.abspath(os.path.join(proj_dir, \"..\", \"..\", \"..\")))",
+    "token_count": 270,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 8,
+     "rerank_score": -0.44014638662338257,
+     "bm25_rank": 90,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 270
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:188-189",
+    "content": "# django/utils/translation/trans_real.py:188-189  (django.utils.translation.trans_real.DjangoTranslation.__repr__)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    def __repr__(self):\n        return \"<DjangoTranslation lang:%s>\" % self.__language",
+    "token_count": 60,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.DjangoTranslation.__repr__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 12,
+     "rerank_score": -0.47457361221313477,
+     "bm25_rank": 39,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:131-140",
+    "content": "# django/utils/translation/trans_real.py:131-140  (django.utils.translation.trans_real.DjangoTranslation)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    \"\"\"\n    Set up the GNUTranslations context with regard to output charset.\n\n    This translation object will be constructed out of multiple GNUTranslations\n    objects by merging their catalogs. It will construct an object for the\n    requested language and add a fallback to the default language, if it's\n    different from the requested language.\n    \"\"\"\n\n    domain = \"django\"",
+    "token_count": 111,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.DjangoTranslation"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 5,
+     "rerank_score": -0.5162934064865112,
+     "bm25_rank": 16,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:306-312",
+    "content": "# django/utils/translation/trans_real.py:306-312  (django.utils.translation.trans_real.deactivate)\ndef deactivate():\n    \"\"\"\n    Uninstall the active translation object so that further _() calls resolve\n    to the default translation object.\n    \"\"\"\n    if hasattr(_active, \"value\"):\n        del _active.value",
+    "token_count": 69,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.deactivate"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 50,
+     "rerank_score": -0.6022912263870239,
+     "bm25_rank": 23,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_null.py:1-5",
+    "content": "# django/utils/translation/trans_null.py:1-5  (django.utils.translation.trans_null)\n# These are versions of the functions in django.utils.translation.trans_real\n# that don't actually do anything. This is purely for performance, so that\n# settings.USE_I18N = False can use this module rather than trans_real.py.\n\nfrom django.conf import settings",
+    "token_count": 76,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 7,
+     "rerank_score": -0.6837483048439026,
+     "bm25_rank": 2,
+     "dense_rank": 85,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:296-303",
+    "content": "# django/utils/translation/trans_real.py:296-303  (django.utils.translation.trans_real.activate)\ndef activate(language):\n    \"\"\"\n    Fetch the translation object for a given language and install it as the\n    current translation object for the current thread.\n    \"\"\"\n    if not language:\n        return\n    _active.value = translation(language)",
+    "token_count": 73,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.activate"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 41,
+     "rerank_score": -0.7073098421096802,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:87-190",
+    "content": "# django/views/i18n.py:87-190  (django.views.i18n)\njs_catalog_template = r\"\"\"\n{% autoescape off %}\n'use strict';\n{\n  const globals = this;\n  const django = globals.django || (globals.django = {});\n\n  {% if plural %}\n  django.pluralidx = function(n) {\n    const v = {{ plural }};\n    if (typeof v === 'boolean') {\n      return v ? 1 : 0;\n    } else {\n      return v;\n    }\n  };\n  {% else %}\n  django.pluralidx = function(count) { return (count == 1) ? 0 : 1; };\n  {% endif %}\n\n  /* gettext library */\n\n  django.catalog = django.catalog || {};\n  {% if catalog_str %}\n  const newcatalog = {{ catalog_str }};\n  for (const key in newcatalog) {\n    django.catalog[key] = newcatalog[key];\n  }\n  {% endif %}\n\n  if (!django.jsi18n_initialized) {\n    django.gettext = function(msgid) {\n      const value = django.catalog[msgid];\n      if (typeof value === 'undefined') {\n        return msgid;\n      } else {\n        return (typeof value === 'string') ? value : value[0];\n      }\n    };\n\n    django.ngettext = function(singular, plural, count) {\n      const value = django.catalog[singular];\n      if (typeof value === 'undefined') {\n        return (count == 1) ? singular : plural;\n      } else {\n        return value.constructor === Array ? value[django.pluralidx(count)] : value;\n      }\n    };\n\n    django.gettext_noop = function(msgid) { return msgid; };\n\n    django.pgettext = function(context, msgid) {\n      let value = django.gettext(context + '\\x04' + msgid);\n      if (value.includes('\\x04')) {\n        value = msgid;\n      }\n      return value;\n    };\n\n    django.npgettext = function(context, singular, plural, count) {\n      let value = django.ngettext(context + '\\x04' + singular, context + '\\x04' + plural, count);\n      if (value.includes('\\x04')) {\n        value = django.ngettext(singular, plural, count);\n      }\n      return value;\n    };\n\n    django.interpolate = function(fmt, obj, named) {\n      if (named) {\n        return fmt.replace(/%\\(\\w+\\)s/g, function(match){return String(obj[match.slice(2,-2)])});\n      } else {\n        return fmt.replace(/%s/g, function(match){return String(obj.shift())});\n      }\n    };\n\n\n    /* formatting library */\n\n    django.formats = {{ formats_str }};\n\n    django.get_format = function(format_type) {\n      const value = django.formats[format_type];\n      if (typeof value === 'undefined') {\n        return format_type;\n      } else {\n        return value;\n      }\n    };\n\n    /* add to global namespace */\n    globals.pluralidx = django.pluralidx;\n    globals.gettext = django.gettext;\n    globals.ngettext = django.ngettext;\n    globals.gettext_noop = django.gettext_noop;\n    globals.pgettext = django.pgettext;\n    globals.npgettext = django.npgettext;\n    globals.interpolate = django.interpolate;\n    globals.get_format = django.get_format;\n\n    django.jsi18n_initialized = true;\n  }\n};\n{% endautoescape %}\n\"\"\"  # NOQA",
+    "token_count": 737,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -0.714118242263794,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 737
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/checks/translation.py:1-26",
+    "content": "# django/core/checks/translation.py:1-26  (django.core.checks.translation)\nfrom django.conf import settings\nfrom django.utils.translation import get_supported_language_variant\nfrom django.utils.translation.trans_real import language_code_re\n\nfrom . import Error, Tags, register\n\nE001 = Error(\n    \"You have provided an invalid value for the LANGUAGE_CODE setting: {!r}.\",\n    id=\"translation.E001\",\n)\n\nE002 = Error(\n    \"You have provided an invalid language code in the LANGUAGES setting: {!r}.\",\n    id=\"translation.E002\",\n)\n\nE003 = Error(\n    \"You have provided an invalid language code in the LANGUAGES_BIDI setting: {!r}.\",\n    id=\"translation.E003\",\n)\n\nE004 = Error(\n    \"You have provided a value for the LANGUAGE_CODE setting that is not in \"\n    \"the LANGUAGES setting.\",\n    id=\"translation.E004\",\n)",
+    "token_count": 210,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -0.8881394863128662,
+     "bm25_rank": 18,
+     "dense_rank": 94,
+     "oversized_chunk": false,
+     "engine_token_count": 210
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:78-80",
+    "content": "# django/utils/translation/trans_real.py:78-80  (django.utils.translation.trans_real.TranslationCatalog.__init__)\nclass TranslationCatalog:\n    def __init__(self, trans=None):\n        self._catalogs = [trans._catalog.copy()] if trans else [{}]\n        self._plurals = [trans.plural] if trans else [lambda n: int(n != 1)]",
+    "token_count": 84,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": -1.1316077709197998,
+     "bm25_rank": 11,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:90-91",
+    "content": "# django/utils/translation/trans_real.py:90-91  (django.utils.translation.trans_real.TranslationCatalog.__setitem__)\nclass TranslationCatalog:\n    def __setitem__(self, key, value):\n        self._catalogs[0][key] = value",
+    "token_count": 56,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.__setitem__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": -1.4854702949523926,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:122-127",
+    "content": "# django/utils/translation/trans_real.py:122-127  (django.utils.translation.trans_real.TranslationCatalog.plural)\nclass TranslationCatalog:\n    def plural(self, msgid, num):\n        for cat, plural in zip(self._catalogs, self._plurals):\n            tmsg = cat.get((msgid, plural(num)))\n            if tmsg is not None:\n                return tmsg\n        raise KeyError",
+    "token_count": 89,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.plural"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 44,
+     "rerank_score": -1.637549638748169,
+     "bm25_rank": 19,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:82-88",
+    "content": "# django/utils/translation/trans_real.py:82-88  (django.utils.translation.trans_real.TranslationCatalog.__getitem__)\nclass TranslationCatalog:\n    def __getitem__(self, key):\n        for cat in self._catalogs:\n            try:\n                return cat[key]\n            except KeyError:\n                pass\n        raise KeyError(key)",
+    "token_count": 69,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.__getitem__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -1.668452501296997,
+     "bm25_rank": 15,
+     "dense_rank": 48,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:1-57",
+    "content": "# django/utils/translation/trans_real.py:1-57  (django.utils.translation.trans_real)\n\"\"\"Translation helper functions.\"\"\"\nimport functools\nimport gettext as gettext_module\nimport os\nimport re\nimport sys\nimport warnings\n\nfrom asgiref.local import Local\n\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.conf.locale import LANG_INFO\nfrom django.core.exceptions import AppRegistryNotReady\nfrom django.core.signals import setting_changed\nfrom django.dispatch import receiver\nfrom django.utils.regex_helper import _lazy_re_compile\nfrom django.utils.safestring import SafeData, mark_safe\n\nfrom . import to_language, to_locale\n\n# Translations are cached in a dictionary for every language.\n# The active translations are stored by threadid to make them thread local.\n_translations = {}\n_active = Local()\n\n# The default translation is based on the settings file.\n_default = None\n\n# magic gettext number to separate context from message\nCONTEXT_SEPARATOR = \"\\x04\"\n\n# Maximum number of characters that will be parsed from the Accept-Language\n# header or cookie to prevent possible denial of service or memory exhaustion\n# attacks. About 10x longer than the longest value shown on MDN\u2019s\n# Accept-Language page.\nLANGUAGE_CODE_MAX_LENGTH = 500\n\n# Format of Accept-Language header values. From RFC 9110 Sections 12.4.2 and\n# 12.5.4, and RFC 5646 Section 2.1.\naccept_language_re = _lazy_re_compile(\n    r\"\"\"\n        # \"en\", \"en-au\", \"x-y-z\", \"es-419\", \"*\"\n        ([A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*|\\*)\n        # Optional \"q=1.00\", \"q=0.8\"\n        (?:\\s*;\\s*q=(0(?:\\.[0-9]{,3})?|1(?:\\.0{,3})?))?\n        # Multiple accepts per header.\n        (?:\\s*,\\s*|$)\n    \"\"\",\n    re.VERBOSE,\n)\n\nlanguage_code_re = _lazy_re_compile(\n    r\"^[a-z]{1,8}(?:-[a-z0-9]{1,8})*(?:@[a-z0-9]{1,20})?$\", re.IGNORECASE\n)\n\nlanguage_code_prefix_re = _lazy_re_compile(r\"^/(\\w+([@-]\\w+){0,2})(/|$)\")",
+    "token_count": 532,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 14,
+     "rerank_score": -1.7473690509796143,
+     "bm25_rank": 60,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 532
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:73-76",
+    "content": "# django/utils/translation/trans_real.py:73-76  (django.utils.translation.trans_real.TranslationCatalog)\nclass TranslationCatalog:\n    \"\"\"\n    Simulate a dict for DjangoTranslation._catalog so as multiple catalogs\n    with different plural equations are kept separate.\n    \"\"\"",
+    "token_count": 57,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 2,
+     "rerank_score": -1.8275654315948486,
+     "bm25_rank": 7,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:273-298",
+    "content": "# django/views/i18n.py:273-298  (django.views.i18n.JavaScriptCatalog.get_catalog)\nclass JavaScriptCatalog(View):\n    def get_catalog(self):\n        pdict = {}\n        catalog = {}\n        translation = self.translation\n        seen_keys = set()\n        while True:\n            for key, value in translation._catalog.items():\n                if key == \"\" or key in seen_keys:\n                    continue\n                if isinstance(key, str):\n                    catalog[key] = value\n                elif isinstance(key, tuple):\n                    msgid, cnt = key\n                    pdict.setdefault(msgid, {})[cnt] = value\n                else:\n                    raise TypeError(key)\n                seen_keys.add(key)\n            if translation._fallback:\n                translation = translation._fallback\n            else:\n                break\n\n        num_plurals = self._num_plurals\n        for k, v in pdict.items():\n            catalog[k] = [v.get(i, \"\") for i in range(num_plurals)]\n        return catalog",
+    "token_count": 213,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.i18n.JavaScriptCatalog.get_catalog"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 11,
+     "rerank_score": -2.163869619369507,
+     "bm25_rank": 71,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 213
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/reloader.py:25-36",
+    "content": "# django/utils/translation/reloader.py:25-36  (django.utils.translation.reloader.translation_file_changed)\ndef translation_file_changed(sender, file_path, **kwargs):\n    \"\"\"Clear the internal translations cache if a .mo file is modified.\"\"\"\n    if file_path.suffix == \".mo\":\n        import gettext\n\n        from django.utils.translation import trans_real\n\n        gettext._translations = {}\n        trans_real._translations = {}\n        trans_real._default = None\n        trans_real._active = Local()\n        return True",
+    "token_count": 107,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.reloader.translation_file_changed"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 37,
+     "rerank_score": -2.214191198348999,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:100-102",
+    "content": "# django/utils/translation/trans_real.py:100-102  (django.utils.translation.trans_real.TranslationCatalog.keys)\nclass TranslationCatalog:\n    def keys(self):\n        for cat in self._catalogs:\n            yield from cat.keys()",
+    "token_count": 52,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.keys"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": -2.263937473297119,
+     "bm25_rank": 4,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/test_localeregexdescriptor.py:15-16",
+    "content": "# tests/urlpatterns_reverse/test_localeregexdescriptor.py:15-16  (tests.urlpatterns_reverse.test_localeregexdescriptor.LocaleRegexDescriptorTests.setUp)\nclass LocaleRegexDescriptorTests(SimpleTestCase):\n    def setUp(self):\n        translation.trans_real._translations = {}",
+    "token_count": 56,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.test_localeregexdescriptor.LocaleRegexDescriptorTests.setUp"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 19,
+     "rerank_score": -2.3597302436828613,
+     "bm25_rank": 78,
+     "dense_rank": 42,
+     "oversized_chunk": false,
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:248-258",
+    "content": "# django/views/i18n.py:248-258  (django.views.i18n.JavaScriptCatalog._plural_string)\nclass JavaScriptCatalog(View):\n    @property\n    def _plural_string(self):\n        \"\"\"\n        Return the plural string (including nplurals) for this catalog language,\n        or None if no plural string is available.\n        \"\"\"\n        if \"\" in self.translation._catalog:\n            for line in self.translation._catalog[\"\"].split(\"\\n\"):\n                if line.startswith(\"Plural-Forms:\"):\n                    return line.split(\":\", 1)[1].strip()\n        return None",
+    "token_count": 128,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.i18n.JavaScriptCatalog._plural_string"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 21,
+     "rerank_score": -2.475884437561035,
+     "bm25_rank": 42,
+     "dense_rank": 81,
+     "oversized_chunk": false,
+     "engine_token_count": 128
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:327-342",
+    "content": "# django/views/i18n.py:327-342  (django.views.i18n.JSONCatalog)\nclass JSONCatalog(JavaScriptCatalog):\n    \"\"\"\n    Return the selected language catalog as a JSON object.\n\n    Receive the same parameters as JavaScriptCatalog and return a response\n    with a JSON object of the following format:\n\n        {\n            \"catalog\": {\n                # Translations catalog\n            },\n            \"formats\": {\n                # Language formats for date, time, etc.\n            },\n            \"plural\": '...'  # Expression for plural forms, or null.\n        }\n    \"\"\"",
+    "token_count": 123,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.i18n.JSONCatalog"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 15,
+     "rerank_score": -2.646693468093872,
+     "bm25_rank": 68,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 123
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:93-94",
+    "content": "# django/utils/translation/trans_real.py:93-94  (django.utils.translation.trans_real.TranslationCatalog.__contains__)\nclass TranslationCatalog:\n    def __contains__(self, key):\n        return any(key in cat for cat in self._catalogs)",
+    "token_count": 54,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.__contains__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 26,
+     "rerank_score": -2.685210704803467,
+     "bm25_rank": 5,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:96-98",
+    "content": "# django/utils/translation/trans_real.py:96-98  (django.utils.translation.trans_real.TranslationCatalog.items)\nclass TranslationCatalog:\n    def items(self):\n        for cat in self._catalogs:\n            yield from cat.items()",
+    "token_count": 50,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.items"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 6,
+     "rerank_score": -2.7336676120758057,
+     "bm25_rank": 3,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/i18n/sampleproject/update_catalogs.py:59-60",
+    "content": "# tests/i18n/sampleproject/update_catalogs.py:59-60  (tests.i18n.sampleproject.update_catalogs)\nif __name__ == \"__main__\":\n    update_translation_catalogs()",
+    "token_count": 45,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": -2.8855581283569336,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/trans_real.py:104-112",
+    "content": "# django/utils/translation/trans_real.py:104-112  (django.utils.translation.trans_real.TranslationCatalog.update)\nclass TranslationCatalog:\n    def update(self, trans):\n        # Merge if plural function is the same, else prepend.\n        for cat, plural in zip(self._catalogs, self._plurals):\n            if trans.plural.__code__ == plural.__code__:\n                cat.update(trans._catalog)\n                break\n        else:\n            self._catalogs.insert(0, trans._catalog.copy())\n            self._plurals.insert(0, trans.plural)",
+    "token_count": 125,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.translation.trans_real.TranslationCatalog.update"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 32,
+     "rerank_score": -2.9301915168762207,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 125
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:194-207",
+    "content": "# django/views/i18n.py:194-207  (django.views.i18n.JavaScriptCatalog)\nclass JavaScriptCatalog(View):\n    \"\"\"\n    Return the selected language catalog as a JavaScript library.\n\n    Receive the list of packages to check for translations in the `packages`\n    kwarg either from the extra dictionary passed to the path() function or as\n    a plus-sign delimited string from the request. Default is 'django.conf'.\n\n    You can override the gettext domain for this view, but usually you don't\n    want to do that as JavaScript messages go to the djangojs domain. This\n    might be needed if you deliver your JavaScript source from Django templates.\n    \"\"\"\n\n    domain = \"djangojs\"\n    packages = None",
+    "token_count": 155,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.i18n.JavaScriptCatalog"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 23,
+     "rerank_score": -2.946016311645508,
+     "bm25_rank": 74,
+     "dense_rank": 58,
+     "oversized_chunk": false,
+     "engine_token_count": 155
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/test_localeregexdescriptor.py:18-19",
+    "content": "# tests/urlpatterns_reverse/test_localeregexdescriptor.py:18-19  (tests.urlpatterns_reverse.test_localeregexdescriptor.LocaleRegexDescriptorTests.tearDown)\nclass LocaleRegexDescriptorTests(SimpleTestCase):\n    def tearDown(self):\n        translation.trans_real._translations = {}",
+    "token_count": 57,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.test_localeregexdescriptor.LocaleRegexDescriptorTests.tearDown"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 36,
+     "rerank_score": -2.954475164413452,
+     "bm25_rank": 84,
+     "dense_rank": 80,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/__init__.py:1-33",
+    "content": "# django/utils/translation/__init__.py:1-33  (django.utils.translation)\n\"\"\"\nInternationalization support.\n\"\"\"\nfrom contextlib import ContextDecorator\nfrom decimal import ROUND_UP, Decimal\n\nfrom django.utils.autoreload import autoreload_started, file_changed\nfrom django.utils.functional import lazy\nfrom django.utils.regex_helper import _lazy_re_compile\n\n__all__ = [\n    \"activate\",\n    \"deactivate\",\n    \"override\",\n    \"deactivate_all\",\n    \"get_language\",\n    \"get_language_from_request\",\n    \"get_language_info\",\n    \"get_language_bidi\",\n    \"check_for_language\",\n    \"to_language\",\n    \"to_locale\",\n    \"templatize\",\n    \"gettext\",\n    \"gettext_lazy\",\n    \"gettext_noop\",\n    \"ngettext\",\n    \"ngettext_lazy\",\n    \"pgettext\",\n    \"pgettext_lazy\",\n    \"npgettext\",\n    \"npgettext_lazy\",\n]",
+    "token_count": 194,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": -3.1322836875915527,
+     "bm25_rank": null,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 194
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/gis/apps.py:1-3",
+    "content": "# django/contrib/gis/apps.py:1-3  (django.contrib.gis.apps)\nfrom django.apps import AppConfig\nfrom django.core import serializers\nfrom django.utils.translation import gettext_lazy as _",
+    "token_count": 41,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 43,
+     "rerank_score": -3.243037700653076,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/i18n/test_blocktranslate.py:566-568#part1of2",
+    "content": "# tests/template_tests/syntax_tests/i18n/test_blocktranslate.py:566-568#part1of2  (tests.template_tests.syntax_tests.i18n.test_blocktranslate.TranslationBlockTranslateTagTests.test_template_tags_pgettext)\nclass TranslationBlockTranslateTagTests(SimpleTestCase):\n    @override_settings(LOCALE_PATHS=extended_locale_paths)\n    def test_template_tags_pgettext(self):\n        \"\"\"{% blocktranslate %} takes message contexts into account (#14806).\"\"\"\n        trans_real._active = Local()\n        trans_real._translations = {}",
+    "token_count": 122,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.template_tests.syntax_tests.i18n.test_blocktranslate.TranslationBlockTranslateTagTests.test_template_tags_pgettext"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 10,
+     "rerank_score": -3.5020198822021484,
+     "bm25_rank": 59,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 122
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/template.py:22-36",
+    "content": "# django/utils/translation/template.py:22-36  (django.utils.translation.template)\ncontext_re = _lazy_re_compile(r\"\"\"^\\s+.*context\\s+((?:\"[^\"]*?\")|(?:'[^']*?'))\\s*\"\"\")\ninline_re = _lazy_re_compile(\n    # Match the trans/translate 'some text' part.\n    r\"\"\"^\\s*trans(?:late)?\\s+((?:\"[^\"]*?\")|(?:'[^']*?'))\"\"\"\n    # Match and ignore optional filters\n    r\"\"\"(?:\\s*\\|\\s*[^\\s:]+(?::(?:[^\\s'\":]+|(?:\"[^\"]*?\")|(?:'[^']*?')))?)*\"\"\"\n    # Match the optional context part\n    r\"\"\"(\\s+.*context\\s+((?:\"[^\"]*?\")|(?:'[^']*?')))?\\s*\"\"\"\n)\nblock_re = _lazy_re_compile(\n    r\"\"\"^\\s*blocktrans(?:late)?(\\s+.*context\\s+((?:\"[^\"]*?\")|(?:'[^']*?')))?(?:\\s+|$)\"\"\"\n)\nendblock_re = _lazy_re_compile(r\"\"\"^\\s*endblocktrans(?:late)?$\"\"\")\nplural_re = _lazy_re_compile(r\"\"\"^\\s*plural$\"\"\")\nconstant_re = _lazy_re_compile(r\"\"\"_\\(((?:\".*?\")|(?:'.*?'))\\)\"\"\")",
+    "token_count": 303,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 31,
+     "rerank_score": -4.173018932342529,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 303
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/i18n/test_get_language_info.py:38-49",
+    "content": "# tests/template_tests/syntax_tests/i18n/test_get_language_info.py:38-49  (tests.template_tests.syntax_tests.i18n.test_get_language_info.I18nGetLanguageInfoTagTests.test_i18n38)\nclass I18nGetLanguageInfoTagTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n38\": \"{% load i18n custom %}\"\n            '{% get_language_info for \"de\"|noop:\"x y\" as l %}'\n            \"{{ l.code }}: {{ l.name }}/{{ l.name_local }}/\"\n            \"{{ l.name_translated }} bidi={{ l.bidi }}\"\n        }\n    )\n    def test_i18n38(self):\n        with translation.override(\"cs\"):\n            output = self.engine.render_to_string(\"i18n38\")\n        self.assertEqual(output, \"de: German/Deutsch/n\u011bmecky bidi=False\")",
+    "token_count": 199,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.template_tests.syntax_tests.i18n.test_get_language_info.I18nGetLanguageInfoTagTests.test_i18n38"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 39,
+     "rerank_score": -4.201290130615234,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 199
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:46-64",
+    "content": "# tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:46-64  (tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n38_2)\nclass GetLanguageInfoListTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n38_2\": \"{% load i18n custom %}\"\n            '{% get_language_info_list for langcodes|noop:\"x y\" as langs %}'\n            \"{% for l in langs %}{{ l.code }}: {{ l.name }}/\"\n            \"{{ l.name_local }}/{{ l.name_translated }} \"\n            \"bidi={{ l.bidi }}; {% endfor %}\"\n        }\n    )\n    def test_i18n38_2(self):\n        with translation.override(\"cs\"):\n            output = self.engine.render_to_string(\n                \"i18n38_2\", {\"langcodes\": [\"it\", \"fr\"]}\n            )\n        self.assertEqual(\n            output,\n            \"it: Italian/italiano/italsky bidi=False; \"\n            \"fr: French/fran\u00e7ais/francouzsky bidi=False; \",\n        )",
+    "token_count": 256,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n38_2"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 38,
+     "rerank_score": -4.211979389190674,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 256
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/i18n/tests.py:2042-2050",
+    "content": "# tests/i18n/tests.py:2042-2050  (tests.i18n.tests.TranslationFallbackI18NTests.test_sparse_territory_catalog)\nclass TranslationFallbackI18NTests(ResolutionOrderI18NTests):\n    def test_sparse_territory_catalog(self):\n        \"\"\"\n        Untranslated strings for territorial language variants use the\n        translations of the generic language. In this case, the de-de\n        translation falls back to de.\n        \"\"\"\n        with translation.override(\"de-de\"):\n            self.assertGettext(\"Test 1 (en)\", \"(de-de)\")\n            self.assertGettext(\"Test 2 (en)\", \"(de)\")",
+    "token_count": 144,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.i18n.tests.TranslationFallbackI18NTests.test_sparse_territory_catalog"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 16,
+     "rerank_score": -4.457691669464111,
+     "bm25_rank": 38,
+     "dense_rank": 33,
+     "oversized_chunk": false,
+     "engine_token_count": 144
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:1-16",
+    "content": "# django/views/i18n.py:1-16  (django.views.i18n)\nimport json\nimport os\nimport re\n\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.http import HttpResponse, HttpResponseRedirect, JsonResponse\nfrom django.template import Context, Engine\nfrom django.urls import translate_url\nfrom django.utils.formats import get_format\nfrom django.utils.http import url_has_allowed_host_and_scheme\nfrom django.utils.translation import check_for_language, get_language\nfrom django.utils.translation.trans_real import DjangoTranslation\nfrom django.views.generic import View\n\nLANGUAGE_QUERY_PARAMETER = \"language\"",
+    "token_count": 125,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 13,
+     "rerank_score": -4.544127464294434,
+     "bm25_rank": 44,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 125
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:14-26",
+    "content": "# tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:14-26  (tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n30)\nclass GetLanguageInfoListTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n30\": \"{% load i18n %}\"\n            \"{% get_language_info_list for langcodes as langs %}\"\n            \"{% for l in langs %}{{ l.code }}: {{ l.name }}/\"\n            \"{{ l.name_local }} bidi={{ l.bidi }}; {% endfor %}\"\n        }\n    )\n    def test_i18n30(self):\n        output = self.engine.render_to_string(\"i18n30\", {\"langcodes\": [\"it\", \"no\"]})\n        self.assertEqual(\n            output, \"it: Italian/italiano bidi=False; no: Norwegian/norsk bidi=False; \"\n        )",
+    "token_count": 207,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n30"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 47,
+     "rerank_score": -4.769932746887207,
+     "bm25_rank": null,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 207
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/i18n/test_translate.py:1-14",
+    "content": "# tests/template_tests/syntax_tests/i18n/test_translate.py:1-14  (tests.template_tests.syntax_tests.i18n.test_translate)\nimport inspect\nfrom functools import partial, wraps\n\nfrom asgiref.local import Local\n\nfrom django.template import Context, Template, TemplateSyntaxError\nfrom django.templatetags.l10n import LocalizeNode\nfrom django.test import SimpleTestCase, override_settings\nfrom django.utils import translation\nfrom django.utils.safestring import mark_safe\nfrom django.utils.translation import trans_real\n\nfrom ...utils import setup as base_setup\nfrom .base import MultipleLocaleActivationTestCase, extended_locale_paths",
+    "token_count": 135,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 30,
+     "rerank_score": -4.991262435913086,
+     "bm25_rank": 88,
+     "dense_rank": 67,
+     "oversized_chunk": false,
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:28-44",
+    "content": "# tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:28-44  (tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n31)\nclass GetLanguageInfoListTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n31\": \"{% load i18n %}\"\n            \"{% get_language_info_list for langcodes as langs %}\"\n            \"{% for l in langs %}{{ l.code }}: {{ l.name }}/\"\n            \"{{ l.name_local }} bidi={{ l.bidi }}; {% endfor %}\"\n        }\n    )\n    def test_i18n31(self):\n        output = self.engine.render_to_string(\n            \"i18n31\", {\"langcodes\": ((\"sl\", \"Slovenian\"), (\"fa\", \"Persian\"))}\n        )\n        self.assertEqual(\n            output,\n            \"sl: Slovenian/Sloven\\u0161\\u010dina bidi=False; \"\n            \"fa: Persian/\\u0641\\u0627\\u0631\\u0633\\u06cc bidi=True; \",\n        )",
+    "token_count": 260,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n31"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 49,
+     "rerank_score": -5.142010688781738,
+     "bm25_rank": null,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 260
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/i18n/test_blocktranslate.py:1-16",
+    "content": "# tests/template_tests/syntax_tests/i18n/test_blocktranslate.py:1-16  (tests.template_tests.syntax_tests.i18n.test_blocktranslate)\nimport inspect\nimport os\nfrom functools import partial, wraps\n\nfrom asgiref.local import Local\n\nfrom django.template import Context, Template, TemplateSyntaxError\nfrom django.template.base import Token, TokenType\nfrom django.templatetags.i18n import BlockTranslateNode\nfrom django.test import SimpleTestCase, override_settings\nfrom django.utils import translation\nfrom django.utils.safestring import mark_safe\nfrom django.utils.translation import trans_real\n\nfrom ...utils import setup as base_setup\nfrom .base import MultipleLocaleActivationTestCase, extended_locale_paths, here",
+    "token_count": 151,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": -5.80668830871582,
+     "bm25_rank": 91,
+     "dense_rank": 36,
+     "oversized_chunk": false,
+     "engine_token_count": 151
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/translation/template.py:1-11",
+    "content": "# django/utils/translation/template.py:1-11  (django.utils.translation.template)\nimport warnings\nfrom io import StringIO\n\nfrom django.template.base import Lexer, TokenType\nfrom django.utils.regex_helper import _lazy_re_compile\n\nfrom . import TranslatorCommentWarning, trim_whitespace\n\nTRANSLATOR_COMMENT_MARK = \"Translators\"\n\ndot_re = _lazy_re_compile(r\"\\S\")",
+    "token_count": 79,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 45,
+     "rerank_score": -5.9234209060668945,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/i18n/test_filters.py:43-61",
+    "content": "# tests/template_tests/syntax_tests/i18n/test_filters.py:43-61  (tests.template_tests.syntax_tests.i18n.test_filters.I18nFiltersTests.test_i18n38_2)\nclass I18nFiltersTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n38_2\": \"{% load i18n custom %}\"\n            '{% get_language_info_list for langcodes|noop:\"x y\" as langs %}'\n            \"{% for l in langs %}{{ l.code }}: {{ l.name }}/\"\n            \"{{ l.name_local }}/{{ l.name_translated }} \"\n            \"bidi={{ l.bidi }}; {% endfor %}\"\n        }\n    )\n    def test_i18n38_2(self):\n        with translation.override(\"cs\"):\n            output = self.engine.render_to_string(\n                \"i18n38_2\", {\"langcodes\": [\"it\", \"fr\"]}\n            )\n        self.assertEqual(\n            output,\n            \"it: Italian/italiano/italsky bidi=False; \"\n            \"fr: French/fran\u00e7ais/francouzsky bidi=False; \",\n        )",
+    "token_count": 252,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.template_tests.syntax_tests.i18n.test_filters.I18nFiltersTests.test_i18n38_2"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 42,
+     "rerank_score": -6.5008745193481445,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 252
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/templatetags/inclusion.py:254-254",
+    "content": "# tests/template_tests/templatetags/inclusion.py:254-254  (tests.template_tests.templatetags.inclusion)\ninclusion_tag_use_l10n.anything = \"Expected inclusion_tag_use_l10n __dict__\"",
+    "token_count": 57,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 34,
+     "rerank_score": -6.723797798156738,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 7509,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are debugging Django's translation-catalog resolution in\ndjango/utils/translation/trans_real.py. Starting from `catalog()`,\ntrace the real causal pipeline that produces the default-language\ntranslation catalog, in the order each stage is actually reached, up\nto and including the call that constructs the real translation\nobject. Assume no translation has been activated yet in this process,\nand this is the very first request for the default language's\ncatalog (the cold-start path, not a cache hit).\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.utils.translation.trans_real.catalog\", \"django.utils.translation.trans_real.translation\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1163.877098
+    ],
+    "L_embed_query": [
+     298.284457
+    ],
+    "L_dense": [
+     51.697145
+    ],
+    "L_rrf": [
+     0.181105
+    ],
+    "L_rerank": [
+     25532.119742
+    ],
+    "L_retrieve": [
+     27080.662677
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 7509,
+   "prompt_tokens": 7842,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 7855,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/utils/translation/trans_real.py:142-186  (django.utils.translation.trans_real.DjangoTranslation.__init__)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    def __init__(self, language, domain=None, localedirs=None):\n        \"\"\"Create a GNUTranslations() using many locale directories\"\"\"\n        gettext_module.GNUTranslations.__init__(self)\n        if domain is not None:\n            self.domain = domain\n\n        self.__language = language\n        self.__to_language = to_language(language)\n        self.__locale = to_locale(language)\n        self._catalog = None\n        # If a language doesn't have a catalog, use the Germanic default for\n        # pluralization: anything except one is pluralized.\n        self.plural = lambda n: int(n != 1)\n\n        if self.domain == \"django\":\n            if localedirs is not None:\n                # A module-level cache is used for caching 'django' translations\n                warnings.warn(\n                    \"localedirs is ignored when domain is 'django'.\", RuntimeWarning\n                )\n                localedirs = None\n            self._init_translation_catalog()\n\n        if localedirs:\n            for localedir in localedirs:\n                translation = self._new_gnu_trans(localedir)\n                self.merge(translation)\n        else:\n            self._add_installed_apps_translations()\n\n        self._add_local_translations()\n        if (\n            self.__language == settings.LANGUAGE_CODE\n            and self.domain == \"django\"\n            and self._catalog is None\n        ):\n            # default lang should have at least one translation file available.\n            raise OSError(\n                \"No translation files found for default language %s.\"\n                % settings.LANGUAGE_CODE\n            )\n        self._add_fallback(localedirs)\n        if self._catalog is None:\n            # No catalogs found for this language, set an empty catalog.\n            self._catalog = TranslationCatalog()\n\n# django/utils/translation/trans_real.py:287-293  (django.utils.translation.trans_real.translation)\ndef translation(language):\n    \"\"\"\n    Return a translation object in the default 'django' domain.\n    \"\"\"\n    if language not in _translations:\n        _translations[language] = DjangoTranslation(language)\n    return _translations[language]\n\n# django/utils/translation/trans_real.py:325-334  (django.utils.translation.trans_real.get_language)\ndef get_language():\n    \"\"\"Return the currently selected language.\"\"\"\n    t = getattr(_active, \"value\", None)\n    if t is not None:\n        try:\n            return t.to_language()\n        except AttributeError:\n            pass\n    # If we don't have a real translation object, assume it's the default language.\n    return settings.LANGUAGE_CODE\n\n# django/utils/translation/trans_real.py:206-211  (django.utils.translation.trans_real.DjangoTranslation._init_translation_catalog)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    def _init_translation_catalog(self):\n        \"\"\"Create a base catalog using global django translations.\"\"\"\n        settingsfile = sys.modules[settings.__module__].__file__\n        localedir = os.path.join(os.path.dirname(settingsfile), \"locale\")\n        translation = self._new_gnu_trans(localedir)\n        self.merge(translation)\n\n# django/utils/translation/trans_real.py:352-365  (django.utils.translation.trans_real.catalog)\ndef catalog():\n    \"\"\"\n    Return the current active catalog for further processing.\n    This can be used if you need to modify the catalog or want to access the\n    whole message catalog instead of just translating one string.\n    \"\"\"\n    global _default\n\n    t = getattr(_active, \"value\", None)\n    if t is not None:\n        return t\n    if _default is None:\n        _default = translation(settings.LANGUAGE_CODE)\n    return _default\n\n# django/views/i18n.py:209-219  (django.views.i18n.JavaScriptCatalog.get)\nclass JavaScriptCatalog(View):\n    def get(self, request, *args, **kwargs):\n        locale = get_language()\n        domain = kwargs.get(\"domain\", self.domain)\n        # If packages are not provided, default to all installed packages, as\n        # DjangoTranslation without localedirs harvests them all.\n        packages = kwargs.get(\"packages\", \"\")\n        packages = packages.split(\"+\") if packages else self.packages\n        paths = self.get_paths(packages) if packages else None\n        self.translation = DjangoTranslation(locale, domain=domain, localedirs=paths)\n        context = self.get_context_data(**kwargs)\n        return self.render_to_response(context)\n\n# django/utils/translation/trans_real.py:252-264  (django.utils.translation.trans_real.DjangoTranslation.merge)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    def merge(self, other):\n        \"\"\"Merge another translation into this catalog.\"\"\"\n        if not getattr(other, \"_catalog\", None):\n            return  # NullTranslations() has no _catalog\n        if self._catalog is None:\n            # Take plural and _info from first catalog found (generally Django's).\n            self.plural = other.plural\n            self._info = other._info.copy()\n            self._catalog = TranslationCatalog(other)\n        else:\n            self._catalog.update(other)\n        if other._fallback:\n            self.add_fallback(other._fallback)\n\n# django/test/signals.py:145-156  (django.test.signals.language_changed)\n@receiver(setting_changed)\ndef language_changed(*, setting, **kwargs):\n    if setting in {\"LANGUAGES\", \"LANGUAGE_CODE\", \"LOCALE_PATHS\"}:\n        from django.utils.translation import trans_real\n\n        trans_real._default = None\n        trans_real._active = Local()\n    if setting in {\"LANGUAGES\", \"LOCALE_PATHS\"}:\n        from django.utils.translation import trans_real\n\n        trans_real._translations = {}\n        trans_real.check_for_language.cache_clear()\n\n# django/utils/translation/trans_real.py:114-120  (django.utils.translation.trans_real.TranslationCatalog.get)\nclass TranslationCatalog:\n    def get(self, key, default=None):\n        missing = object()\n        for cat in self._catalogs:\n            result = cat.get(key, missing)\n            if result is not missing:\n                return result\n        return default\n\n# tests/i18n/sampleproject/update_catalogs.py:1-34  (tests.i18n.sampleproject.update_catalogs)\n#!/usr/bin/env python\n\n\"\"\"\nHelper script to update sampleproject's translation catalogs.\n\nWhen a bug has been identified related to i18n, this helps capture the issue\nby using catalogs created from management commands.\n\nExample:\n\nThe string \"Two %% Three %%%\" renders differently using translate and\nblocktranslate. This issue is difficult to debug, it could be a problem with\nextraction, interpolation, or both.\n\nHow this script helps:\n * Add {% translate \"Two %% Three %%%\" %} and blocktranslate equivalent to templates.\n * Run this script.\n * Test extraction - verify the new msgid in sampleproject's django.po.\n * Add a translation to sampleproject's django.po.\n * Run this script.\n * Test interpolation - verify templatetag rendering, test each in a template\n   that is rendered using an activated language from sampleproject's locale.\n * Tests should fail, issue captured.\n * Fix issue.\n * Run this script.\n * Tests all pass.\n\"\"\"\n\nimport os\nimport re\nimport sys\n\nproj_dir = os.path.dirname(os.path.abspath(__file__))\nsys.path.append(os.path.abspath(os.path.join(proj_dir, \"..\", \"..\", \"..\")))\n\n# django/utils/translation/trans_real.py:188-189  (django.utils.translation.trans_real.DjangoTranslation.__repr__)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    def __repr__(self):\n        return \"<DjangoTranslation lang:%s>\" % self.__language\n\n# django/utils/translation/trans_real.py:131-140  (django.utils.translation.trans_real.DjangoTranslation)\nclass DjangoTranslation(gettext_module.GNUTranslations):\n    \"\"\"\n    Set up the GNUTranslations context with regard to output charset.\n\n    This translation object will be constructed out of multiple GNUTranslations\n    objects by merging their catalogs. It will construct an object for the\n    requested language and add a fallback to the default language, if it's\n    different from the requested language.\n    \"\"\"\n\n    domain = \"django\"\n\n# django/utils/translation/trans_real.py:306-312  (django.utils.translation.trans_real.deactivate)\ndef deactivate():\n    \"\"\"\n    Uninstall the active translation object so that further _() calls resolve\n    to the default translation object.\n    \"\"\"\n    if hasattr(_active, \"value\"):\n        del _active.value\n\n# django/utils/translation/trans_null.py:1-5  (django.utils.translation.trans_null)\n# These are versions of the functions in django.utils.translation.trans_real\n# that don't actually do anything. This is purely for performance, so that\n# settings.USE_I18N = False can use this module rather than trans_real.py.\n\nfrom django.conf import settings\n\n# django/utils/translation/trans_real.py:296-303  (django.utils.translation.trans_real.activate)\ndef activate(language):\n    \"\"\"\n    Fetch the translation object for a given language and install it as the\n    current translation object for the current thread.\n    \"\"\"\n    if not language:\n        return\n    _active.value = translation(language)\n\n# django/views/i18n.py:87-190  (django.views.i18n)\njs_catalog_template = r\"\"\"\n{% autoescape off %}\n'use strict';\n{\n  const globals = this;\n  const django = globals.django || (globals.django = {});\n\n  {% if plural %}\n  django.pluralidx = function(n) {\n    const v = {{ plural }};\n    if (typeof v === 'boolean') {\n      return v ? 1 : 0;\n    } else {\n      return v;\n    }\n  };\n  {% else %}\n  django.pluralidx = function(count) { return (count == 1) ? 0 : 1; };\n  {% endif %}\n\n  /* gettext library */\n\n  django.catalog = django.catalog || {};\n  {% if catalog_str %}\n  const newcatalog = {{ catalog_str }};\n  for (const key in newcatalog) {\n    django.catalog[key] = newcatalog[key];\n  }\n  {% endif %}\n\n  if (!django.jsi18n_initialized) {\n    django.gettext = function(msgid) {\n      const value = django.catalog[msgid];\n      if (typeof value === 'undefined') {\n        return msgid;\n      } else {\n        return (typeof value === 'string') ? value : value[0];\n      }\n    };\n\n    django.ngettext = function(singular, plural, count) {\n      const value = django.catalog[singular];\n      if (typeof value === 'undefined') {\n        return (count == 1) ? singular : plural;\n      } else {\n        return value.constructor === Array ? value[django.pluralidx(count)] : value;\n      }\n    };\n\n    django.gettext_noop = function(msgid) { return msgid; };\n\n    django.pgettext = function(context, msgid) {\n      let value = django.gettext(context + '\\x04' + msgid);\n      if (value.includes('\\x04')) {\n        value = msgid;\n      }\n      return value;\n    };\n\n    django.npgettext = function(context, singular, plural, count) {\n      let value = django.ngettext(context + '\\x04' + singular, context + '\\x04' + plural, count);\n      if (value.includes('\\x04')) {\n        value = django.ngettext(singular, plural, count);\n      }\n      return value;\n    };\n\n    django.interpolate = function(fmt, obj, named) {\n      if (named) {\n        return fmt.replace(/%\\(\\w+\\)s/g, function(match){return String(obj[match.slice(2,-2)])});\n      } else {\n        return fmt.replace(/%s/g, function(match){return String(obj.shift())});\n      }\n    };\n\n\n    /* formatting library */\n\n    django.formats = {{ formats_str }};\n\n    django.get_format = function(format_type) {\n      const value = django.formats[format_type];\n      if (typeof value === 'undefined') {\n        return format_type;\n      } else {\n        return value;\n      }\n    };\n\n    /* add to global namespace */\n    globals.pluralidx = django.pluralidx;\n    globals.gettext = django.gettext;\n    globals.ngettext = django.ngettext;\n    globals.gettext_noop = django.gettext_noop;\n    globals.pgettext = django.pgettext;\n    globals.npgettext = django.npgettext;\n    globals.interpolate = django.interpolate;\n    globals.get_format = django.get_format;\n\n    django.jsi18n_initialized = true;\n  }\n};\n{% endautoescape %}\n\"\"\"  # NOQA\n\n# django/core/checks/translation.py:1-26  (django.core.checks.translation)\nfrom django.conf import settings\nfrom django.utils.translation import get_supported_language_variant\nfrom django.utils.translation.trans_real import language_code_re\n\nfrom . import Error, Tags, register\n\nE001 = Error(\n    \"You have provided an invalid value for the LANGUAGE_CODE setting: {!r}.\",\n    id=\"translation.E001\",\n)\n\nE002 = Error(\n    \"You have provided an invalid language code in the LANGUAGES setting: {!r}.\",\n    id=\"translation.E002\",\n)\n\nE003 = Error(\n    \"You have provided an invalid language code in the LANGUAGES_BIDI setting: {!r}.\",\n    id=\"translation.E003\",\n)\n\nE004 = Error(\n    \"You have provided a value for the LANGUAGE_CODE setting that is not in \"\n    \"the LANGUAGES setting.\",\n    id=\"translation.E004\",\n)\n\n# django/utils/translation/trans_real.py:78-80  (django.utils.translation.trans_real.TranslationCatalog.__init__)\nclass TranslationCatalog:\n    def __init__(self, trans=None):\n        self._catalogs = [trans._catalog.copy()] if trans else [{}]\n        self._plurals = [trans.plural] if trans else [lambda n: int(n != 1)]\n\n# django/utils/translation/trans_real.py:90-91  (django.utils.translation.trans_real.TranslationCatalog.__setitem__)\nclass TranslationCatalog:\n    def __setitem__(self, key, value):\n        self._catalogs[0][key] = value\n\n# django/utils/translation/trans_real.py:122-127  (django.utils.translation.trans_real.TranslationCatalog.plural)\nclass TranslationCatalog:\n    def plural(self, msgid, num):\n        for cat, plural in zip(self._catalogs, self._plurals):\n            tmsg = cat.get((msgid, plural(num)))\n            if tmsg is not None:\n                return tmsg\n        raise KeyError\n\n# django/utils/translation/trans_real.py:82-88  (django.utils.translation.trans_real.TranslationCatalog.__getitem__)\nclass TranslationCatalog:\n    def __getitem__(self, key):\n        for cat in self._catalogs:\n            try:\n                return cat[key]\n            except KeyError:\n                pass\n        raise KeyError(key)\n\n# django/utils/translation/trans_real.py:1-57  (django.utils.translation.trans_real)\n\"\"\"Translation helper functions.\"\"\"\nimport functools\nimport gettext as gettext_module\nimport os\nimport re\nimport sys\nimport warnings\n\nfrom asgiref.local import Local\n\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.conf.locale import LANG_INFO\nfrom django.core.exceptions import AppRegistryNotReady\nfrom django.core.signals import setting_changed\nfrom django.dispatch import receiver\nfrom django.utils.regex_helper import _lazy_re_compile\nfrom django.utils.safestring import SafeData, mark_safe\n\nfrom . import to_language, to_locale\n\n# Translations are cached in a dictionary for every language.\n# The active translations are stored by threadid to make them thread local.\n_translations = {}\n_active = Local()\n\n# The default translation is based on the settings file.\n_default = None\n\n# magic gettext number to separate context from message\nCONTEXT_SEPARATOR = \"\\x04\"\n\n# Maximum number of characters that will be parsed from the Accept-Language\n# header or cookie to prevent possible denial of service or memory exhaustion\n# attacks. About 10x longer than the longest value shown on MDN\u2019s\n# Accept-Language page.\nLANGUAGE_CODE_MAX_LENGTH = 500\n\n# Format of Accept-Language header values. From RFC 9110 Sections 12.4.2 and\n# 12.5.4, and RFC 5646 Section 2.1.\naccept_language_re = _lazy_re_compile(\n    r\"\"\"\n        # \"en\", \"en-au\", \"x-y-z\", \"es-419\", \"*\"\n        ([A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*|\\*)\n        # Optional \"q=1.00\", \"q=0.8\"\n        (?:\\s*;\\s*q=(0(?:\\.[0-9]{,3})?|1(?:\\.0{,3})?))?\n        # Multiple accepts per header.\n        (?:\\s*,\\s*|$)\n    \"\"\",\n    re.VERBOSE,\n)\n\nlanguage_code_re = _lazy_re_compile(\n    r\"^[a-z]{1,8}(?:-[a-z0-9]{1,8})*(?:@[a-z0-9]{1,20})?$\", re.IGNORECASE\n)\n\nlanguage_code_prefix_re = _lazy_re_compile(r\"^/(\\w+([@-]\\w+){0,2})(/|$)\")\n\n# django/utils/translation/trans_real.py:73-76  (django.utils.translation.trans_real.TranslationCatalog)\nclass TranslationCatalog:\n    \"\"\"\n    Simulate a dict for DjangoTranslation._catalog so as multiple catalogs\n    with different plural equations are kept separate.\n    \"\"\"\n\n# django/views/i18n.py:273-298  (django.views.i18n.JavaScriptCatalog.get_catalog)\nclass JavaScriptCatalog(View):\n    def get_catalog(self):\n        pdict = {}\n        catalog = {}\n        translation = self.translation\n        seen_keys = set()\n        while True:\n            for key, value in translation._catalog.items():\n                if key == \"\" or key in seen_keys:\n                    continue\n                if isinstance(key, str):\n                    catalog[key] = value\n                elif isinstance(key, tuple):\n                    msgid, cnt = key\n                    pdict.setdefault(msgid, {})[cnt] = value\n                else:\n                    raise TypeError(key)\n                seen_keys.add(key)\n            if translation._fallback:\n                translation = translation._fallback\n            else:\n                break\n\n        num_plurals = self._num_plurals\n        for k, v in pdict.items():\n            catalog[k] = [v.get(i, \"\") for i in range(num_plurals)]\n        return catalog\n\n# django/utils/translation/reloader.py:25-36  (django.utils.translation.reloader.translation_file_changed)\ndef translation_file_changed(sender, file_path, **kwargs):\n    \"\"\"Clear the internal translations cache if a .mo file is modified.\"\"\"\n    if file_path.suffix == \".mo\":\n        import gettext\n\n        from django.utils.translation import trans_real\n\n        gettext._translations = {}\n        trans_real._translations = {}\n        trans_real._default = None\n        trans_real._active = Local()\n        return True\n\n# django/utils/translation/trans_real.py:100-102  (django.utils.translation.trans_real.TranslationCatalog.keys)\nclass TranslationCatalog:\n    def keys(self):\n        for cat in self._catalogs:\n            yield from cat.keys()\n\n# tests/urlpatterns_reverse/test_localeregexdescriptor.py:15-16  (tests.urlpatterns_reverse.test_localeregexdescriptor.LocaleRegexDescriptorTests.setUp)\nclass LocaleRegexDescriptorTests(SimpleTestCase):\n    def setUp(self):\n        translation.trans_real._translations = {}\n\n# django/views/i18n.py:248-258  (django.views.i18n.JavaScriptCatalog._plural_string)\nclass JavaScriptCatalog(View):\n    @property\n    def _plural_string(self):\n        \"\"\"\n        Return the plural string (including nplurals) for this catalog language,\n        or None if no plural string is available.\n        \"\"\"\n        if \"\" in self.translation._catalog:\n            for line in self.translation._catalog[\"\"].split(\"\\n\"):\n                if line.startswith(\"Plural-Forms:\"):\n                    return line.split(\":\", 1)[1].strip()\n        return None\n\n# django/views/i18n.py:327-342  (django.views.i18n.JSONCatalog)\nclass JSONCatalog(JavaScriptCatalog):\n    \"\"\"\n    Return the selected language catalog as a JSON object.\n\n    Receive the same parameters as JavaScriptCatalog and return a response\n    with a JSON object of the following format:\n\n        {\n            \"catalog\": {\n                # Translations catalog\n            },\n            \"formats\": {\n                # Language formats for date, time, etc.\n            },\n            \"plural\": '...'  # Expression for plural forms, or null.\n        }\n    \"\"\"\n\n# django/utils/translation/trans_real.py:93-94  (django.utils.translation.trans_real.TranslationCatalog.__contains__)\nclass TranslationCatalog:\n    def __contains__(self, key):\n        return any(key in cat for cat in self._catalogs)\n\n# django/utils/translation/trans_real.py:96-98  (django.utils.translation.trans_real.TranslationCatalog.items)\nclass TranslationCatalog:\n    def items(self):\n        for cat in self._catalogs:\n            yield from cat.items()\n\n# tests/i18n/sampleproject/update_catalogs.py:59-60  (tests.i18n.sampleproject.update_catalogs)\nif __name__ == \"__main__\":\n    update_translation_catalogs()\n\n# django/utils/translation/trans_real.py:104-112  (django.utils.translation.trans_real.TranslationCatalog.update)\nclass TranslationCatalog:\n    def update(self, trans):\n        # Merge if plural function is the same, else prepend.\n        for cat, plural in zip(self._catalogs, self._plurals):\n            if trans.plural.__code__ == plural.__code__:\n                cat.update(trans._catalog)\n                break\n        else:\n            self._catalogs.insert(0, trans._catalog.copy())\n            self._plurals.insert(0, trans.plural)\n\n# django/views/i18n.py:194-207  (django.views.i18n.JavaScriptCatalog)\nclass JavaScriptCatalog(View):\n    \"\"\"\n    Return the selected language catalog as a JavaScript library.\n\n    Receive the list of packages to check for translations in the `packages`\n    kwarg either from the extra dictionary passed to the path() function or as\n    a plus-sign delimited string from the request. Default is 'django.conf'.\n\n    You can override the gettext domain for this view, but usually you don't\n    want to do that as JavaScript messages go to the djangojs domain. This\n    might be needed if you deliver your JavaScript source from Django templates.\n    \"\"\"\n\n    domain = \"djangojs\"\n    packages = None\n\n# tests/urlpatterns_reverse/test_localeregexdescriptor.py:18-19  (tests.urlpatterns_reverse.test_localeregexdescriptor.LocaleRegexDescriptorTests.tearDown)\nclass LocaleRegexDescriptorTests(SimpleTestCase):\n    def tearDown(self):\n        translation.trans_real._translations = {}\n\n# django/utils/translation/__init__.py:1-33  (django.utils.translation)\n\"\"\"\nInternationalization support.\n\"\"\"\nfrom contextlib import ContextDecorator\nfrom decimal import ROUND_UP, Decimal\n\nfrom django.utils.autoreload import autoreload_started, file_changed\nfrom django.utils.functional import lazy\nfrom django.utils.regex_helper import _lazy_re_compile\n\n__all__ = [\n    \"activate\",\n    \"deactivate\",\n    \"override\",\n    \"deactivate_all\",\n    \"get_language\",\n    \"get_language_from_request\",\n    \"get_language_info\",\n    \"get_language_bidi\",\n    \"check_for_language\",\n    \"to_language\",\n    \"to_locale\",\n    \"templatize\",\n    \"gettext\",\n    \"gettext_lazy\",\n    \"gettext_noop\",\n    \"ngettext\",\n    \"ngettext_lazy\",\n    \"pgettext\",\n    \"pgettext_lazy\",\n    \"npgettext\",\n    \"npgettext_lazy\",\n]\n\n# django/contrib/gis/apps.py:1-3  (django.contrib.gis.apps)\nfrom django.apps import AppConfig\nfrom django.core import serializers\nfrom django.utils.translation import gettext_lazy as _\n\n# tests/template_tests/syntax_tests/i18n/test_blocktranslate.py:566-568#part1of2  (tests.template_tests.syntax_tests.i18n.test_blocktranslate.TranslationBlockTranslateTagTests.test_template_tags_pgettext)\nclass TranslationBlockTranslateTagTests(SimpleTestCase):\n    @override_settings(LOCALE_PATHS=extended_locale_paths)\n    def test_template_tags_pgettext(self):\n        \"\"\"{% blocktranslate %} takes message contexts into account (#14806).\"\"\"\n        trans_real._active = Local()\n        trans_real._translations = {}\n\n# django/utils/translation/template.py:22-36  (django.utils.translation.template)\ncontext_re = _lazy_re_compile(r\"\"\"^\\s+.*context\\s+((?:\"[^\"]*?\")|(?:'[^']*?'))\\s*\"\"\")\ninline_re = _lazy_re_compile(\n    # Match the trans/translate 'some text' part.\n    r\"\"\"^\\s*trans(?:late)?\\s+((?:\"[^\"]*?\")|(?:'[^']*?'))\"\"\"\n    # Match and ignore optional filters\n    r\"\"\"(?:\\s*\\|\\s*[^\\s:]+(?::(?:[^\\s'\":]+|(?:\"[^\"]*?\")|(?:'[^']*?')))?)*\"\"\"\n    # Match the optional context part\n    r\"\"\"(\\s+.*context\\s+((?:\"[^\"]*?\")|(?:'[^']*?')))?\\s*\"\"\"\n)\nblock_re = _lazy_re_compile(\n    r\"\"\"^\\s*blocktrans(?:late)?(\\s+.*context\\s+((?:\"[^\"]*?\")|(?:'[^']*?')))?(?:\\s+|$)\"\"\"\n)\nendblock_re = _lazy_re_compile(r\"\"\"^\\s*endblocktrans(?:late)?$\"\"\")\nplural_re = _lazy_re_compile(r\"\"\"^\\s*plural$\"\"\")\nconstant_re = _lazy_re_compile(r\"\"\"_\\(((?:\".*?\")|(?:'.*?'))\\)\"\"\")\n\n# tests/template_tests/syntax_tests/i18n/test_get_language_info.py:38-49  (tests.template_tests.syntax_tests.i18n.test_get_language_info.I18nGetLanguageInfoTagTests.test_i18n38)\nclass I18nGetLanguageInfoTagTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n38\": \"{% load i18n custom %}\"\n            '{% get_language_info for \"de\"|noop:\"x y\" as l %}'\n            \"{{ l.code }}: {{ l.name }}/{{ l.name_local }}/\"\n            \"{{ l.name_translated }} bidi={{ l.bidi }}\"\n        }\n    )\n    def test_i18n38(self):\n        with translation.override(\"cs\"):\n            output = self.engine.render_to_string(\"i18n38\")\n        self.assertEqual(output, \"de: German/Deutsch/n\u011bmecky bidi=False\")\n\n# tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:46-64  (tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n38_2)\nclass GetLanguageInfoListTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n38_2\": \"{% load i18n custom %}\"\n            '{% get_language_info_list for langcodes|noop:\"x y\" as langs %}'\n            \"{% for l in langs %}{{ l.code }}: {{ l.name }}/\"\n            \"{{ l.name_local }}/{{ l.name_translated }} \"\n            \"bidi={{ l.bidi }}; {% endfor %}\"\n        }\n    )\n    def test_i18n38_2(self):\n        with translation.override(\"cs\"):\n            output = self.engine.render_to_string(\n                \"i18n38_2\", {\"langcodes\": [\"it\", \"fr\"]}\n            )\n        self.assertEqual(\n            output,\n            \"it: Italian/italiano/italsky bidi=False; \"\n            \"fr: French/fran\u00e7ais/francouzsky bidi=False; \",\n        )\n\n# tests/i18n/tests.py:2042-2050  (tests.i18n.tests.TranslationFallbackI18NTests.test_sparse_territory_catalog)\nclass TranslationFallbackI18NTests(ResolutionOrderI18NTests):\n    def test_sparse_territory_catalog(self):\n        \"\"\"\n        Untranslated strings for territorial language variants use the\n        translations of the generic language. In this case, the de-de\n        translation falls back to de.\n        \"\"\"\n        with translation.override(\"de-de\"):\n            self.assertGettext(\"Test 1 (en)\", \"(de-de)\")\n            self.assertGettext(\"Test 2 (en)\", \"(de)\")\n\n# django/views/i18n.py:1-16  (django.views.i18n)\nimport json\nimport os\nimport re\n\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.http import HttpResponse, HttpResponseRedirect, JsonResponse\nfrom django.template import Context, Engine\nfrom django.urls import translate_url\nfrom django.utils.formats import get_format\nfrom django.utils.http import url_has_allowed_host_and_scheme\nfrom django.utils.translation import check_for_language, get_language\nfrom django.utils.translation.trans_real import DjangoTranslation\nfrom django.views.generic import View\n\nLANGUAGE_QUERY_PARAMETER = \"language\"\n\n# tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:14-26  (tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n30)\nclass GetLanguageInfoListTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n30\": \"{% load i18n %}\"\n            \"{% get_language_info_list for langcodes as langs %}\"\n            \"{% for l in langs %}{{ l.code }}: {{ l.name }}/\"\n            \"{{ l.name_local }} bidi={{ l.bidi }}; {% endfor %}\"\n        }\n    )\n    def test_i18n30(self):\n        output = self.engine.render_to_string(\"i18n30\", {\"langcodes\": [\"it\", \"no\"]})\n        self.assertEqual(\n            output, \"it: Italian/italiano bidi=False; no: Norwegian/norsk bidi=False; \"\n        )\n\n# tests/template_tests/syntax_tests/i18n/test_translate.py:1-14  (tests.template_tests.syntax_tests.i18n.test_translate)\nimport inspect\nfrom functools import partial, wraps\n\nfrom asgiref.local import Local\n\nfrom django.template import Context, Template, TemplateSyntaxError\nfrom django.templatetags.l10n import LocalizeNode\nfrom django.test import SimpleTestCase, override_settings\nfrom django.utils import translation\nfrom django.utils.safestring import mark_safe\nfrom django.utils.translation import trans_real\n\nfrom ...utils import setup as base_setup\nfrom .base import MultipleLocaleActivationTestCase, extended_locale_paths\n\n# tests/template_tests/syntax_tests/i18n/test_get_language_info_list.py:28-44  (tests.template_tests.syntax_tests.i18n.test_get_language_info_list.GetLanguageInfoListTests.test_i18n31)\nclass GetLanguageInfoListTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n31\": \"{% load i18n %}\"\n            \"{% get_language_info_list for langcodes as langs %}\"\n            \"{% for l in langs %}{{ l.code }}: {{ l.name }}/\"\n            \"{{ l.name_local }} bidi={{ l.bidi }}; {% endfor %}\"\n        }\n    )\n    def test_i18n31(self):\n        output = self.engine.render_to_string(\n            \"i18n31\", {\"langcodes\": ((\"sl\", \"Slovenian\"), (\"fa\", \"Persian\"))}\n        )\n        self.assertEqual(\n            output,\n            \"sl: Slovenian/Sloven\\u0161\\u010dina bidi=False; \"\n            \"fa: Persian/\\u0641\\u0627\\u0631\\u0633\\u06cc bidi=True; \",\n        )\n\n# tests/template_tests/syntax_tests/i18n/test_blocktranslate.py:1-16  (tests.template_tests.syntax_tests.i18n.test_blocktranslate)\nimport inspect\nimport os\nfrom functools import partial, wraps\n\nfrom asgiref.local import Local\n\nfrom django.template import Context, Template, TemplateSyntaxError\nfrom django.template.base import Token, TokenType\nfrom django.templatetags.i18n import BlockTranslateNode\nfrom django.test import SimpleTestCase, override_settings\nfrom django.utils import translation\nfrom django.utils.safestring import mark_safe\nfrom django.utils.translation import trans_real\n\nfrom ...utils import setup as base_setup\nfrom .base import MultipleLocaleActivationTestCase, extended_locale_paths, here\n\n# django/utils/translation/template.py:1-11  (django.utils.translation.template)\nimport warnings\nfrom io import StringIO\n\nfrom django.template.base import Lexer, TokenType\nfrom django.utils.regex_helper import _lazy_re_compile\n\nfrom . import TranslatorCommentWarning, trim_whitespace\n\nTRANSLATOR_COMMENT_MARK = \"Translators\"\n\ndot_re = _lazy_re_compile(r\"\\S\")\n\n# tests/template_tests/syntax_tests/i18n/test_filters.py:43-61  (tests.template_tests.syntax_tests.i18n.test_filters.I18nFiltersTests.test_i18n38_2)\nclass I18nFiltersTests(SimpleTestCase):\n    @setup(\n        {\n            \"i18n38_2\": \"{% load i18n custom %}\"\n            '{% get_language_info_list for langcodes|noop:\"x y\" as langs %}'\n            \"{% for l in langs %}{{ l.code }}: {{ l.name }}/\"\n            \"{{ l.name_local }}/{{ l.name_translated }} \"\n            \"bidi={{ l.bidi }}; {% endfor %}\"\n        }\n    )\n    def test_i18n38_2(self):\n        with translation.override(\"cs\"):\n            output = self.engine.render_to_string(\n                \"i18n38_2\", {\"langcodes\": [\"it\", \"fr\"]}\n            )\n        self.assertEqual(\n            output,\n            \"it: Italian/italiano/italsky bidi=False; \"\n            \"fr: French/fran\u00e7ais/francouzsky bidi=False; \",\n        )\n\n# tests/template_tests/templatetags/inclusion.py:254-254  (tests.template_tests.templatetags.inclusion)\ninclusion_tag_use_l10n.anything = \"Expected inclusion_tag_use_l10n __dict__\"\n\n## Task\n\nYou are debugging Django's translation-catalog resolution in\ndjango/utils/translation/trans_real.py. Starting from `catalog()`,\ntrace the real causal pipeline that produces the default-language\ntranslation catalog, in the order each stage is actually reached, up\nto and including the call that constructs the real translation\nobject. Assume no translation has been activated yet in this process,\nand this is the very first request for the default language's\ncatalog (the cold-start path, not a cache hit).\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.utils.translation.trans_real.catalog\", \"django.utils.translation.trans_real.translation\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

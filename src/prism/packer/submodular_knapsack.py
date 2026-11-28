@@ -100,7 +100,7 @@ from prism.graph.contracts import BehavioralContract
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolRole
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
 from prism.parser.tree_sitter_loader import LanguageID, node_text
-from prism.semantics.bitmask import FeatureBit
+from prism.semantics.bitmask import AXIS_BITS, FeatureBit
 from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import count_tokens
 from prism.traversal._cache_keys import snapshot_file_hash_set
@@ -441,6 +441,24 @@ def compute_candidate_value(
     return decay * (1.0 + beta * delta_feat)
 
 
+_AXIS_MASK = 0
+for _bit in AXIS_BITS:
+    _AXIS_MASK |= int(_bit)
+
+
+class _AxisMasks:
+    """Read-only view of `{qname: mask}` keeping only the four-axis bits
+    (no modifier or primitive bits)."""
+
+    __slots__ = ("_masks",)
+
+    def __init__(self, masks: dict[str, int]) -> None:
+        self._masks = masks
+
+    def get(self, key: str, default: int = 0) -> int:
+        return self._masks.get(key, default) & _AXIS_MASK
+
+
 def select_submodular_context(
     graph: nx.DiGraph,
     seed_id: str,
@@ -612,6 +630,9 @@ def select_submodular_context(
             "distance, breaking the 1-hop-vs-2-hop dominance guarantee this packer depends on."
         )
 
+    # Coverage is over axis features only: a modifier flag (HAS_REFLECTION)
+    # or primitive bit describes a symbol, it is not a feature to cover.
+    feature_masks = _AxisMasks(feature_masks)
     s_pack = [seed_id]
     current_cost = costs.get(seed_id, 0)
     covered_mask = feature_masks.get(seed_id, 0)
@@ -940,7 +961,10 @@ def select_submodular_context(
     # of "strongest upstream caller" that is never actually part of a
     # causal pipeline, so an unconditional force-admit here would defeat
     # the whole point of the gate added elsewhere in this function.
-    if upstream_candidates:
+    # Only a confidently-resolved caller is guaranteed: a best-effort
+    # (`tentative`) caller edge is a guess, not established coupling.
+    confident_upstream = {u for u in upstream_candidates if not graph.edges[u, seed_id].get("tentative")}
+    if confident_upstream:
         # Phase I determinism audit: `upstream_candidates` is a `set`,
         # so an exact `dist_w_upstream` tie between two callers left the
         # winner hash-seed dependent (`min` only compares strictly-less,
@@ -948,7 +972,7 @@ def select_submodular_context(
         # function's own tie-break points, every other one of which
         # already pairs its distance key with the qualified name
         # ascending (see the B1 comment above). Matched here too.
-        best_upstream = min(upstream_candidates, key=lambda u: (dist_w_upstream_map.get(u, float("inf")), u))
+        best_upstream = min(confident_upstream, key=lambda u: (dist_w_upstream_map.get(u, float("inf")), u))
         if (
             best_upstream not in s_pack
             and current_cost + costs.get(best_upstream, 0) <= target_budget
@@ -1231,11 +1255,10 @@ def _default_costs(
         if info is None:
             costs[qname] = 0
             continue
-        parsed = builder.parsed_file(info.file)
-        if parsed is None:
+        source = builder.source_text(info.file)
+        if source is None:
             costs[qname] = 0
             continue
-        source = parsed.source.decode("utf-8", errors="replace")
         lines = source.splitlines()
         start, end = info.line_range
         snippet = "\n".join(lines[max(start - 1, 0):end])
@@ -1268,10 +1291,9 @@ def _signature_stub(builder: ConcreteGraphBuilder, qname: str) -> str | None:
     info = builder.symbol_table.get(qname)
     if info is None:
         return None
-    parsed = builder.parsed_file(info.file)
-    if parsed is None:
+    source = builder.source_text(info.file)
+    if source is None:
         return None
-    source = parsed.source.decode("utf-8", errors="replace")
     lines = source.splitlines()
     start, end = info.line_range
     snippet_lines = lines[max(start - 1, 0):end]

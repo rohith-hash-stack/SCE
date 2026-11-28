@@ -1,0 +1,177 @@
+diff --git a/examples/pydantic_ai_examples/question_graph.py b/examples/pydantic_ai_examples/question_graph.py
+index 402d94242..4b7e0113b 100644
+--- a/examples/pydantic_ai_examples/question_graph.py
++++ b/examples/pydantic_ai_examples/question_graph.py
+@@ -13,7 +13,7 @@ from pathlib import Path
+ import logfire
+ from groq import BaseModel
+ 
+-from pydantic_ai import Agent, format_as_xml
++from pydantic_ai import Agent, render_as_xml
+ from pydantic_ai.messages import ModelMessage
+ from pydantic_graph import (
+     BaseNode,
+@@ -82,7 +82,7 @@ class Evaluate(BaseNode[QuestionState, None, str]):
+     ) -> End[str] | Reprimand:
+         assert ctx.state.question is not None
+         result = await evaluate_agent.run(
+-            format_as_xml({'question': ctx.state.question, 'answer': self.answer}),
++            render_as_xml({'question': ctx.state.question, 'answer': self.answer}),
+             message_history=ctx.state.evaluate_agent_messages,
+         )
+         ctx.state.evaluate_agent_messages += result.all_messages()
+diff --git a/examples/pydantic_ai_examples/slack_lead_qualifier/models.py b/examples/pydantic_ai_examples/slack_lead_qualifier/models.py
+index defa66bfa..49c494d76 100644
+--- a/examples/pydantic_ai_examples/slack_lead_qualifier/models.py
++++ b/examples/pydantic_ai_examples/slack_lead_qualifier/models.py
+@@ -4,7 +4,7 @@ from annotated_types import Ge, Le
+ from pydantic import BaseModel
+ 
+ ### [import-format_as_xml]
+-from pydantic_ai import format_as_xml  ### [/import-format_as_xml]
++from pydantic_ai import render_as_xml  ### [/import-format_as_xml]
+ 
+ 
+ ### [profile,profile-intro]
+@@ -16,7 +16,7 @@ class Profile(BaseModel):  ### [/profile-intro]
+ 
+     ### [profile-as_prompt]
+     def as_prompt(self) -> str:
+-        return format_as_xml(self, root_tag='profile')  ### [/profile-as_prompt]
++        return render_as_xml(self, root_tag='profile')  ### [/profile-as_prompt]
+ 
+ 
+ ### [analysis,analysis-intro]
+diff --git a/examples/pydantic_ai_examples/sql_gen.py b/examples/pydantic_ai_examples/sql_gen.py
+index 55aa77436..bc1b82a29 100644
+--- a/examples/pydantic_ai_examples/sql_gen.py
++++ b/examples/pydantic_ai_examples/sql_gen.py
+@@ -24,7 +24,7 @@ from annotated_types import MinLen
+ from devtools import debug
+ from pydantic import BaseModel, Field
+ 
+-from pydantic_ai import Agent, ModelRetry, RunContext, format_as_xml
++from pydantic_ai import Agent, ModelRetry, RunContext, render_as_xml
+ 
+ # 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+ logfire.configure(send_to_logfire='if-token-present')
+@@ -111,7 +111,7 @@ Database schema:
+ 
+ today's date = {date.today()}
+ 
+-{format_as_xml(SQL_EXAMPLES)}
++{render_as_xml(SQL_EXAMPLES)}
+ """
+ 
+ 
+diff --git a/pydantic_ai_slim/pydantic_ai/__init__.py b/pydantic_ai_slim/pydantic_ai/__init__.py
+index a0008c8ef..b13afb3a4 100644
+--- a/pydantic_ai_slim/pydantic_ai/__init__.py
++++ b/pydantic_ai_slim/pydantic_ai/__init__.py
+@@ -21,7 +21,7 @@ from .exceptions import (
+     UsageLimitExceeded,
+     UserError,
+ )
+-from .format_prompt import format_as_xml
++from .format_prompt import render_as_xml
+ from .messages import AudioUrl, BinaryContent, DocumentUrl, ImageUrl, VideoUrl
+ from .output import NativeOutput, PromptedOutput, StructuredDict, TextOutput, ToolOutput
+ from .settings import ModelSettings
+@@ -74,7 +74,7 @@ __all__ = (
+     'TextOutput',
+     'StructuredDict',
+     # format_prompt
+-    'format_as_xml',
++    'render_as_xml',
+     # settings
+     'ModelSettings',
+     # usage
+diff --git a/pydantic_ai_slim/pydantic_ai/format_prompt.py b/pydantic_ai_slim/pydantic_ai/format_prompt.py
+index 42e6b4ac6..60bd223e9 100644
+--- a/pydantic_ai_slim/pydantic_ai/format_prompt.py
++++ b/pydantic_ai_slim/pydantic_ai/format_prompt.py
+@@ -8,10 +8,10 @@ from xml.etree import ElementTree
+ 
+ from pydantic import BaseModel
+ 
+-__all__ = ('format_as_xml',)
++__all__ = ('render_as_xml',)
+ 
+ 
+-def format_as_xml(
++def render_as_xml(
+     obj: Any,
+     root_tag: str | None = None,
+     item_tag: str = 'item',
+diff --git a/tests/test_format_as_xml.py b/tests/test_format_as_xml.py
+index 37053a67f..b29dfac0f 100644
+--- a/tests/test_format_as_xml.py
++++ b/tests/test_format_as_xml.py
+@@ -6,7 +6,7 @@ import pytest
+ from inline_snapshot import snapshot
+ from pydantic import BaseModel
+ 
+-from pydantic_ai import format_as_xml
++from pydantic_ai import render_as_xml
+ 
+ 
+ @dataclass
+@@ -124,7 +124,7 @@ class ExamplePydanticModel(BaseModel):
+     ],
+ )
+ def test_root_tag(input_obj: Any, output: str):
+-    assert format_as_xml(input_obj, root_tag='examples', item_tag='example') == output
++    assert render_as_xml(input_obj, root_tag='examples', item_tag='example') == output
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -174,29 +174,29 @@ def test_root_tag(input_obj: Any, output: str):
+     ],
+ )
+ def test_no_root(input_obj: Any, output: str):
+-    assert format_as_xml(input_obj) == output
++    assert render_as_xml(input_obj) == output
+ 
+ 
+ def test_no_indent():
+-    assert format_as_xml([1, 2, 3], indent=None, root_tag='example') == snapshot(
++    assert render_as_xml([1, 2, 3], indent=None, root_tag='example') == snapshot(
+         '<example><item>1</item><item>2</item><item>3</item></example>'
+     )
+-    assert format_as_xml([1, 2, 3], indent=None) == snapshot('<item>1</item><item>2</item><item>3</item>')
++    assert render_as_xml([1, 2, 3], indent=None) == snapshot('<item>1</item><item>2</item><item>3</item>')
+ 
+ 
+ def test_invalid_value():
+     with pytest.raises(TypeError, match='Unsupported type'):
+-        format_as_xml(object())
++        render_as_xml(object())
+ 
+ 
+ def test_invalid_key():
+     with pytest.raises(TypeError, match='Unsupported key type for XML formatting'):
+-        format_as_xml({(1, 2): 42})
++        render_as_xml({(1, 2): 42})
+ 
+ 
+ def test_set():
+-    assert '<example>1</example>' in format_as_xml({1, 2, 3}, item_tag='example')
++    assert '<example>1</example>' in render_as_xml({1, 2, 3}, item_tag='example')
+ 
+ 
+ def test_custom_null():
+-    assert format_as_xml(None, none_str='nil') == snapshot('<item>nil</item>')
++    assert render_as_xml(None, none_str='nil') == snapshot('<item>nil</item>')
+diff --git a/tests/test_phase3_rename_format_as_xml.py b/tests/test_phase3_rename_format_as_xml.py
+new file mode 100644
+index 000000000..ad0b59d77
+--- /dev/null
++++ b/tests/test_phase3_rename_format_as_xml.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_render_as_xml():
++    owner = importlib.import_module('pydantic_ai.format_prompt')
++    assert hasattr(owner, 'render_as_xml')
++    assert not hasattr(owner, 'format_as_xml')

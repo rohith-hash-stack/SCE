@@ -13,6 +13,13 @@ from prism.cli import build_pipeline
 from prism.packer.submodular_knapsack import pack_symbol_context, select_submodular_context
 from prism.semantics.bitmask import FeatureBit, compose_mask
 
+import pytest
+
+# Budgets in this module were calibrated with PRISM's fallback tokenizer (see `tests/conftest.py`
+# `fallback_tokenizer`); with tiktoken's exact counts the same budgets admit more items.
+pytestmark = pytest.mark.usefixtures("fallback_tokenizer")
+
+
 
 # --------------------------------------------------------------------- #
 # Direct unit test: exactly the spec's own scenario, hand-constructed

@@ -16,6 +16,12 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 
+#: Languages where a class member is never reachable by its bare name at
+#: module scope, so `SymbolTable.add` keeps members out of Rule D's
+#: bare-name index (`LanguageID` values, spelled out to avoid importing
+#: the parser layer here).
+_MODULE_SCOPED_MEMBER_LANGUAGES = frozenset({"python", "javascript", "typescript", "tsx"})
+
 
 class SymbolRole(str, Enum):
     """A symbol's behavioral role, orthogonal to `SymbolInfo.kind`
@@ -101,6 +107,18 @@ class SymbolInfo:
     module: str
     enclosing_class: str | None = None
     role: SymbolRole = SymbolRole.IMPLEMENTATION
+    #: Defined inside a function body (a closure), even when the ancestor
+    #: walk still names an `enclosing_class` (a `def` nested in a method is
+    #: registered as `Class.inner`). Such a definition is not a class
+    #: member, so it stays visible to Rule D's bare-name lookup.
+    nested_in_function: bool = False
+    #: Other names the same definition is reachable by in its module: the
+    #: properties a JS/TS chained assignment binds it to (`res.set =
+    #: res.header = function header(...)` is `header` with alias `set`),
+    #: or the property a named function expression is assigned to (`res.type
+    #: = function contentType(...)`: `contentType`, alias `type`). Indexed
+    #: for bare-name and simple-name lookup to the definition's own key.
+    aliases: tuple[str, ...] = ()
 
 
 class GlobalSymbolTable:
@@ -128,7 +146,7 @@ class GlobalSymbolTable:
         #: which never collide at all. Queried via `collisions_for`.
         self.collisions: dict[str, list[str]] = {}
 
-    def add(self, symbol: SymbolInfo) -> str:
+    def add(self, symbol: SymbolInfo, index_by_name: bool = True) -> str:
         """Registers `symbol`, returning the real key it was stored
         under - identical to `symbol.qualified_name` unless a genuine
         collision was detected, in which case a deterministic `#N`
@@ -167,6 +185,21 @@ class GlobalSymbolTable:
         base_key = symbol.qualified_name
         existing = self._symbols.get(base_key)
         simple_name = base_key.rsplit(".", 1)[-1]
+        if not index_by_name:
+            # A symbol nothing calls by name (a JS/TS test callback named
+            # after its title): registered, but kept out of the by-name
+            # indexes call resolution reads, so a test titled `map` or
+            # `loginAs` never becomes a candidate target or shadows a real
+            # same-named function in its module.
+            key = base_key
+            n = 2
+            while key in self._symbols and (self._symbols[key].file, self._symbols[key].line_range) != (symbol.file, symbol.line_range):
+                key = f"{base_key}#{n}"
+                n += 1
+            if key != base_key:
+                symbol.qualified_name = key
+            self._symbols[key] = symbol
+            return key
 
         if existing is None or (existing.file, existing.line_range) == (symbol.file, symbol.line_range):
             # First registration, or a harmless re-registration of the
@@ -179,7 +212,18 @@ class GlobalSymbolTable:
             # this change and still does.
             key = base_key
             self._symbols[key] = symbol
-            self._module_index.setdefault(symbol.module, {})[simple_name] = key
+            # A class member is never visible as a bare name at module
+            # scope in Python or JS/TS - indexing it there let a method or
+            # `self.<attr>` symbol shadow a same-named module function, or
+            # capture an unrelated local (`client.post()` resolving to
+            # `<Class>.client.post`). Java/C#/Go keep it: a bare `helper()`
+            # inside a class body is a same-class call there.
+            if (
+                symbol.enclosing_class is None
+                or symbol.nested_in_function
+                or symbol.language_id not in _MODULE_SCOPED_MEMBER_LANGUAGES
+            ):
+                self._module_index.setdefault(symbol.module, {})[simple_name] = key
             # Also index by the class-qualified name (Class.method) so `self.method()`
             # resolution can look up `EnclosingClass.method` without the module prefix.
             if symbol.enclosing_class is not None:
@@ -188,6 +232,7 @@ class GlobalSymbolTable:
                 self._module_index.setdefault(symbol.module, {})[local_name] = key
             if symbol.kind in ("function", "method"):
                 self._simple_name_index.setdefault(simple_name, []).append(key)
+            self._index_aliases(symbol, key)
             return key
 
         # Genuine collision: two real, different definitions share
@@ -249,6 +294,19 @@ class GlobalSymbolTable:
             # functions colliding in the *same* module too.
             self._simple_name_index.setdefault(simple_name, []).append(sibling_key)
         return sibling_key
+
+    def _index_aliases(self, symbol: SymbolInfo, key: str) -> None:
+        """`symbol.aliases` as extra names for `key`: in its module's
+        bare-name index unless a definition of that name already holds the
+        slot (a real `res.set = function set` would win; one registered
+        later overwrites the alias), and among the repo-wide simple-name
+        candidates."""
+        for alias in symbol.aliases:
+            if alias == key.rsplit(".", 1)[-1]:
+                continue
+            self._module_index.setdefault(symbol.module, {}).setdefault(alias, key)
+            if symbol.kind in ("function", "method") and key not in self._simple_name_index.get(alias, []):
+                self._simple_name_index.setdefault(alias, []).append(key)
 
     def get(self, qualified_name: str) -> SymbolInfo | None:
         return self._symbols.get(qualified_name)
@@ -460,15 +518,32 @@ class InstanceTypeMap:
     #: `ConcreteGraphBuilder._resolve_segments`/`_resolve_calls_in_function`).
     builtin_bindings: set[str] = field(default_factory=set)
 
-    def bind(self, var_name: str, qualified_class: str) -> None:
+    def bind(self, var_name: str, qualified_class: str, inferred: bool = False) -> None:
         existing = self.bindings.get(var_name)
         if existing is not None and existing != qualified_class:
             self.ambiguous.add(var_name)
+            members = self.branch_members.get(var_name, (existing,))
+            if qualified_class not in members:
+                self.branch_members[var_name] = (*members, qualified_class)
         self.bindings[var_name] = qualified_class
+        if inferred:
+            self.inferred.add(var_name)
+        else:
+            self.inferred.discard(var_name)
         # A real class binding always supersedes a stale builtin marking
         # from an earlier assignment to the same name (most-recent-
         # assignment-wins, matching `ambiguous`'s own convention above).
         self.builtin_bindings.discard(var_name)
+        self.element_types.pop(var_name, None)
+        self.union_members.pop(var_name, None)
+
+    def bind_union(self, var_name: str, members: tuple[str, ...]) -> None:
+        """`x: Union[A, B]`: any of `members` at run time. Linked as a
+        best-effort (`inferred`) binding to the first member; callers pick
+        the member that actually defines the called method via
+        `union_members`."""
+        self.bind(var_name, members[0], inferred=True)
+        self.union_members[var_name] = members
 
     def bind_builtin(self, var_name: str) -> None:
         self.builtin_bindings.add(var_name)
@@ -477,6 +552,16 @@ class InstanceTypeMap:
         # the same name.
         self.bindings.pop(var_name, None)
         self.ambiguous.discard(var_name)
+        self.branch_members.pop(var_name, None)
+        self.inferred.discard(var_name)
+        self.union_members.pop(var_name, None)
+        self.element_types.pop(var_name, None)
+
+    def bind_container(self, var_name: str, element: str | None) -> None:
+        """`xs: list[T]`: a builtin container whose items are `T`."""
+        self.bind_builtin(var_name)
+        if element is not None:
+            self.element_types[var_name] = element
 
     def resolve(self, var_name: str) -> str | None:
         return self.bindings.get(var_name)
@@ -486,6 +571,37 @@ class InstanceTypeMap:
 
     def is_builtin(self, var_name: str) -> bool:
         return var_name in self.builtin_bindings
+
+    def is_inferred(self, var_name: str) -> bool:
+        return var_name in self.inferred
+
+    #: Locals assigned from an attribute access (`opts = model._meta`):
+    #: {local name: attribute name}, so a later `opts.get_field(...)` can be
+    #: typed through the repo-wide attribute index
+    #: (`ConcreteGraphBuilder._resolve_by_attribute`).
+    attr_aliases: dict[str, str] = field(default_factory=dict)
+    #: Names whose class was *inferred* (from a call's inferred return
+    #: class) rather than read off a constructor call or an annotation -
+    #: calls through them link as best-effort (`TENTATIVE_CALL`) edges.
+    inferred: set[str] = field(default_factory=set)
+    #: Every name bound in the function's own scope (parameters,
+    #: assignment/loop/`with`/`except`/comprehension/walrus targets, minus
+    #: `global`/`nonlocal` declarations). A local shadows any same-named
+    #: module-level symbol, so call resolution never looks one up through
+    #: Rule D (Python only; empty for other languages).
+    local_names: set[str] = field(default_factory=set)
+    #: `x: Union[A, B]` -> (A, B): the classes a union annotation allows.
+    union_members: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: `xs: list[T]` -> T: what iterating a container-annotated name yields
+    #: (a mapping's key type).
+    element_types: dict[str, str] = field(default_factory=dict)
+    #: Every class an `ambiguous` name was bound to, in binding order
+    #: (`self._pool = ConnectionPool(...)` / `= HTTPProxy(...)` on separate
+    #: branches). `resolve()` is unchanged (the most recent binding).
+    branch_members: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+    def is_local(self, var_name: str) -> bool:
+        return var_name in self.local_names
 
 
 # --------------------------------------------------------------------- #

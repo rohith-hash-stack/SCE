@@ -43,20 +43,24 @@ own body (and, one hop out, its thin wrapper callees) actually touches.
     shouldn't force every one of its callers to also spell out
     `requests.post` before being recognized as network-touching.
 
-A symbol with zero sink bits after all three phases, and no detected
-state mutation (reusing `prism.graph.contracts.ContractExtractor`'s own
-mutation check), gets `SINK_PURE_COMPUTE` instead.
+A symbol with zero sink bits after all three phases, no detected state
+mutation (reusing `prism.graph.contracts.ContractExtractor`'s own mutation
+check) and no dynamic-hazard construct gets `SINK_PURE_COMPUTE` instead
+(`_is_pure_eligible`). A symbol whose own body has such a construct gets
+the `HAS_REFLECTION` modifier, with or without sinks.
 """
 from __future__ import annotations
 
 from tree_sitter import Node
 
+from prism.graph.call_site import has_dynamic_hazard_construct
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.parser.lang_config import CALL_NODE_TYPE, call_callee_segments, flatten_reference_chain, iter_scoped_nodes
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile
 from prism.semantics._ast_utils import count_statements
 from prism.semantics.bitmask import FeatureBit
 from prism.semantics.canonical_sinks import CANONICAL_SINKS
+from prism.semantics.primitives import CATEGORY_PRIMITIVES
 from prism.traversal._data_flow_common import _bindings, _decl_node_types, _node_key
 
 #: The maximum statement count a callee `B` may have for its own direct
@@ -121,11 +125,42 @@ _UNAMBIGUOUS_DRIVER_SUFFIXES: dict[str, str] = {
 }
 
 
-def _registry_for(lang: str) -> dict[str, set[str]] | None:
+def _registry_for(lang: str, shadowed: "frozenset[str] | dict" = frozenset()) -> dict[str, set[str]] | None:
+    """`{category: entries}` for `lang`; Layer 3 stub entries in `shadowed`
+    (their dependency summary takes precedence, `prism.deps.shadow`) are
+    left out."""
     key = _LANG_REGISTRY_KEY.get(lang)
     if key is None:
         return None
-    return {category: entries.get(key, set()) for category, entries in CANONICAL_SINKS.items()}
+    return {category: entries.get(key, set()) - set(shadowed) for category, entries in CANONICAL_SINKS.items()}
+
+
+def summary_sink_bits(primitive_bits: int) -> FeatureBit:
+    """Substance sink bits for a dependency entry point's summary bits: each
+    category any of its primitives reach. OPAQUE (bits 0) yields none -
+    never invented."""
+    bits = FeatureBit(0)
+    for category, mask in CATEGORY_PRIMITIVES.items():
+        if primitive_bits & mask:
+            bits |= _CATEGORY_BIT[category]
+    return bits
+
+
+def boundary_sink_bits(builder: ConcreteGraphBuilder, qname: str) -> FeatureBit:
+    """Sink bits from `qname`'s direct calls into summarized dependency entry
+    points (`boundary_bits`, `prism.deps.host`): canonical sinks of their
+    own, like a matched registry entry - not subject to the thin-wrapper
+    limit. Empty in builds without dependency summaries."""
+    bits = FeatureBit(0)
+    if qname not in builder.graph:
+        return bits
+    for _u, callee, data in builder.graph.out_edges(qname, data=True):
+        if data.get("relation", "CALLS") not in ("CALLS", "INSTANTIATES"):
+            continue
+        attrs = builder.graph.nodes[callee]
+        if attrs.get("boundary") and attrs.get("boundary_bits"):
+            bits |= summary_sink_bits(int(attrs["boundary_bits"]))
+    return bits
 
 
 def _normalize_go(path: str) -> str:
@@ -180,47 +215,83 @@ def _match_sink_bits_for_call(segments: list[str], import_map, lang: str, regist
     """
     if not segments:
         return FeatureBit(0)
-    joined = ".".join(segments)
-    root = segments[0]
-    resolved_root = import_map.resolve(root) if import_map is not None else None
-    resolved_joined = ".".join([resolved_root, *segments[1:]]) if resolved_root is not None else None
-    suffix_after_root = ".".join(segments[1:]) if len(segments) > 1 else None
+    joined, root, resolved_root, resolved_joined, suffix_after_root = _call_shape(segments, import_map)
 
     bits = FeatureBit(0)
     for category, entries in registry.items():
         bit = _CATEGORY_BIT[category]
         for entry in entries:
-            if "/" in entry:
-                split = _split_go_import_entry(entry)
-                if split is None:
-                    continue
-                import_path, entry_suffix = split
-                normalized_import_path = _normalize_go(import_path)
-                if (
-                    resolved_root is not None
-                    and resolved_root == normalized_import_path
-                    and suffix_after_root is not None
-                    and _chain_matches(suffix_after_root, entry_suffix)
-                ):
-                    bits |= bit
-                    break
-            elif "." in entry:
-                if joined == entry or joined.startswith(entry + "."):
-                    bits |= bit
-                    break
-                if resolved_joined is not None and (resolved_joined == entry or resolved_joined.startswith(entry + ".")):
-                    bits |= bit
-                    break
-            else:
-                if root == entry or resolved_root == entry:
-                    bits |= bit
-                    break
+            if _entry_matches(entry, joined, root, resolved_root, resolved_joined, suffix_after_root):
+                bits |= bit
+                break
     return bits
 
 
-def _suffix_fallback_bits(method_name: str) -> FeatureBit:
-    """Phase 2b - see `_UNAMBIGUOUS_DRIVER_SUFFIXES`."""
+def _call_shape(segments: list[str], import_map) -> tuple[str, str, str | None, str | None, str | None]:
+    """`(joined, root, resolved_root, resolved_joined, suffix_after_root)`
+    for one call's segments - what `_entry_matches` compares against."""
+    joined = ".".join(segments)
+    root = segments[0]
+    resolved_root = import_map.resolve(root) if import_map is not None else None
+    resolved_joined = ".".join([resolved_root, *segments[1:]]) if resolved_root is not None else None
+    suffix_after_root = ".".join(segments[1:]) if len(segments) > 1 else None
+    return joined, root, resolved_root, resolved_joined, suffix_after_root
+
+
+def _entry_matches(
+    entry: str, joined: str, root: str, resolved_root: str | None, resolved_joined: str | None, suffix_after_root: str | None
+) -> bool:
+    """Whether one registry entry names this call - see this module's own
+    docstring for the three entry shapes (Go import path, dotted, bare)."""
+    if "/" in entry:
+        split = _split_go_import_entry(entry)
+        if split is None:
+            return False
+        import_path, entry_suffix = split
+        return (
+            resolved_root is not None
+            and resolved_root == _normalize_go(import_path)
+            and suffix_after_root is not None
+            and _chain_matches(suffix_after_root, entry_suffix)
+        )
+    if "." in entry:
+        if joined == entry or joined.startswith(entry + "."):
+            return True
+        return resolved_joined is not None and (resolved_joined == entry or resolved_joined.startswith(entry + "."))
+    return root == entry or resolved_root == entry
+
+
+def _event_loop_methods() -> dict[str, str]:
+    """`{method: category}` for the asyncio event loop's I/O methods, read
+    off the Layer 2 table's `asyncio.AbstractEventLoop.*` entries: the loop
+    is almost always an untyped local or attribute (`loop =
+    asyncio.get_event_loop()`, `self._loop`), so these distinctive method
+    names are matched on any receiver - never on a bare call."""
+    prefix = "asyncio.AbstractEventLoop."
+    return {
+        entry[len(prefix):]: category
+        for category, langs in CANONICAL_SINKS.items()
+        for entry in langs.get("python", ())
+        if entry.startswith(prefix)
+    }
+
+
+EVENT_LOOP_METHODS: dict[str, str] = _event_loop_methods()
+
+
+def fallback_category(method_name: str, on_receiver: bool) -> str | None:
+    """Phase 2b's category for an otherwise unmatched call: an unambiguous
+    driver method (`_UNAMBIGUOUS_DRIVER_SUFFIXES`), or - called on some
+    receiver - an event-loop I/O method (`EVENT_LOOP_METHODS`)."""
     category = _UNAMBIGUOUS_DRIVER_SUFFIXES.get(method_name)
+    if category is None and on_receiver:
+        category = EVENT_LOOP_METHODS.get(method_name)
+    return category
+
+
+def _suffix_fallback_bits(method_name: str, on_receiver: bool = False) -> FeatureBit:
+    """Phase 2b - see `fallback_category`."""
+    category = fallback_category(method_name, on_receiver)
     if category is None:
         return FeatureBit(0)
     return _CATEGORY_BIT[category]
@@ -239,7 +310,20 @@ def _callable_segments(node: Node, new_expr_type: str | None, parsed: ParsedFile
     return call_callee_segments(node, parsed.source, lang)
 
 
-def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> FeatureBit:
+def calls_opaque_boundary(builder: ConcreteGraphBuilder, qname: str) -> bool:
+    """`qname` directly calls dependency code whose capability is unknown -
+    compiled native code (OPAQUE) or a runtime proxy (PROXY): never
+    `SINK_PURE_COMPUTE`."""
+    if qname not in builder.graph:
+        return False
+    return any(
+        builder.graph.nodes[callee].get("boundary_opaque") or builder.graph.nodes[callee].get("boundary_proxy")
+        for _u, callee, data in builder.graph.out_edges(qname, data=True)
+        if data.get("relation", "CALLS") in ("CALLS", "INSTANTIATES")
+    )
+
+
+def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map, shadowed: "frozenset[str] | dict" = frozenset()) -> FeatureBit:
     """`S_direct(v)` - Phases 1 and 2 combined, scoped to `def_node`'s own
     body. Two passes over the same call/instantiation-site set rather
     than one: Phase 2a (local constructor provenance) needs every site's
@@ -249,9 +333,23 @@ def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> Feature
     from was itself resolved.
     """
     lang = parsed.language_id
-    registry = _registry_for(lang)
+    registry = _registry_for(lang, shadowed)
     if registry is None:
         return FeatureBit(0)
+    return _direct_call_bits(
+        def_node, parsed,
+        lambda segments, _node: _match_sink_bits_for_call(segments, import_map, lang, registry),
+        _suffix_fallback_bits,
+    )
+
+
+def _direct_call_bits(def_node: Node, parsed: ParsedFile, match, fallback) -> FeatureBit:
+    """The three-phase direct scan shared by Substance sink bits and Phase 2
+    primitive bits: `match(segments, node)` per call/instantiation (Phase 1),
+    local constructor provenance (Phase 2a), then `fallback(method_name)`
+    for an otherwise unmatched call (Phase 2b; `on_receiver`: a method call,
+    `x.m(...)`, not a bare `m(...)`)."""
+    lang = parsed.language_id
     call_type = CALL_NODE_TYPE.get(lang)
     new_expr_type = _NEW_EXPRESSION_NODE_TYPE.get(lang)
     if not call_type and not new_expr_type:
@@ -266,7 +364,7 @@ def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> Feature
             continue
         key = _node_key(node)
         segments_by_key[key] = segments
-        phase1_bits[key] = _match_sink_bits_for_call(segments, import_map, lang, registry)
+        phase1_bits[key] = match(segments, node)
 
     # Phase 2a: local constructor provenance - a variable bound directly
     # from a Phase-1-matched call/instantiation inherits its sink bits
@@ -288,7 +386,7 @@ def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> Feature
         if not call_bits and len(segments) >= 2 and segments[0] in local_bindings:
             call_bits = local_bindings[segments[0]]  # Phase 2a
         if not call_bits:
-            call_bits = _suffix_fallback_bits(segments[-1])  # Phase 2b
+            call_bits = fallback(segments[-1], len(segments) >= 2)  # Phase 2b
         bits |= call_bits
     return bits
 
@@ -304,6 +402,25 @@ def _has_state_mutation(def_node: Node, parsed: ParsedFile) -> bool:
     return bool(ContractExtractor()._state_mutations(def_node, parsed))
 
 
+def _is_pure_eligible(def_node: Node, parsed: ParsedFile) -> tuple[bool, bool]:
+    """`(pure, reflective)` for one function body with no sink.
+
+    `reflective`: the body itself contains a dynamic-hazard construct
+    (`has_dynamic_hazard_construct` - reflection, `eval`/`exec`, dynamic
+    import or namespace lookup, subscript dispatch, JS `Reflect`/`Proxy`/
+    `Function`). What such a body does cannot be read statically, so it is
+    never `pure`, the same rule `ContractExtractor` applies to purity.
+    `pure` also requires no state mutation. The one predicate every
+    `SINK_PURE_COMPUTE` decision uses (here and in
+    `prism.semantics.extractor`'s cached path), so they cannot drift."""
+    reflective = _has_reflection(def_node, parsed)
+    return (not reflective and not _has_state_mutation(def_node, parsed)), reflective
+
+
+def _has_reflection(def_node: Node, parsed: ParsedFile) -> bool:
+    return has_dynamic_hazard_construct(def_node, parsed)
+
+
 def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
     """`{qualified_name: Substance bits}` for every function/method
     `builder` indexed - the one entry point `prism.semantics.extractor`
@@ -315,6 +432,7 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
     direct: dict[str, FeatureBit] = {}
     wrapper_statement_counts: dict[str, int] = {}
     import_maps: dict[str, object] = {}
+    shadowed = getattr(builder, "stub_shadow", {})
 
     for symbol in builder.symbol_table:
         if symbol.kind not in ("function", "method"):
@@ -326,7 +444,9 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
         if symbol.module not in import_maps:
             import_maps[symbol.module] = builder._build_import_map(parsed, symbol.module)
         import_map = import_maps[symbol.module]
-        direct[symbol.qualified_name] = _direct_sink_bits(def_node, parsed, import_map)
+        direct[symbol.qualified_name] = _direct_sink_bits(def_node, parsed, import_map, shadowed) | boundary_sink_bits(
+            builder, symbol.qualified_name
+        )
         wrapper_statement_counts[symbol.qualified_name] = count_statements(def_node, parsed.language_id)
 
     result: dict[str, int] = {}
@@ -363,14 +483,20 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
                     transitive_bits |= callee_bits
         combined = own_bits | transitive_bits
 
-        if not combined:
-            def_node = builder.def_node(qname)
-            parsed = builder.parsed_file(symbol.file)
-            is_pure = True
-            if def_node is not None and parsed is not None:
-                is_pure = not _has_state_mutation(def_node, parsed)
-            if is_pure:
-                combined = FeatureBit.SINK_PURE_COMPUTE
+        # HAS_REFLECTION is an own-body modifier, set whether or not the
+        # function also reaches a sink, and never propagated to callers.
+        def_node = builder.def_node(qname)
+        parsed = builder.parsed_file(symbol.file)
+        is_pure, reflective = (True, False)
+        if def_node is not None and parsed is not None:
+            if combined:
+                reflective = _has_reflection(def_node, parsed)
+            else:
+                is_pure, reflective = _is_pure_eligible(def_node, parsed)
+        if not combined and is_pure and not calls_opaque_boundary(builder, qname):
+            combined = FeatureBit.SINK_PURE_COMPUTE
+        if reflective:
+            combined |= FeatureBit.HAS_REFLECTION
 
         result[qname] = int(combined)
 

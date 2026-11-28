@@ -1,0 +1,249 @@
+diff --git a/sqlglot/dialects/doris.py b/sqlglot/dialects/doris.py
+index 00636c1c..08c152d8 100644
+--- a/sqlglot/dialects/doris.py
++++ b/sqlglot/dialects/doris.py
+@@ -74,22 +74,19 @@ class Doris(MySQL):
+ 
+         def _parse_partition_property(
+             self,
+-        ) -> t.Optional[
+-            exp.PartitionedByProperty | exp.PartitionByRangeProperty | exp.PartitionByListProperty
+-        ]:
+-            if self._match_text_seq("LIST", advance=False):
+-                return super()._parse_partition_property()
++        ) -> t.Optional[exp.Expression] | t.List[exp.Expression]:
++            expr = super()._parse_partition_property()
+ 
+-            if not self._match_text_seq("RANGE"):
++            if not expr:
+                 return self._parse_partitioned_by()
+ 
+-            partition_expressions = self._parse_wrapped_csv(self._parse_assignment)
++            if isinstance(expr, exp.Property):
++                return expr
++
+             self._match_l_paren()
+ 
+             if self._match_text_seq("FROM", advance=False):
+                 create_expressions = self._parse_csv(self._parse_partitioning_granularity_dynamic)
+-            elif self._match_text_seq("PARTITION", advance=False):
+-                create_expressions = self._parse_csv(self._parse_partition_range_value)
+             else:
+                 create_expressions = None
+ 
+@@ -97,7 +94,7 @@ class Doris(MySQL):
+ 
+             return self.expression(
+                 exp.PartitionByRangeProperty,
+-                partition_expressions=partition_expressions,
++                partition_expressions=expr,
+                 create_expressions=create_expressions,
+             )
+ 
+@@ -115,15 +112,13 @@ class Doris(MySQL):
+             )
+ 
+         def _parse_partition_range_value(self) -> exp.Partition:
+-            self._match_text_seq("PARTITION")
++            expr = super()._parse_partition_range_value()
+ 
+-            name = self._parse_id_var()
+-            self._match_text_seq("VALUES")
++            if isinstance(expr, exp.Partition):
++                return expr
+ 
+-            if self._match_text_seq("LESS", "THAN"):
+-                values = self._parse_partition_bound_values()
+-                part_range = self.expression(exp.PartitionRange, this=name, expressions=values)
+-                return self.expression(exp.Partition, expressions=[part_range])
++            self._match_text_seq("VALUES")
++            name = expr
+ 
+             # Doris-specific bracket syntax: VALUES [(...), (...))
+             self._match(TokenType.L_BRACKET)
+diff --git a/sqlglot/dialects/mysql.py b/sqlglot/dialects/mysql.py
+index 8d4054a1..2cb4118b 100644
+--- a/sqlglot/dialects/mysql.py
++++ b/sqlglot/dialects/mysql.py
+@@ -735,37 +735,41 @@ class MySQL(Dialect):
+ 
+         def _parse_partition_property(
+             self,
+-        ) -> t.Optional[
+-            exp.PartitionedByProperty | exp.PartitionByRangeProperty | exp.PartitionByListProperty
+-        ]:
++        ) -> t.Optional[exp.Expression] | t.List[exp.Expression]:
++            partition_cls: t.Optional[t.Type[exp.Expression]] = None
++            value_parser = None
++
+             if self._match_text_seq("RANGE"):
+-                return self.expression(
+-                    exp.PartitionByRangeProperty,
+-                    partition_expressions=self._parse_wrapped_csv(self._parse_assignment),
+-                    create_expressions=self._parse_wrapped_csv(self._parse_partition_range_value),
+-                )
++                partition_cls = exp.PartitionByRangeProperty
++                value_parser = self._parse_partition_range_value
++            elif self._match_text_seq("LIST"):
++                partition_cls = exp.PartitionByListProperty
++                value_parser = self._parse_partition_list_value
+ 
+-            if self._match_text_seq("LIST"):
+-                return self.expression(
+-                    exp.PartitionByListProperty,
+-                    partition_expressions=self._parse_wrapped_csv(self._parse_assignment),
+-                    create_expressions=self._parse_wrapped_csv(self._parse_partition_list_value),
+-                )
++            if not partition_cls or not value_parser:
++                return None
++
++            partition_expressions = self._parse_wrapped_csv(self._parse_assignment)
++
++            # For Doris and Starrocks
++            if not self._match_text_seq("(", "PARTITION", advance=False):
++                return partition_expressions
++
++            create_expressions = self._parse_wrapped_csv(value_parser)
+ 
+-            return None
++            return self.expression(
++                partition_cls,
++                partition_expressions=partition_expressions,
++                create_expressions=create_expressions,
++            )
+ 
+-        def _parse_partition_range_value(self) -> exp.Partition:
+-            """Parse PARTITION <name> VALUES LESS THAN (<values>)"""
++        def _parse_partition_range_value(self) -> t.Optional[exp.Expression]:
+             self._match_text_seq("PARTITION")
+             name = self._parse_id_var()
+-            self._match_text_seq("VALUES", "LESS", "THAN")
+-            values = self._parse_partition_bound_values()
+ 
+-            part_range = self.expression(exp.PartitionRange, this=name, expressions=values)
+-            return self.expression(exp.Partition, expressions=[part_range])
++            if not self._match_text_seq("VALUES", "LESS", "THAN"):
++                return name
+ 
+-        def _parse_partition_bound_values(self) -> t.List[exp.Expression]:
+-            """Parse (<values>) and normalize MAXVALUE to exp.var('MAXVALUE')."""
+             values = self._parse_wrapped_csv(self._parse_expression)
+ 
+             if (
+@@ -773,12 +777,12 @@ class MySQL(Dialect):
+                 and isinstance(values[0], exp.Column)
+                 and values[0].name.upper() == "MAXVALUE"
+             ):
+-                return [exp.var("MAXVALUE")]
++                values = [exp.var("MAXVALUE")]
+ 
+-            return values
++            part_range = self.expression(exp.PartitionRange, this=name, expressions=values)
++            return self.expression(exp.Partition, expressions=[part_range])
+ 
+         def _parse_partition_list_value(self) -> exp.Partition:
+-            """Parse PARTITION <name> VALUES IN (<values>)"""
+             self._match_text_seq("PARTITION")
+             name = self._parse_id_var()
+             self._match_text_seq("VALUES", "IN")
+diff --git a/sqlglot/dialects/starrocks.py b/sqlglot/dialects/starrocks.py
+index 6bffae19..fe7afdb9 100644
+--- a/sqlglot/dialects/starrocks.py
++++ b/sqlglot/dialects/starrocks.py
+@@ -138,33 +138,29 @@ class StarRocks(MySQL):
+ 
+             return unnest
+ 
++        def _parse_partitioned_by(self) -> exp.PartitionedByProperty:
++            return self.expression(
++                exp.PartitionedByProperty,
++                this=exp.Schema(
++                    expressions=self._parse_wrapped_csv(self._parse_assignment, optional=True)
++                ),
++            )
++
+         def _parse_partition_property(
+             self,
+-        ) -> t.Optional[
+-            exp.PartitionedByProperty | exp.PartitionByRangeProperty | exp.PartitionByListProperty
+-        ]:
+-            if self._match_text_seq("LIST"):
+-                return self.expression(
+-                    exp.PartitionByListProperty,
+-                    partition_expressions=self._parse_wrapped_csv(self._parse_assignment),
+-                    create_expressions=self._parse_wrapped_csv(self._parse_partition_list_value),
+-                )
++        ) -> t.Optional[exp.Expression] | t.List[exp.Expression]:
++            expr = super()._parse_partition_property()
+ 
+-            if not self._match_text_seq("RANGE"):
+-                # StarRocks expression-based partitioning: PARTITION BY expr1, expr2, ...
+-                return self.expression(
+-                    exp.PartitionedByProperty,
+-                    this=exp.Schema(expressions=self._parse_csv(self._parse_assignment)),
+-                )
++            if not expr:
++                return self._parse_partitioned_by()
++
++            if isinstance(expr, exp.Property):
++                return expr
+ 
+-            # StarRocks RANGE partitioning supports expressions like str2date()
+-            partition_expressions = self._parse_wrapped_csv(self._parse_assignment)
+             self._match_l_paren()
+ 
+             if self._match_text_seq("START", advance=False):
+                 create_expressions = self._parse_csv(self._parse_partitioning_granularity_dynamic)
+-            elif self._match_text_seq("PARTITION", advance=False):
+-                create_expressions = self._parse_csv(self._parse_partition_range_value)
+             else:
+                 create_expressions = None
+ 
+@@ -172,7 +168,7 @@ class StarRocks(MySQL):
+ 
+             return self.expression(
+                 exp.PartitionByRangeProperty,
+-                partition_expressions=partition_expressions,
++                partition_expressions=expr,
+                 create_expressions=create_expressions,
+             )
+ 
+@@ -422,9 +418,8 @@ class StarRocks(MySQL):
+ 
+         def partitionedbyproperty_sql(self, expression: exp.PartitionedByProperty) -> str:
+             this = expression.this
+-            partition_cols = this.expressions if isinstance(this, exp.Schema) else [this]
+-            # Column refs need parens, especially for StarRocks < 3.4: PARTITION BY (col), expressions don't: PARTITION BY func()
+-            # See https://docs.starrocks.io/docs/table_design/data_distribution/expression_partitioning/#syntax-1
+-            is_cols = all(isinstance(col, (exp.Column, exp.Identifier)) for col in partition_cols)
+-            sql = self.expressions(sqls=partition_cols, flat=True)
+-            return f"PARTITION BY ({sql})" if is_cols else f"PARTITION BY {sql}"
++            if isinstance(this, exp.Schema):
++                # Parenstheses are ommited in latest versions
++                # https://docs.starrocks.io/docs/table_design/data_distribution/expression_partitioning/#syntax-1
++                return f"PARTITION BY {self.expressions(this, flat=True)}"
++            return f"PARTITION BY {self.sql(this)}"
+diff --git a/tests/dialects/test_starrocks.py b/tests/dialects/test_starrocks.py
+index e4201256..5526de1b 100644
+--- a/tests/dialects/test_starrocks.py
++++ b/tests/dialects/test_starrocks.py
+@@ -211,10 +211,15 @@ class TestStarrocks(Validator):
+ 
+     def test_partition(self):
+         # Column-based partitioning
+-        self.validate_identity("CREATE TABLE test_table (col1 STRING) PARTITION BY (col1)")
+-        self.validate_identity(
+-            "CREATE TABLE test_table (col1 INT, col2 DATE) PARTITION BY (col1, col2)"
+-        )
++        for cols in "col1", "col1, col2":
++            with self.subTest(f"Testing PARTITION BY with {cols}"):
++                self.validate_identity(
++                    f"CREATE TABLE test_table (col1 INT, col2 DATE) PARTITION BY ({cols})",
++                    f"CREATE TABLE test_table (col1 INT, col2 DATE) PARTITION BY {cols}",
++                )
++                self.validate_identity(
++                    f"CREATE TABLE test_table (col1 INT, col2 DATE) PARTITION BY {cols}"
++                )
+ 
+         # Expression-based partitioning
+         self.validate_identity(

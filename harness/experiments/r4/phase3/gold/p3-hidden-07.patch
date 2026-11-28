@@ -1,0 +1,219 @@
+diff --git a/scrapy/spiders/__init__.py b/scrapy/spiders/__init__.py
+index 6244e326..5b706401 100644
+--- a/scrapy/spiders/__init__.py
++++ b/scrapy/spiders/__init__.py
+@@ -183,14 +183,14 @@ class Spider(object_ref):
+ 
+ 
+ # Top-level imports
+-from scrapy.spiders.crawl import CrawlSpider, Rule
++from scrapy.spiders.crawl import CrawlSpider, RuleImpl
+ from scrapy.spiders.feed import CSVFeedSpider, XMLFeedSpider
+ from scrapy.spiders.sitemap import SitemapSpider
+ 
+ __all__ = [
+     "CSVFeedSpider",
+     "CrawlSpider",
+-    "Rule",
++    "RuleImpl",
+     "SitemapSpider",
+     "Spider",
+     "XMLFeedSpider",
+diff --git a/scrapy/spiders/crawl.py b/scrapy/spiders/crawl.py
+index 373c0b8b..d60a576a 100644
+--- a/scrapy/spiders/crawl.py
++++ b/scrapy/spiders/crawl.py
+@@ -60,7 +60,7 @@ def _get_method(
+ _default_link_extractor = LinkExtractor()
+ 
+ 
+-class Rule:
++class RuleImpl:
+     def __init__(
+         self,
+         link_extractor: LinkExtractor | None = None,
+@@ -96,8 +96,8 @@ class Rule:
+ 
+ 
+ class CrawlSpider(Spider):
+-    rules: Sequence[Rule] = ()
+-    _rules: list[Rule]
++    rules: Sequence[RuleImpl] = ()
++    _rules: list[RuleImpl]
+     _follow_links: bool
+ 
+     def __init__(self, *a: Any, **kw: Any):
+diff --git a/tests/spiders.py b/tests/spiders.py
+index 3ff30ce0..30bdeb60 100644
+--- a/tests/spiders.py
++++ b/tests/spiders.py
+@@ -18,7 +18,7 @@ from scrapy.item import Item
+ from scrapy.linkextractors import LinkExtractor
+ from scrapy.spidermiddlewares.httperror import HttpError
+ from scrapy.spiders import Spider
+-from scrapy.spiders.crawl import CrawlSpider, Rule
++from scrapy.spiders.crawl import CrawlSpider, RuleImpl
+ from scrapy.utils.defer import deferred_to_future, maybe_deferred_to_future
+ from scrapy.utils.test import get_from_asyncio_queue
+ 
+@@ -478,7 +478,7 @@ class CrawlSpiderWithParseMethod(MockServerSpider, CrawlSpider):
+     custom_settings: dict[str, Any] = {
+         "RETRY_HTTP_CODES": [],  # no need to retry
+     }
+-    rules = (Rule(LinkExtractor(), callback="parse", follow=True),)
++    rules = (RuleImpl(LinkExtractor(), callback="parse", follow=True),)
+ 
+     async def start(self) -> AsyncIterator[Any]:
+         test_body = b"""
+@@ -506,7 +506,7 @@ class CrawlSpiderWithAsyncCallback(CrawlSpiderWithParseMethod):
+     """A CrawlSpider with an async def callback"""
+ 
+     name = "crawl_spider_with_async_callback"
+-    rules = (Rule(LinkExtractor(), callback="parse_async", follow=True),)
++    rules = (RuleImpl(LinkExtractor(), callback="parse_async", follow=True),)
+ 
+     async def parse_async(self, response: Response, foo: str | None = None) -> Request:
+         self.logger.info("[parse_async] status %i (foo: %s)", response.status, foo)
+@@ -522,7 +522,7 @@ class CrawlSpiderWithAsyncGeneratorCallback(CrawlSpiderWithParseMethod):
+     """A CrawlSpider with an async generator callback"""
+ 
+     name = "crawl_spider_with_async_generator_callback"
+-    rules = (Rule(LinkExtractor(), callback="parse_async_gen", follow=True),)
++    rules = (RuleImpl(LinkExtractor(), callback="parse_async_gen", follow=True),)
+ 
+     async def parse_async_gen(
+         self, response: Response, foo: str | None = None
+@@ -538,7 +538,7 @@ class CrawlSpiderWithAsyncGeneratorCallback(CrawlSpiderWithParseMethod):
+ 
+ class CrawlSpiderWithErrback(CrawlSpiderWithParseMethod):
+     name = "crawl_spider_with_errback"
+-    rules = (Rule(LinkExtractor(), callback="parse", errback="errback", follow=True),)
++    rules = (RuleImpl(LinkExtractor(), callback="parse", errback="errback", follow=True),)
+ 
+     async def start(self) -> AsyncIterator[Any]:
+         test_body = b"""
+@@ -583,7 +583,7 @@ class CrawlSpiderWithoutErrback(CrawlSpiderWithParseMethod):
+ class CrawlSpiderWithProcessRequestCallbackKeywordArguments(CrawlSpiderWithParseMethod):
+     name = "crawl_spider_with_process_request_cb_kwargs"
+     rules = (
+-        Rule(
++        RuleImpl(
+             LinkExtractor(),
+             callback="parse",
+             follow=True,
+diff --git a/tests/test_phase3_rename_Rule.py b/tests/test_phase3_rename_Rule.py
+new file mode 100644
+index 00000000..210e8360
+--- /dev/null
++++ b/tests/test_phase3_rename_Rule.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_RuleImpl():
++    owner = importlib.import_module('scrapy.spiders.crawl')
++    assert hasattr(owner, 'RuleImpl')
++    assert not hasattr(owner, 'Rule')
+diff --git a/tests/test_spider_crawl.py b/tests/test_spider_crawl.py
+index ce556d0d..a1690d59 100644
+--- a/tests/test_spider_crawl.py
++++ b/tests/test_spider_crawl.py
+@@ -10,7 +10,7 @@ from w3lib.url import safe_url_string
+ from scrapy.exceptions import ScrapyDeprecationWarning
+ from scrapy.http import HtmlResponse, Request, TextResponse
+ from scrapy.linkextractors import LinkExtractor
+-from scrapy.spiders import CrawlSpider, Rule, Spider
++from scrapy.spiders import CrawlSpider, RuleImpl, Spider
+ from scrapy.utils.test import get_crawler
+ from tests.utils.bases.spider import TestSpiderBase
+ from tests.utils.decorators import coroutine_test
+@@ -43,7 +43,7 @@ class TestCrawlSpider(TestSpiderBase):
+         class _CrawlSpider(self.spider_class):  # type: ignore[name-defined,misc]
+             name = "test"
+             allowed_domains = ["example.org"]
+-            rules = (Rule(),)
++            rules = (RuleImpl(),)
+ 
+         spider = _CrawlSpider()
+         output = list(spider._requests_to_follow(response))
+@@ -63,7 +63,7 @@ class TestCrawlSpider(TestSpiderBase):
+         class _CrawlSpider(self.spider_class):  # type: ignore[name-defined,misc]
+             name = "test"
+             allowed_domains = ["example.org"]
+-            rules = (Rule(LinkExtractor(), process_links="dummy_process_links"),)
++            rules = (RuleImpl(LinkExtractor(), process_links="dummy_process_links"),)
+ 
+             def dummy_process_links(self, links):
+                 return links
+@@ -86,7 +86,7 @@ class TestCrawlSpider(TestSpiderBase):
+         class _CrawlSpider(self.spider_class):  # type: ignore[name-defined,misc]
+             name = "test"
+             allowed_domains = ["example.org"]
+-            rules = (Rule(LinkExtractor(), process_links="filter_process_links"),)
++            rules = (RuleImpl(LinkExtractor(), process_links="filter_process_links"),)
+             _test_regex = re.compile("nofollow")
+ 
+             def filter_process_links(self, links):
+@@ -109,7 +109,7 @@ class TestCrawlSpider(TestSpiderBase):
+         class _CrawlSpider(self.spider_class):  # type: ignore[name-defined,misc]
+             name = "test"
+             allowed_domains = ["example.org"]
+-            rules = (Rule(LinkExtractor(), process_links="dummy_process_links"),)
++            rules = (RuleImpl(LinkExtractor(), process_links="dummy_process_links"),)
+ 
+             def dummy_process_links(self, links):
+                 yield from links
+@@ -136,7 +136,7 @@ class TestCrawlSpider(TestSpiderBase):
+             name = "test"
+             allowed_domains = ["example.org"]
+             rules = (
+-                Rule(LinkExtractor(), process_request=process_request_change_domain),
++                RuleImpl(LinkExtractor(), process_request=process_request_change_domain),
+             )
+ 
+         spider = _CrawlSpider()
+@@ -162,7 +162,7 @@ class TestCrawlSpider(TestSpiderBase):
+             name = "test"
+             allowed_domains = ["example.org"]
+             rules = (
+-                Rule(
++                RuleImpl(
+                     LinkExtractor(), process_request=process_request_meta_response_class
+                 ),
+             )
+@@ -190,7 +190,7 @@ class TestCrawlSpider(TestSpiderBase):
+         class _CrawlSpider(self.spider_class):  # type: ignore[name-defined,misc]
+             name = "test"
+             allowed_domains = ["example.org"]
+-            rules = (Rule(LinkExtractor(), process_request="process_request_upper"),)
++            rules = (RuleImpl(LinkExtractor(), process_request="process_request_upper"),)
+ 
+             def process_request_upper(self, request, response):
+                 return request.replace(url=request.url.upper())
+@@ -214,7 +214,7 @@ class TestCrawlSpider(TestSpiderBase):
+             name = "test"
+             allowed_domains = ["example.org"]
+             rules = (
+-                Rule(
++                RuleImpl(
+                     LinkExtractor(),
+                     process_request="process_request_meta_response_class",
+                 ),
+@@ -307,7 +307,7 @@ class TestCrawlSpider(TestSpiderBase):
+         class _CrawlSpider(CrawlSpider):
+             name = "test"
+             allowed_domains = ["example.org"]
+-            rules = (Rule(),)
++            rules = (RuleImpl(),)
+ 
+         spider = _CrawlSpider.from_crawler(get_crawler(_CrawlSpider))
+         results = [
+@@ -329,7 +329,7 @@ class TestCrawlSpider(TestSpiderBase):
+         class _CrawlSpider(CrawlSpider):
+             name = "test"
+             allowed_domains = ["example.org"]
+-            rules = (Rule(),)
++            rules = (RuleImpl(),)
+ 
+         def callback(response: Response) -> list[Any]:
+             return [item]

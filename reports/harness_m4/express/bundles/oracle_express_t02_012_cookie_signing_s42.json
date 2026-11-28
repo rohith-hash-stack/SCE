@@ -1,0 +1,48 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "express_t02_012_cookie_signing",
+  "items": [
+   {
+    "source_id": "lib/response.js:862-895",
+    "content": "# lib/response.js:862-895  (lib.response.cookie)\nres.cookie = function (name, value, options) {\n  var opts = merge({}, options);\n  var secret = this.req.secret;\n  var signed = opts.signed;\n\n  if (signed && !secret) {\n    throw new Error('cookieParser(\"secret\") required for signed cookies');\n  }\n\n  var val = typeof value === 'object'\n    ? 'j:' + JSON.stringify(value)\n    : String(value);\n\n  if (signed) {\n    val = 's:' + sign(val, secret);\n  }\n\n  if (opts.maxAge != null) {\n    var maxAge = opts.maxAge - 0\n\n    if (!isNaN(maxAge)) {\n      opts.expires = new Date(Date.now() + maxAge)\n      opts.maxAge = Math.floor(maxAge / 1000)\n    }\n  }\n\n  if (opts.path == null) {\n    opts.path = '/';\n  }\n\n  this.append('Set-Cookie', cookie.serialize(name, String(val), opts));\n\n  return this;\n};",
+    "token_count": 226,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.response.cookie"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 226
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 226,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how Express serializes an outgoing cookie, starting from `res.cookie` in lib/response.js. Identify the real third-party npm package function it delegates the actual name=value;attributes string construction to, and that function's own real signature and thrown-exception behavior.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.cookie\", \"cookie.index.serialize\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 2,
+   "unresolved_universe": [
+    "cookie.index.serialize"
+   ],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 226,
+   "prompt_tokens": 498,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 511,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/response.js:862-895  (lib.response.cookie)\nres.cookie = function (name, value, options) {\n  var opts = merge({}, options);\n  var secret = this.req.secret;\n  var signed = opts.signed;\n\n  if (signed && !secret) {\n    throw new Error('cookieParser(\"secret\") required for signed cookies');\n  }\n\n  var val = typeof value === 'object'\n    ? 'j:' + JSON.stringify(value)\n    : String(value);\n\n  if (signed) {\n    val = 's:' + sign(val, secret);\n  }\n\n  if (opts.maxAge != null) {\n    var maxAge = opts.maxAge - 0\n\n    if (!isNaN(maxAge)) {\n      opts.expires = new Date(Date.now() + maxAge)\n      opts.maxAge = Math.floor(maxAge / 1000)\n    }\n  }\n\n  if (opts.path == null) {\n    opts.path = '/';\n  }\n\n  this.append('Set-Cookie', cookie.serialize(name, String(val), opts));\n\n  return this;\n};\n\n## Task\n\nYou are investigating how Express serializes an outgoing cookie, starting from `res.cookie` in lib/response.js. Identify the real third-party npm package function it delegates the actual name=value;attributes string construction to, and that function's own real signature and thrown-exception behavior.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.cookie\", \"cookie.index.serialize\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

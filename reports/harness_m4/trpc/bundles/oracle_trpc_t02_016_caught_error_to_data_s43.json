@@ -1,0 +1,91 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "trpc_t02_016_caught_error_to_data",
+  "items": [
+   {
+    "source_id": "http/resolveHTTPResponse.ts:177-223",
+    "content": "# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData)\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  const { router, req, onError } = errorOpts.opts;\n  const error = getTRPCErrorFromUnknown(cause);\n  onError?.({\n    error,\n    path: errorOpts.path,\n    input: errorOpts.input,\n    ctx: errorOpts.ctx,\n    type: errorOpts.type,\n    req,\n  });\n  const untransformedJSON = {\n    error: getErrorShape({\n      config: router._def._config,\n      error,\n      type: errorOpts.type,\n      path: errorOpts.path,\n      input: errorOpts.input,\n      ctx: errorOpts.ctx,\n    }),\n  };\n  const transformedJSON = transformTRPCResponse(\n    router._def._config,\n    untransformedJSON,\n  );\n  const body = JSON.stringify(transformedJSON);\n  return {\n    error,\n    untransformedJSON,\n    body,\n  };\n}",
+    "token_count": 305,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "http.resolveHTTPResponse.caughtErrorToData"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 305
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:4-24",
+    "content": "# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}",
+    "token_count": 162,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "error.TRPCError.getTRPCErrorFromUnknown"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 162
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/getErrorShape.ts:10-35",
+    "content": "# shared/getErrorShape.ts:10-35  (shared.getErrorShape.getErrorShape)\nexport function getErrorShape<TConfig extends AnyRootConfig>(opts: {\n  config: TConfig;\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TConfig['$types']['ctx'] | undefined;\n}): TConfig['$types']['errorShape'] {\n  const { path, error, config } = opts;\n  const { code } = opts.error;\n  const shape: DefaultErrorShape = {\n    message: error.message,\n    code: TRPC_ERROR_CODES_BY_KEY[code],\n    data: {\n      code,\n      httpStatus: getHTTPStatusCodeFromError(error),\n    },\n  };\n  if (config.isDev && typeof opts.error.stack === 'string') {\n    shape.data.stack = opts.error.stack;\n  }\n  if (typeof path === 'string') {\n    shape.data.path = path;\n  }\n  return config.errorFormatter({ ...opts, shape });\n}",
+    "token_count": 221,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "shared.getErrorShape.getErrorShape"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 221
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/transformTRPCResponse.ts:30-40",
+    "content": "# shared/transformTRPCResponse.ts:30-40  (shared.transformTRPCResponse.transformTRPCResponse)\nexport function transformTRPCResponse<\n  TResponse extends\n    | TRPCResponse\n    | TRPCResponse[]\n    | TRPCResponseMessage\n    | TRPCResponseMessage[],\n>(config: AnyRootConfig, itemOrItems: TResponse) {\n  return Array.isArray(itemOrItems)\n    ? itemOrItems.map((item) => transformTRPCResponseItem(config, item))\n    : transformTRPCResponseItem(config, itemOrItems);\n}",
+    "token_count": 120,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "shared.transformTRPCResponse.transformTRPCResponse"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 120
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 808,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating tRPC's top-level HTTP error path (as opposed to a single procedure's own error path), starting from `caughtErrorToData` in http/resolveHTTPResponse.ts. Trace the real causal pipeline it runs through to produce a real serialized error response body.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"http.resolveHTTPResponse.caughtErrorToData\", \"error.TRPCError.getTRPCErrorFromUnknown\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 4,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 808,
+   "prompt_tokens": 1086,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1099,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData)\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  const { router, req, onError } = errorOpts.opts;\n  const error = getTRPCErrorFromUnknown(cause);\n  onError?.({\n    error,\n    path: errorOpts.path,\n    input: errorOpts.input,\n    ctx: errorOpts.ctx,\n    type: errorOpts.type,\n    req,\n  });\n  const untransformedJSON = {\n    error: getErrorShape({\n      config: router._def._config,\n      error,\n      type: errorOpts.type,\n      path: errorOpts.path,\n      input: errorOpts.input,\n      ctx: errorOpts.ctx,\n    }),\n  };\n  const transformedJSON = transformTRPCResponse(\n    router._def._config,\n    untransformedJSON,\n  );\n  const body = JSON.stringify(transformedJSON);\n  return {\n    error,\n    untransformedJSON,\n    body,\n  };\n}\n\n# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}\n\n# shared/getErrorShape.ts:10-35  (shared.getErrorShape.getErrorShape)\nexport function getErrorShape<TConfig extends AnyRootConfig>(opts: {\n  config: TConfig;\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TConfig['$types']['ctx'] | undefined;\n}): TConfig['$types']['errorShape'] {\n  const { path, error, config } = opts;\n  const { code } = opts.error;\n  const shape: DefaultErrorShape = {\n    message: error.message,\n    code: TRPC_ERROR_CODES_BY_KEY[code],\n    data: {\n      code,\n      httpStatus: getHTTPStatusCodeFromError(error),\n    },\n  };\n  if (config.isDev && typeof opts.error.stack === 'string') {\n    shape.data.stack = opts.error.stack;\n  }\n  if (typeof path === 'string') {\n    shape.data.path = path;\n  }\n  return config.errorFormatter({ ...opts, shape });\n}\n\n# shared/transformTRPCResponse.ts:30-40  (shared.transformTRPCResponse.transformTRPCResponse)\nexport function transformTRPCResponse<\n  TResponse extends\n    | TRPCResponse\n    | TRPCResponse[]\n    | TRPCResponseMessage\n    | TRPCResponseMessage[],\n>(config: AnyRootConfig, itemOrItems: TResponse) {\n  return Array.isArray(itemOrItems)\n    ? itemOrItems.map((item) => transformTRPCResponseItem(config, item))\n    : transformTRPCResponseItem(config, itemOrItems);\n}\n\n## Task\n\nYou are investigating tRPC's top-level HTTP error path (as opposed to a single procedure's own error path), starting from `caughtErrorToData` in http/resolveHTTPResponse.ts. Trace the real causal pipeline it runs through to produce a real serialized error response body.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"http.resolveHTTPResponse.caughtErrorToData\", \"error.TRPCError.getTRPCErrorFromUnknown\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

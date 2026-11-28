@@ -1,0 +1,166 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t02_007_procedure_builder_new_builder",
+  "items": [
+   {
+    "source_id": "core/internals/procedureBuilder.ts:192-205",
+    "content": "# core/internals/procedureBuilder.ts:192-205  (core.internals.procedureBuilder.createNewBuilder)\nfunction createNewBuilder(\n  def1: AnyProcedureBuilderDef,\n  def2: Partial<AnyProcedureBuilderDef>,\n) {\n  const { middlewares = [], inputs, meta, ...rest } = def2;\n\n  // TODO: maybe have a fn here to warn about calls\n  return createBuilder({\n    ...mergeWithoutOverrides(def1, rest),\n    inputs: [...def1.inputs, ...(inputs ?? [])],\n    middlewares: [...def1.middlewares, ...middlewares],\n    meta: def1.meta && meta ? { ...def1.meta, ...meta } : meta ?? def1.meta,\n  });\n}",
+    "token_count": 154,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createNewBuilder"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 127,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/mergeWithoutOverrides.ts:4-19",
+    "content": "# core/internals/mergeWithoutOverrides.ts:4-19  (core.internals.mergeWithoutOverrides.mergeWithoutOverrides)\nexport function mergeWithoutOverrides<TType extends Record<string, unknown>>(\n  obj1: TType,\n  ...objs: Partial<TType>[]\n): TType {\n  const newObj: TType = Object.assign(Object.create(null), obj1);\n\n  for (const overrides of objs) {\n    for (const key in overrides) {\n      if (key in newObj && newObj[key] !== overrides[key]) {\n        throw new Error(`Duplicate key ${key}`);\n      }\n      newObj[key as keyof TType] = overrides[key] as TType[keyof TType];\n    }\n  }\n  return newObj;\n}",
+    "token_count": 149,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.mergeWithoutOverrides.mergeWithoutOverrides"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 123,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:226-232",
+    "content": "# core/internals/procedureBuilder.ts:226-232  (core.internals.procedureBuilder.createBuilder.input)\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },",
+    "token_count": 76,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder.input"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 48,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:233-239",
+    "content": "# core/internals/procedureBuilder.ts:233-239  (core.internals.procedureBuilder.createBuilder.output)\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },",
+    "token_count": 77,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder.output"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 49,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:207-282",
+    "content": "# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}",
+    "token_count": 521,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 494,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 977,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how tRPC's ProcedureBuilder produces a new builder for each chained method call (`.input()`, `.output()`, `.use()`), starting from `createNewBuilder` in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.internals.procedureBuilder.createNewBuilder\", \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "anchor": "core.internals.procedureBuilder.createNewBuilder",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 9,
+   "manifest_candidates_unfiltered": 9,
+   "requested_symbols": [
+    "core.internals.procedureBuilder.createNewBuilder",
+    "core.internals.mergeWithoutOverrides.mergeWithoutOverrides",
+    "core.internals.procedureBuilder.createBuilder.input",
+    "core.internals.getParseFn.getParseFn",
+    "core.internals.procedureBuilder.createNewBuilder",
+    "core.middleware.createInputMiddleware",
+    "core.internals.procedureBuilder.createBuilder.output",
+    "core.internals.getParseFn.getParseFn",
+    "core.internals.procedureBuilder.createNewBuilder",
+    "core.middleware.createOutputMiddleware"
+   ],
+   "turn1_requested_count": 10,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "core.internals.getParseFn.getParseFn",
+    "core.middleware.createInputMiddleware",
+    "core.internals.getParseFn.getParseFn",
+    "core.middleware.createOutputMiddleware"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The pipeline starts with `createNewBuilder`, which initializes a new builder. It then merges default configurations using `mergeWithoutOverrides`. The builder can then be extended with input and output parsers through `.input()` and `.output()` methods, each of which creates new builders with updated configurations.\",\n  \"requested_symbols\": [\n    \"core.internals.procedureBuilder.createNewBuilder\",\n    \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\",\n    \"core.internals.procedureBuilder.createBuilder.input\",\n    \"core.internals.getParseFn.getParseFn\",\n    \"core.internals.procedureBuilder.createNewBuilder\",\n    \"core.middleware.createInputMiddleware\",\n    \"core.internals.procedureBuilder.createBuilder.output\",\n    \"core.internals.getParseFn.getParseFn\",\n    \"core.internals.procedureBuilder.createNewBuilder\",\n    \"core.middleware.createOutputMiddleware\"\n  ]\n}\n```",
+     "prompt_tokens": 830,
+     "completion_tokens": 187,
+     "latency_seconds": 13.699825051999142,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     6.387297
+    ],
+    "L_turn2_hydrate": [
+     20.765175
+    ],
+    "L_retrieve": [
+     13730.529139
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 977,
+   "prompt_tokens": 1253,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1266,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/internals/procedureBuilder.ts:192-205  (core.internals.procedureBuilder.createNewBuilder)\nfunction createNewBuilder(\n  def1: AnyProcedureBuilderDef,\n  def2: Partial<AnyProcedureBuilderDef>,\n) {\n  const { middlewares = [], inputs, meta, ...rest } = def2;\n\n  // TODO: maybe have a fn here to warn about calls\n  return createBuilder({\n    ...mergeWithoutOverrides(def1, rest),\n    inputs: [...def1.inputs, ...(inputs ?? [])],\n    middlewares: [...def1.middlewares, ...middlewares],\n    meta: def1.meta && meta ? { ...def1.meta, ...meta } : meta ?? def1.meta,\n  });\n}\n\n# core/internals/mergeWithoutOverrides.ts:4-19  (core.internals.mergeWithoutOverrides.mergeWithoutOverrides)\nexport function mergeWithoutOverrides<TType extends Record<string, unknown>>(\n  obj1: TType,\n  ...objs: Partial<TType>[]\n): TType {\n  const newObj: TType = Object.assign(Object.create(null), obj1);\n\n  for (const overrides of objs) {\n    for (const key in overrides) {\n      if (key in newObj && newObj[key] !== overrides[key]) {\n        throw new Error(`Duplicate key ${key}`);\n      }\n      newObj[key as keyof TType] = overrides[key] as TType[keyof TType];\n    }\n  }\n  return newObj;\n}\n\n# core/internals/procedureBuilder.ts:226-232  (core.internals.procedureBuilder.createBuilder.input)\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n\n# core/internals/procedureBuilder.ts:233-239  (core.internals.procedureBuilder.createBuilder.output)\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n\n# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}\n\n## Task\n\nYou are investigating how tRPC's ProcedureBuilder produces a new builder for each chained method call (`.input()`, `.output()`, `.use()`), starting from `createNewBuilder` in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.internals.procedureBuilder.createNewBuilder\", \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

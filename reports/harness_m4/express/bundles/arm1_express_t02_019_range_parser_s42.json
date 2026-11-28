@@ -1,0 +1,641 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "express_t02_019_range_parser",
+  "items": [
+   {
+    "source_id": "test/req.range.js:1-104",
+    "content": "# test/req.range.js:1-104  (test.req.range)\n'use strict'\n\nvar express = require('..');\nvar request = require('supertest')\n\ndescribe('req', function(){\n  describe('.range(size)', function(){\n    it('should return parsed ranges', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(120))\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'bytes=0-50,51-100')\n      .expect(200, '[{\"start\":0,\"end\":50},{\"start\":51,\"end\":100}]', done)\n    })\n\n    it('should cap to the given size', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(75))\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'bytes=0-100')\n      .expect(200, '[{\"start\":0,\"end\":74}]', done)\n    })\n\n    it('should cap to the given size when open-ended', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(75))\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'bytes=0-')\n      .expect(200, '[{\"start\":0,\"end\":74}]', done)\n    })\n\n    it('should have a .type', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(120).type)\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'bytes=0-100')\n      .expect(200, '\"bytes\"', done)\n    })\n\n    it('should accept any type', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(120).type)\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'users=0-2')\n      .expect(200, '\"users\"', done)\n    })\n\n    it('should return undefined if no range', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.send(String(req.range(120)))\n      })\n\n      request(app)\n      .get('/')\n      .expect(200, 'undefined', done)\n    })\n  })\n\n  describe('.range(size, options)', function(){\n    describe('with \"combine: true\" option', function(){\n      it('should return combined ranges', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.json(req.range(120, {\n            combine: true\n          }))\n        })\n\n        request(app)\n        .get('/')\n        .set('Range', 'bytes=0-50,51-100')\n        .expect(200, '[{\"start\":0,\"end\":100}]', done)\n      })\n    })\n  })\n})",
+    "token_count": 694,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 3,
+     "rerank_score": 0.8032660484313965,
+     "bm25_rank": 3,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 694
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/express.static.js:592-689#part4of5",
+    "content": "# test/express.static.js:592-689#part4of5  (test.express.static)\ndescribe('express.static()', function () {\n  describe('when request has \"Range\" header', function () {\n    before(function () {\n      this.app = createApp()\n    })\n\n    it('should support byte ranges', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=0-4')\n        .expect('12345', done)\n    })\n\n    it('should be inclusive', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=0-0')\n        .expect('1', done)\n    })\n\n    it('should set Content-Range', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=2-5')\n        .expect('Content-Range', 'bytes 2-5/9', done)\n    })\n\n    it('should support -n', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=-3')\n        .expect('789', done)\n    })\n\n    it('should support n-', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=3-')\n        .expect('456789', done)\n    })\n\n    it('should respond with 206 \"Partial Content\"', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=0-4')\n        .expect(206, done)\n    })\n\n    it('should set Content-Length to the # of octets transferred', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=2-3')\n        .expect('Content-Length', '2')\n        .expect(206, '34', done)\n    })\n\n    describe('when last-byte-pos of the range is greater than current length', function () {\n      it('is taken to be equal to one less than the current length', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'bytes=2-50')\n          .expect('Content-Range', 'bytes 2-8/9', done)\n      })\n\n      it('should adapt the Content-Length accordingly', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'bytes=2-50')\n          .expect('Content-Length', '7')\n          .expect(206, done)\n      })\n    })\n\n    describe('when the first- byte-pos of the range is greater than the current length', function () {\n      it('should respond with 416', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'bytes=9-50')\n          .expect(416, done)\n      })\n\n      it('should include a Content-Range header of complete length', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'bytes=9-50')\n          .expect('Content-Range', 'bytes */9')\n          .expect(416, done)\n      })\n    })\n\n    describe('when syntactically invalid', function () {\n      it('should respond with 200 and the entire contents', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'asdf')\n          .expect('123456789', done)\n      })\n    })\n  })\n})",
+    "token_count": 823,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 2,
+     "rerank_score": 0.6388260126113892,
+     "bm25_rank": 2,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 823
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:1-62",
+    "content": "# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */",
+    "token_count": 347,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 10,
+     "rerank_score": -0.5794536471366882,
+     "bm25_rank": 39,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.jsonp.js:331-386",
+    "content": "# test/res.jsonp.js:331-386  (test.res.jsonp)\ndescribe('res', function(){\n  describe('.jsonp(status, object)', function(){\n    it('should respond with json and set the .statusCode', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp(201, { id: 1 });\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '{\"id\":1}', done)\n    })\n  })\n\n  describe('.jsonp(object, status)', function(){\n    it('should respond with json and set the .statusCode for backwards compat', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp({ id: 1 }, 201);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '{\"id\":1}', done)\n    })\n\n    it('should use status as second number for backwards compat', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp(200, 201);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '200', done)\n    })\n  })\n\n  it('should not override previous Content-Types', function(done){\n    var app = express();\n\n    app.get('/', function(req, res){\n      res.type('application/vnd.example+json');\n      res.jsonp({ hello: 'world' });\n    });\n\n    request(app)\n    .get('/')\n    .expect('content-type', 'application/vnd.example+json; charset=utf-8')\n    .expect(200, '{\"hello\":\"world\"}', done)\n  })\n})",
+    "token_count": 415,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 24,
+     "rerank_score": -0.6184375882148743,
+     "bm25_rank": 63,
+     "dense_rank": 90,
+     "oversized_chunk": false,
+     "engine_token_count": 415
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.download.js:19-76#part1of2",
+    "content": "# test/res.download.js:19-76#part1of2  (test.res.download)\ndescribe('res', function(){\n  describe('.download(path)', function(){\n    it('should transfer as an attachment', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.download('test/fixtures/user.html');\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/html; charset=UTF-8')\n      .expect('Content-Disposition', 'attachment; filename=\"user.html\"')\n      .expect(200, '<p>{{user.name}}</p>', done)\n    })\n\n    it('should accept range requests', function (done) {\n      var app = express()\n\n      app.get('/', function (req, res) {\n        res.download('test/fixtures/user.html')\n      })\n\n      request(app)\n        .get('/')\n        .expect('Accept-Ranges', 'bytes')\n        .expect(200, '<p>{{user.name}}</p>', done)\n    })\n\n    it('should respond with requested byte range', function (done) {\n      var app = express()\n\n      app.get('/', function (req, res) {\n        res.download('test/fixtures/user.html')\n      })\n\n      request(app)\n        .get('/')\n        .set('Range', 'bytes=0-2')\n        .expect('Content-Range', 'bytes 0-2/20')\n        .expect(206, '<p>', done)\n    })\n  })\n\n  describe('.download(path, filename)', function(){\n    it('should provide an alternate filename', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.download('test/fixtures/user.html', 'document');\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/html; charset=UTF-8')\n      .expect('Content-Disposition', 'attachment; filename=\"document\"')\n      .expect(200, done)\n    })\n  })\n})",
+    "token_count": 416,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 36,
+     "rerank_score": -0.6290585398674011,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 416
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/express.raw.js:222-310#part4of5",
+    "content": "# test/express.raw.js:222-310#part4of5  (test.express.raw)\ndescribe('express.raw()', function () {\n  describe('with type option', function () {\n    describe('when \"application/vnd+octets\"', function () {\n      before(function () {\n        this.app = createApp({ type: 'application/vnd+octets' })\n      })\n\n      it('should parse for custom type', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/vnd+octets')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should ignore standard type', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/octet-stream')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, '{}', done)\n      })\n    })\n\n    describe('when [\"application/octet-stream\", \"application/vnd+octets\"]', function () {\n      before(function () {\n        this.app = createApp({\n          type: ['application/octet-stream', 'application/vnd+octets']\n        })\n      })\n\n      it('should parse \"application/octet-stream\"', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/octet-stream')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should parse \"application/vnd+octets\"', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/vnd+octets')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should ignore \"application/x-foo\"', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/x-foo')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, '{}', done)\n      })\n    })\n\n    describe('when a function', function () {\n      it('should parse when truthy value returned', function (done) {\n        var app = createApp({ type: accept })\n\n        function accept (req) {\n          return req.headers['content-type'] === 'application/vnd.octet'\n        }\n\n        var test = request(app).post('/')\n        test.set('Content-Type', 'application/vnd.octet')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should work without content-type', function (done) {\n        var app = createApp({ type: accept })\n\n        function accept (req) {\n          return true\n        }\n\n        var test = request(app).post('/')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should not invoke without a body', function (done) {\n        var app = createApp({ type: accept })\n\n        function accept (req) {\n          throw new Error('oops!')\n        }\n\n        request(app)\n          .get('/')\n          .expect(404, done)\n      })\n    })\n  })\n})",
+    "token_count": 786,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -0.7056013941764832,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 786
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/req.accepts.js:1-125",
+    "content": "# test/req.accepts.js:1-125  (test.req.accepts)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('req', function(){\n  describe('.accepts(type)', function(){\n    it('should return true when Accept is not present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .expect('yes', done);\n    })\n\n    it('should return true when present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'application/json')\n      .expect('yes', done);\n    })\n\n    it('should return false otherwise', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('no', done);\n    })\n  })\n\n  it('should accept an argument list of type names', function(done){\n    var app = express();\n\n    app.use(function(req, res, next){\n      res.end(req.accepts('json', 'html'));\n    });\n\n    request(app)\n    .get('/')\n    .set('Accept', 'application/json')\n    .expect('json', done);\n  })\n\n  describe('.accepts(types)', function(){\n    it('should return the first when Accept is not present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['json', 'html']));\n      });\n\n      request(app)\n      .get('/')\n      .expect('json', done);\n    })\n\n    it('should return the first acceptable type', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['json', 'html']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('html', done);\n    })\n\n    it('should return false when no match is made', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['text/html', 'application/json']) ? 'yup' : 'nope');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'foo/bar, bar/baz')\n      .expect('nope', done);\n    })\n\n    it('should take quality into account', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['text/html', 'application/json']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', '*/html; q=.5, application/json')\n      .expect('application/json', done);\n    })\n\n    it('should return the first acceptable type with canonical mime types', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['application/json', 'text/html']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', '*/html')\n      .expect('text/html', done);\n    })\n  })\n})",
+    "token_count": 740,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -0.7380234003067017,
+     "bm25_rank": 52,
+     "dense_rank": 88,
+     "oversized_chunk": false,
+     "engine_token_count": 740
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.sendFile.js:330-441#part1of3",
+    "content": "# test/res.sendFile.js:330-441#part1of3  (test.res.sendFile)\ndescribe('res', function(){\n  describe('.sendFile(path, options)', function () {\n    it('should pass options to send module', function (done) {\n      request(createApp(path.resolve(fixtures, 'name.txt'), { start: 0, end: 1 }))\n      .get('/')\n      .expect(200, 'to', done)\n    })\n\n    describe('with \"acceptRanges\" option', function () {\n      describe('when true', function () {\n        it('should advertise byte range accepted', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'nums.txt'), {\n              acceptRanges: true\n            })\n          })\n\n          request(app)\n            .get('/')\n            .expect(200)\n            .expect('Accept-Ranges', 'bytes')\n            .expect('123456789')\n            .end(done)\n        })\n\n        it('should respond to range request', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'nums.txt'), {\n              acceptRanges: true\n            })\n          })\n\n          request(app)\n            .get('/')\n            .set('Range', 'bytes=0-4')\n            .expect(206, '12345', done)\n        })\n      })\n\n      describe('when false', function () {\n        it('should not advertise accept-ranges', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'nums.txt'), {\n              acceptRanges: false\n            })\n          })\n\n          request(app)\n            .get('/')\n            .expect(200)\n            .expect(utils.shouldNotHaveHeader('Accept-Ranges'))\n            .end(done)\n        })\n\n        it('should not honor range requests', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'nums.txt'), {\n              acceptRanges: false\n            })\n          })\n\n          request(app)\n            .get('/')\n            .set('Range', 'bytes=0-4')\n            .expect(200, '123456789', done)\n        })\n      })\n    })\n\n    describe('with \"cacheControl\" option', function () {\n      describe('when true', function () {\n        it('should send cache-control header', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'user.html'), {\n              cacheControl: true\n            })\n          })\n\n          request(app)\n            .get('/')\n            .expect(200)\n            .expect('Cache-Control', 'public, max-age=0')\n            .end(done)\n        })\n      })\n\n      describe('when false', function () {\n        it('should not send cache-control header', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'user.html'), {\n              cacheControl: false\n            })\n          })\n\n          request(app)\n            .get('/')\n            .expect(200)\n            .expect(utils.shouldNotHaveHeader('Cache-Control'))\n            .end(done)\n        })\n      })\n    })\n  })\n})",
+    "token_count": 745,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 6,
+     "rerank_score": -0.8497827053070068,
+     "bm25_rank": 19,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 745
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/req.subdomains.js:95-171#part2of2",
+    "content": "# test/req.subdomains.js:95-171#part2of2  (test.req.subdomains)\ndescribe('req', function(){\n  describe('.subdomains', function(){\n    describe('when subdomain offset is set', function(){\n      describe('when subdomain offset is zero', function(){\n        it('should return an array with the whole domain', function(done){\n          var app = express();\n          app.set('subdomain offset', 0);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', 'tobi.ferrets.sub.example.com')\n          .expect(200, ['com', 'example', 'sub', 'ferrets', 'tobi'], done);\n        })\n\n        it('should return an array with the whole IPv4', function (done) {\n          var app = express();\n          app.set('subdomain offset', 0);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', '127.0.0.1')\n          .expect(200, ['127.0.0.1'], done);\n        })\n\n        it('should return an array with the whole IPv6', function (done) {\n          var app = express();\n          app.set('subdomain offset', 0);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', '[::1]')\n          .expect(200, ['[::1]'], done);\n        })\n      })\n\n      describe('when present', function(){\n        it('should return an array', function(done){\n          var app = express();\n          app.set('subdomain offset', 3);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', 'tobi.ferrets.sub.example.com')\n          .expect(200, ['ferrets', 'tobi'], done);\n        })\n      })\n\n      describe('otherwise', function(){\n        it('should return an empty array', function(done){\n          var app = express();\n          app.set('subdomain offset', 3);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', 'sub.example.com')\n          .expect(200, [], done);\n        })\n      })\n    })\n  })\n})",
+    "token_count": 547,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 17,
+     "rerank_score": -0.8764994740486145,
+     "bm25_rank": 76,
+     "dense_rank": 58,
+     "oversized_chunk": false,
+     "engine_token_count": 547
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:610-736#part1of2",
+    "content": "# test/app.router.js:610-736#part1of2  (test.app.router)\ndescribe('app.router', function(){\n  describe('*', function(){\n    it('should capture everything', function (done) {\n      var app = express()\n\n      app.get('*', function (req, res) {\n        res.end(req.params[0])\n      })\n\n      request(app)\n      .get('/user/tobi.json')\n      .expect('/user/tobi.json', done)\n    })\n\n    it('should decode the capture', function (done) {\n      var app = express()\n\n      app.get('*', function (req, res) {\n        res.end(req.params[0])\n      })\n\n      request(app)\n      .get('/user/tobi%20and%20loki.json')\n      .expect('/user/tobi and loki.json', done)\n    })\n\n    it('should denote a greedy capture group', function(done){\n      var app = express();\n\n      app.get('/user/*.json', function(req, res){\n        res.end(req.params[0]);\n      });\n\n      request(app)\n      .get('/user/tj.json')\n      .expect('tj', done);\n    })\n\n    it('should work with several', function(done){\n      var app = express();\n\n      app.get('/api/*.*', function(req, res){\n        var resource = req.params[0]\n          , format = req.params[1];\n        res.end(resource + ' as ' + format);\n      });\n\n      request(app)\n      .get('/api/users/foo.bar.json')\n      .expect('users/foo.bar as json', done);\n    })\n\n    it('should work cross-segment', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/api*', function(req, res){\n        res.send(req.params[0]);\n      });\n\n      request(app)\n        .get('/api')\n        .expect(200, '', cb)\n\n      request(app)\n        .get('/api/hey')\n        .expect(200, '/hey', cb)\n    })\n\n    it('should allow naming', function(done){\n      var app = express();\n\n      app.get('/api/:resource(*)', function(req, res){\n        var resource = req.params.resource;\n        res.end(resource);\n      });\n\n      request(app)\n      .get('/api/users/0.json')\n      .expect('users/0.json', done);\n    })\n\n    it('should not be greedy immediately after param', function(done){\n      var app = express();\n\n      app.get('/user/:user*', function(req, res){\n        res.end(req.params.user);\n      });\n\n      request(app)\n      .get('/user/122')\n      .expect('122', done);\n    })\n\n    it('should eat everything after /', function(done){\n      var app = express();\n\n      app.get('/user/:user*', function(req, res){\n        res.end(req.params.user);\n      });\n\n      request(app)\n      .get('/user/122/aaa')\n      .expect('122', done);\n    })\n\n    it('should span multiple segments', function(done){\n      var app = express();\n\n      app.get('/file/*', function(req, res){\n        res.end(req.params[0]);\n      });\n\n      request(app)\n      .get('/file/javascripts/jquery.js')\n      .expect('javascripts/jquery.js', done);\n    })\n\n    it('should be optional', function(done){\n      var app = express();\n\n      app.get('/file/*', function(req, res){\n        res.end(req.params[0]);\n      });\n\n      request(app)\n      .get('/file/')\n      .expect('', done);\n    })\n  })\n})",
+    "token_count": 764,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 30,
+     "rerank_score": -0.9132704138755798,
+     "bm25_rank": 81,
+     "dense_rank": 76,
+     "oversized_chunk": false,
+     "engine_token_count": 764
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/static-files/index.js:1-43",
+    "content": "# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');",
+    "token_count": 348,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 37,
+     "rerank_score": -1.1046797037124634,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 348
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:1-62",
+    "content": "# lib/request.js:1-62  (lib.request)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar accepts = require('accepts');\nvar deprecate = require('depd')('express');\nvar isIP = require('net').isIP;\nvar typeis = require('type-is');\nvar http = require('http');\nvar fresh = require('fresh');\nvar parseRange = require('range-parser');\nvar parse = require('parseurl');\nvar proxyaddr = require('proxy-addr');\n\n/**\n * Request prototype.\n * @public\n */\n\nvar req = Object.create(http.IncomingMessage.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = req\n\n/**\n * Return request header.\n *\n * The `Referrer` header field is special-cased,\n * both `Referrer` and `Referer` are interchangeable.\n *\n * Examples:\n *\n *     req.get('Content-Type');\n *     // => \"text/plain\"\n *\n *     req.get('content-type');\n *     // => \"text/plain\"\n *\n *     req.get('Something');\n *     // => undefined\n *\n * Aliased as `req.header()`.\n *\n * @param {String} name\n * @return {String}\n * @public\n */",
+    "token_count": 324,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": -1.140254020690918,
+     "bm25_rank": 4,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 324
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/req.ips.js:1-71",
+    "content": "# test/req.ips.js:1-71  (test.req.ips)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('req', function(){\n  describe('.ips', function(){\n    describe('when X-Forwarded-For is present', function(){\n      describe('when \"trust proxy\" is enabled', function(){\n        it('should return an array of the specified addresses', function(done){\n          var app = express();\n\n          app.enable('trust proxy');\n\n          app.use(function(req, res, next){\n            res.send(req.ips);\n          });\n\n          request(app)\n          .get('/')\n          .set('X-Forwarded-For', 'client, p1, p2')\n          .expect('[\"client\",\"p1\",\"p2\"]', done);\n        })\n\n        it('should stop at first untrusted', function(done){\n          var app = express();\n\n          app.set('trust proxy', 2);\n\n          app.use(function(req, res, next){\n            res.send(req.ips);\n          });\n\n          request(app)\n          .get('/')\n          .set('X-Forwarded-For', 'client, p1, p2')\n          .expect('[\"p1\",\"p2\"]', done);\n        })\n      })\n\n      describe('when \"trust proxy\" is disabled', function(){\n        it('should return an empty array', function(done){\n          var app = express();\n\n          app.use(function(req, res, next){\n            res.send(req.ips);\n          });\n\n          request(app)\n          .get('/')\n          .set('X-Forwarded-For', 'client, p1, p2')\n          .expect('[]', done);\n        })\n      })\n    })\n\n    describe('when X-Forwarded-For is not present', function(){\n      it('should return []', function(done){\n        var app = express();\n\n        app.use(function(req, res, next){\n          res.send(req.ips);\n        });\n\n        request(app)\n        .get('/')\n        .expect('[]', done);\n      })\n    })\n  })\n})",
+    "token_count": 431,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 21,
+     "rerank_score": -1.4504871368408203,
+     "bm25_rank": 68,
+     "dense_rank": 80,
+     "oversized_chunk": false,
+     "engine_token_count": 431
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:887-1008#part2of3",
+    "content": "# test/app.router.js:887-1008#part2of3  (test.app.router)\ndescribe('app.router', function(){\n  describe('.:name', function(){\n    it('should denote a format', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/:name.:format', function(req, res){\n        res.end(req.params.name + ' as ' + req.params.format);\n      });\n\n      request(app)\n        .get('/foo.json')\n        .expect(200, 'foo as json', cb)\n\n      request(app)\n        .get('/foo')\n        .expect(404, cb)\n    })\n  })\n\n  describe('.:name?', function(){\n    it('should denote an optional format', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/:name.:format?', function(req, res){\n        res.end(req.params.name + ' as ' + (req.params.format || 'html'));\n      });\n\n      request(app)\n        .get('/foo')\n        .expect(200, 'foo as html', cb)\n\n      request(app)\n        .get('/foo.json')\n        .expect(200, 'foo as json', cb)\n    })\n  })\n\n  describe('when next() is called', function(){\n    it('should continue lookup', function(done){\n      var app = express()\n        , calls = [];\n\n      app.get('/foo/:bar?', function(req, res, next){\n        calls.push('/foo/:bar?');\n        next();\n      });\n\n      app.get('/bar', function () {\n        assert(0);\n      });\n\n      app.get('/foo', function(req, res, next){\n        calls.push('/foo');\n        next();\n      });\n\n      app.get('/foo', function (req, res) {\n        calls.push('/foo 2');\n        res.json(calls)\n      });\n\n      request(app)\n      .get('/foo')\n      .expect(200, ['/foo/:bar?', '/foo', '/foo 2'], done)\n    })\n  })\n\n  describe('when next(\"route\") is called', function(){\n    it('should jump to next route', function(done){\n      var app = express()\n\n      function fn(req, res, next){\n        res.set('X-Hit', '1')\n        next('route')\n      }\n\n      app.get('/foo', fn, function (req, res) {\n        res.end('failure')\n      });\n\n      app.get('/foo', function(req, res){\n        res.end('success')\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('X-Hit', '1')\n      .expect(200, 'success', done)\n    })\n  })\n\n  describe('when next(\"router\") is called', function () {\n    it('should jump out of router', function (done) {\n      var app = express()\n      var router = express.Router()\n\n      function fn (req, res, next) {\n        res.set('X-Hit', '1')\n        next('router')\n      }\n\n      router.get('/foo', fn, function (req, res) {\n        res.end('failure')\n      })\n\n      router.get('/foo', function (req, res) {\n        res.end('failure')\n      })\n\n      app.use(router)\n\n      app.get('/foo', function (req, res) {\n        res.end('success')\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('X-Hit', '1')\n      .expect(200, 'success', done)\n    })\n  })\n})",
+    "token_count": 756,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -1.4885001182556152,
+     "bm25_rank": 97,
+     "dense_rank": 63,
+     "oversized_chunk": false,
+     "engine_token_count": 756
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/web-service/index.js:21-117",
+    "content": "# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 774,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 41,
+     "rerank_score": -1.505290150642395,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 774
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.location.js:1-6",
+    "content": "# test/res.location.js:1-6  (test.res.location)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest')\n  , assert = require('assert')\n  , url = require('url');",
+    "token_count": 49,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -1.5367506742477417,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:627-682",
+    "content": "# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 384,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": -1.6870372295379639,
+     "bm25_rank": 7,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 384
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.send.js:184-302#part3of4",
+    "content": "# test/res.send.js:184-302#part3of4  (test.res.send)\ndescribe('res', function(){\n  describe('.send(Buffer)', function(){\n    it('should send as octet-stream', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.send(Buffer.from('hello'))\n      });\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect('Content-Type', 'application/octet-stream')\n        .expect(utils.shouldHaveBody(Buffer.from('hello')))\n        .end(done)\n    })\n\n    it('should set ETag', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.send(Buffer.alloc(999, '-'))\n      });\n\n      request(app)\n      .get('/')\n      .expect('ETag', 'W/\"3e7-qPnkJ3CVdVhFJQvUBfF10TmVA7g\"')\n      .expect(200, done);\n    })\n\n    it('should not override Content-Type', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.set('Content-Type', 'text/plain').send(Buffer.from('hey'))\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/plain; charset=utf-8')\n      .expect(200, 'hey', done);\n    })\n\n    it('should not override ETag', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.type('text/plain').set('ETag', '\"foo\"').send(Buffer.from('hey'))\n      })\n\n      request(app)\n      .get('/')\n      .expect('ETag', '\"foo\"')\n      .expect(200, 'hey', done)\n    })\n  })\n\n  describe('.send(Object)', function(){\n    it('should send as application/json', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.send({ name: 'tobi' });\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(200, '{\"name\":\"tobi\"}', done)\n    })\n  })\n\n  describe('when the request method is HEAD', function(){\n    it('should ignore the body', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.send('yay');\n      });\n\n      request(app)\n        .head('/')\n        .expect(200)\n        .expect(utils.shouldNotHaveBody())\n        .end(done)\n    })\n  })\n\n  describe('when .statusCode is 204', function(){\n    it('should strip Content-* fields, Transfer-Encoding field, and body', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.status(204).set('Transfer-Encoding', 'chunked').send('foo');\n      });\n\n      request(app)\n      .get('/')\n      .expect(utils.shouldNotHaveHeader('Content-Type'))\n      .expect(utils.shouldNotHaveHeader('Content-Length'))\n      .expect(utils.shouldNotHaveHeader('Transfer-Encoding'))\n      .expect(204, '', done);\n    })\n  })\n\n  describe('when .statusCode is 205', function () {\n    it('should strip Transfer-Encoding field and body, set Content-Length', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.status(205).set('Transfer-Encoding', 'chunked').send('foo')\n      })\n\n      request(app)\n        .get('/')\n        .expect(utils.shouldNotHaveHeader('Transfer-Encoding'))\n        .expect('Content-Length', '0')\n        .expect(205, '', done)\n    })\n  })\n})",
+    "token_count": 818,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 16,
+     "rerank_score": -1.8625690937042236,
+     "bm25_rank": 57,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 818
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/web-service/index.js:1-13",
+    "content": "# examples/web-service/index.js:1-13  (examples.web-service)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\n\nvar app = module.exports = express();\n\n// create an error with .status. we\n// can then use the property in our\n// custom error handler (Connect respects this prop as well)",
+    "token_count": 71,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 33,
+     "rerank_score": -1.8684587478637695,
+     "bm25_rank": 80,
+     "dense_rank": 81,
+     "oversized_chunk": false,
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:212-216",
+    "content": "# lib/request.js:212-216  (lib.request.range)\nreq.range = function range(size, options) {\n  var range = this.get('Range');\n  if (!range) return;\n  return parseRange(size, range, options);\n};",
+    "token_count": 55,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.request.range"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 4,
+     "rerank_score": -1.8763662576675415,
+     "bm25_rank": 6,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error-pages/index.js:1-103",
+    "content": "# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 721,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 43,
+     "rerank_score": -1.898762822151184,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 721
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/init.js:1-26",
+    "content": "# lib/middleware/init.js:1-26  (lib.middleware.init)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Initialization middleware, exposing the\n * request and response to each other, as well\n * as defaulting the X-Powered-By header field.\n *\n * @param {Function} app\n * @return {Function}\n * @api private\n */",
+    "token_count": 156,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 12,
+     "rerank_score": -1.9585484266281128,
+     "bm25_rank": 73,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.format.js:84-175#part2of2",
+    "content": "# test/res.format.js:84-175#part2of2  (test.res.format)\ndescribe('res', function(){\n  describe('.format(obj)', function(){\n    describe('with canonicalized mime types', function(){\n      test(app1);\n    })\n\n    describe('with extnames', function(){\n      test(app2);\n    })\n\n    describe('with parameters', function(){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.format({\n          'text/plain; charset=utf-8': function(){ res.send('hey') },\n          'text/html; foo=bar; bar=baz': function(){ res.send('<p>hey</p>') },\n          'application/json; q=0.5': function(){ res.send({ message: 'hey' }) }\n        });\n      });\n\n      app.use(function(err, req, res, next){\n        res.send(err.status, 'Supports: ' + err.types.join(', '));\n      });\n\n      test(app);\n    })\n\n    describe('given .default', function(){\n      it('should be invoked instead of auto-responding', function(done){\n        request(app3)\n        .get('/')\n        .set('Accept', 'text/html')\n        .expect('default', done);\n      })\n\n      it('should work when only .default is provided', function (done) {\n        request(app5)\n        .get('/')\n        .set('Accept', '*/*')\n        .expect('hey', done);\n      })\n\n      it('should be able to invoke other formatter', function (done) {\n        var app = express()\n\n        app.use(function (req, res, next) {\n          res.format({\n            json: function () { res.send('json') },\n            default: function () {\n              res.header('x-default', '1')\n              this.json()\n            }\n          })\n        })\n\n        request(app)\n          .get('/')\n          .set('Accept', 'text/plain')\n          .expect(200)\n          .expect('x-default', '1')\n          .expect('json')\n          .end(done)\n      })\n    })\n\n    describe('in router', function(){\n      test(app4);\n    })\n\n    describe('in router', function(){\n      var app = express();\n      var router = express.Router();\n\n      router.get('/', function (req, res) {\n        res.format({\n          text: function(){ res.send('hey') },\n          html: function(){ res.send('<p>hey</p>') },\n          json: function(){ res.send({ message: 'hey' }) }\n        });\n      });\n\n      router.use(function(err, req, res, next){\n        res.send(err.status, 'Supports: ' + err.types.join(', '));\n      })\n\n      app.use(router)\n\n      test(app)\n    })\n  })\n})",
+    "token_count": 575,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 27,
+     "rerank_score": -2.3492283821105957,
+     "bm25_rank": 64,
+     "dense_rank": 93,
+     "oversized_chunk": false,
+     "engine_token_count": 575
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:1-54",
+    "content": "# lib/utils.js:1-54  (lib.utils)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @api private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar contentType = require('content-type');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar mime = require('send').mime;\nvar etag = require('etag');\nvar proxyaddr = require('proxy-addr');\nvar qs = require('qs');\nvar querystring = require('querystring');\n\n/**\n * Return strong ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.etag = createETagGenerator({ weak: false })\n\n/**\n * Return weak ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.wetag = createETagGenerator({ weak: true })\n\n/**\n * Check if `path` looks absolute.\n *\n * @param {String} path\n * @return {Boolean}\n * @api private\n */",
+    "token_count": 310,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 23,
+     "rerank_score": -2.4335732460021973,
+     "bm25_rank": null,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 310
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "index.js:1-11",
+    "content": "# index.js:1-11\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\nmodule.exports = require('./lib/express');",
+    "token_count": 84,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": -2.4806365966796875,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/route-middleware/index.js:60-90",
+    "content": "# examples/route-middleware/index.js:60-90  (examples.route-middleware)\n// Middleware for faux authentication\n// you would of course implement something real,\n// but this illustrates how an authenticated user\n// may interact with middleware\n\napp.use(function(req, res, next){\n  req.authenticatedUser = users[0];\n  next();\n});\n\napp.get('/', function(req, res){\n  res.redirect('/user/0');\n});\n\napp.get('/user/:id', loadUser, function(req, res){\n  res.send('Viewing user ' + req.user.name);\n});\n\napp.get('/user/:id/edit', loadUser, andRestrictToSelf, function(req, res){\n  res.send('Editing user ' + req.user.name);\n});\n\napp.delete('/user/:id', loadUser, andRestrictTo('admin'), function(req, res){\n  res.send('Deleted user ' + req.user.name);\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 227,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 50,
+     "rerank_score": -2.4839558601379395,
+     "bm25_rank": 21,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 227
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/query.js:1-23",
+    "content": "# lib/middleware/query.js:1-23  (lib.middleware.query)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n */\n\nvar merge = require('utils-merge')\nvar parseUrl = require('parseurl');\nvar qs = require('qs');\n\n/**\n * @param {Object} options\n * @return {Function}\n * @api public\n */",
+    "token_count": 135,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": -2.525779962539673,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:266-298",
+    "content": "# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 321,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 46,
+     "rerank_score": -2.919290065765381,
+     "bm25_rank": 18,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 321
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.send.js:1-10",
+    "content": "# test/res.send.js:1-10  (test.res.send)\n'use strict'\n\nvar assert = require('assert')\nvar Buffer = require('safe-buffer').Buffer\nvar express = require('..');\nvar methods = require('methods');\nvar request = require('supertest');\nvar utils = require('./support/utils');\n\nvar shouldSkipQuery = require('./support/utils').shouldSkipQuery",
+    "token_count": 79,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -3.387810707092285,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:132-135",
+    "content": "# lib/request.js:132-135  (lib.request.accepts)\nreq.accepts = function(){\n  var accept = accepts(this);\n  return accept.types.apply(accept, arguments);\n};",
+    "token_count": 43,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.request.accepts"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 44,
+     "rerank_score": -6.765259742736816,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 43
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:77-84",
+    "content": "# lib/router/layer.js:77-84  (lib.router.layer)\n/**\n * Handle the request for the layer.\n *\n * @param {Request} req\n * @param {Response} res\n * @param {function} next\n * @api private\n */",
+    "token_count": 58,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -7.163819789886475,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12996,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are investigating how Express parses an incoming Range header, starting from `req.range` in lib/request.js. Identify the real third-party npm package function it delegates the actual range-parsing logic to, and that function's own real signature and thrown-exception behavior.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.request.range\", \"range-parser.index.rangeParser\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 586,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "test/express.static.js:136-212#part1of2",
+    "lib/express.js:59-116",
+    "test/app.router.js:577-607",
+    "examples/view-locals/index.js:102-155",
+    "lib/request.js:64-84",
+    "lib/request.js:184-210",
+    "lib/request.js:416-509#part2of2",
+    "lib/router/index.js:63-95",
+    "examples/resource/index.js:13-26",
+    "lib/request.js:86-130",
+    "examples/route-middleware/index.js:36-48",
+    "examples/resource/index.js:28-95",
+    "lib/response.js:378-417",
+    "lib/response.js:460-499",
+    "examples/error/index.js:29-53",
+    "lib/request.js:292-414#part1of2",
+    "lib/request.js:167-177",
+    "lib/response.js:112-225#part1of2",
+    "lib/request.js:150-160"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "typescript",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     15.569222
+    ],
+    "L_embed_query": [
+     331.681065
+    ],
+    "L_dense": [
+     0.586805
+    ],
+    "L_rrf": [
+     0.105348
+    ],
+    "L_rerank": [
+     25861.19424
+    ],
+    "L_retrieve": [
+     26320.268411
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12996,
+   "prompt_tokens": 13269,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13282,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# test/req.range.js:1-104  (test.req.range)\n'use strict'\n\nvar express = require('..');\nvar request = require('supertest')\n\ndescribe('req', function(){\n  describe('.range(size)', function(){\n    it('should return parsed ranges', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(120))\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'bytes=0-50,51-100')\n      .expect(200, '[{\"start\":0,\"end\":50},{\"start\":51,\"end\":100}]', done)\n    })\n\n    it('should cap to the given size', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(75))\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'bytes=0-100')\n      .expect(200, '[{\"start\":0,\"end\":74}]', done)\n    })\n\n    it('should cap to the given size when open-ended', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(75))\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'bytes=0-')\n      .expect(200, '[{\"start\":0,\"end\":74}]', done)\n    })\n\n    it('should have a .type', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(120).type)\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'bytes=0-100')\n      .expect(200, '\"bytes\"', done)\n    })\n\n    it('should accept any type', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.json(req.range(120).type)\n      })\n\n      request(app)\n      .get('/')\n      .set('Range', 'users=0-2')\n      .expect(200, '\"users\"', done)\n    })\n\n    it('should return undefined if no range', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.send(String(req.range(120)))\n      })\n\n      request(app)\n      .get('/')\n      .expect(200, 'undefined', done)\n    })\n  })\n\n  describe('.range(size, options)', function(){\n    describe('with \"combine: true\" option', function(){\n      it('should return combined ranges', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.json(req.range(120, {\n            combine: true\n          }))\n        })\n\n        request(app)\n        .get('/')\n        .set('Range', 'bytes=0-50,51-100')\n        .expect(200, '[{\"start\":0,\"end\":100}]', done)\n      })\n    })\n  })\n})\n\n# test/express.static.js:592-689#part4of5  (test.express.static)\ndescribe('express.static()', function () {\n  describe('when request has \"Range\" header', function () {\n    before(function () {\n      this.app = createApp()\n    })\n\n    it('should support byte ranges', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=0-4')\n        .expect('12345', done)\n    })\n\n    it('should be inclusive', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=0-0')\n        .expect('1', done)\n    })\n\n    it('should set Content-Range', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=2-5')\n        .expect('Content-Range', 'bytes 2-5/9', done)\n    })\n\n    it('should support -n', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=-3')\n        .expect('789', done)\n    })\n\n    it('should support n-', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=3-')\n        .expect('456789', done)\n    })\n\n    it('should respond with 206 \"Partial Content\"', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=0-4')\n        .expect(206, done)\n    })\n\n    it('should set Content-Length to the # of octets transferred', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .set('Range', 'bytes=2-3')\n        .expect('Content-Length', '2')\n        .expect(206, '34', done)\n    })\n\n    describe('when last-byte-pos of the range is greater than current length', function () {\n      it('is taken to be equal to one less than the current length', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'bytes=2-50')\n          .expect('Content-Range', 'bytes 2-8/9', done)\n      })\n\n      it('should adapt the Content-Length accordingly', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'bytes=2-50')\n          .expect('Content-Length', '7')\n          .expect(206, done)\n      })\n    })\n\n    describe('when the first- byte-pos of the range is greater than the current length', function () {\n      it('should respond with 416', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'bytes=9-50')\n          .expect(416, done)\n      })\n\n      it('should include a Content-Range header of complete length', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'bytes=9-50')\n          .expect('Content-Range', 'bytes */9')\n          .expect(416, done)\n      })\n    })\n\n    describe('when syntactically invalid', function () {\n      it('should respond with 200 and the entire contents', function (done) {\n        request(this.app)\n          .get('/nums.txt')\n          .set('Range', 'asdf')\n          .expect('123456789', done)\n      })\n    })\n  })\n})\n\n# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */\n\n# test/res.jsonp.js:331-386  (test.res.jsonp)\ndescribe('res', function(){\n  describe('.jsonp(status, object)', function(){\n    it('should respond with json and set the .statusCode', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp(201, { id: 1 });\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '{\"id\":1}', done)\n    })\n  })\n\n  describe('.jsonp(object, status)', function(){\n    it('should respond with json and set the .statusCode for backwards compat', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp({ id: 1 }, 201);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '{\"id\":1}', done)\n    })\n\n    it('should use status as second number for backwards compat', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.jsonp(200, 201);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(201, '200', done)\n    })\n  })\n\n  it('should not override previous Content-Types', function(done){\n    var app = express();\n\n    app.get('/', function(req, res){\n      res.type('application/vnd.example+json');\n      res.jsonp({ hello: 'world' });\n    });\n\n    request(app)\n    .get('/')\n    .expect('content-type', 'application/vnd.example+json; charset=utf-8')\n    .expect(200, '{\"hello\":\"world\"}', done)\n  })\n})\n\n# test/res.download.js:19-76#part1of2  (test.res.download)\ndescribe('res', function(){\n  describe('.download(path)', function(){\n    it('should transfer as an attachment', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.download('test/fixtures/user.html');\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/html; charset=UTF-8')\n      .expect('Content-Disposition', 'attachment; filename=\"user.html\"')\n      .expect(200, '<p>{{user.name}}</p>', done)\n    })\n\n    it('should accept range requests', function (done) {\n      var app = express()\n\n      app.get('/', function (req, res) {\n        res.download('test/fixtures/user.html')\n      })\n\n      request(app)\n        .get('/')\n        .expect('Accept-Ranges', 'bytes')\n        .expect(200, '<p>{{user.name}}</p>', done)\n    })\n\n    it('should respond with requested byte range', function (done) {\n      var app = express()\n\n      app.get('/', function (req, res) {\n        res.download('test/fixtures/user.html')\n      })\n\n      request(app)\n        .get('/')\n        .set('Range', 'bytes=0-2')\n        .expect('Content-Range', 'bytes 0-2/20')\n        .expect(206, '<p>', done)\n    })\n  })\n\n  describe('.download(path, filename)', function(){\n    it('should provide an alternate filename', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.download('test/fixtures/user.html', 'document');\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/html; charset=UTF-8')\n      .expect('Content-Disposition', 'attachment; filename=\"document\"')\n      .expect(200, done)\n    })\n  })\n})\n\n# test/express.raw.js:222-310#part4of5  (test.express.raw)\ndescribe('express.raw()', function () {\n  describe('with type option', function () {\n    describe('when \"application/vnd+octets\"', function () {\n      before(function () {\n        this.app = createApp({ type: 'application/vnd+octets' })\n      })\n\n      it('should parse for custom type', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/vnd+octets')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should ignore standard type', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/octet-stream')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, '{}', done)\n      })\n    })\n\n    describe('when [\"application/octet-stream\", \"application/vnd+octets\"]', function () {\n      before(function () {\n        this.app = createApp({\n          type: ['application/octet-stream', 'application/vnd+octets']\n        })\n      })\n\n      it('should parse \"application/octet-stream\"', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/octet-stream')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should parse \"application/vnd+octets\"', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/vnd+octets')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should ignore \"application/x-foo\"', function (done) {\n        var test = request(this.app).post('/')\n        test.set('Content-Type', 'application/x-foo')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, '{}', done)\n      })\n    })\n\n    describe('when a function', function () {\n      it('should parse when truthy value returned', function (done) {\n        var app = createApp({ type: accept })\n\n        function accept (req) {\n          return req.headers['content-type'] === 'application/vnd.octet'\n        }\n\n        var test = request(app).post('/')\n        test.set('Content-Type', 'application/vnd.octet')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should work without content-type', function (done) {\n        var app = createApp({ type: accept })\n\n        function accept (req) {\n          return true\n        }\n\n        var test = request(app).post('/')\n        test.write(Buffer.from('000102', 'hex'))\n        test.expect(200, { buf: '000102' }, done)\n      })\n\n      it('should not invoke without a body', function (done) {\n        var app = createApp({ type: accept })\n\n        function accept (req) {\n          throw new Error('oops!')\n        }\n\n        request(app)\n          .get('/')\n          .expect(404, done)\n      })\n    })\n  })\n})\n\n# test/req.accepts.js:1-125  (test.req.accepts)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('req', function(){\n  describe('.accepts(type)', function(){\n    it('should return true when Accept is not present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .expect('yes', done);\n    })\n\n    it('should return true when present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'application/json')\n      .expect('yes', done);\n    })\n\n    it('should return false otherwise', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts('json') ? 'yes' : 'no');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('no', done);\n    })\n  })\n\n  it('should accept an argument list of type names', function(done){\n    var app = express();\n\n    app.use(function(req, res, next){\n      res.end(req.accepts('json', 'html'));\n    });\n\n    request(app)\n    .get('/')\n    .set('Accept', 'application/json')\n    .expect('json', done);\n  })\n\n  describe('.accepts(types)', function(){\n    it('should return the first when Accept is not present', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['json', 'html']));\n      });\n\n      request(app)\n      .get('/')\n      .expect('json', done);\n    })\n\n    it('should return the first acceptable type', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['json', 'html']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('html', done);\n    })\n\n    it('should return false when no match is made', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['text/html', 'application/json']) ? 'yup' : 'nope');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'foo/bar, bar/baz')\n      .expect('nope', done);\n    })\n\n    it('should take quality into account', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['text/html', 'application/json']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', '*/html; q=.5, application/json')\n      .expect('application/json', done);\n    })\n\n    it('should return the first acceptable type with canonical mime types', function(done){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.end(req.accepts(['application/json', 'text/html']));\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', '*/html')\n      .expect('text/html', done);\n    })\n  })\n})\n\n# test/res.sendFile.js:330-441#part1of3  (test.res.sendFile)\ndescribe('res', function(){\n  describe('.sendFile(path, options)', function () {\n    it('should pass options to send module', function (done) {\n      request(createApp(path.resolve(fixtures, 'name.txt'), { start: 0, end: 1 }))\n      .get('/')\n      .expect(200, 'to', done)\n    })\n\n    describe('with \"acceptRanges\" option', function () {\n      describe('when true', function () {\n        it('should advertise byte range accepted', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'nums.txt'), {\n              acceptRanges: true\n            })\n          })\n\n          request(app)\n            .get('/')\n            .expect(200)\n            .expect('Accept-Ranges', 'bytes')\n            .expect('123456789')\n            .end(done)\n        })\n\n        it('should respond to range request', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'nums.txt'), {\n              acceptRanges: true\n            })\n          })\n\n          request(app)\n            .get('/')\n            .set('Range', 'bytes=0-4')\n            .expect(206, '12345', done)\n        })\n      })\n\n      describe('when false', function () {\n        it('should not advertise accept-ranges', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'nums.txt'), {\n              acceptRanges: false\n            })\n          })\n\n          request(app)\n            .get('/')\n            .expect(200)\n            .expect(utils.shouldNotHaveHeader('Accept-Ranges'))\n            .end(done)\n        })\n\n        it('should not honor range requests', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'nums.txt'), {\n              acceptRanges: false\n            })\n          })\n\n          request(app)\n            .get('/')\n            .set('Range', 'bytes=0-4')\n            .expect(200, '123456789', done)\n        })\n      })\n    })\n\n    describe('with \"cacheControl\" option', function () {\n      describe('when true', function () {\n        it('should send cache-control header', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'user.html'), {\n              cacheControl: true\n            })\n          })\n\n          request(app)\n            .get('/')\n            .expect(200)\n            .expect('Cache-Control', 'public, max-age=0')\n            .end(done)\n        })\n      })\n\n      describe('when false', function () {\n        it('should not send cache-control header', function (done) {\n          var app = express()\n\n          app.use(function (req, res) {\n            res.sendFile(path.resolve(fixtures, 'user.html'), {\n              cacheControl: false\n            })\n          })\n\n          request(app)\n            .get('/')\n            .expect(200)\n            .expect(utils.shouldNotHaveHeader('Cache-Control'))\n            .end(done)\n        })\n      })\n    })\n  })\n})\n\n# test/req.subdomains.js:95-171#part2of2  (test.req.subdomains)\ndescribe('req', function(){\n  describe('.subdomains', function(){\n    describe('when subdomain offset is set', function(){\n      describe('when subdomain offset is zero', function(){\n        it('should return an array with the whole domain', function(done){\n          var app = express();\n          app.set('subdomain offset', 0);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', 'tobi.ferrets.sub.example.com')\n          .expect(200, ['com', 'example', 'sub', 'ferrets', 'tobi'], done);\n        })\n\n        it('should return an array with the whole IPv4', function (done) {\n          var app = express();\n          app.set('subdomain offset', 0);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', '127.0.0.1')\n          .expect(200, ['127.0.0.1'], done);\n        })\n\n        it('should return an array with the whole IPv6', function (done) {\n          var app = express();\n          app.set('subdomain offset', 0);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', '[::1]')\n          .expect(200, ['[::1]'], done);\n        })\n      })\n\n      describe('when present', function(){\n        it('should return an array', function(done){\n          var app = express();\n          app.set('subdomain offset', 3);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', 'tobi.ferrets.sub.example.com')\n          .expect(200, ['ferrets', 'tobi'], done);\n        })\n      })\n\n      describe('otherwise', function(){\n        it('should return an empty array', function(done){\n          var app = express();\n          app.set('subdomain offset', 3);\n\n          app.use(function(req, res){\n            res.send(req.subdomains);\n          });\n\n          request(app)\n          .get('/')\n          .set('Host', 'sub.example.com')\n          .expect(200, [], done);\n        })\n      })\n    })\n  })\n})\n\n# test/app.router.js:610-736#part1of2  (test.app.router)\ndescribe('app.router', function(){\n  describe('*', function(){\n    it('should capture everything', function (done) {\n      var app = express()\n\n      app.get('*', function (req, res) {\n        res.end(req.params[0])\n      })\n\n      request(app)\n      .get('/user/tobi.json')\n      .expect('/user/tobi.json', done)\n    })\n\n    it('should decode the capture', function (done) {\n      var app = express()\n\n      app.get('*', function (req, res) {\n        res.end(req.params[0])\n      })\n\n      request(app)\n      .get('/user/tobi%20and%20loki.json')\n      .expect('/user/tobi and loki.json', done)\n    })\n\n    it('should denote a greedy capture group', function(done){\n      var app = express();\n\n      app.get('/user/*.json', function(req, res){\n        res.end(req.params[0]);\n      });\n\n      request(app)\n      .get('/user/tj.json')\n      .expect('tj', done);\n    })\n\n    it('should work with several', function(done){\n      var app = express();\n\n      app.get('/api/*.*', function(req, res){\n        var resource = req.params[0]\n          , format = req.params[1];\n        res.end(resource + ' as ' + format);\n      });\n\n      request(app)\n      .get('/api/users/foo.bar.json')\n      .expect('users/foo.bar as json', done);\n    })\n\n    it('should work cross-segment', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/api*', function(req, res){\n        res.send(req.params[0]);\n      });\n\n      request(app)\n        .get('/api')\n        .expect(200, '', cb)\n\n      request(app)\n        .get('/api/hey')\n        .expect(200, '/hey', cb)\n    })\n\n    it('should allow naming', function(done){\n      var app = express();\n\n      app.get('/api/:resource(*)', function(req, res){\n        var resource = req.params.resource;\n        res.end(resource);\n      });\n\n      request(app)\n      .get('/api/users/0.json')\n      .expect('users/0.json', done);\n    })\n\n    it('should not be greedy immediately after param', function(done){\n      var app = express();\n\n      app.get('/user/:user*', function(req, res){\n        res.end(req.params.user);\n      });\n\n      request(app)\n      .get('/user/122')\n      .expect('122', done);\n    })\n\n    it('should eat everything after /', function(done){\n      var app = express();\n\n      app.get('/user/:user*', function(req, res){\n        res.end(req.params.user);\n      });\n\n      request(app)\n      .get('/user/122/aaa')\n      .expect('122', done);\n    })\n\n    it('should span multiple segments', function(done){\n      var app = express();\n\n      app.get('/file/*', function(req, res){\n        res.end(req.params[0]);\n      });\n\n      request(app)\n      .get('/file/javascripts/jquery.js')\n      .expect('javascripts/jquery.js', done);\n    })\n\n    it('should be optional', function(done){\n      var app = express();\n\n      app.get('/file/*', function(req, res){\n        res.end(req.params[0]);\n      });\n\n      request(app)\n      .get('/file/')\n      .expect('', done);\n    })\n  })\n})\n\n# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');\n\n# lib/request.js:1-62  (lib.request)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar accepts = require('accepts');\nvar deprecate = require('depd')('express');\nvar isIP = require('net').isIP;\nvar typeis = require('type-is');\nvar http = require('http');\nvar fresh = require('fresh');\nvar parseRange = require('range-parser');\nvar parse = require('parseurl');\nvar proxyaddr = require('proxy-addr');\n\n/**\n * Request prototype.\n * @public\n */\n\nvar req = Object.create(http.IncomingMessage.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = req\n\n/**\n * Return request header.\n *\n * The `Referrer` header field is special-cased,\n * both `Referrer` and `Referer` are interchangeable.\n *\n * Examples:\n *\n *     req.get('Content-Type');\n *     // => \"text/plain\"\n *\n *     req.get('content-type');\n *     // => \"text/plain\"\n *\n *     req.get('Something');\n *     // => undefined\n *\n * Aliased as `req.header()`.\n *\n * @param {String} name\n * @return {String}\n * @public\n */\n\n# test/req.ips.js:1-71  (test.req.ips)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('req', function(){\n  describe('.ips', function(){\n    describe('when X-Forwarded-For is present', function(){\n      describe('when \"trust proxy\" is enabled', function(){\n        it('should return an array of the specified addresses', function(done){\n          var app = express();\n\n          app.enable('trust proxy');\n\n          app.use(function(req, res, next){\n            res.send(req.ips);\n          });\n\n          request(app)\n          .get('/')\n          .set('X-Forwarded-For', 'client, p1, p2')\n          .expect('[\"client\",\"p1\",\"p2\"]', done);\n        })\n\n        it('should stop at first untrusted', function(done){\n          var app = express();\n\n          app.set('trust proxy', 2);\n\n          app.use(function(req, res, next){\n            res.send(req.ips);\n          });\n\n          request(app)\n          .get('/')\n          .set('X-Forwarded-For', 'client, p1, p2')\n          .expect('[\"p1\",\"p2\"]', done);\n        })\n      })\n\n      describe('when \"trust proxy\" is disabled', function(){\n        it('should return an empty array', function(done){\n          var app = express();\n\n          app.use(function(req, res, next){\n            res.send(req.ips);\n          });\n\n          request(app)\n          .get('/')\n          .set('X-Forwarded-For', 'client, p1, p2')\n          .expect('[]', done);\n        })\n      })\n    })\n\n    describe('when X-Forwarded-For is not present', function(){\n      it('should return []', function(done){\n        var app = express();\n\n        app.use(function(req, res, next){\n          res.send(req.ips);\n        });\n\n        request(app)\n        .get('/')\n        .expect('[]', done);\n      })\n    })\n  })\n})\n\n# test/app.router.js:887-1008#part2of3  (test.app.router)\ndescribe('app.router', function(){\n  describe('.:name', function(){\n    it('should denote a format', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/:name.:format', function(req, res){\n        res.end(req.params.name + ' as ' + req.params.format);\n      });\n\n      request(app)\n        .get('/foo.json')\n        .expect(200, 'foo as json', cb)\n\n      request(app)\n        .get('/foo')\n        .expect(404, cb)\n    })\n  })\n\n  describe('.:name?', function(){\n    it('should denote an optional format', function(done){\n      var app = express();\n      var cb = after(2, done)\n\n      app.get('/:name.:format?', function(req, res){\n        res.end(req.params.name + ' as ' + (req.params.format || 'html'));\n      });\n\n      request(app)\n        .get('/foo')\n        .expect(200, 'foo as html', cb)\n\n      request(app)\n        .get('/foo.json')\n        .expect(200, 'foo as json', cb)\n    })\n  })\n\n  describe('when next() is called', function(){\n    it('should continue lookup', function(done){\n      var app = express()\n        , calls = [];\n\n      app.get('/foo/:bar?', function(req, res, next){\n        calls.push('/foo/:bar?');\n        next();\n      });\n\n      app.get('/bar', function () {\n        assert(0);\n      });\n\n      app.get('/foo', function(req, res, next){\n        calls.push('/foo');\n        next();\n      });\n\n      app.get('/foo', function (req, res) {\n        calls.push('/foo 2');\n        res.json(calls)\n      });\n\n      request(app)\n      .get('/foo')\n      .expect(200, ['/foo/:bar?', '/foo', '/foo 2'], done)\n    })\n  })\n\n  describe('when next(\"route\") is called', function(){\n    it('should jump to next route', function(done){\n      var app = express()\n\n      function fn(req, res, next){\n        res.set('X-Hit', '1')\n        next('route')\n      }\n\n      app.get('/foo', fn, function (req, res) {\n        res.end('failure')\n      });\n\n      app.get('/foo', function(req, res){\n        res.end('success')\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('X-Hit', '1')\n      .expect(200, 'success', done)\n    })\n  })\n\n  describe('when next(\"router\") is called', function () {\n    it('should jump out of router', function (done) {\n      var app = express()\n      var router = express.Router()\n\n      function fn (req, res, next) {\n        res.set('X-Hit', '1')\n        next('router')\n      }\n\n      router.get('/foo', fn, function (req, res) {\n        res.end('failure')\n      })\n\n      router.get('/foo', function (req, res) {\n        res.end('failure')\n      })\n\n      app.use(router)\n\n      app.get('/foo', function (req, res) {\n        res.end('success')\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('X-Hit', '1')\n      .expect(200, 'success', done)\n    })\n  })\n})\n\n# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# test/res.location.js:1-6  (test.res.location)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest')\n  , assert = require('assert')\n  , url = require('url');\n\n# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# test/res.send.js:184-302#part3of4  (test.res.send)\ndescribe('res', function(){\n  describe('.send(Buffer)', function(){\n    it('should send as octet-stream', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.send(Buffer.from('hello'))\n      });\n\n      request(app)\n        .get('/')\n        .expect(200)\n        .expect('Content-Type', 'application/octet-stream')\n        .expect(utils.shouldHaveBody(Buffer.from('hello')))\n        .end(done)\n    })\n\n    it('should set ETag', function (done) {\n      var app = express();\n\n      app.use(function (req, res) {\n        res.send(Buffer.alloc(999, '-'))\n      });\n\n      request(app)\n      .get('/')\n      .expect('ETag', 'W/\"3e7-qPnkJ3CVdVhFJQvUBfF10TmVA7g\"')\n      .expect(200, done);\n    })\n\n    it('should not override Content-Type', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.set('Content-Type', 'text/plain').send(Buffer.from('hey'))\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'text/plain; charset=utf-8')\n      .expect(200, 'hey', done);\n    })\n\n    it('should not override ETag', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.type('text/plain').set('ETag', '\"foo\"').send(Buffer.from('hey'))\n      })\n\n      request(app)\n      .get('/')\n      .expect('ETag', '\"foo\"')\n      .expect(200, 'hey', done)\n    })\n  })\n\n  describe('.send(Object)', function(){\n    it('should send as application/json', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.send({ name: 'tobi' });\n      });\n\n      request(app)\n      .get('/')\n      .expect('Content-Type', 'application/json; charset=utf-8')\n      .expect(200, '{\"name\":\"tobi\"}', done)\n    })\n  })\n\n  describe('when the request method is HEAD', function(){\n    it('should ignore the body', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.send('yay');\n      });\n\n      request(app)\n        .head('/')\n        .expect(200)\n        .expect(utils.shouldNotHaveBody())\n        .end(done)\n    })\n  })\n\n  describe('when .statusCode is 204', function(){\n    it('should strip Content-* fields, Transfer-Encoding field, and body', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.status(204).set('Transfer-Encoding', 'chunked').send('foo');\n      });\n\n      request(app)\n      .get('/')\n      .expect(utils.shouldNotHaveHeader('Content-Type'))\n      .expect(utils.shouldNotHaveHeader('Content-Length'))\n      .expect(utils.shouldNotHaveHeader('Transfer-Encoding'))\n      .expect(204, '', done);\n    })\n  })\n\n  describe('when .statusCode is 205', function () {\n    it('should strip Transfer-Encoding field and body, set Content-Length', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.status(205).set('Transfer-Encoding', 'chunked').send('foo')\n      })\n\n      request(app)\n        .get('/')\n        .expect(utils.shouldNotHaveHeader('Transfer-Encoding'))\n        .expect('Content-Length', '0')\n        .expect(205, '', done)\n    })\n  })\n})\n\n# examples/web-service/index.js:1-13  (examples.web-service)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\n\nvar app = module.exports = express();\n\n// create an error with .status. we\n// can then use the property in our\n// custom error handler (Connect respects this prop as well)\n\n# lib/request.js:212-216  (lib.request.range)\nreq.range = function range(size, options) {\n  var range = this.get('Range');\n  if (!range) return;\n  return parseRange(size, range, options);\n};\n\n# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/middleware/init.js:1-26  (lib.middleware.init)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Initialization middleware, exposing the\n * request and response to each other, as well\n * as defaulting the X-Powered-By header field.\n *\n * @param {Function} app\n * @return {Function}\n * @api private\n */\n\n# test/res.format.js:84-175#part2of2  (test.res.format)\ndescribe('res', function(){\n  describe('.format(obj)', function(){\n    describe('with canonicalized mime types', function(){\n      test(app1);\n    })\n\n    describe('with extnames', function(){\n      test(app2);\n    })\n\n    describe('with parameters', function(){\n      var app = express();\n\n      app.use(function(req, res, next){\n        res.format({\n          'text/plain; charset=utf-8': function(){ res.send('hey') },\n          'text/html; foo=bar; bar=baz': function(){ res.send('<p>hey</p>') },\n          'application/json; q=0.5': function(){ res.send({ message: 'hey' }) }\n        });\n      });\n\n      app.use(function(err, req, res, next){\n        res.send(err.status, 'Supports: ' + err.types.join(', '));\n      });\n\n      test(app);\n    })\n\n    describe('given .default', function(){\n      it('should be invoked instead of auto-responding', function(done){\n        request(app3)\n        .get('/')\n        .set('Accept', 'text/html')\n        .expect('default', done);\n      })\n\n      it('should work when only .default is provided', function (done) {\n        request(app5)\n        .get('/')\n        .set('Accept', '*/*')\n        .expect('hey', done);\n      })\n\n      it('should be able to invoke other formatter', function (done) {\n        var app = express()\n\n        app.use(function (req, res, next) {\n          res.format({\n            json: function () { res.send('json') },\n            default: function () {\n              res.header('x-default', '1')\n              this.json()\n            }\n          })\n        })\n\n        request(app)\n          .get('/')\n          .set('Accept', 'text/plain')\n          .expect(200)\n          .expect('x-default', '1')\n          .expect('json')\n          .end(done)\n      })\n    })\n\n    describe('in router', function(){\n      test(app4);\n    })\n\n    describe('in router', function(){\n      var app = express();\n      var router = express.Router();\n\n      router.get('/', function (req, res) {\n        res.format({\n          text: function(){ res.send('hey') },\n          html: function(){ res.send('<p>hey</p>') },\n          json: function(){ res.send({ message: 'hey' }) }\n        });\n      });\n\n      router.use(function(err, req, res, next){\n        res.send(err.status, 'Supports: ' + err.types.join(', '));\n      })\n\n      app.use(router)\n\n      test(app)\n    })\n  })\n})\n\n# lib/utils.js:1-54  (lib.utils)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @api private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar contentType = require('content-type');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar mime = require('send').mime;\nvar etag = require('etag');\nvar proxyaddr = require('proxy-addr');\nvar qs = require('qs');\nvar querystring = require('querystring');\n\n/**\n * Return strong ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.etag = createETagGenerator({ weak: false })\n\n/**\n * Return weak ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.wetag = createETagGenerator({ weak: true })\n\n/**\n * Check if `path` looks absolute.\n *\n * @param {String} path\n * @return {Boolean}\n * @api private\n */\n\n# index.js:1-11\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\nmodule.exports = require('./lib/express');\n\n# examples/route-middleware/index.js:60-90  (examples.route-middleware)\n// Middleware for faux authentication\n// you would of course implement something real,\n// but this illustrates how an authenticated user\n// may interact with middleware\n\napp.use(function(req, res, next){\n  req.authenticatedUser = users[0];\n  next();\n});\n\napp.get('/', function(req, res){\n  res.redirect('/user/0');\n});\n\napp.get('/user/:id', loadUser, function(req, res){\n  res.send('Viewing user ' + req.user.name);\n});\n\napp.get('/user/:id/edit', loadUser, andRestrictToSelf, function(req, res){\n  res.send('Editing user ' + req.user.name);\n});\n\napp.delete('/user/:id', loadUser, andRestrictTo('admin'), function(req, res){\n  res.send('Deleted user ' + req.user.name);\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/middleware/query.js:1-23  (lib.middleware.query)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n */\n\nvar merge = require('utils-merge')\nvar parseUrl = require('parseurl');\nvar qs = require('qs');\n\n/**\n * @param {Object} options\n * @return {Function}\n * @api public\n */\n\n# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# test/res.send.js:1-10  (test.res.send)\n'use strict'\n\nvar assert = require('assert')\nvar Buffer = require('safe-buffer').Buffer\nvar express = require('..');\nvar methods = require('methods');\nvar request = require('supertest');\nvar utils = require('./support/utils');\n\nvar shouldSkipQuery = require('./support/utils').shouldSkipQuery\n\n# lib/request.js:132-135  (lib.request.accepts)\nreq.accepts = function(){\n  var accept = accepts(this);\n  return accept.types.apply(accept, arguments);\n};\n\n# lib/router/layer.js:77-84  (lib.router.layer)\n/**\n * Handle the request for the layer.\n *\n * @param {Request} req\n * @param {Response} res\n * @param {function} next\n * @api private\n */\n\n## Task\n\nYou are investigating how Express parses an incoming Range header, starting from `req.range` in lib/request.js. Identify the real third-party npm package function it delegates the actual range-parsing logic to, and that function's own real signature and thrown-exception behavior.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.request.range\", \"range-parser.index.rangeParser\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

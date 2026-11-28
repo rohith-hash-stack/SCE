@@ -1,0 +1,236 @@
+diff --git a/aiohttp/web_ws.py b/aiohttp/web_ws.py
+index 9ec478e4..94839858 100644
+--- a/aiohttp/web_ws.py
++++ b/aiohttp/web_ws.py
+@@ -468,7 +468,7 @@ class WebSocketResponse(StreamResponse, Generic[_DecodeText]):
+             data.encode("utf-8"), WSMsgType.TEXT, compress=compress
+         )
+ 
+-    async def send_bytes(self, data: bytes, compress: int | None = None) -> None:
++    async def dispatch_bytes(self, data: bytes, compress: int | None = None) -> None:
+         if self._writer is None:
+             raise RuntimeError("Call .prepare() first")
+         if not isinstance(data, (bytes, bytearray, memoryview)):
+@@ -496,7 +496,7 @@ class WebSocketResponse(StreamResponse, Generic[_DecodeText]):
+         Use this when your JSON encoder (like orjson) returns bytes
+         instead of str, avoiding the encode/decode overhead.
+         """
+-        await self.send_bytes(dumps(data), compress=compress)
++        await self.dispatch_bytes(dumps(data), compress=compress)
+ 
+     async def write_eof(self) -> None:  # type: ignore[override]
+         if self._eof_sent:
+diff --git a/examples/server_simple.py b/examples/server_simple.py
+index c602bff4..b78bc833 100644
+--- a/examples/server_simple.py
++++ b/examples/server_simple.py
+@@ -16,7 +16,7 @@ async def wshandle(request: web.Request) -> web.StreamResponse:
+         if msg.type is web.WSMsgType.TEXT:
+             await ws.send_str(f"Hello, {msg.data}")
+         elif msg.type is web.WSMsgType.BINARY:
+-            await ws.send_bytes(msg.data)
++            await ws.dispatch_bytes(msg.data)
+         elif msg.type is web.WSMsgType.CLOSE:
+             break
+ 
+diff --git a/tests/autobahn/server/server.py b/tests/autobahn/server/server.py
+index 1b056084..05002940 100644
+--- a/tests/autobahn/server/server.py
++++ b/tests/autobahn/server/server.py
+@@ -17,7 +17,7 @@ async def wshandler(request: web.Request) -> web.WebSocketResponse:
+         if msg.type is web.WSMsgType.TEXT:
+             await ws.send_str(msg.data)
+         elif msg.type is web.WSMsgType.BINARY:
+-            await ws.send_bytes(msg.data)
++            await ws.dispatch_bytes(msg.data)
+         else:
+             break
+ 
+diff --git a/tests/test_benchmarks_client_ws.py b/tests/test_benchmarks_client_ws.py
+index ab7405b5..5414276d 100644
+--- a/tests/test_benchmarks_client_ws.py
++++ b/tests/test_benchmarks_client_ws.py
+@@ -89,7 +89,7 @@ def test_one_thousand_round_trip_websocket_binary_messages(
+         ws = web.WebSocketResponse()
+         await ws.prepare(request)
+         for _ in range(message_count):
+-            await ws.send_bytes(raw_message)
++            await ws.dispatch_bytes(raw_message)
+         await ws.close()
+         return ws
+ 
+@@ -187,7 +187,7 @@ def test_client_receive_large_websocket_compressed_messages(
+         ws = web.WebSocketResponse()
+         await ws.prepare(request)
+         for _ in range(message_count):
+-            await ws.send_bytes(raw_message)
++            await ws.dispatch_bytes(raw_message)
+         await ws.close()
+         return ws
+ 
+diff --git a/tests/test_client_ws_functional.py b/tests/test_client_ws_functional.py
+index 411f310d..c5f9bdb5 100644
+--- a/tests/test_client_ws_functional.py
++++ b/tests/test_client_ws_functional.py
+@@ -106,7 +106,7 @@ async def test_send_recv_bytes(aiohttp_client: AiohttpClient) -> None:
+         await ws.prepare(request)
+ 
+         msg = await ws.receive_bytes()
+-        await ws.send_bytes(msg + b"/answer")
++        await ws.dispatch_bytes(msg + b"/answer")
+         await ws.close()
+         return ws
+ 
+@@ -129,7 +129,7 @@ async def test_send_recv_text_bad_type(aiohttp_client: AiohttpClient) -> None:
+         await ws.prepare(request)
+ 
+         msg = await ws.receive_bytes()
+-        await ws.send_bytes(msg + b"/answer")
++        await ws.dispatch_bytes(msg + b"/answer")
+         await ws.close()
+         assert False
+ 
+@@ -192,7 +192,7 @@ async def test_send_recv_json_bytes(aiohttp_client: AiohttpClient) -> None:
+     async def handler(request: web.Request) -> web.WebSocketResponse:
+         ws = web.WebSocketResponse()
+         await ws.prepare(request)
+-        await ws.send_bytes(json.dumps({"response": "x"}).encode())
++        await ws.dispatch_bytes(json.dumps({"response": "x"}).encode())
+         await ws.close()
+         return ws
+ 
+@@ -297,7 +297,7 @@ async def test_ping_pong(aiohttp_client: AiohttpClient) -> None:
+ 
+         msg = await ws.receive_bytes()
+         await ws.ping()
+-        await ws.send_bytes(msg + b"/answer")
++        await ws.dispatch_bytes(msg + b"/answer")
+         try:
+             await ws.close()
+         finally:
+@@ -333,7 +333,7 @@ async def test_ping_pong_manual(aiohttp_client: AiohttpClient) -> None:
+ 
+         msg = await ws.receive_bytes()
+         await ws.ping()
+-        await ws.send_bytes(msg + b"/answer")
++        await ws.dispatch_bytes(msg + b"/answer")
+         try:
+             await ws.close()
+         finally:
+@@ -1268,7 +1268,7 @@ async def test_closed_async_for(aiohttp_client: AiohttpClient) -> None:
+         await ws.prepare(request)
+ 
+         try:
+-            await ws.send_bytes(b"started")
++            await ws.dispatch_bytes(b"started")
+             await ws.receive_bytes()
+         finally:
+             closed.set_result(1)
+@@ -1464,7 +1464,7 @@ async def test_receive_text_as_bytes_server_side(aiohttp_client: AiohttpClient)
+         assert msg.data == b"test message"
+ 
+         # Send response
+-        await ws.send_bytes(msg.data + b"/reply")
++        await ws.dispatch_bytes(msg.data + b"/reply")
+         await ws.close()
+         return ws
+ 
+diff --git a/tests/test_phase3_rename_send_bytes.py b/tests/test_phase3_rename_send_bytes.py
+new file mode 100644
+index 00000000..ab604141
+--- /dev/null
++++ b/tests/test_phase3_rename_send_bytes.py
+@@ -0,0 +1,8 @@
++import importlib
++
++
++def test_phase3_rename_dispatch_bytes():
++    owner = importlib.import_module('aiohttp.web_ws')
++    owner = getattr(owner, 'WebSocketResponse')
++    assert hasattr(owner, 'dispatch_bytes')
++    assert not hasattr(owner, 'send_bytes')
+diff --git a/tests/test_web_websocket.py b/tests/test_web_websocket.py
+index ecc4e025..fd03b72e 100644
+--- a/tests/test_web_websocket.py
++++ b/tests/test_web_websocket.py
+@@ -99,7 +99,7 @@ async def test_nonstarted_send_str() -> None:
+ async def test_nonstarted_send_bytes() -> None:
+     ws = web.WebSocketResponse()
+     with pytest.raises(RuntimeError):
+-        await ws.send_bytes(b"bytes")
++        await ws.dispatch_bytes(b"bytes")
+ 
+ 
+ async def test_nonstarted_send_json() -> None:
+@@ -178,7 +178,7 @@ async def test_send_bytes_nonbytes(make_request: _RequestMaker) -> None:
+     ws = web.WebSocketResponse()
+     await ws.prepare(req)
+     with pytest.raises(TypeError):
+-        await ws.send_bytes("string")  # type: ignore[arg-type]
++        await ws.dispatch_bytes("string")  # type: ignore[arg-type]
+ 
+ 
+ async def test_send_json_nonjson(make_request: _RequestMaker) -> None:
+@@ -371,7 +371,7 @@ async def test_send_bytes_closed(make_request: _RequestMaker) -> None:
+     await ws.close()
+ 
+     with pytest.raises(ConnectionError):
+-        await ws.send_bytes(b"bytes")
++        await ws.dispatch_bytes(b"bytes")
+ 
+ 
+ async def test_recv_bytes_closed(make_request: _RequestMaker) -> None:
+@@ -705,7 +705,7 @@ async def test_send_with_per_message_deflate(
+         await ws.send_str("string", compress=15)
+         m.assert_called_with(b"string", WSMsgType.TEXT, compress=15)
+ 
+-        await ws.send_bytes(b"bytes", compress=0)
++        await ws.dispatch_bytes(b"bytes", compress=0)
+         m.assert_called_with(b"bytes", WSMsgType.BINARY, compress=0)
+ 
+         await ws.send_json("[{}]", compress=9)
+diff --git a/tests/test_web_websocket_functional.py b/tests/test_web_websocket_functional.py
+index 502b1a91..91104d90 100644
+--- a/tests/test_web_websocket_functional.py
++++ b/tests/test_web_websocket_functional.py
+@@ -178,7 +178,7 @@ async def test_send_recv_bytes(aiohttp_client: AiohttpClient) -> None:
+         await ws.prepare(request)
+ 
+         msg = await ws.receive_bytes()
+-        await ws.send_bytes(msg + b"/answer")
++        await ws.dispatch_bytes(msg + b"/answer")
+         await ws.close()
+         closed.set_result(1)
+         return ws
+@@ -950,7 +950,7 @@ async def test_receive_str_nonstring(aiohttp_client: AiohttpClient) -> None:
+         assert ws.can_prepare(request)
+ 
+         await ws.prepare(request)
+-        await ws.send_bytes(b"answer")
++        await ws.dispatch_bytes(b"answer")
+         await ws.close()
+         return ws
+ 
+@@ -1403,7 +1403,7 @@ async def test_receive_text_as_bytes_server_side(aiohttp_client: AiohttpClient)
+         assert msg.data == b"test message"
+ 
+         # Send response
+-        await ws.send_bytes(msg.data + b"/reply")
++        await ws.dispatch_bytes(msg.data + b"/reply")
+         await ws.close()
+         return ws
+ 
+@@ -1439,11 +1439,11 @@ async def test_receive_text_as_bytes_server_iteration(
+                 # msg.data should be bytes
+                 assert isinstance(msg.data, bytes)
+                 # Echo back
+-                await ws.send_bytes(msg.data)
++                await ws.dispatch_bytes(msg.data)
+             else:
+                 assert msg.type is aiohttp.WSMsgType.BINARY
+                 assert isinstance(msg.data, bytes)
+-                await ws.send_bytes(msg.data)
++                await ws.dispatch_bytes(msg.data)
+ 
+         return ws
+ 

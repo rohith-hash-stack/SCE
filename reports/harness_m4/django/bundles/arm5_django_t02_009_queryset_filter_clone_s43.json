@@ -1,0 +1,191 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t02_009_queryset_filter_clone",
+  "items": [
+   {
+    "source_id": "django/db/models/query.py:293-1981",
+    "content": "# django/db/models/query.py:293-1981  (django.db.models.query.QuerySet)\nclass QuerySet(AltersData):\n    ...",
+    "token_count": 34,
+    "rank": 1,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.query.QuerySet"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 10,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1432-1438",
+    "content": "# django/db/models/query.py:1432-1438  (django.db.models.query.QuerySet.filter)\n    def filter(self, *args, **kwargs):\n        \"\"\"\n        Return a new QuerySet instance with the args ANDed to the existing\n        set.\n        \"\"\"\n        self._not_support_combined_queries(\"filter\")\n        return self._filter_or_exclude(False, args, kwargs)",
+    "token_count": 83,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.filter"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 57,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1448-1457",
+    "content": "# django/db/models/query.py:1448-1457  (django.db.models.query.QuerySet._filter_or_exclude)\n    def _filter_or_exclude(self, negate, args, kwargs):\n        if (args or kwargs) and self.query.is_sliced:\n            raise TypeError(\"Cannot filter a query once a slice has been taken.\")\n        clone = self._chain()\n        if self._defer_next_filter:\n            self._defer_next_filter = False\n            clone._deferred_filter = negate, args, kwargs\n        else:\n            clone._filter_or_exclude_inplace(negate, args, kwargs)\n        return clone",
+    "token_count": 131,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet._filter_or_exclude"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 102,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1854-1863",
+    "content": "# django/db/models/query.py:1854-1863  (django.db.models.query.QuerySet._chain)\n    def _chain(self):\n        ...",
+    "token_count": 35,
+    "rank": 4,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.query.QuerySet._chain"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 8,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1865-1882",
+    "content": "# django/db/models/query.py:1865-1882  (django.db.models.query.QuerySet._clone)\n    def _clone(self):\n        ...",
+    "token_count": 35,
+    "rank": 5,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.query.QuerySet._clone"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 8,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1459-1466",
+    "content": "# django/db/models/query.py:1459-1466  (django.db.models.query.QuerySet._filter_or_exclude_inplace)\n    def _filter_or_exclude_inplace(self, negate, args, kwargs):\n        ...",
+    "token_count": 49,
+    "rank": 6,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.query.QuerySet._filter_or_exclude_inplace"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 18,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1963-1968",
+    "content": "# django/db/models/query.py:1963-1968  (django.db.models.query.QuerySet._not_support_combined_queries)\n    def _not_support_combined_queries(self, operation_name):\n        if self.query.combinator:\n            raise NotSupportedError(\n                \"Calling QuerySet.%s() after %s() is not supported.\"\n                % (operation_name, self.query.combinator)\n            )",
+    "token_count": 86,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet._not_support_combined_queries"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 56,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 453,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are debugging why `QuerySet.filter()` always returns a distinct\nQuerySet object, never mutating the original in place, in\ndjango/db/models/query.py. Starting from `QuerySet.filter`, trace the\nreal causal pipeline that produces the new, cloned queryset, in the\norder each stage is actually reached, up to and including the call\nthat actually copies the queryset's internal state.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.db.models.query.QuerySet.filter\", \"django.db.models.query.QuerySet._not_support_combined_queries\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "django.db.models.query.QuerySet.filter",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 14,
+   "manifest_candidates_unfiltered": 14,
+   "requested_symbols": [
+    "django.db.models.query.QuerySet.filter",
+    "django.db.models.query.QuerySet._filter_or_exclude",
+    "django.db.models.query.QuerySet._chain",
+    "django.db.models.query.QuerySet._clone",
+    "django.db.models.query.QuerySet._filter_or_exclude_inplace",
+    "django.db.models.query.QuerySet._not_support_combined_queries"
+   ],
+   "turn1_requested_count": 6,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `QuerySet.filter()` method is designed to return a new QuerySet object that reflects the filtering criteria applied. This is achieved by cloning the original QuerySet and modifying the clone. The cloning process involves creating a new instance of the QuerySet with the same internal state, ensuring that the original QuerySet remains unchanged.\",\n  \"requested_symbols\": [\n    \"django.db.models.query.QuerySet.filter\",\n    \"django.db.models.query.QuerySet._filter_or_exclude\",\n    \"django.db.models.query.QuerySet._chain\",\n    \"django.db.models.query.QuerySet._clone\",\n    \"django.db.models.query.QuerySet._filter_or_exclude_inplace\",\n    \"django.db.models.query.QuerySet._not_support_combined_queries\"\n  ]\n}\n```",
+     "prompt_tokens": 1321,
+     "completion_tokens": 159,
+     "latency_seconds": 11.88846320599987,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     212.261472
+    ],
+    "L_turn2_hydrate": [
+     761.722215
+    ],
+    "L_retrieve": [
+     12864.770298
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 453,
+   "prompt_tokens": 758,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 771,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/db/models/query.py:293-1981  (django.db.models.query.QuerySet)\nclass QuerySet(AltersData):\n    ...\n\n# django/db/models/query.py:1432-1438  (django.db.models.query.QuerySet.filter)\n    def filter(self, *args, **kwargs):\n        \"\"\"\n        Return a new QuerySet instance with the args ANDed to the existing\n        set.\n        \"\"\"\n        self._not_support_combined_queries(\"filter\")\n        return self._filter_or_exclude(False, args, kwargs)\n\n# django/db/models/query.py:1448-1457  (django.db.models.query.QuerySet._filter_or_exclude)\n    def _filter_or_exclude(self, negate, args, kwargs):\n        if (args or kwargs) and self.query.is_sliced:\n            raise TypeError(\"Cannot filter a query once a slice has been taken.\")\n        clone = self._chain()\n        if self._defer_next_filter:\n            self._defer_next_filter = False\n            clone._deferred_filter = negate, args, kwargs\n        else:\n            clone._filter_or_exclude_inplace(negate, args, kwargs)\n        return clone\n\n# django/db/models/query.py:1854-1863  (django.db.models.query.QuerySet._chain)\n    def _chain(self):\n        ...\n\n# django/db/models/query.py:1865-1882  (django.db.models.query.QuerySet._clone)\n    def _clone(self):\n        ...\n\n# django/db/models/query.py:1459-1466  (django.db.models.query.QuerySet._filter_or_exclude_inplace)\n    def _filter_or_exclude_inplace(self, negate, args, kwargs):\n        ...\n\n# django/db/models/query.py:1963-1968  (django.db.models.query.QuerySet._not_support_combined_queries)\n    def _not_support_combined_queries(self, operation_name):\n        if self.query.combinator:\n            raise NotSupportedError(\n                \"Calling QuerySet.%s() after %s() is not supported.\"\n                % (operation_name, self.query.combinator)\n            )\n\n## Task\n\nYou are debugging why `QuerySet.filter()` always returns a distinct\nQuerySet object, never mutating the original in place, in\ndjango/db/models/query.py. Starting from `QuerySet.filter`, trace the\nreal causal pipeline that produces the new, cloned queryset, in the\norder each stage is actually reached, up to and including the call\nthat actually copies the queryset's internal state.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.db.models.query.QuerySet.filter\", \"django.db.models.query.QuerySet._not_support_combined_queries\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

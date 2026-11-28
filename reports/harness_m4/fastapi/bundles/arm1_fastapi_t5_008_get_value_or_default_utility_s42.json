@@ -1,0 +1,955 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "fastapi_t5_008_get_value_or_default_utility",
+  "items": [
+   {
+    "source_id": "fastapi/utils.py:205-220",
+    "content": "# fastapi/utils.py:205-220  (fastapi.utils.get_value_or_default)\ndef get_value_or_default(\n    first_item: Union[DefaultPlaceholder, DefaultType],\n    *extra_items: Union[DefaultPlaceholder, DefaultType],\n) -> Union[DefaultPlaceholder, DefaultType]:\n    \"\"\"\n    Pass items or `DefaultPlaceholder`s by descending priority.\n\n    The first one to _not_ be a `DefaultPlaceholder` will be returned.\n\n    Otherwise, the first item (a `DefaultPlaceholder`) will be returned.\n    \"\"\"\n    items = (first_item,) + extra_items\n    for item in items:\n        if not isinstance(item, DefaultPlaceholder):\n            return item\n    return first_item",
+    "token_count": 148,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.utils.get_value_or_default"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 3,
+     "rerank_score": 0.18957962095737457,
+     "bm25_rank": 1,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 148
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:355-429#part1of2",
+    "content": "# fastapi/dependencies/utils.py:355-429#part1of2  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    field_info = None\n    depends = None\n    type_annotation: Any = Any\n    use_annotation: Any = Any\n    if annotation is not inspect.Signature.empty:\n        use_annotation = annotation\n        type_annotation = annotation\n    # Extract Annotated info\n    if get_origin(use_annotation) is Annotated:\n        annotated_args = get_args(annotation)\n        type_annotation = annotated_args[0]\n        fastapi_annotations = [\n            arg\n            for arg in annotated_args[1:]\n            if isinstance(arg, (FieldInfo, params.Depends))\n        ]\n        fastapi_specific_annotations = [\n            arg\n            for arg in fastapi_annotations\n            if isinstance(arg, (params.Param, params.Body, params.Depends))\n        ]\n        if fastapi_specific_annotations:\n            fastapi_annotation: Union[FieldInfo, params.Depends, None] = (\n                fastapi_specific_annotations[-1]\n            )\n        else:\n            fastapi_annotation = None\n        # Set default for Annotated FieldInfo\n        if isinstance(fastapi_annotation, FieldInfo):\n            # Copy `field_info` because we mutate `field_info.default` below.\n            field_info = copy_field_info(\n                field_info=fastapi_annotation, annotation=use_annotation\n            )\n            assert (\n                field_info.default is Undefined or field_info.default is RequiredParam\n            ), (\n                f\"`{field_info.__class__.__name__}` default value cannot be set in\"\n                f\" `Annotated` for {param_name!r}. Set the default value with `=` instead.\"\n            )\n            if value is not inspect.Signature.empty:\n                assert not is_path_param, \"Path parameters cannot have default values\"\n                field_info.default = value\n            else:\n                field_info.default = RequiredParam\n        # Get Annotated Depends\n        elif isinstance(fastapi_annotation, params.Depends):\n            depends = fastapi_annotation\n    # Get Depends from default value\n    if isinstance(value, params.Depends):\n        assert depends is None, (\n            \"Cannot specify `Depends` in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        assert field_info is None, (\n            \"Cannot specify a FastAPI annotation in `Annotated` and `Depends` as a\"\n            f\" default value together for {param_name!r}\"\n        )\n        depends = value\n    # Get FieldInfo from default value\n    elif isinstance(value, FieldInfo):\n        assert field_info is None, (\n            \"Cannot specify FastAPI annotations in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        field_info = value\n        if PYDANTIC_V2:\n            field_info.annotation = type_annotation\n\n    # Get Depends from type annotation\n    if depends is not None and depends.dependency is None:\n        # Copy `depends` before mutating it\n        depends = copy(depends)\n        depends.dependency = type_annotation\n\n    # Handle non-param type annotations like Request",
+    "token_count": 691,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.analyze_param"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 20,
+     "rerank_score": -0.10520318150520325,
+     "bm25_rank": 3,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 691
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/routing.py:1-77",
+    "content": "# fastapi/routing.py:1-77  (fastapi.routing)\nimport asyncio\nimport dataclasses\nimport email.message\nimport inspect\nimport json\nfrom contextlib import AsyncExitStack, asynccontextmanager\nfrom enum import Enum, IntEnum\nfrom typing import (\n    Any,\n    AsyncIterator,\n    Callable,\n    Collection,\n    Coroutine,\n    Dict,\n    List,\n    Mapping,\n    Optional,\n    Sequence,\n    Set,\n    Tuple,\n    Type,\n    Union,\n)\n\nfrom fastapi import params\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    _model_dump,\n    _normalize_errors,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import Default, DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _should_embed_body_fields,\n    get_body_field,\n    get_dependant,\n    get_flat_dependant,\n    get_parameterless_sub_dependant,\n    get_typed_return_annotation,\n    solve_dependencies,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.exceptions import (\n    FastAPIError,\n    RequestValidationError,\n    ResponseValidationError,\n    WebSocketRequestValidationError,\n)\nfrom fastapi.types import DecoratedCallable, IncEx\nfrom fastapi.utils import (\n    create_cloned_field,\n    create_model_field,\n    generate_unique_id,\n    get_value_or_default,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette import routing\nfrom starlette.concurrency import run_in_threadpool\nfrom starlette.exceptions import HTTPException\nfrom starlette.requests import Request\nfrom starlette.responses import JSONResponse, Response\nfrom starlette.routing import (\n    BaseRoute,\n    Match,\n    compile_path,\n    get_name,\n    request_response,\n    websocket_session,\n)\nfrom starlette.routing import Mount as Mount  # noqa\nfrom starlette.types import AppType, ASGIApp, Lifespan, Scope\nfrom starlette.websockets import WebSocket\nfrom typing_extensions import Annotated, Doc, deprecated",
+    "token_count": 428,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 31,
+     "rerank_score": -0.9922956228256226,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 428
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:430-511#part2of2",
+    "content": "# fastapi/dependencies/utils.py:430-511#part2of2  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    if lenient_issubclass(\n        type_annotation,\n        (\n            Request,\n            WebSocket,\n            HTTPConnection,\n            Response,\n            StarletteBackgroundTasks,\n            SecurityScopes,\n        ),\n    ):\n        assert depends is None, f\"Cannot specify `Depends` for type {type_annotation!r}\"\n        assert field_info is None, (\n            f\"Cannot specify FastAPI annotation for type {type_annotation!r}\"\n        )\n    # Handle default assignations, neither field_info nor depends was not found in Annotated nor default value\n    elif field_info is None and depends is None:\n        default_value = value if value is not inspect.Signature.empty else RequiredParam\n        if is_path_param:\n            # We might check here that `default_value is RequiredParam`, but the fact is that the same\n            # parameter might sometimes be a path parameter and sometimes not. See\n            # `tests/test_infer_param_optionality.py` for an example.\n            field_info = params.Path(annotation=use_annotation)\n        elif is_uploadfile_or_nonable_uploadfile_annotation(\n            type_annotation\n        ) or is_uploadfile_sequence_annotation(type_annotation):\n            field_info = params.File(annotation=use_annotation, default=default_value)\n        elif not field_annotation_is_scalar(annotation=type_annotation):\n            field_info = params.Body(annotation=use_annotation, default=default_value)\n        else:\n            field_info = params.Query(annotation=use_annotation, default=default_value)\n\n    field = None\n    # It's a field_info, not a dependency\n    if field_info is not None:\n        # Handle field_info.in_\n        if is_path_param:\n            assert isinstance(field_info, params.Path), (\n                f\"Cannot use `{field_info.__class__.__name__}` for path param\"\n                f\" {param_name!r}\"\n            )\n        elif (\n            isinstance(field_info, params.Param)\n            and getattr(field_info, \"in_\", None) is None\n        ):\n            field_info.in_ = params.ParamTypes.query\n        use_annotation_from_field_info = get_annotation_from_field_info(\n            use_annotation,\n            field_info,\n            param_name,\n        )\n        if isinstance(field_info, params.Form):\n            ensure_multipart_is_installed()\n        if not field_info.alias and getattr(field_info, \"convert_underscores\", None):\n            alias = param_name.replace(\"_\", \"-\")\n        else:\n            alias = field_info.alias or param_name\n        field_info.alias = alias\n        field = create_model_field(\n            name=param_name,\n            type_=use_annotation_from_field_info,\n            default=field_info.default,\n            alias=alias,\n            required=field_info.default in (RequiredParam, Undefined),\n            field_info=field_info,\n        )\n        if is_path_param:\n            assert is_scalar_field(field=field), (\n                \"Path params must be of one of the supported types\"\n            )\n        elif isinstance(field_info, params.Query):\n            assert (\n                is_scalar_field(field)\n                or is_scalar_sequence_field(field)\n                or (\n                    lenient_issubclass(field.type_, BaseModel)\n                    # For Pydantic v1\n                    and getattr(field, \"shape\", 1) == 1\n                )\n            )\n\n    return ParamDetails(type_annotation=type_annotation, depends=depends, field=field)",
+    "token_count": 743,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.analyze_param"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 23,
+     "rerank_score": -1.3512732982635498,
+     "bm25_rank": 4,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 743
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:63-106",
+    "content": "# fastapi/utils.py:63-106  (fastapi.utils.create_model_field)\ndef create_model_field(\n    name: str,\n    type_: Any,\n    class_validators: Optional[Dict[str, Validator]] = None,\n    default: Optional[Any] = Undefined,\n    required: Union[bool, UndefinedType] = Undefined,\n    model_config: Type[BaseConfig] = BaseConfig,\n    field_info: Optional[FieldInfo] = None,\n    alias: Optional[str] = None,\n    mode: Literal[\"validation\", \"serialization\"] = \"validation\",\n) -> ModelField:\n    class_validators = class_validators or {}\n    if PYDANTIC_V2:\n        field_info = field_info or FieldInfo(\n            annotation=type_, default=default, alias=alias\n        )\n    else:\n        field_info = field_info or FieldInfo()\n    kwargs = {\"name\": name, \"field_info\": field_info}\n    if PYDANTIC_V2:\n        kwargs.update({\"mode\": mode})\n    else:\n        kwargs.update(\n            {\n                \"type_\": type_,\n                \"class_validators\": class_validators,\n                \"default\": default,\n                \"required\": required,\n                \"model_config\": model_config,\n                \"alias\": alias,\n            }\n        )\n    try:\n        return ModelField(**kwargs)  # type: ignore[arg-type]\n    except (RuntimeError, PydanticSchemaGenerationError):\n        raise fastapi.exceptions.FastAPIError(\n            \"Invalid args for response field! Hint: \"\n            f\"check that {type_} is a valid Pydantic field type. \"\n            \"If you are using a return type annotation that is not a valid Pydantic \"\n            \"field (e.g. Union[Response, dict, None]) you can disable generating the \"\n            \"response model from the type annotation with the path operation decorator \"\n            \"parameter response_model=None. Read more: \"\n            \"https://fastapi.tiangolo.com/tutorial/response-model/\"\n        ) from None",
+    "token_count": 424,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.utils.create_model_field"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 39,
+     "rerank_score": -1.3773595094680786,
+     "bm25_rank": 14,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 424
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/param_functions.py:643-956",
+    "content": "# fastapi/param_functions.py:643-956  (fastapi.param_functions.Header)\ndef Header(  # noqa: N802\n    default: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Default value if the parameter field is not set.\n            \"\"\"\n        ),\n    ] = Undefined,\n    *,\n    default_factory: Annotated[\n        Union[Callable[[], Any], None],\n        Doc(\n            \"\"\"\n            A callable to generate the default value.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = _Unset,\n    alias: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            An alternative name for the parameter field.\n\n            This will be used to extract the data and for the generated OpenAPI.\n            It is particularly useful when you can't use the name you want because it\n            is a Python reserved keyword or similar.\n            \"\"\"\n        ),\n    ] = None,\n    alias_priority: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Priority of the alias. This affects whether an alias generator is used.\n            \"\"\"\n        ),\n    ] = _Unset,\n    # TODO: update when deprecating Pydantic v1, import these types\n    # validation_alias: str | AliasPath | AliasChoices | None\n    validation_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Whitelist' validation step. The parameter field will be the single one\n            allowed by the alias or set of aliases defined.\n            \"\"\"\n        ),\n    ] = None,\n    serialization_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Blacklist' validation step. The vanilla parameter field will be the\n            single one of the alias' or set of aliases' fields and all the other\n            fields will be ignored at serialization time.\n            \"\"\"\n        ),\n    ] = None,\n    convert_underscores: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Automatically convert underscores to hyphens in the parameter field name.\n\n            Read more about it in the\n            [FastAPI docs for Header Parameters](https://fastapi.tiangolo.com/tutorial/header-params/#automatic-conversion)\n            \"\"\"\n        ),\n    ] = True,\n    title: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable title.\n            \"\"\"\n        ),\n    ] = None,\n    description: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable description.\n            \"\"\"\n        ),\n    ] = None,\n    gt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than. If set, value must be greater than this. Only applicable to\n            numbers.\n            \"\"\"\n        ),\n    ] = None,\n    ge: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than or equal. If set, value must be greater than or equal to\n            this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    lt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than. If set, value must be less than this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    le: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than or equal. If set, value must be less than or equal to this.\n            Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    min_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Minimum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    max_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Maximum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    pattern: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n    ] = None,\n    regex: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n        deprecated(\n            \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n        ),\n    ] = None,\n    discriminator: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            Parameter field name for discriminating the type in a tagged union.\n            \"\"\"\n        ),\n    ] = None,\n    strict: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            If `True`, strict validation is applied to the field.\n            \"\"\"\n        ),\n    ] = _Unset,\n    multiple_of: Annotated[\n        Union[float, None],\n        Doc(\n            \"\"\"\n            Value must be a multiple of this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    allow_inf_nan: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            Allow `inf`, `-inf`, `nan`. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    max_digits: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of allow digits for strings.\n            \"\"\"\n        ),\n    ] = _Unset,\n    decimal_places: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of decimal places allowed for numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    examples: Annotated[\n        Optional[List[Any]],\n        Doc(\n            \"\"\"\n            Example values for this field.\n            \"\"\"\n        ),\n    ] = None,\n    example: Annotated[\n        Optional[Any],\n        deprecated(\n            \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n            \"although still supported. Use examples instead.\"\n        ),\n    ] = _Unset,\n    openapi_examples: Annotated[\n        Optional[Dict[str, Example]],\n        Doc(\n            \"\"\"\n            OpenAPI-specific examples.\n\n            It will be added to the generated OpenAPI (e.g. visible at `/docs`).\n\n            Swagger UI (that provides the `/docs` interface) has better support for the\n            OpenAPI-specific examples than the JSON Schema `examples`, that's the main\n            use case for this.\n\n            Read more about it in the\n            [FastAPI docs for Declare Request Example Data](https://fastapi.tiangolo.com/tutorial/schema-extra-example/#using-the-openapi_examples-parameter).\n            \"\"\"\n        ),\n    ] = None,\n    deprecated: Annotated[\n        Union[deprecated, str, bool, None],\n        Doc(\n            \"\"\"\n            Mark this parameter field as deprecated.\n\n            It will affect the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = None,\n    include_in_schema: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            To include (or not) this parameter field in the generated OpenAPI.\n            You probably don't need it, but it's available.\n\n            This affects the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = True,\n    json_schema_extra: Annotated[\n        Union[Dict[str, Any], None],\n        Doc(\n            \"\"\"\n            Any additional JSON schema data.\n            \"\"\"\n        ),\n    ] = None,\n    **extra: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Include extra fields used by the JSON Schema.\n            \"\"\"\n        ),\n        deprecated(\n            \"\"\"\n            The `extra` kwargs is deprecated. Use `json_schema_extra` instead.\n            \"\"\"\n        ),\n    ],\n) -> Any:\n    return params.Header(\n        default=default,\n        default_factory=default_factory,\n        alias=alias,\n        alias_priority=alias_priority,\n        validation_alias=validation_alias,\n        serialization_alias=serialization_alias,\n        convert_underscores=convert_underscores,\n        title=title,\n        description=description,\n        gt=gt,\n        ge=ge,\n        lt=lt,\n        le=le,\n        min_length=min_length,\n        max_length=max_length,\n        pattern=pattern,\n        regex=regex,\n        discriminator=discriminator,\n        strict=strict,\n        multiple_of=multiple_of,\n        allow_inf_nan=allow_inf_nan,\n        max_digits=max_digits,\n        decimal_places=decimal_places,\n        example=example,\n        examples=examples,\n        openapi_examples=openapi_examples,\n        deprecated=deprecated,\n        include_in_schema=include_in_schema,\n        json_schema_extra=json_schema_extra,\n        **extra,\n    )",
+    "token_count": 1784,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.param_functions.Header"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 18,
+     "rerank_score": -2.575011730194092,
+     "bm25_rank": 39,
+     "dense_rank": 84,
+     "oversized_chunk": true,
+     "engine_token_count": 1784
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/params.py:75-115#part1of2",
+    "content": "# fastapi/params.py:75-115#part1of2  (fastapi.params.Param.__init__)\nclass Param(FieldInfo):\n    def __init__(\n        self,\n        default: Any = Undefined,\n        *,\n        default_factory: Union[Callable[[], Any], None] = _Unset,\n        annotation: Optional[Any] = None,\n        alias: Optional[str] = None,\n        alias_priority: Union[int, None] = _Unset,\n        # TODO: update when deprecating Pydantic v1, import these types\n        # validation_alias: str | AliasPath | AliasChoices | None\n        validation_alias: Union[str, None] = None,\n        serialization_alias: Union[str, None] = None,\n        title: Optional[str] = None,\n        description: Optional[str] = None,\n        gt: Optional[float] = None,\n        ge: Optional[float] = None,\n        lt: Optional[float] = None,\n        le: Optional[float] = None,\n        min_length: Optional[int] = None,\n        max_length: Optional[int] = None,\n        pattern: Optional[str] = None,\n        regex: Annotated[\n            Optional[str],\n            deprecated(\n                \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n            ),\n        ] = None,\n        discriminator: Union[str, None] = None,\n        strict: Union[bool, None] = _Unset,\n        multiple_of: Union[float, None] = _Unset,\n        allow_inf_nan: Union[bool, None] = _Unset,\n        max_digits: Union[int, None] = _Unset,\n        decimal_places: Union[int, None] = _Unset,\n        examples: Optional[List[Any]] = None,\n        example: Annotated[\n            Optional[Any],\n            deprecated(\n                \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n                \"although still supported. Use examples instead.\"\n            ),\n        ] = _Unset,\n        openapi_examples: Optional[Dict[str, Example]] = None,\n        deprecated: Union[deprecated, str, bool, None] = None,\n        include_in_schema: bool = True,\n        json_schema_extra: Union[Dict[str, Any], None] = None,\n        **extra: Any,\n    ):\n        if example is not _Unset:\n            warnings.warn(\n                \"`example` has been deprecated, please use `examples` instead\",\n                category=DeprecationWarning,\n                stacklevel=4,\n            )\n        self.example = example\n        self.include_in_schema = include_in_schema\n        self.openapi_examples = openapi_examples\n        kwargs = dict(\n            default=default,\n            default_factory=default_factory,\n            alias=alias,\n            title=title,\n            description=description,\n            gt=gt,\n            ge=ge,\n            lt=lt,\n            le=le,\n            min_length=min_length,\n            max_length=max_length,\n            discriminator=discriminator,\n            multiple_of=multiple_of,\n            allow_inf_nan=allow_inf_nan,\n            max_digits=max_digits,\n            decimal_places=decimal_places,\n            **extra,\n        )\n        if examples is not None:\n            kwargs[\"examples\"] = examples\n        if regex is not None:\n            warnings.warn(\n                \"`regex` has been deprecated, please use `pattern` instead\",\n                category=DeprecationWarning,\n                stacklevel=4,\n            )\n        current_json_schema_extra = json_schema_extra or extra\n        if PYDANTIC_VERSION_MINOR_TUPLE < (2, 7):\n            self.deprecated = deprecated\n        else:\n            kwargs[\"deprecated\"] = deprecated",
+    "token_count": 778,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.params.Param.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 48,
+     "rerank_score": -3.033111095428467,
+     "bm25_rank": null,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 778
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_datastructures.py:22-26",
+    "content": "# tests/test_datastructures.py:22-26  (tests.test_datastructures.test_default_placeholder_equals)\ndef test_default_placeholder_equals():\n    placeholder_1 = Default(\"a\")\n    placeholder_2 = Default(\"a\")\n    assert placeholder_1 == placeholder_2\n    assert placeholder_1.value == placeholder_2.value",
+    "token_count": 68,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_datastructures.test_default_placeholder_equals"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 15,
+     "rerank_score": -3.7903172969818115,
+     "bm25_rank": 38,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_http_connection_injection.py:14-16",
+    "content": "# tests/test_http_connection_injection.py:14-16  (tests.test_http_connection_injection.get_value_by_http)\n@app.get(\"/http\")\nasync def get_value_by_http(value: int = Depends(extract_value_from_http_connection)):\n    return value",
+    "token_count": 53,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_http_connection_injection.get_value_by_http"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 19,
+     "rerank_score": -4.056597709655762,
+     "bm25_rank": null,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/datastructures.py:184-185",
+    "content": "# fastapi/datastructures.py:184-185  (fastapi.datastructures.DefaultPlaceholder.__init__)\nclass DefaultPlaceholder:\n    def __init__(self, value: Any):\n        self.value = value",
+    "token_count": 45,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.datastructures.DefaultPlaceholder.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": -4.32524299621582,
+     "bm25_rank": 15,
+     "dense_rank": 67,
+     "oversized_chunk": false,
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/datastructures.py:187-188",
+    "content": "# fastapi/datastructures.py:187-188  (fastapi.datastructures.DefaultPlaceholder.__bool__)\nclass DefaultPlaceholder:\n    def __bool__(self) -> bool:\n        return bool(self.value)",
+    "token_count": 45,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.datastructures.DefaultPlaceholder.__bool__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": -4.964057445526123,
+     "bm25_rank": 30,
+     "dense_rank": 27,
+     "oversized_chunk": false,
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/datastructures.py:177-182",
+    "content": "# fastapi/datastructures.py:177-182  (fastapi.datastructures.DefaultPlaceholder)\nclass DefaultPlaceholder:\n    \"\"\"\n    You shouldn't use this class directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"",
+    "token_count": 67,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.datastructures.DefaultPlaceholder"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 5,
+     "rerank_score": -5.092613697052002,
+     "bm25_rank": 7,
+     "dense_rank": 79,
+     "oversized_chunk": false,
+     "engine_token_count": 67
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial005.py:21-23",
+    "content": "# docs_src/dependencies/tutorial005.py:21-23  (docs_src.dependencies.tutorial005.read_query)\n@app.get(\"/items/\")\nasync def read_query(query_or_default: str = Depends(query_or_cookie_extractor)):\n    return {\"q_or_cookie\": query_or_default}",
+    "token_count": 61,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.dependencies.tutorial005.read_query"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 8,
+     "rerank_score": -5.19264554977417,
+     "bm25_rank": 17,
+     "dense_rank": 75,
+     "oversized_chunk": false,
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial005_py310.py:18-20",
+    "content": "# docs_src/dependencies/tutorial005_py310.py:18-20  (docs_src.dependencies.tutorial005_py310.read_query)\n@app.get(\"/items/\")\nasync def read_query(query_or_default: str = Depends(query_or_cookie_extractor)):\n    return {\"q_or_cookie\": query_or_default}",
+    "token_count": 69,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.dependencies.tutorial005_py310.read_query"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 9,
+     "rerank_score": -5.19264554977417,
+     "bm25_rank": 19,
+     "dense_rank": 76,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/main.py:165-167",
+    "content": "# tests/main.py:165-167  (tests.main.get_query_type_int_default)\n@app.get(\"/query/int/default\")\ndef get_query_type_int_default(query: int = 10):\n    return f\"foo bar {query}\"",
+    "token_count": 52,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.main.get_query_type_int_default"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 45,
+     "rerank_score": -5.24397087097168,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_annotated.py:10-12",
+    "content": "# tests/test_annotated.py:10-12  (tests.test_annotated.default)\n@app.get(\"/default\")\nasync def default(foo: Annotated[str, Query()] = \"foo\"):\n    return {\"foo\": foo}",
+    "token_count": 49,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_annotated.default"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 25,
+     "rerank_score": -5.317096710205078,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:716-737",
+    "content": "# fastapi/dependencies/utils.py:716-737  (fastapi.dependencies.utils._get_multidict_value)\ndef _get_multidict_value(\n    field: ModelField, values: Mapping[str, Any], alias: Union[str, None] = None\n) -> Any:\n    alias = alias or field.alias\n    if is_sequence_field(field) and isinstance(values, (ImmutableMultiDict, Headers)):\n        value = values.getlist(alias)\n    else:\n        value = values.get(alias, None)\n    if (\n        value is None\n        or (\n            isinstance(field.field_info, params.Form)\n            and isinstance(value, str)  # For type checks\n            and value == \"\"\n        )\n        or (is_sequence_field(field) and len(value) == 0)\n    ):\n        if field.required:\n            return\n        else:\n            return deepcopy(field.default)\n    return value",
+    "token_count": 187,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils._get_multidict_value"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 2,
+     "rerank_score": -5.481825351715088,
+     "bm25_rank": 2,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 187
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/datastructures.py:197-204",
+    "content": "# fastapi/datastructures.py:197-204  (fastapi.datastructures.Default)\ndef Default(value: DefaultType) -> DefaultType:\n    \"\"\"\n    You shouldn't use this function directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n    return DefaultPlaceholder(value)  # type: ignore",
+    "token_count": 84,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.datastructures.Default"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 1,
+     "rerank_score": -5.654245376586914,
+     "bm25_rank": 5,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial005_an.py:22-26",
+    "content": "# docs_src/dependencies/tutorial005_an.py:22-26  (docs_src.dependencies.tutorial005_an.read_query)\n@app.get(\"/items/\")\nasync def read_query(\n    query_or_default: Annotated[str, Depends(query_or_cookie_extractor)],\n):\n    return {\"q_or_cookie\": query_or_default}",
+    "token_count": 68,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.dependencies.tutorial005_an.read_query"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 10,
+     "rerank_score": -5.848402976989746,
+     "bm25_rank": 18,
+     "dense_rank": 85,
+     "oversized_chunk": false,
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial005_an_py310.py:21-25",
+    "content": "# docs_src/dependencies/tutorial005_an_py310.py:21-25  (docs_src.dependencies.tutorial005_an_py310.read_query)\n@app.get(\"/items/\")\nasync def read_query(\n    query_or_default: Annotated[str, Depends(query_or_cookie_extractor)],\n):\n    return {\"q_or_cookie\": query_or_default}",
+    "token_count": 76,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.dependencies.tutorial005_an_py310.read_query"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 11,
+     "rerank_score": -5.848402976989746,
+     "bm25_rank": 20,
+     "dense_rank": 86,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial005_an_py39.py:21-25",
+    "content": "# docs_src/dependencies/tutorial005_an_py39.py:21-25  (docs_src.dependencies.tutorial005_an_py39.read_query)\n@app.get(\"/items/\")\nasync def read_query(\n    query_or_default: Annotated[str, Depends(query_or_cookie_extractor)],\n):\n    return {\"q_or_cookie\": query_or_default}",
+    "token_count": 74,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.dependencies.tutorial005_an_py39.read_query"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 13,
+     "rerank_score": -5.848402976989746,
+     "bm25_rank": 21,
+     "dense_rank": 87,
+     "oversized_chunk": false,
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:42-56",
+    "content": "# fastapi/utils.py:42-56  (fastapi.utils.is_body_allowed_for_status_code)\ndef is_body_allowed_for_status_code(status_code: Union[int, str, None]) -> bool:\n    if status_code is None:\n        return True\n    # Ref: https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#patterned-fields-1\n    if status_code in {\n        \"default\",\n        \"1XX\",\n        \"2XX\",\n        \"3XX\",\n        \"4XX\",\n        \"5XX\",\n    }:\n        return True\n    current_status_code = int(status_code)\n    return not (current_status_code < 200 or current_status_code in {204, 205, 304})",
+    "token_count": 170,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.utils.is_body_allowed_for_status_code"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 41,
+     "rerank_score": -6.239495277404785,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 170
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_skip_defaults.py:44-50",
+    "content": "# tests/test_skip_defaults.py:44-50  (tests.test_skip_defaults.get_exclude_defaults)\n@app.get(\n    \"/exclude_defaults\",\n    response_model=ModelDefaults,\n    response_model_exclude_defaults=True,\n)\ndef get_exclude_defaults() -> ModelDefaults:\n    return ModelDefaults(x=None, y=\"y\")",
+    "token_count": 65,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_skip_defaults.get_exclude_defaults"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 42,
+     "rerank_score": -6.299263000488281,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/main.py:170-174",
+    "content": "# tests/main.py:170-174  (tests.main.get_query_param)\n@app.get(\"/query/param\")\ndef get_query_param(query=Query(default=None)):\n    if query is None:\n        return \"foo bar\"\n    return f\"foo bar {query}\"",
+    "token_count": 58,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.main.get_query_param"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 50,
+     "rerank_score": -6.502285957336426,
+     "bm25_rank": null,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_include_router_defaults_overrides.py:159-161",
+    "content": "# tests/test_include_router_defaults_overrides.py:159-161  (tests.test_include_router_defaults_overrides.path1_default)\n@app.get(\"/default1\")\nasync def path1_default(level1: str):\n    return level1",
+    "token_count": 50,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_include_router_defaults_overrides.path1_default"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 44,
+     "rerank_score": -6.548820495605469,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_dependency_class.py:51-53",
+    "content": "# tests/test_dependency_class.py:51-53  (tests.test_dependency_class.get_callable_dependency)\n@app.get(\"/callable-dependency\")\nasync def get_callable_dependency(value: str = Depends(callable_dependency)):\n    return value",
+    "token_count": 46,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_dependency_class.get_callable_dependency"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 37,
+     "rerank_score": -6.550045013427734,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_openapi_query_parameter_extension.py:1-7",
+    "content": "# tests/test_openapi_query_parameter_extension.py:1-7  (tests.test_openapi_query_parameter_extension)\nfrom typing import Optional\n\nfrom dirty_equals import IsDict\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()",
+    "token_count": 56,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -6.566314697265625,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:698-713",
+    "content": "# fastapi/dependencies/utils.py:698-713  (fastapi.dependencies.utils._validate_value_with_model_field)\ndef _validate_value_with_model_field(\n    *, field: ModelField, value: Any, values: Dict[str, Any], loc: Tuple[str, ...]\n) -> Tuple[Any, List[Any]]:\n    if value is None:\n        if field.required:\n            return None, [get_missing_field_error(loc=loc)]\n        else:\n            return deepcopy(field.default), []\n    v_, errors_ = field.validate(value, values, loc=loc)\n    if isinstance(errors_, ErrorWrapper):\n        return None, [errors_]\n    elif isinstance(errors_, list):\n        new_errors = _regenerate_error_with_loc(errors=errors_, loc_prefix=())\n        return None, new_errors\n    else:\n        return v_, []",
+    "token_count": 175,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils._validate_value_with_model_field"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 6,
+     "rerank_score": -6.754090309143066,
+     "bm25_rank": 6,
+     "dense_rank": 90,
+     "oversized_chunk": false,
+     "engine_token_count": 175
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_dependency_class.py:56-58",
+    "content": "# tests/test_dependency_class.py:56-58  (tests.test_dependency_class.get_callable_gen_dependency)\n@app.get(\"/callable-gen-dependency\")\nasync def get_callable_gen_dependency(value: str = Depends(callable_gen_dependency)):\n    return value",
+    "token_count": 50,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_dependency_class.get_callable_gen_dependency"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 30,
+     "rerank_score": -6.83914852142334,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/param_functions.py:959-1260",
+    "content": "# fastapi/param_functions.py:959-1260  (fastapi.param_functions.Cookie)\ndef Cookie(  # noqa: N802\n    default: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Default value if the parameter field is not set.\n            \"\"\"\n        ),\n    ] = Undefined,\n    *,\n    default_factory: Annotated[\n        Union[Callable[[], Any], None],\n        Doc(\n            \"\"\"\n            A callable to generate the default value.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = _Unset,\n    alias: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            An alternative name for the parameter field.\n\n            This will be used to extract the data and for the generated OpenAPI.\n            It is particularly useful when you can't use the name you want because it\n            is a Python reserved keyword or similar.\n            \"\"\"\n        ),\n    ] = None,\n    alias_priority: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Priority of the alias. This affects whether an alias generator is used.\n            \"\"\"\n        ),\n    ] = _Unset,\n    # TODO: update when deprecating Pydantic v1, import these types\n    # validation_alias: str | AliasPath | AliasChoices | None\n    validation_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Whitelist' validation step. The parameter field will be the single one\n            allowed by the alias or set of aliases defined.\n            \"\"\"\n        ),\n    ] = None,\n    serialization_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Blacklist' validation step. The vanilla parameter field will be the\n            single one of the alias' or set of aliases' fields and all the other\n            fields will be ignored at serialization time.\n            \"\"\"\n        ),\n    ] = None,\n    title: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable title.\n            \"\"\"\n        ),\n    ] = None,\n    description: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable description.\n            \"\"\"\n        ),\n    ] = None,\n    gt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than. If set, value must be greater than this. Only applicable to\n            numbers.\n            \"\"\"\n        ),\n    ] = None,\n    ge: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than or equal. If set, value must be greater than or equal to\n            this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    lt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than. If set, value must be less than this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    le: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than or equal. If set, value must be less than or equal to this.\n            Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    min_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Minimum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    max_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Maximum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    pattern: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n    ] = None,\n    regex: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n        deprecated(\n            \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n        ),\n    ] = None,\n    discriminator: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            Parameter field name for discriminating the type in a tagged union.\n            \"\"\"\n        ),\n    ] = None,\n    strict: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            If `True`, strict validation is applied to the field.\n            \"\"\"\n        ),\n    ] = _Unset,\n    multiple_of: Annotated[\n        Union[float, None],\n        Doc(\n            \"\"\"\n            Value must be a multiple of this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    allow_inf_nan: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            Allow `inf`, `-inf`, `nan`. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    max_digits: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of allow digits for strings.\n            \"\"\"\n        ),\n    ] = _Unset,\n    decimal_places: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of decimal places allowed for numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    examples: Annotated[\n        Optional[List[Any]],\n        Doc(\n            \"\"\"\n            Example values for this field.\n            \"\"\"\n        ),\n    ] = None,\n    example: Annotated[\n        Optional[Any],\n        deprecated(\n            \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n            \"although still supported. Use examples instead.\"\n        ),\n    ] = _Unset,\n    openapi_examples: Annotated[\n        Optional[Dict[str, Example]],\n        Doc(\n            \"\"\"\n            OpenAPI-specific examples.\n\n            It will be added to the generated OpenAPI (e.g. visible at `/docs`).\n\n            Swagger UI (that provides the `/docs` interface) has better support for the\n            OpenAPI-specific examples than the JSON Schema `examples`, that's the main\n            use case for this.\n\n            Read more about it in the\n            [FastAPI docs for Declare Request Example Data](https://fastapi.tiangolo.com/tutorial/schema-extra-example/#using-the-openapi_examples-parameter).\n            \"\"\"\n        ),\n    ] = None,\n    deprecated: Annotated[\n        Union[deprecated, str, bool, None],\n        Doc(\n            \"\"\"\n            Mark this parameter field as deprecated.\n\n            It will affect the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = None,\n    include_in_schema: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            To include (or not) this parameter field in the generated OpenAPI.\n            You probably don't need it, but it's available.\n\n            This affects the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = True,\n    json_schema_extra: Annotated[\n        Union[Dict[str, Any], None],\n        Doc(\n            \"\"\"\n            Any additional JSON schema data.\n            \"\"\"\n        ),\n    ] = None,\n    **extra: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Include extra fields used by the JSON Schema.\n            \"\"\"\n        ),\n        deprecated(\n            \"\"\"\n            The `extra` kwargs is deprecated. Use `json_schema_extra` instead.\n            \"\"\"\n        ),\n    ],\n) -> Any:\n    return params.Cookie(\n        default=default,\n        default_factory=default_factory,\n        alias=alias,\n        alias_priority=alias_priority,\n        validation_alias=validation_alias,\n        serialization_alias=serialization_alias,\n        title=title,\n        description=description,\n        gt=gt,\n        ge=ge,\n        lt=lt,\n        le=le,\n        min_length=min_length,\n        max_length=max_length,\n        pattern=pattern,\n        regex=regex,\n        discriminator=discriminator,\n        strict=strict,\n        multiple_of=multiple_of,\n        allow_inf_nan=allow_inf_nan,\n        max_digits=max_digits,\n        decimal_places=decimal_places,\n        example=example,\n        examples=examples,\n        openapi_examples=openapi_examples,\n        deprecated=deprecated,\n        include_in_schema=include_in_schema,\n        json_schema_extra=json_schema_extra,\n        **extra,\n    )",
+    "token_count": 1700,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.param_functions.Cookie"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 16,
+     "rerank_score": -6.921823501586914,
+     "bm25_rank": 35,
+     "dense_rank": 73,
+     "oversized_chunk": true,
+     "engine_token_count": 1700
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_validate_response.py:28-33",
+    "content": "# tests/test_validate_response.py:28-33  (tests.test_validate_response.get_valid_none)\n@app.get(\"/items/validnone\", response_model=Union[Item, None])\ndef get_valid_none(send_none: bool = False):\n    if send_none:\n        return None\n    else:\n        return {\"name\": \"invalid\", \"price\": 3.2}",
+    "token_count": 78,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_validate_response.get_valid_none"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 46,
+     "rerank_score": -7.114682197570801,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial005_py310.py:10-15",
+    "content": "# docs_src/dependencies/tutorial005_py310.py:10-15  (docs_src.dependencies.tutorial005_py310.query_or_cookie_extractor)\ndef query_or_cookie_extractor(\n    q: str = Depends(query_extractor), last_query: str | None = Cookie(default=None)\n):\n    if not q:\n        return last_query\n    return q",
+    "token_count": 79,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.dependencies.tutorial005_py310.query_or_cookie_extractor"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 49,
+     "rerank_score": -7.127717018127441,
+     "bm25_rank": 23,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/utils.py:4-10",
+    "content": "# fastapi/security/utils.py:4-10  (fastapi.security.utils.get_authorization_scheme_param)\ndef get_authorization_scheme_param(\n    authorization_header_value: Optional[str],\n) -> Tuple[str, str]:\n    if not authorization_header_value:\n        return \"\", \"\"\n    scheme, _, param = authorization_header_value.partition(\" \")\n    return scheme, param",
+    "token_count": 73,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.utils.get_authorization_scheme_param"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 27,
+     "rerank_score": -7.168885231018066,
+     "bm25_rank": 8,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/param_functions.py:11-336",
+    "content": "# fastapi/param_functions.py:11-336  (fastapi.param_functions.Path)\ndef Path(  # noqa: N802\n    default: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Default value if the parameter field is not set.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = ...,\n    *,\n    default_factory: Annotated[\n        Union[Callable[[], Any], None],\n        Doc(\n            \"\"\"\n            A callable to generate the default value.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = _Unset,\n    alias: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            An alternative name for the parameter field.\n\n            This will be used to extract the data and for the generated OpenAPI.\n            It is particularly useful when you can't use the name you want because it\n            is a Python reserved keyword or similar.\n            \"\"\"\n        ),\n    ] = None,\n    alias_priority: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Priority of the alias. This affects whether an alias generator is used.\n            \"\"\"\n        ),\n    ] = _Unset,\n    # TODO: update when deprecating Pydantic v1, import these types\n    # validation_alias: str | AliasPath | AliasChoices | None\n    validation_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Whitelist' validation step. The parameter field will be the single one\n            allowed by the alias or set of aliases defined.\n            \"\"\"\n        ),\n    ] = None,\n    serialization_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Blacklist' validation step. The vanilla parameter field will be the\n            single one of the alias' or set of aliases' fields and all the other\n            fields will be ignored at serialization time.\n            \"\"\"\n        ),\n    ] = None,\n    title: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable title.\n            \"\"\"\n        ),\n    ] = None,\n    description: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable description.\n            \"\"\"\n        ),\n    ] = None,\n    gt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than. If set, value must be greater than this. Only applicable to\n            numbers.\n            \"\"\"\n        ),\n    ] = None,\n    ge: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than or equal. If set, value must be greater than or equal to\n            this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    lt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than. If set, value must be less than this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    le: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than or equal. If set, value must be less than or equal to this.\n            Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    min_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Minimum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    max_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Maximum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    pattern: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n    ] = None,\n    regex: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n        deprecated(\n            \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n        ),\n    ] = None,\n    discriminator: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            Parameter field name for discriminating the type in a tagged union.\n            \"\"\"\n        ),\n    ] = None,\n    strict: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            If `True`, strict validation is applied to the field.\n            \"\"\"\n        ),\n    ] = _Unset,\n    multiple_of: Annotated[\n        Union[float, None],\n        Doc(\n            \"\"\"\n            Value must be a multiple of this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    allow_inf_nan: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            Allow `inf`, `-inf`, `nan`. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    max_digits: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of allow digits for strings.\n            \"\"\"\n        ),\n    ] = _Unset,\n    decimal_places: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of decimal places allowed for numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    examples: Annotated[\n        Optional[List[Any]],\n        Doc(\n            \"\"\"\n            Example values for this field.\n            \"\"\"\n        ),\n    ] = None,\n    example: Annotated[\n        Optional[Any],\n        deprecated(\n            \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n            \"although still supported. Use examples instead.\"\n        ),\n    ] = _Unset,\n    openapi_examples: Annotated[\n        Optional[Dict[str, Example]],\n        Doc(\n            \"\"\"\n            OpenAPI-specific examples.\n\n            It will be added to the generated OpenAPI (e.g. visible at `/docs`).\n\n            Swagger UI (that provides the `/docs` interface) has better support for the\n            OpenAPI-specific examples than the JSON Schema `examples`, that's the main\n            use case for this.\n\n            Read more about it in the\n            [FastAPI docs for Declare Request Example Data](https://fastapi.tiangolo.com/tutorial/schema-extra-example/#using-the-openapi_examples-parameter).\n            \"\"\"\n        ),\n    ] = None,\n    deprecated: Annotated[\n        Union[deprecated, str, bool, None],\n        Doc(\n            \"\"\"\n            Mark this parameter field as deprecated.\n\n            It will affect the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = None,\n    include_in_schema: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            To include (or not) this parameter field in the generated OpenAPI.\n            You probably don't need it, but it's available.\n\n            This affects the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = True,\n    json_schema_extra: Annotated[\n        Union[Dict[str, Any], None],\n        Doc(\n            \"\"\"\n            Any additional JSON schema data.\n            \"\"\"\n        ),\n    ] = None,\n    **extra: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Include extra fields used by the JSON Schema.\n            \"\"\"\n        ),\n        deprecated(\n            \"\"\"\n            The `extra` kwargs is deprecated. Use `json_schema_extra` instead.\n            \"\"\"\n        ),\n    ],\n) -> Any:\n    \"\"\"\n    Declare a path parameter for a *path operation*.\n\n    Read more about it in the\n    [FastAPI docs for Path Parameters and Numeric Validations](https://fastapi.tiangolo.com/tutorial/path-params-numeric-validations/).\n\n    ```python\n    from typing import Annotated\n\n    from fastapi import FastAPI, Path\n\n    app = FastAPI()\n\n\n    @app.get(\"/items/{item_id}\")\n    async def read_items(\n        item_id: Annotated[int, Path(title=\"The ID of the item to get\")],\n    ):\n        return {\"item_id\": item_id}\n    ```\n    \"\"\"\n    return params.Path(\n        default=default,\n        default_factory=default_factory,\n        alias=alias,\n        alias_priority=alias_priority,\n        validation_alias=validation_alias,\n        serialization_alias=serialization_alias,\n        title=title,\n        description=description,\n        gt=gt,\n        ge=ge,\n        lt=lt,\n        le=le,\n        min_length=min_length,\n        max_length=max_length,\n        pattern=pattern,\n        regex=regex,\n        discriminator=discriminator,\n        strict=strict,\n        multiple_of=multiple_of,\n        allow_inf_nan=allow_inf_nan,\n        max_digits=max_digits,\n        decimal_places=decimal_places,\n        example=example,\n        examples=examples,\n        openapi_examples=openapi_examples,\n        deprecated=deprecated,\n        include_in_schema=include_in_schema,\n        json_schema_extra=json_schema_extra,\n        **extra,\n    )",
+    "token_count": 1854,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.param_functions.Path"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 17,
+     "rerank_score": -7.38210391998291,
+     "bm25_rank": 36,
+     "dense_rank": 77,
+     "oversized_chunk": true,
+     "engine_token_count": 1854
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/param_functions.py:339-640",
+    "content": "# fastapi/param_functions.py:339-640  (fastapi.param_functions.Query)\ndef Query(  # noqa: N802\n    default: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Default value if the parameter field is not set.\n            \"\"\"\n        ),\n    ] = Undefined,\n    *,\n    default_factory: Annotated[\n        Union[Callable[[], Any], None],\n        Doc(\n            \"\"\"\n            A callable to generate the default value.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = _Unset,\n    alias: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            An alternative name for the parameter field.\n\n            This will be used to extract the data and for the generated OpenAPI.\n            It is particularly useful when you can't use the name you want because it\n            is a Python reserved keyword or similar.\n            \"\"\"\n        ),\n    ] = None,\n    alias_priority: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Priority of the alias. This affects whether an alias generator is used.\n            \"\"\"\n        ),\n    ] = _Unset,\n    # TODO: update when deprecating Pydantic v1, import these types\n    # validation_alias: str | AliasPath | AliasChoices | None\n    validation_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Whitelist' validation step. The parameter field will be the single one\n            allowed by the alias or set of aliases defined.\n            \"\"\"\n        ),\n    ] = None,\n    serialization_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Blacklist' validation step. The vanilla parameter field will be the\n            single one of the alias' or set of aliases' fields and all the other\n            fields will be ignored at serialization time.\n            \"\"\"\n        ),\n    ] = None,\n    title: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable title.\n            \"\"\"\n        ),\n    ] = None,\n    description: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable description.\n            \"\"\"\n        ),\n    ] = None,\n    gt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than. If set, value must be greater than this. Only applicable to\n            numbers.\n            \"\"\"\n        ),\n    ] = None,\n    ge: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than or equal. If set, value must be greater than or equal to\n            this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    lt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than. If set, value must be less than this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    le: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than or equal. If set, value must be less than or equal to this.\n            Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    min_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Minimum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    max_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Maximum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    pattern: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n    ] = None,\n    regex: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n        deprecated(\n            \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n        ),\n    ] = None,\n    discriminator: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            Parameter field name for discriminating the type in a tagged union.\n            \"\"\"\n        ),\n    ] = None,\n    strict: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            If `True`, strict validation is applied to the field.\n            \"\"\"\n        ),\n    ] = _Unset,\n    multiple_of: Annotated[\n        Union[float, None],\n        Doc(\n            \"\"\"\n            Value must be a multiple of this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    allow_inf_nan: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            Allow `inf`, `-inf`, `nan`. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    max_digits: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of allow digits for strings.\n            \"\"\"\n        ),\n    ] = _Unset,\n    decimal_places: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of decimal places allowed for numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    examples: Annotated[\n        Optional[List[Any]],\n        Doc(\n            \"\"\"\n            Example values for this field.\n            \"\"\"\n        ),\n    ] = None,\n    example: Annotated[\n        Optional[Any],\n        deprecated(\n            \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n            \"although still supported. Use examples instead.\"\n        ),\n    ] = _Unset,\n    openapi_examples: Annotated[\n        Optional[Dict[str, Example]],\n        Doc(\n            \"\"\"\n            OpenAPI-specific examples.\n\n            It will be added to the generated OpenAPI (e.g. visible at `/docs`).\n\n            Swagger UI (that provides the `/docs` interface) has better support for the\n            OpenAPI-specific examples than the JSON Schema `examples`, that's the main\n            use case for this.\n\n            Read more about it in the\n            [FastAPI docs for Declare Request Example Data](https://fastapi.tiangolo.com/tutorial/schema-extra-example/#using-the-openapi_examples-parameter).\n            \"\"\"\n        ),\n    ] = None,\n    deprecated: Annotated[\n        Union[deprecated, str, bool, None],\n        Doc(\n            \"\"\"\n            Mark this parameter field as deprecated.\n\n            It will affect the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = None,\n    include_in_schema: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            To include (or not) this parameter field in the generated OpenAPI.\n            You probably don't need it, but it's available.\n\n            This affects the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = True,\n    json_schema_extra: Annotated[\n        Union[Dict[str, Any], None],\n        Doc(\n            \"\"\"\n            Any additional JSON schema data.\n            \"\"\"\n        ),\n    ] = None,\n    **extra: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Include extra fields used by the JSON Schema.\n            \"\"\"\n        ),\n        deprecated(\n            \"\"\"\n            The `extra` kwargs is deprecated. Use `json_schema_extra` instead.\n            \"\"\"\n        ),\n    ],\n) -> Any:\n    return params.Query(\n        default=default,\n        default_factory=default_factory,\n        alias=alias,\n        alias_priority=alias_priority,\n        validation_alias=validation_alias,\n        serialization_alias=serialization_alias,\n        title=title,\n        description=description,\n        gt=gt,\n        ge=ge,\n        lt=lt,\n        le=le,\n        min_length=min_length,\n        max_length=max_length,\n        pattern=pattern,\n        regex=regex,\n        discriminator=discriminator,\n        strict=strict,\n        multiple_of=multiple_of,\n        allow_inf_nan=allow_inf_nan,\n        max_digits=max_digits,\n        decimal_places=decimal_places,\n        example=example,\n        examples=examples,\n        openapi_examples=openapi_examples,\n        deprecated=deprecated,\n        include_in_schema=include_in_schema,\n        json_schema_extra=json_schema_extra,\n        **extra,\n    )",
+    "token_count": 1699,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.param_functions.Query"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 14,
+     "rerank_score": -7.396072864532471,
+     "bm25_rank": 34,
+     "dense_rank": 71,
+     "oversized_chunk": true,
+     "engine_token_count": 1699
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial005.py:12-18",
+    "content": "# docs_src/dependencies/tutorial005.py:12-18  (docs_src.dependencies.tutorial005.query_or_cookie_extractor)\ndef query_or_cookie_extractor(\n    q: str = Depends(query_extractor),\n    last_query: Union[str, None] = Cookie(default=None),\n):\n    if not q:\n        return last_query\n    return q",
+    "token_count": 74,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.dependencies.tutorial005.query_or_cookie_extractor"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 47,
+     "rerank_score": -7.557655334472656,
+     "bm25_rank": 22,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/params.py:1-15",
+    "content": "# fastapi/params.py:1-15  (fastapi.params)\nimport warnings\nfrom enum import Enum\nfrom typing import Any, Callable, Dict, List, Optional, Sequence, Union\n\nfrom fastapi.openapi.models import Example\nfrom pydantic.fields import FieldInfo\nfrom typing_extensions import Annotated, deprecated\n\nfrom ._compat import (\n    PYDANTIC_V2,\n    PYDANTIC_VERSION_MINOR_TUPLE,\n    Undefined,\n)\n\n_Unset: Any = Undefined",
+    "token_count": 101,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -7.585994720458984,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 101
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/main.py:158-162",
+    "content": "# tests/main.py:158-162  (tests.main.get_query_type_optional)\n@app.get(\"/query/int/optional\")\ndef get_query_type_optional(query: Optional[int] = None):\n    if query is None:\n        return \"foo bar\"\n    return f\"foo bar {query}\"",
+    "token_count": 63,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.main.get_query_type_optional"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 33,
+     "rerank_score": -7.772316932678223,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_ambiguous_params.py:11-30",
+    "content": "# tests/test_ambiguous_params.py:11-30  (tests.test_ambiguous_params.test_no_annotated_defaults)\ndef test_no_annotated_defaults():\n    with pytest.raises(\n        AssertionError, match=\"Path parameters cannot have a default value\"\n    ):\n\n        @app.get(\"/items/{item_id}/\")\n        async def get_item(item_id: Annotated[int, Path(default=1)]):\n            pass  # pragma: nocover\n\n    with pytest.raises(\n        AssertionError,\n        match=(\n            \"`Query` default value cannot be set in `Annotated` for 'item_id'. Set the\"\n            \" default value with `=` instead.\"\n        ),\n    ):\n\n        @app.get(\"/\")\n        async def get(item_id: Annotated[int, Query(default=1)]):\n            pass  # pragma: nocover",
+    "token_count": 169,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_ambiguous_params.test_no_annotated_defaults"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 12,
+     "rerank_score": -7.862033843994141,
+     "bm25_rank": 51,
+     "dense_rank": 38,
+     "oversized_chunk": false,
+     "engine_token_count": 169
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/websockets/tutorial002_py310.py:64-71",
+    "content": "# docs_src/websockets/tutorial002_py310.py:64-71  (docs_src.websockets.tutorial002_py310.get_cookie_or_token)\nasync def get_cookie_or_token(\n    websocket: WebSocket,\n    session: str | None = Cookie(default=None),\n    token: str | None = Query(default=None),\n):\n    if session is None and token is None:\n        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)\n    return session or token",
+    "token_count": 109,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.websockets.tutorial002_py310.get_cookie_or_token"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 36,
+     "rerank_score": -7.942171096801758,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/websockets/tutorial002.py:66-73",
+    "content": "# docs_src/websockets/tutorial002.py:66-73  (docs_src.websockets.tutorial002.get_cookie_or_token)\nasync def get_cookie_or_token(\n    websocket: WebSocket,\n    session: Union[str, None] = Cookie(default=None),\n    token: Union[str, None] = Query(default=None),\n):\n    if session is None and token is None:\n        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)\n    return session or token",
+    "token_count": 105,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.websockets.tutorial002.get_cookie_or_token"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 34,
+     "rerank_score": -8.219533920288086,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 105
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/python_types/tutorial009.py:1-1",
+    "content": "# docs_src/python_types/tutorial009.py:1-1  (docs_src.python_types.tutorial009)\nfrom typing import Optional",
+    "token_count": 30,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": -8.374622344970703,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/python_types/tutorial009c.py:1-1",
+    "content": "# docs_src/python_types/tutorial009c.py:1-1  (docs_src.python_types.tutorial009c)\nfrom typing import Optional",
+    "token_count": 32,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 24,
+     "rerank_score": -8.374622344970703,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 32
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_compat.py:21-26",
+    "content": "# tests/test_compat.py:21-26  (tests.test_compat.test_model_field_default_required)\n@needs_pydanticv2\ndef test_model_field_default_required():\n    # For coverage\n    field_info = FieldInfo(annotation=str)\n    field = ModelField(name=\"foo\", field_info=field_info)\n    assert field.default is Undefined",
+    "token_count": 72,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_compat.test_model_field_default_required"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 21,
+     "rerank_score": -8.392961502075195,
+     "bm25_rank": null,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_skip_defaults.py:37-41",
+    "content": "# tests/test_skip_defaults.py:37-41  (tests.test_skip_defaults.get_exclude_unset)\n@app.get(\n    \"/exclude_unset\", response_model=ModelDefaults, response_model_exclude_unset=True\n)\ndef get_exclude_unset() -> ModelDefaults:\n    return ModelDefaults(x=None, y=\"y\")",
+    "token_count": 63,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_skip_defaults.get_exclude_unset"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 40,
+     "rerank_score": -8.461152076721191,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12965,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "What breaks if `fastapi.utils.get_value_or_default` changes?",
+   "task_type": "T5_blast_radius",
+   "n_chunks_indexed": 5398,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "fastapi/routing.py:882-962",
+    "tests/test_skip_defaults.py:60-67",
+    "tests/test_dependency_class.py:68-72",
+    "tests/test_dependency_class.py:61-65",
+    "fastapi/dependencies/utils.py:740-816"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     28.751185
+    ],
+    "L_embed_query": [
+     110.755231
+    ],
+    "L_dense": [
+     8.153564
+    ],
+    "L_rrf": [
+     0.214697
+    ],
+    "L_rerank": [
+     33375.799864
+    ],
+    "L_retrieve": [
+     33607.696947
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12965,
+   "prompt_tokens": 13126,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13139,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/utils.py:205-220  (fastapi.utils.get_value_or_default)\ndef get_value_or_default(\n    first_item: Union[DefaultPlaceholder, DefaultType],\n    *extra_items: Union[DefaultPlaceholder, DefaultType],\n) -> Union[DefaultPlaceholder, DefaultType]:\n    \"\"\"\n    Pass items or `DefaultPlaceholder`s by descending priority.\n\n    The first one to _not_ be a `DefaultPlaceholder` will be returned.\n\n    Otherwise, the first item (a `DefaultPlaceholder`) will be returned.\n    \"\"\"\n    items = (first_item,) + extra_items\n    for item in items:\n        if not isinstance(item, DefaultPlaceholder):\n            return item\n    return first_item\n\n# fastapi/dependencies/utils.py:355-429#part1of2  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    field_info = None\n    depends = None\n    type_annotation: Any = Any\n    use_annotation: Any = Any\n    if annotation is not inspect.Signature.empty:\n        use_annotation = annotation\n        type_annotation = annotation\n    # Extract Annotated info\n    if get_origin(use_annotation) is Annotated:\n        annotated_args = get_args(annotation)\n        type_annotation = annotated_args[0]\n        fastapi_annotations = [\n            arg\n            for arg in annotated_args[1:]\n            if isinstance(arg, (FieldInfo, params.Depends))\n        ]\n        fastapi_specific_annotations = [\n            arg\n            for arg in fastapi_annotations\n            if isinstance(arg, (params.Param, params.Body, params.Depends))\n        ]\n        if fastapi_specific_annotations:\n            fastapi_annotation: Union[FieldInfo, params.Depends, None] = (\n                fastapi_specific_annotations[-1]\n            )\n        else:\n            fastapi_annotation = None\n        # Set default for Annotated FieldInfo\n        if isinstance(fastapi_annotation, FieldInfo):\n            # Copy `field_info` because we mutate `field_info.default` below.\n            field_info = copy_field_info(\n                field_info=fastapi_annotation, annotation=use_annotation\n            )\n            assert (\n                field_info.default is Undefined or field_info.default is RequiredParam\n            ), (\n                f\"`{field_info.__class__.__name__}` default value cannot be set in\"\n                f\" `Annotated` for {param_name!r}. Set the default value with `=` instead.\"\n            )\n            if value is not inspect.Signature.empty:\n                assert not is_path_param, \"Path parameters cannot have default values\"\n                field_info.default = value\n            else:\n                field_info.default = RequiredParam\n        # Get Annotated Depends\n        elif isinstance(fastapi_annotation, params.Depends):\n            depends = fastapi_annotation\n    # Get Depends from default value\n    if isinstance(value, params.Depends):\n        assert depends is None, (\n            \"Cannot specify `Depends` in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        assert field_info is None, (\n            \"Cannot specify a FastAPI annotation in `Annotated` and `Depends` as a\"\n            f\" default value together for {param_name!r}\"\n        )\n        depends = value\n    # Get FieldInfo from default value\n    elif isinstance(value, FieldInfo):\n        assert field_info is None, (\n            \"Cannot specify FastAPI annotations in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        field_info = value\n        if PYDANTIC_V2:\n            field_info.annotation = type_annotation\n\n    # Get Depends from type annotation\n    if depends is not None and depends.dependency is None:\n        # Copy `depends` before mutating it\n        depends = copy(depends)\n        depends.dependency = type_annotation\n\n    # Handle non-param type annotations like Request\n\n# fastapi/routing.py:1-77  (fastapi.routing)\nimport asyncio\nimport dataclasses\nimport email.message\nimport inspect\nimport json\nfrom contextlib import AsyncExitStack, asynccontextmanager\nfrom enum import Enum, IntEnum\nfrom typing import (\n    Any,\n    AsyncIterator,\n    Callable,\n    Collection,\n    Coroutine,\n    Dict,\n    List,\n    Mapping,\n    Optional,\n    Sequence,\n    Set,\n    Tuple,\n    Type,\n    Union,\n)\n\nfrom fastapi import params\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    _model_dump,\n    _normalize_errors,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import Default, DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _should_embed_body_fields,\n    get_body_field,\n    get_dependant,\n    get_flat_dependant,\n    get_parameterless_sub_dependant,\n    get_typed_return_annotation,\n    solve_dependencies,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.exceptions import (\n    FastAPIError,\n    RequestValidationError,\n    ResponseValidationError,\n    WebSocketRequestValidationError,\n)\nfrom fastapi.types import DecoratedCallable, IncEx\nfrom fastapi.utils import (\n    create_cloned_field,\n    create_model_field,\n    generate_unique_id,\n    get_value_or_default,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette import routing\nfrom starlette.concurrency import run_in_threadpool\nfrom starlette.exceptions import HTTPException\nfrom starlette.requests import Request\nfrom starlette.responses import JSONResponse, Response\nfrom starlette.routing import (\n    BaseRoute,\n    Match,\n    compile_path,\n    get_name,\n    request_response,\n    websocket_session,\n)\nfrom starlette.routing import Mount as Mount  # noqa\nfrom starlette.types import AppType, ASGIApp, Lifespan, Scope\nfrom starlette.websockets import WebSocket\nfrom typing_extensions import Annotated, Doc, deprecated\n\n# fastapi/dependencies/utils.py:430-511#part2of2  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    if lenient_issubclass(\n        type_annotation,\n        (\n            Request,\n            WebSocket,\n            HTTPConnection,\n            Response,\n            StarletteBackgroundTasks,\n            SecurityScopes,\n        ),\n    ):\n        assert depends is None, f\"Cannot specify `Depends` for type {type_annotation!r}\"\n        assert field_info is None, (\n            f\"Cannot specify FastAPI annotation for type {type_annotation!r}\"\n        )\n    # Handle default assignations, neither field_info nor depends was not found in Annotated nor default value\n    elif field_info is None and depends is None:\n        default_value = value if value is not inspect.Signature.empty else RequiredParam\n        if is_path_param:\n            # We might check here that `default_value is RequiredParam`, but the fact is that the same\n            # parameter might sometimes be a path parameter and sometimes not. See\n            # `tests/test_infer_param_optionality.py` for an example.\n            field_info = params.Path(annotation=use_annotation)\n        elif is_uploadfile_or_nonable_uploadfile_annotation(\n            type_annotation\n        ) or is_uploadfile_sequence_annotation(type_annotation):\n            field_info = params.File(annotation=use_annotation, default=default_value)\n        elif not field_annotation_is_scalar(annotation=type_annotation):\n            field_info = params.Body(annotation=use_annotation, default=default_value)\n        else:\n            field_info = params.Query(annotation=use_annotation, default=default_value)\n\n    field = None\n    # It's a field_info, not a dependency\n    if field_info is not None:\n        # Handle field_info.in_\n        if is_path_param:\n            assert isinstance(field_info, params.Path), (\n                f\"Cannot use `{field_info.__class__.__name__}` for path param\"\n                f\" {param_name!r}\"\n            )\n        elif (\n            isinstance(field_info, params.Param)\n            and getattr(field_info, \"in_\", None) is None\n        ):\n            field_info.in_ = params.ParamTypes.query\n        use_annotation_from_field_info = get_annotation_from_field_info(\n            use_annotation,\n            field_info,\n            param_name,\n        )\n        if isinstance(field_info, params.Form):\n            ensure_multipart_is_installed()\n        if not field_info.alias and getattr(field_info, \"convert_underscores\", None):\n            alias = param_name.replace(\"_\", \"-\")\n        else:\n            alias = field_info.alias or param_name\n        field_info.alias = alias\n        field = create_model_field(\n            name=param_name,\n            type_=use_annotation_from_field_info,\n            default=field_info.default,\n            alias=alias,\n            required=field_info.default in (RequiredParam, Undefined),\n            field_info=field_info,\n        )\n        if is_path_param:\n            assert is_scalar_field(field=field), (\n                \"Path params must be of one of the supported types\"\n            )\n        elif isinstance(field_info, params.Query):\n            assert (\n                is_scalar_field(field)\n                or is_scalar_sequence_field(field)\n                or (\n                    lenient_issubclass(field.type_, BaseModel)\n                    # For Pydantic v1\n                    and getattr(field, \"shape\", 1) == 1\n                )\n            )\n\n    return ParamDetails(type_annotation=type_annotation, depends=depends, field=field)\n\n# fastapi/utils.py:63-106  (fastapi.utils.create_model_field)\ndef create_model_field(\n    name: str,\n    type_: Any,\n    class_validators: Optional[Dict[str, Validator]] = None,\n    default: Optional[Any] = Undefined,\n    required: Union[bool, UndefinedType] = Undefined,\n    model_config: Type[BaseConfig] = BaseConfig,\n    field_info: Optional[FieldInfo] = None,\n    alias: Optional[str] = None,\n    mode: Literal[\"validation\", \"serialization\"] = \"validation\",\n) -> ModelField:\n    class_validators = class_validators or {}\n    if PYDANTIC_V2:\n        field_info = field_info or FieldInfo(\n            annotation=type_, default=default, alias=alias\n        )\n    else:\n        field_info = field_info or FieldInfo()\n    kwargs = {\"name\": name, \"field_info\": field_info}\n    if PYDANTIC_V2:\n        kwargs.update({\"mode\": mode})\n    else:\n        kwargs.update(\n            {\n                \"type_\": type_,\n                \"class_validators\": class_validators,\n                \"default\": default,\n                \"required\": required,\n                \"model_config\": model_config,\n                \"alias\": alias,\n            }\n        )\n    try:\n        return ModelField(**kwargs)  # type: ignore[arg-type]\n    except (RuntimeError, PydanticSchemaGenerationError):\n        raise fastapi.exceptions.FastAPIError(\n            \"Invalid args for response field! Hint: \"\n            f\"check that {type_} is a valid Pydantic field type. \"\n            \"If you are using a return type annotation that is not a valid Pydantic \"\n            \"field (e.g. Union[Response, dict, None]) you can disable generating the \"\n            \"response model from the type annotation with the path operation decorator \"\n            \"parameter response_model=None. Read more: \"\n            \"https://fastapi.tiangolo.com/tutorial/response-model/\"\n        ) from None\n\n# fastapi/param_functions.py:643-956  (fastapi.param_functions.Header)\ndef Header(  # noqa: N802\n    default: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Default value if the parameter field is not set.\n            \"\"\"\n        ),\n    ] = Undefined,\n    *,\n    default_factory: Annotated[\n        Union[Callable[[], Any], None],\n        Doc(\n            \"\"\"\n            A callable to generate the default value.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = _Unset,\n    alias: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            An alternative name for the parameter field.\n\n            This will be used to extract the data and for the generated OpenAPI.\n            It is particularly useful when you can't use the name you want because it\n            is a Python reserved keyword or similar.\n            \"\"\"\n        ),\n    ] = None,\n    alias_priority: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Priority of the alias. This affects whether an alias generator is used.\n            \"\"\"\n        ),\n    ] = _Unset,\n    # TODO: update when deprecating Pydantic v1, import these types\n    # validation_alias: str | AliasPath | AliasChoices | None\n    validation_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Whitelist' validation step. The parameter field will be the single one\n            allowed by the alias or set of aliases defined.\n            \"\"\"\n        ),\n    ] = None,\n    serialization_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Blacklist' validation step. The vanilla parameter field will be the\n            single one of the alias' or set of aliases' fields and all the other\n            fields will be ignored at serialization time.\n            \"\"\"\n        ),\n    ] = None,\n    convert_underscores: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Automatically convert underscores to hyphens in the parameter field name.\n\n            Read more about it in the\n            [FastAPI docs for Header Parameters](https://fastapi.tiangolo.com/tutorial/header-params/#automatic-conversion)\n            \"\"\"\n        ),\n    ] = True,\n    title: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable title.\n            \"\"\"\n        ),\n    ] = None,\n    description: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable description.\n            \"\"\"\n        ),\n    ] = None,\n    gt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than. If set, value must be greater than this. Only applicable to\n            numbers.\n            \"\"\"\n        ),\n    ] = None,\n    ge: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than or equal. If set, value must be greater than or equal to\n            this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    lt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than. If set, value must be less than this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    le: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than or equal. If set, value must be less than or equal to this.\n            Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    min_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Minimum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    max_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Maximum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    pattern: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n    ] = None,\n    regex: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n        deprecated(\n            \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n        ),\n    ] = None,\n    discriminator: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            Parameter field name for discriminating the type in a tagged union.\n            \"\"\"\n        ),\n    ] = None,\n    strict: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            If `True`, strict validation is applied to the field.\n            \"\"\"\n        ),\n    ] = _Unset,\n    multiple_of: Annotated[\n        Union[float, None],\n        Doc(\n            \"\"\"\n            Value must be a multiple of this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    allow_inf_nan: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            Allow `inf`, `-inf`, `nan`. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    max_digits: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of allow digits for strings.\n            \"\"\"\n        ),\n    ] = _Unset,\n    decimal_places: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of decimal places allowed for numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    examples: Annotated[\n        Optional[List[Any]],\n        Doc(\n            \"\"\"\n            Example values for this field.\n            \"\"\"\n        ),\n    ] = None,\n    example: Annotated[\n        Optional[Any],\n        deprecated(\n            \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n            \"although still supported. Use examples instead.\"\n        ),\n    ] = _Unset,\n    openapi_examples: Annotated[\n        Optional[Dict[str, Example]],\n        Doc(\n            \"\"\"\n            OpenAPI-specific examples.\n\n            It will be added to the generated OpenAPI (e.g. visible at `/docs`).\n\n            Swagger UI (that provides the `/docs` interface) has better support for the\n            OpenAPI-specific examples than the JSON Schema `examples`, that's the main\n            use case for this.\n\n            Read more about it in the\n            [FastAPI docs for Declare Request Example Data](https://fastapi.tiangolo.com/tutorial/schema-extra-example/#using-the-openapi_examples-parameter).\n            \"\"\"\n        ),\n    ] = None,\n    deprecated: Annotated[\n        Union[deprecated, str, bool, None],\n        Doc(\n            \"\"\"\n            Mark this parameter field as deprecated.\n\n            It will affect the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = None,\n    include_in_schema: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            To include (or not) this parameter field in the generated OpenAPI.\n            You probably don't need it, but it's available.\n\n            This affects the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = True,\n    json_schema_extra: Annotated[\n        Union[Dict[str, Any], None],\n        Doc(\n            \"\"\"\n            Any additional JSON schema data.\n            \"\"\"\n        ),\n    ] = None,\n    **extra: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Include extra fields used by the JSON Schema.\n            \"\"\"\n        ),\n        deprecated(\n            \"\"\"\n            The `extra` kwargs is deprecated. Use `json_schema_extra` instead.\n            \"\"\"\n        ),\n    ],\n) -> Any:\n    return params.Header(\n        default=default,\n        default_factory=default_factory,\n        alias=alias,\n        alias_priority=alias_priority,\n        validation_alias=validation_alias,\n        serialization_alias=serialization_alias,\n        convert_underscores=convert_underscores,\n        title=title,\n        description=description,\n        gt=gt,\n        ge=ge,\n        lt=lt,\n        le=le,\n        min_length=min_length,\n        max_length=max_length,\n        pattern=pattern,\n        regex=regex,\n        discriminator=discriminator,\n        strict=strict,\n        multiple_of=multiple_of,\n        allow_inf_nan=allow_inf_nan,\n        max_digits=max_digits,\n        decimal_places=decimal_places,\n        example=example,\n        examples=examples,\n        openapi_examples=openapi_examples,\n        deprecated=deprecated,\n        include_in_schema=include_in_schema,\n        json_schema_extra=json_schema_extra,\n        **extra,\n    )\n\n# fastapi/params.py:75-115#part1of2  (fastapi.params.Param.__init__)\nclass Param(FieldInfo):\n    def __init__(\n        self,\n        default: Any = Undefined,\n        *,\n        default_factory: Union[Callable[[], Any], None] = _Unset,\n        annotation: Optional[Any] = None,\n        alias: Optional[str] = None,\n        alias_priority: Union[int, None] = _Unset,\n        # TODO: update when deprecating Pydantic v1, import these types\n        # validation_alias: str | AliasPath | AliasChoices | None\n        validation_alias: Union[str, None] = None,\n        serialization_alias: Union[str, None] = None,\n        title: Optional[str] = None,\n        description: Optional[str] = None,\n        gt: Optional[float] = None,\n        ge: Optional[float] = None,\n        lt: Optional[float] = None,\n        le: Optional[float] = None,\n        min_length: Optional[int] = None,\n        max_length: Optional[int] = None,\n        pattern: Optional[str] = None,\n        regex: Annotated[\n            Optional[str],\n            deprecated(\n                \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n            ),\n        ] = None,\n        discriminator: Union[str, None] = None,\n        strict: Union[bool, None] = _Unset,\n        multiple_of: Union[float, None] = _Unset,\n        allow_inf_nan: Union[bool, None] = _Unset,\n        max_digits: Union[int, None] = _Unset,\n        decimal_places: Union[int, None] = _Unset,\n        examples: Optional[List[Any]] = None,\n        example: Annotated[\n            Optional[Any],\n            deprecated(\n                \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n                \"although still supported. Use examples instead.\"\n            ),\n        ] = _Unset,\n        openapi_examples: Optional[Dict[str, Example]] = None,\n        deprecated: Union[deprecated, str, bool, None] = None,\n        include_in_schema: bool = True,\n        json_schema_extra: Union[Dict[str, Any], None] = None,\n        **extra: Any,\n    ):\n        if example is not _Unset:\n            warnings.warn(\n                \"`example` has been deprecated, please use `examples` instead\",\n                category=DeprecationWarning,\n                stacklevel=4,\n            )\n        self.example = example\n        self.include_in_schema = include_in_schema\n        self.openapi_examples = openapi_examples\n        kwargs = dict(\n            default=default,\n            default_factory=default_factory,\n            alias=alias,\n            title=title,\n            description=description,\n            gt=gt,\n            ge=ge,\n            lt=lt,\n            le=le,\n            min_length=min_length,\n            max_length=max_length,\n            discriminator=discriminator,\n            multiple_of=multiple_of,\n            allow_inf_nan=allow_inf_nan,\n            max_digits=max_digits,\n            decimal_places=decimal_places,\n            **extra,\n        )\n        if examples is not None:\n            kwargs[\"examples\"] = examples\n        if regex is not None:\n            warnings.warn(\n                \"`regex` has been deprecated, please use `pattern` instead\",\n                category=DeprecationWarning,\n                stacklevel=4,\n            )\n        current_json_schema_extra = json_schema_extra or extra\n        if PYDANTIC_VERSION_MINOR_TUPLE < (2, 7):\n            self.deprecated = deprecated\n        else:\n            kwargs[\"deprecated\"] = deprecated\n\n# tests/test_datastructures.py:22-26  (tests.test_datastructures.test_default_placeholder_equals)\ndef test_default_placeholder_equals():\n    placeholder_1 = Default(\"a\")\n    placeholder_2 = Default(\"a\")\n    assert placeholder_1 == placeholder_2\n    assert placeholder_1.value == placeholder_2.value\n\n# tests/test_http_connection_injection.py:14-16  (tests.test_http_connection_injection.get_value_by_http)\n@app.get(\"/http\")\nasync def get_value_by_http(value: int = Depends(extract_value_from_http_connection)):\n    return value\n\n# fastapi/datastructures.py:184-185  (fastapi.datastructures.DefaultPlaceholder.__init__)\nclass DefaultPlaceholder:\n    def __init__(self, value: Any):\n        self.value = value\n\n# fastapi/datastructures.py:187-188  (fastapi.datastructures.DefaultPlaceholder.__bool__)\nclass DefaultPlaceholder:\n    def __bool__(self) -> bool:\n        return bool(self.value)\n\n# fastapi/datastructures.py:177-182  (fastapi.datastructures.DefaultPlaceholder)\nclass DefaultPlaceholder:\n    \"\"\"\n    You shouldn't use this class directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n\n# docs_src/dependencies/tutorial005.py:21-23  (docs_src.dependencies.tutorial005.read_query)\n@app.get(\"/items/\")\nasync def read_query(query_or_default: str = Depends(query_or_cookie_extractor)):\n    return {\"q_or_cookie\": query_or_default}\n\n# docs_src/dependencies/tutorial005_py310.py:18-20  (docs_src.dependencies.tutorial005_py310.read_query)\n@app.get(\"/items/\")\nasync def read_query(query_or_default: str = Depends(query_or_cookie_extractor)):\n    return {\"q_or_cookie\": query_or_default}\n\n# tests/main.py:165-167  (tests.main.get_query_type_int_default)\n@app.get(\"/query/int/default\")\ndef get_query_type_int_default(query: int = 10):\n    return f\"foo bar {query}\"\n\n# tests/test_annotated.py:10-12  (tests.test_annotated.default)\n@app.get(\"/default\")\nasync def default(foo: Annotated[str, Query()] = \"foo\"):\n    return {\"foo\": foo}\n\n# fastapi/dependencies/utils.py:716-737  (fastapi.dependencies.utils._get_multidict_value)\ndef _get_multidict_value(\n    field: ModelField, values: Mapping[str, Any], alias: Union[str, None] = None\n) -> Any:\n    alias = alias or field.alias\n    if is_sequence_field(field) and isinstance(values, (ImmutableMultiDict, Headers)):\n        value = values.getlist(alias)\n    else:\n        value = values.get(alias, None)\n    if (\n        value is None\n        or (\n            isinstance(field.field_info, params.Form)\n            and isinstance(value, str)  # For type checks\n            and value == \"\"\n        )\n        or (is_sequence_field(field) and len(value) == 0)\n    ):\n        if field.required:\n            return\n        else:\n            return deepcopy(field.default)\n    return value\n\n# fastapi/datastructures.py:197-204  (fastapi.datastructures.Default)\ndef Default(value: DefaultType) -> DefaultType:\n    \"\"\"\n    You shouldn't use this function directly.\n\n    It's used internally to recognize when a default value has been overwritten, even\n    if the overridden default value was truthy.\n    \"\"\"\n    return DefaultPlaceholder(value)  # type: ignore\n\n# docs_src/dependencies/tutorial005_an.py:22-26  (docs_src.dependencies.tutorial005_an.read_query)\n@app.get(\"/items/\")\nasync def read_query(\n    query_or_default: Annotated[str, Depends(query_or_cookie_extractor)],\n):\n    return {\"q_or_cookie\": query_or_default}\n\n# docs_src/dependencies/tutorial005_an_py310.py:21-25  (docs_src.dependencies.tutorial005_an_py310.read_query)\n@app.get(\"/items/\")\nasync def read_query(\n    query_or_default: Annotated[str, Depends(query_or_cookie_extractor)],\n):\n    return {\"q_or_cookie\": query_or_default}\n\n# docs_src/dependencies/tutorial005_an_py39.py:21-25  (docs_src.dependencies.tutorial005_an_py39.read_query)\n@app.get(\"/items/\")\nasync def read_query(\n    query_or_default: Annotated[str, Depends(query_or_cookie_extractor)],\n):\n    return {\"q_or_cookie\": query_or_default}\n\n# fastapi/utils.py:42-56  (fastapi.utils.is_body_allowed_for_status_code)\ndef is_body_allowed_for_status_code(status_code: Union[int, str, None]) -> bool:\n    if status_code is None:\n        return True\n    # Ref: https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#patterned-fields-1\n    if status_code in {\n        \"default\",\n        \"1XX\",\n        \"2XX\",\n        \"3XX\",\n        \"4XX\",\n        \"5XX\",\n    }:\n        return True\n    current_status_code = int(status_code)\n    return not (current_status_code < 200 or current_status_code in {204, 205, 304})\n\n# tests/test_skip_defaults.py:44-50  (tests.test_skip_defaults.get_exclude_defaults)\n@app.get(\n    \"/exclude_defaults\",\n    response_model=ModelDefaults,\n    response_model_exclude_defaults=True,\n)\ndef get_exclude_defaults() -> ModelDefaults:\n    return ModelDefaults(x=None, y=\"y\")\n\n# tests/main.py:170-174  (tests.main.get_query_param)\n@app.get(\"/query/param\")\ndef get_query_param(query=Query(default=None)):\n    if query is None:\n        return \"foo bar\"\n    return f\"foo bar {query}\"\n\n# tests/test_include_router_defaults_overrides.py:159-161  (tests.test_include_router_defaults_overrides.path1_default)\n@app.get(\"/default1\")\nasync def path1_default(level1: str):\n    return level1\n\n# tests/test_dependency_class.py:51-53  (tests.test_dependency_class.get_callable_dependency)\n@app.get(\"/callable-dependency\")\nasync def get_callable_dependency(value: str = Depends(callable_dependency)):\n    return value\n\n# tests/test_openapi_query_parameter_extension.py:1-7  (tests.test_openapi_query_parameter_extension)\nfrom typing import Optional\n\nfrom dirty_equals import IsDict\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# fastapi/dependencies/utils.py:698-713  (fastapi.dependencies.utils._validate_value_with_model_field)\ndef _validate_value_with_model_field(\n    *, field: ModelField, value: Any, values: Dict[str, Any], loc: Tuple[str, ...]\n) -> Tuple[Any, List[Any]]:\n    if value is None:\n        if field.required:\n            return None, [get_missing_field_error(loc=loc)]\n        else:\n            return deepcopy(field.default), []\n    v_, errors_ = field.validate(value, values, loc=loc)\n    if isinstance(errors_, ErrorWrapper):\n        return None, [errors_]\n    elif isinstance(errors_, list):\n        new_errors = _regenerate_error_with_loc(errors=errors_, loc_prefix=())\n        return None, new_errors\n    else:\n        return v_, []\n\n# tests/test_dependency_class.py:56-58  (tests.test_dependency_class.get_callable_gen_dependency)\n@app.get(\"/callable-gen-dependency\")\nasync def get_callable_gen_dependency(value: str = Depends(callable_gen_dependency)):\n    return value\n\n# fastapi/param_functions.py:959-1260  (fastapi.param_functions.Cookie)\ndef Cookie(  # noqa: N802\n    default: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Default value if the parameter field is not set.\n            \"\"\"\n        ),\n    ] = Undefined,\n    *,\n    default_factory: Annotated[\n        Union[Callable[[], Any], None],\n        Doc(\n            \"\"\"\n            A callable to generate the default value.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = _Unset,\n    alias: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            An alternative name for the parameter field.\n\n            This will be used to extract the data and for the generated OpenAPI.\n            It is particularly useful when you can't use the name you want because it\n            is a Python reserved keyword or similar.\n            \"\"\"\n        ),\n    ] = None,\n    alias_priority: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Priority of the alias. This affects whether an alias generator is used.\n            \"\"\"\n        ),\n    ] = _Unset,\n    # TODO: update when deprecating Pydantic v1, import these types\n    # validation_alias: str | AliasPath | AliasChoices | None\n    validation_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Whitelist' validation step. The parameter field will be the single one\n            allowed by the alias or set of aliases defined.\n            \"\"\"\n        ),\n    ] = None,\n    serialization_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Blacklist' validation step. The vanilla parameter field will be the\n            single one of the alias' or set of aliases' fields and all the other\n            fields will be ignored at serialization time.\n            \"\"\"\n        ),\n    ] = None,\n    title: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable title.\n            \"\"\"\n        ),\n    ] = None,\n    description: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable description.\n            \"\"\"\n        ),\n    ] = None,\n    gt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than. If set, value must be greater than this. Only applicable to\n            numbers.\n            \"\"\"\n        ),\n    ] = None,\n    ge: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than or equal. If set, value must be greater than or equal to\n            this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    lt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than. If set, value must be less than this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    le: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than or equal. If set, value must be less than or equal to this.\n            Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    min_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Minimum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    max_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Maximum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    pattern: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n    ] = None,\n    regex: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n        deprecated(\n            \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n        ),\n    ] = None,\n    discriminator: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            Parameter field name for discriminating the type in a tagged union.\n            \"\"\"\n        ),\n    ] = None,\n    strict: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            If `True`, strict validation is applied to the field.\n            \"\"\"\n        ),\n    ] = _Unset,\n    multiple_of: Annotated[\n        Union[float, None],\n        Doc(\n            \"\"\"\n            Value must be a multiple of this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    allow_inf_nan: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            Allow `inf`, `-inf`, `nan`. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    max_digits: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of allow digits for strings.\n            \"\"\"\n        ),\n    ] = _Unset,\n    decimal_places: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of decimal places allowed for numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    examples: Annotated[\n        Optional[List[Any]],\n        Doc(\n            \"\"\"\n            Example values for this field.\n            \"\"\"\n        ),\n    ] = None,\n    example: Annotated[\n        Optional[Any],\n        deprecated(\n            \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n            \"although still supported. Use examples instead.\"\n        ),\n    ] = _Unset,\n    openapi_examples: Annotated[\n        Optional[Dict[str, Example]],\n        Doc(\n            \"\"\"\n            OpenAPI-specific examples.\n\n            It will be added to the generated OpenAPI (e.g. visible at `/docs`).\n\n            Swagger UI (that provides the `/docs` interface) has better support for the\n            OpenAPI-specific examples than the JSON Schema `examples`, that's the main\n            use case for this.\n\n            Read more about it in the\n            [FastAPI docs for Declare Request Example Data](https://fastapi.tiangolo.com/tutorial/schema-extra-example/#using-the-openapi_examples-parameter).\n            \"\"\"\n        ),\n    ] = None,\n    deprecated: Annotated[\n        Union[deprecated, str, bool, None],\n        Doc(\n            \"\"\"\n            Mark this parameter field as deprecated.\n\n            It will affect the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = None,\n    include_in_schema: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            To include (or not) this parameter field in the generated OpenAPI.\n            You probably don't need it, but it's available.\n\n            This affects the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = True,\n    json_schema_extra: Annotated[\n        Union[Dict[str, Any], None],\n        Doc(\n            \"\"\"\n            Any additional JSON schema data.\n            \"\"\"\n        ),\n    ] = None,\n    **extra: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Include extra fields used by the JSON Schema.\n            \"\"\"\n        ),\n        deprecated(\n            \"\"\"\n            The `extra` kwargs is deprecated. Use `json_schema_extra` instead.\n            \"\"\"\n        ),\n    ],\n) -> Any:\n    return params.Cookie(\n        default=default,\n        default_factory=default_factory,\n        alias=alias,\n        alias_priority=alias_priority,\n        validation_alias=validation_alias,\n        serialization_alias=serialization_alias,\n        title=title,\n        description=description,\n        gt=gt,\n        ge=ge,\n        lt=lt,\n        le=le,\n        min_length=min_length,\n        max_length=max_length,\n        pattern=pattern,\n        regex=regex,\n        discriminator=discriminator,\n        strict=strict,\n        multiple_of=multiple_of,\n        allow_inf_nan=allow_inf_nan,\n        max_digits=max_digits,\n        decimal_places=decimal_places,\n        example=example,\n        examples=examples,\n        openapi_examples=openapi_examples,\n        deprecated=deprecated,\n        include_in_schema=include_in_schema,\n        json_schema_extra=json_schema_extra,\n        **extra,\n    )\n\n# tests/test_validate_response.py:28-33  (tests.test_validate_response.get_valid_none)\n@app.get(\"/items/validnone\", response_model=Union[Item, None])\ndef get_valid_none(send_none: bool = False):\n    if send_none:\n        return None\n    else:\n        return {\"name\": \"invalid\", \"price\": 3.2}\n\n# docs_src/dependencies/tutorial005_py310.py:10-15  (docs_src.dependencies.tutorial005_py310.query_or_cookie_extractor)\ndef query_or_cookie_extractor(\n    q: str = Depends(query_extractor), last_query: str | None = Cookie(default=None)\n):\n    if not q:\n        return last_query\n    return q\n\n# fastapi/security/utils.py:4-10  (fastapi.security.utils.get_authorization_scheme_param)\ndef get_authorization_scheme_param(\n    authorization_header_value: Optional[str],\n) -> Tuple[str, str]:\n    if not authorization_header_value:\n        return \"\", \"\"\n    scheme, _, param = authorization_header_value.partition(\" \")\n    return scheme, param\n\n# fastapi/param_functions.py:11-336  (fastapi.param_functions.Path)\ndef Path(  # noqa: N802\n    default: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Default value if the parameter field is not set.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = ...,\n    *,\n    default_factory: Annotated[\n        Union[Callable[[], Any], None],\n        Doc(\n            \"\"\"\n            A callable to generate the default value.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = _Unset,\n    alias: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            An alternative name for the parameter field.\n\n            This will be used to extract the data and for the generated OpenAPI.\n            It is particularly useful when you can't use the name you want because it\n            is a Python reserved keyword or similar.\n            \"\"\"\n        ),\n    ] = None,\n    alias_priority: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Priority of the alias. This affects whether an alias generator is used.\n            \"\"\"\n        ),\n    ] = _Unset,\n    # TODO: update when deprecating Pydantic v1, import these types\n    # validation_alias: str | AliasPath | AliasChoices | None\n    validation_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Whitelist' validation step. The parameter field will be the single one\n            allowed by the alias or set of aliases defined.\n            \"\"\"\n        ),\n    ] = None,\n    serialization_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Blacklist' validation step. The vanilla parameter field will be the\n            single one of the alias' or set of aliases' fields and all the other\n            fields will be ignored at serialization time.\n            \"\"\"\n        ),\n    ] = None,\n    title: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable title.\n            \"\"\"\n        ),\n    ] = None,\n    description: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable description.\n            \"\"\"\n        ),\n    ] = None,\n    gt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than. If set, value must be greater than this. Only applicable to\n            numbers.\n            \"\"\"\n        ),\n    ] = None,\n    ge: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than or equal. If set, value must be greater than or equal to\n            this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    lt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than. If set, value must be less than this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    le: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than or equal. If set, value must be less than or equal to this.\n            Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    min_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Minimum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    max_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Maximum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    pattern: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n    ] = None,\n    regex: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n        deprecated(\n            \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n        ),\n    ] = None,\n    discriminator: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            Parameter field name for discriminating the type in a tagged union.\n            \"\"\"\n        ),\n    ] = None,\n    strict: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            If `True`, strict validation is applied to the field.\n            \"\"\"\n        ),\n    ] = _Unset,\n    multiple_of: Annotated[\n        Union[float, None],\n        Doc(\n            \"\"\"\n            Value must be a multiple of this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    allow_inf_nan: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            Allow `inf`, `-inf`, `nan`. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    max_digits: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of allow digits for strings.\n            \"\"\"\n        ),\n    ] = _Unset,\n    decimal_places: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of decimal places allowed for numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    examples: Annotated[\n        Optional[List[Any]],\n        Doc(\n            \"\"\"\n            Example values for this field.\n            \"\"\"\n        ),\n    ] = None,\n    example: Annotated[\n        Optional[Any],\n        deprecated(\n            \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n            \"although still supported. Use examples instead.\"\n        ),\n    ] = _Unset,\n    openapi_examples: Annotated[\n        Optional[Dict[str, Example]],\n        Doc(\n            \"\"\"\n            OpenAPI-specific examples.\n\n            It will be added to the generated OpenAPI (e.g. visible at `/docs`).\n\n            Swagger UI (that provides the `/docs` interface) has better support for the\n            OpenAPI-specific examples than the JSON Schema `examples`, that's the main\n            use case for this.\n\n            Read more about it in the\n            [FastAPI docs for Declare Request Example Data](https://fastapi.tiangolo.com/tutorial/schema-extra-example/#using-the-openapi_examples-parameter).\n            \"\"\"\n        ),\n    ] = None,\n    deprecated: Annotated[\n        Union[deprecated, str, bool, None],\n        Doc(\n            \"\"\"\n            Mark this parameter field as deprecated.\n\n            It will affect the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = None,\n    include_in_schema: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            To include (or not) this parameter field in the generated OpenAPI.\n            You probably don't need it, but it's available.\n\n            This affects the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = True,\n    json_schema_extra: Annotated[\n        Union[Dict[str, Any], None],\n        Doc(\n            \"\"\"\n            Any additional JSON schema data.\n            \"\"\"\n        ),\n    ] = None,\n    **extra: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Include extra fields used by the JSON Schema.\n            \"\"\"\n        ),\n        deprecated(\n            \"\"\"\n            The `extra` kwargs is deprecated. Use `json_schema_extra` instead.\n            \"\"\"\n        ),\n    ],\n) -> Any:\n    \"\"\"\n    Declare a path parameter for a *path operation*.\n\n    Read more about it in the\n    [FastAPI docs for Path Parameters and Numeric Validations](https://fastapi.tiangolo.com/tutorial/path-params-numeric-validations/).\n\n    ```python\n    from typing import Annotated\n\n    from fastapi import FastAPI, Path\n\n    app = FastAPI()\n\n\n    @app.get(\"/items/{item_id}\")\n    async def read_items(\n        item_id: Annotated[int, Path(title=\"The ID of the item to get\")],\n    ):\n        return {\"item_id\": item_id}\n    ```\n    \"\"\"\n    return params.Path(\n        default=default,\n        default_factory=default_factory,\n        alias=alias,\n        alias_priority=alias_priority,\n        validation_alias=validation_alias,\n        serialization_alias=serialization_alias,\n        title=title,\n        description=description,\n        gt=gt,\n        ge=ge,\n        lt=lt,\n        le=le,\n        min_length=min_length,\n        max_length=max_length,\n        pattern=pattern,\n        regex=regex,\n        discriminator=discriminator,\n        strict=strict,\n        multiple_of=multiple_of,\n        allow_inf_nan=allow_inf_nan,\n        max_digits=max_digits,\n        decimal_places=decimal_places,\n        example=example,\n        examples=examples,\n        openapi_examples=openapi_examples,\n        deprecated=deprecated,\n        include_in_schema=include_in_schema,\n        json_schema_extra=json_schema_extra,\n        **extra,\n    )\n\n# fastapi/param_functions.py:339-640  (fastapi.param_functions.Query)\ndef Query(  # noqa: N802\n    default: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Default value if the parameter field is not set.\n            \"\"\"\n        ),\n    ] = Undefined,\n    *,\n    default_factory: Annotated[\n        Union[Callable[[], Any], None],\n        Doc(\n            \"\"\"\n            A callable to generate the default value.\n\n            This doesn't affect `Path` parameters as the value is always required.\n            The parameter is available only for compatibility.\n            \"\"\"\n        ),\n    ] = _Unset,\n    alias: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            An alternative name for the parameter field.\n\n            This will be used to extract the data and for the generated OpenAPI.\n            It is particularly useful when you can't use the name you want because it\n            is a Python reserved keyword or similar.\n            \"\"\"\n        ),\n    ] = None,\n    alias_priority: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Priority of the alias. This affects whether an alias generator is used.\n            \"\"\"\n        ),\n    ] = _Unset,\n    # TODO: update when deprecating Pydantic v1, import these types\n    # validation_alias: str | AliasPath | AliasChoices | None\n    validation_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Whitelist' validation step. The parameter field will be the single one\n            allowed by the alias or set of aliases defined.\n            \"\"\"\n        ),\n    ] = None,\n    serialization_alias: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            'Blacklist' validation step. The vanilla parameter field will be the\n            single one of the alias' or set of aliases' fields and all the other\n            fields will be ignored at serialization time.\n            \"\"\"\n        ),\n    ] = None,\n    title: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable title.\n            \"\"\"\n        ),\n    ] = None,\n    description: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            Human-readable description.\n            \"\"\"\n        ),\n    ] = None,\n    gt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than. If set, value must be greater than this. Only applicable to\n            numbers.\n            \"\"\"\n        ),\n    ] = None,\n    ge: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Greater than or equal. If set, value must be greater than or equal to\n            this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    lt: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than. If set, value must be less than this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    le: Annotated[\n        Optional[float],\n        Doc(\n            \"\"\"\n            Less than or equal. If set, value must be less than or equal to this.\n            Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = None,\n    min_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Minimum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    max_length: Annotated[\n        Optional[int],\n        Doc(\n            \"\"\"\n            Maximum length for strings.\n            \"\"\"\n        ),\n    ] = None,\n    pattern: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n    ] = None,\n    regex: Annotated[\n        Optional[str],\n        Doc(\n            \"\"\"\n            RegEx pattern for strings.\n            \"\"\"\n        ),\n        deprecated(\n            \"Deprecated in FastAPI 0.100.0 and Pydantic v2, use `pattern` instead.\"\n        ),\n    ] = None,\n    discriminator: Annotated[\n        Union[str, None],\n        Doc(\n            \"\"\"\n            Parameter field name for discriminating the type in a tagged union.\n            \"\"\"\n        ),\n    ] = None,\n    strict: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            If `True`, strict validation is applied to the field.\n            \"\"\"\n        ),\n    ] = _Unset,\n    multiple_of: Annotated[\n        Union[float, None],\n        Doc(\n            \"\"\"\n            Value must be a multiple of this. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    allow_inf_nan: Annotated[\n        Union[bool, None],\n        Doc(\n            \"\"\"\n            Allow `inf`, `-inf`, `nan`. Only applicable to numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    max_digits: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of allow digits for strings.\n            \"\"\"\n        ),\n    ] = _Unset,\n    decimal_places: Annotated[\n        Union[int, None],\n        Doc(\n            \"\"\"\n            Maximum number of decimal places allowed for numbers.\n            \"\"\"\n        ),\n    ] = _Unset,\n    examples: Annotated[\n        Optional[List[Any]],\n        Doc(\n            \"\"\"\n            Example values for this field.\n            \"\"\"\n        ),\n    ] = None,\n    example: Annotated[\n        Optional[Any],\n        deprecated(\n            \"Deprecated in OpenAPI 3.1.0 that now uses JSON Schema 2020-12, \"\n            \"although still supported. Use examples instead.\"\n        ),\n    ] = _Unset,\n    openapi_examples: Annotated[\n        Optional[Dict[str, Example]],\n        Doc(\n            \"\"\"\n            OpenAPI-specific examples.\n\n            It will be added to the generated OpenAPI (e.g. visible at `/docs`).\n\n            Swagger UI (that provides the `/docs` interface) has better support for the\n            OpenAPI-specific examples than the JSON Schema `examples`, that's the main\n            use case for this.\n\n            Read more about it in the\n            [FastAPI docs for Declare Request Example Data](https://fastapi.tiangolo.com/tutorial/schema-extra-example/#using-the-openapi_examples-parameter).\n            \"\"\"\n        ),\n    ] = None,\n    deprecated: Annotated[\n        Union[deprecated, str, bool, None],\n        Doc(\n            \"\"\"\n            Mark this parameter field as deprecated.\n\n            It will affect the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = None,\n    include_in_schema: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            To include (or not) this parameter field in the generated OpenAPI.\n            You probably don't need it, but it's available.\n\n            This affects the generated OpenAPI (e.g. visible at `/docs`).\n            \"\"\"\n        ),\n    ] = True,\n    json_schema_extra: Annotated[\n        Union[Dict[str, Any], None],\n        Doc(\n            \"\"\"\n            Any additional JSON schema data.\n            \"\"\"\n        ),\n    ] = None,\n    **extra: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            Include extra fields used by the JSON Schema.\n            \"\"\"\n        ),\n        deprecated(\n            \"\"\"\n            The `extra` kwargs is deprecated. Use `json_schema_extra` instead.\n            \"\"\"\n        ),\n    ],\n) -> Any:\n    return params.Query(\n        default=default,\n        default_factory=default_factory,\n        alias=alias,\n        alias_priority=alias_priority,\n        validation_alias=validation_alias,\n        serialization_alias=serialization_alias,\n        title=title,\n        description=description,\n        gt=gt,\n        ge=ge,\n        lt=lt,\n        le=le,\n        min_length=min_length,\n        max_length=max_length,\n        pattern=pattern,\n        regex=regex,\n        discriminator=discriminator,\n        strict=strict,\n        multiple_of=multiple_of,\n        allow_inf_nan=allow_inf_nan,\n        max_digits=max_digits,\n        decimal_places=decimal_places,\n        example=example,\n        examples=examples,\n        openapi_examples=openapi_examples,\n        deprecated=deprecated,\n        include_in_schema=include_in_schema,\n        json_schema_extra=json_schema_extra,\n        **extra,\n    )\n\n# docs_src/dependencies/tutorial005.py:12-18  (docs_src.dependencies.tutorial005.query_or_cookie_extractor)\ndef query_or_cookie_extractor(\n    q: str = Depends(query_extractor),\n    last_query: Union[str, None] = Cookie(default=None),\n):\n    if not q:\n        return last_query\n    return q\n\n# fastapi/params.py:1-15  (fastapi.params)\nimport warnings\nfrom enum import Enum\nfrom typing import Any, Callable, Dict, List, Optional, Sequence, Union\n\nfrom fastapi.openapi.models import Example\nfrom pydantic.fields import FieldInfo\nfrom typing_extensions import Annotated, deprecated\n\nfrom ._compat import (\n    PYDANTIC_V2,\n    PYDANTIC_VERSION_MINOR_TUPLE,\n    Undefined,\n)\n\n_Unset: Any = Undefined\n\n# tests/main.py:158-162  (tests.main.get_query_type_optional)\n@app.get(\"/query/int/optional\")\ndef get_query_type_optional(query: Optional[int] = None):\n    if query is None:\n        return \"foo bar\"\n    return f\"foo bar {query}\"\n\n# tests/test_ambiguous_params.py:11-30  (tests.test_ambiguous_params.test_no_annotated_defaults)\ndef test_no_annotated_defaults():\n    with pytest.raises(\n        AssertionError, match=\"Path parameters cannot have a default value\"\n    ):\n\n        @app.get(\"/items/{item_id}/\")\n        async def get_item(item_id: Annotated[int, Path(default=1)]):\n            pass  # pragma: nocover\n\n    with pytest.raises(\n        AssertionError,\n        match=(\n            \"`Query` default value cannot be set in `Annotated` for 'item_id'. Set the\"\n            \" default value with `=` instead.\"\n        ),\n    ):\n\n        @app.get(\"/\")\n        async def get(item_id: Annotated[int, Query(default=1)]):\n            pass  # pragma: nocover\n\n# docs_src/websockets/tutorial002_py310.py:64-71  (docs_src.websockets.tutorial002_py310.get_cookie_or_token)\nasync def get_cookie_or_token(\n    websocket: WebSocket,\n    session: str | None = Cookie(default=None),\n    token: str | None = Query(default=None),\n):\n    if session is None and token is None:\n        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)\n    return session or token\n\n# docs_src/websockets/tutorial002.py:66-73  (docs_src.websockets.tutorial002.get_cookie_or_token)\nasync def get_cookie_or_token(\n    websocket: WebSocket,\n    session: Union[str, None] = Cookie(default=None),\n    token: Union[str, None] = Query(default=None),\n):\n    if session is None and token is None:\n        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)\n    return session or token\n\n# docs_src/python_types/tutorial009.py:1-1  (docs_src.python_types.tutorial009)\nfrom typing import Optional\n\n# docs_src/python_types/tutorial009c.py:1-1  (docs_src.python_types.tutorial009c)\nfrom typing import Optional\n\n# tests/test_compat.py:21-26  (tests.test_compat.test_model_field_default_required)\n@needs_pydanticv2\ndef test_model_field_default_required():\n    # For coverage\n    field_info = FieldInfo(annotation=str)\n    field = ModelField(name=\"foo\", field_info=field_info)\n    assert field.default is Undefined\n\n# tests/test_skip_defaults.py:37-41  (tests.test_skip_defaults.get_exclude_unset)\n@app.get(\n    \"/exclude_unset\", response_model=ModelDefaults, response_model_exclude_unset=True\n)\ndef get_exclude_unset() -> ModelDefaults:\n    return ModelDefaults(x=None, y=\"y\")\n\n## Task\n\nWhat breaks if `fastapi.utils.get_value_or_default` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

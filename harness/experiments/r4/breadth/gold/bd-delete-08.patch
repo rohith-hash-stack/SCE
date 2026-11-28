@@ -1,0 +1,329 @@
+diff --git a/src/werkzeug/_reloader.py b/src/werkzeug/_reloader.py
+index dcc1697c..562d8b07 100644
+--- a/src/werkzeug/_reloader.py
++++ b/src/werkzeug/_reloader.py
+@@ -166,65 +166,6 @@ def _find_common_roots(paths: t.Iterable[str]) -> t.Iterable[str]:
+     return rv
+ 
+ 
+-def _get_args_for_reloading() -> list[str]:
+-    """Determine how the script was executed, and return the args needed
+-    to execute it again in a new process.
+-    """
+-    if sys.version_info >= (3, 10):
+-        # sys.orig_argv, added in Python 3.10, contains the exact args used to invoke
+-        # Python. Still replace argv[0] with sys.executable for accuracy.
+-        return [sys.executable, *sys.orig_argv[1:]]
+-
+-    rv = [sys.executable]
+-    py_script = sys.argv[0]
+-    args = sys.argv[1:]
+-    # Need to look at main module to determine how it was executed.
+-    __main__ = sys.modules["__main__"]
+-
+-    # The value of __package__ indicates how Python was called. It may
+-    # not exist if a setuptools script is installed as an egg. It may be
+-    # set incorrectly for entry points created with pip on Windows.
+-    if getattr(__main__, "__package__", None) is None or (
+-        os.name == "nt"
+-        and __main__.__package__ == ""
+-        and not os.path.exists(py_script)
+-        and os.path.exists(f"{py_script}.exe")
+-    ):
+-        # Executed a file, like "python app.py".
+-        py_script = os.path.abspath(py_script)
+-
+-        if os.name == "nt":
+-            # Windows entry points have ".exe" extension and should be
+-            # called directly.
+-            if not os.path.exists(py_script) and os.path.exists(f"{py_script}.exe"):
+-                py_script += ".exe"
+-
+-            if (
+-                os.path.splitext(sys.executable)[1] == ".exe"
+-                and os.path.splitext(py_script)[1] == ".exe"
+-            ):
+-                rv.pop(0)
+-
+-        rv.append(py_script)
+-    else:
+-        # Executed a module, like "python -m werkzeug.serving".
+-        if os.path.isfile(py_script):
+-            # Rewritten by Python from "-m script" to "/path/to/script.py".
+-            py_module = t.cast(str, __main__.__package__)
+-            name = os.path.splitext(os.path.basename(py_script))[0]
+-
+-            if name != "__main__":
+-                py_module += f".{name}"
+-        else:
+-            # Incorrectly rewritten by pydevd debugger from "-m script" to "script".
+-            py_module = py_script
+-
+-        rv.extend(("-m", py_module.lstrip(".")))
+-
+-    rv.extend(args)
+-    return rv
+-
+-
+ class ReloaderLoop:
+     name = ""
+ 
+@@ -269,7 +210,7 @@ class ReloaderLoop:
+         """
+         while True:
+             _log("info", f" * Restarting with {self.name}")
+-            args = _get_args_for_reloading()
++            args = [sys.executable, *sys.orig_argv[1:]]
+             new_environ = os.environ.copy()
+             new_environ["WERKZEUG_RUN_MAIN"] = "true"
+             exit_code = subprocess.call(args, env=new_environ, close_fds=False)
+diff --git a/src/werkzeug/datastructures/cache_control.py b/src/werkzeug/datastructures/cache_control.py
+index 3d963102..abfbf520 100644
+--- a/src/werkzeug/datastructures/cache_control.py
++++ b/src/werkzeug/datastructures/cache_control.py
+@@ -53,7 +53,7 @@ def cache_control_property(
+     )
+ 
+ 
+-class _CacheControl(CallbackDict[str, t.Optional[str]]):
++class _CacheControl(CallbackDict[str, str | None]):
+     """Subclass of a dict that stores values for a Cache-Control header.  It
+     has accessors for all the cache-control directives specified in RFC 2616.
+     The class does not differentiate between request and response directives.
+@@ -154,7 +154,7 @@ class _CacheControl(CallbackDict[str, t.Optional[str]]):
+     cache_property = staticmethod(cache_control_property)
+ 
+ 
+-class RequestCacheControl(ImmutableDictMixin[str, t.Optional[str]], _CacheControl):  # type: ignore[misc]
++class RequestCacheControl(ImmutableDictMixin[str, str | None], _CacheControl):  # type: ignore[misc]
+     """A cache control for requests.  This is immutable and gives access
+     to all the request-relevant cache control headers.
+ 
+diff --git a/src/werkzeug/debug/tbtools.py b/src/werkzeug/debug/tbtools.py
+index ca4acf60..36dcb80d 100644
+--- a/src/werkzeug/debug/tbtools.py
++++ b/src/werkzeug/debug/tbtools.py
+@@ -154,7 +154,7 @@ def _process_traceback(
+     # Match each frame with the FrameSummary that was generated.
+     # Hide frames using Paste's __traceback_hide__ rules. Replace
+     # all visible FrameSummary with DebugFrameSummary.
+-    for (f, _), fs in zip(frame_gen, te.stack):
++    for (f, _), fs in zip(frame_gen, te.stack, strict=True):
+         if hide:
+             hide_value = f.f_locals.get("__traceback_hide__", False)
+ 
+diff --git a/src/werkzeug/middleware/shared_data.py b/src/werkzeug/middleware/shared_data.py
+index c7c06df5..c632649e 100644
+--- a/src/werkzeug/middleware/shared_data.py
++++ b/src/werkzeug/middleware/shared_data.py
+@@ -31,7 +31,7 @@ from ..wsgi import get_path_info
+ from ..wsgi import wrap_file
+ 
+ _TOpener = t.Callable[[], tuple[t.IO[bytes], datetime, int]]
+-_TLoader = t.Callable[[t.Optional[str]], tuple[t.Optional[str], t.Optional[_TOpener]]]
++_TLoader = t.Callable[[str | None], tuple[str | None, _TOpener | None]]
+ 
+ if t.TYPE_CHECKING:
+     from _typeshed.wsgi import StartResponse
+diff --git a/src/werkzeug/routing/matcher.py b/src/werkzeug/routing/matcher.py
+index 1fd00efc..9174061b 100644
+--- a/src/werkzeug/routing/matcher.py
++++ b/src/werkzeug/routing/matcher.py
+@@ -185,7 +185,7 @@ class StateMachineMatcher:
+             rule, values = rv
+ 
+             result = {}
+-            for name, value in zip(rule._converters.keys(), values):
++            for name, value in zip(rule._converters.keys(), values, strict=True):
+                 try:
+                     value = rule._converters[name].to_python(value)
+                 except ValidationError:
+diff --git a/src/werkzeug/serving.py b/src/werkzeug/serving.py
+index 3b2c236f..0ae6d044 100644
+--- a/src/werkzeug/serving.py
++++ b/src/werkzeug/serving.py
+@@ -80,8 +80,8 @@ except AttributeError:
+ 
+ LISTEN_QUEUE = 128
+ 
+-_TSSLContextArg = t.Optional[
+-    t.Union["ssl.SSLContext", tuple[str, t.Optional[str]], t.Literal["adhoc"]]
++_TSSLContextArg = t.Union[
++    "ssl.SSLContext", tuple[str, str | None], t.Literal["adhoc"], None
+ ]
+ 
+ if t.TYPE_CHECKING:
+@@ -396,7 +396,7 @@ class WSGIRequestHandler(BaseHTTPRequestHandler):
+         """Handles a request ignoring dropped connections."""
+         try:
+             super().handle()
+-        except (ConnectionError, socket.timeout) as e:
++        except (ConnectionError, TimeoutError) as e:
+             self.connection_dropped(e)
+         except Exception as e:
+             if self.server.ssl_context is not None and is_ssl_error(e):
+@@ -715,7 +715,7 @@ class BaseWSGIServer(HTTPServer):
+         app: WSGIApplication,
+         handler: type[WSGIRequestHandler] | None = None,
+         passthrough_errors: bool = False,
+-        ssl_context: _TSSLContextArg | None = None,
++        ssl_context: _TSSLContextArg = None,
+         fd: int | None = None,
+     ) -> None:
+         if handler is None:
+@@ -893,7 +893,7 @@ class ForkingWSGIServer(ForkingMixIn, BaseWSGIServer):
+         processes: int = 40,
+         handler: type[WSGIRequestHandler] | None = None,
+         passthrough_errors: bool = False,
+-        ssl_context: _TSSLContextArg | None = None,
++        ssl_context: _TSSLContextArg = None,
+         fd: int | None = None,
+     ) -> None:
+         if not can_fork:
+@@ -911,7 +911,7 @@ def make_server(
+     processes: int = 1,
+     request_handler: type[WSGIRequestHandler] | None = None,
+     passthrough_errors: bool = False,
+-    ssl_context: _TSSLContextArg | None = None,
++    ssl_context: _TSSLContextArg = None,
+     fd: int | None = None,
+ ) -> BaseWSGIServer:
+     """Create an appropriate WSGI server instance based on the value of
+@@ -973,7 +973,7 @@ def run_simple(
+     request_handler: type[WSGIRequestHandler] | None = None,
+     static_files: dict[str, str | tuple[str, str]] | None = None,
+     passthrough_errors: bool = False,
+-    ssl_context: _TSSLContextArg | None = None,
++    ssl_context: _TSSLContextArg = None,
+ ) -> None:
+     """Start a development server for a WSGI application. Various
+     optional features can be enabled.
+diff --git a/tests/sansio/test_request.py b/tests/sansio/test_request.py
+index 4f4bbd6b..b8363f00 100644
+--- a/tests/sansio/test_request.py
++++ b/tests/sansio/test_request.py
+@@ -1,5 +1,3 @@
+-import typing as t
+-
+ import pytest
+ 
+ from werkzeug.datastructures import Headers
+@@ -19,7 +17,7 @@ from werkzeug.sansio.request import Request
+         (Headers(), None),
+     ],
+ )
+-def test_content_length(headers: Headers, expected: t.Optional[int]) -> None:
++def test_content_length(headers: Headers, expected: int | None) -> None:
+     req = Request("POST", "http", None, "", "", b"", headers, None)
+     assert req.content_length == expected
+ 
+diff --git a/tests/test_datastructures.py b/tests/test_datastructures.py
+index 0cd49743..34d8dbfe 100644
+--- a/tests/test_datastructures.py
++++ b/tests/test_datastructures.py
+@@ -28,13 +28,17 @@ class TestNativeItermethods:
+ 
+             def items(self, multi=1):
+                 return iter(
+-                    zip(iter(self.keys(multi=multi)), iter(self.values(multi=multi)))
++                    zip(
++                        iter(self.keys(multi=multi)),
++                        iter(self.values(multi=multi)),
++                        strict=True,
++                    )
+                 )
+ 
+         d = StupidDict()
+         expected_keys = ["a", "b", "c"]
+         expected_values = [1, 2, 3]
+-        expected_items = list(zip(expected_keys, expected_values))
++        expected_items = list(zip(expected_keys, expected_values, strict=True))
+ 
+         assert list(d.keys()) == expected_keys
+         assert list(d.values()) == expected_values
+@@ -426,9 +430,9 @@ class TestMultiDict(_MutableMultiDictTests):
+             ("c", 3),
+         ]
+         md = self.storage_class(mapping)
+-        assert list(zip(md.keys(), md.listvalues())) == list(md.lists())
+-        assert list(zip(md, md.listvalues())) == list(md.lists())
+-        assert list(zip(md.keys(), md.listvalues())) == list(md.lists())
++        assert list(zip(md.keys(), md.listvalues(), strict=True)) == list(md.lists())
++        assert list(zip(md, md.listvalues(), strict=True)) == list(md.lists())
++        assert list(zip(md.keys(), md.listvalues(), strict=True)) == list(md.lists())
+ 
+     def test_getitem_raise_badrequestkeyerror_for_empty_list_value(self):
+         mapping = [("a", "b"), ("a", "c")]
+diff --git a/tests/test_debug.py b/tests/test_debug.py
+index c5b2e152..4004576a 100644
+--- a/tests/test_debug.py
++++ b/tests/test_debug.py
+@@ -73,7 +73,7 @@ class TestDebugRepr:
+             '</span></span>: <span class="value"><span class="number">42'
+             "</span></span></span>}"
+         )
+-        assert debug_repr(dict(zip(range(10), [None] * 10))) == (
++        assert debug_repr(dict(zip(range(10), [None] * 10, strict=True))) == (
+             '{<span class="pair"><span class="key"><span class="number">0'
+             '</span></span>: <span class="value"><span class="object">None'
+             "</span></span></span>, "
+diff --git a/tests/test_security.py b/tests/test_security.py
+index a40628bc..58a67ec0 100644
+--- a/tests/test_security.py
++++ b/tests/test_security.py
+@@ -1,5 +1,4 @@
+ import os
+-import sys
+ 
+ import pytest
+ 
+@@ -13,9 +12,6 @@ def test_default_password_method():
+     assert value.startswith("scrypt:")
+ 
+ 
+-@pytest.mark.xfail(
+-    sys.implementation.name == "pypy", reason="scrypt unavailable on pypy"
+-)
+ def test_scrypt():
+     value = generate_password_hash("secret", method="scrypt")
+     assert check_password_hash(value, "secret")
+diff --git a/tests/test_serving.py b/tests/test_serving.py
+index 5a3b35dc..72a3a2b0 100644
+--- a/tests/test_serving.py
++++ b/tests/test_serving.py
+@@ -8,7 +8,6 @@ import os
+ import shutil
+ import socket
+ import ssl
+-import sys
+ import typing as t
+ from importlib.metadata import PackageNotFoundError
+ from io import BytesIO
+@@ -21,7 +20,6 @@ import pytest
+ from werkzeug import run_simple
+ from werkzeug._reloader import _find_stat_paths
+ from werkzeug._reloader import _find_watchdog_paths
+-from werkzeug._reloader import _get_args_for_reloading
+ from werkzeug._reloader import WatchdogReloaderLoop
+ from werkzeug.datastructures import FileStorage
+ from werkzeug.serving import make_ssl_devcert
+@@ -184,19 +182,6 @@ def test_watchdog_reloader_ignores_closed_no_write(mock_trigger_reload: Mock) ->
+     mock_trigger_reload.assert_not_called()
+ 
+ 
+-@pytest.mark.skipif(sys.version_info >= (3, 10), reason="not needed on >= 3.10")
+-def test_windows_get_args_for_reloading(
+-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+-) -> None:
+-    argv = [str(tmp_path / "test.exe"), "run"]
+-    monkeypatch.setattr("sys.executable", str(tmp_path / "python.exe"))
+-    monkeypatch.setattr("sys.argv", argv)
+-    monkeypatch.setattr("__main__.__package__", None)
+-    monkeypatch.setattr("os.name", "nt")
+-    rv = _get_args_for_reloading()
+-    assert rv == argv
+-
+-
+ @pytest.mark.parametrize("find", [_find_stat_paths, _find_watchdog_paths])
+ def test_exclude_patterns(
+     find: t.Callable[[set[str], set[str]], cabc.Iterable[str]],

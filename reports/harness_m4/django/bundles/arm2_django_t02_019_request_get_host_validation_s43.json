@@ -1,0 +1,2207 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_019_request_get_host_validation",
+  "items": [
+   {
+    "source_id": "django/http/request.py:131-151",
+    "content": "# django/http/request.py:131-151  (django.http.request.HttpRequest.get_host)\nclass HttpRequest:\n    def get_host(self):\n        \"\"\"Return the HTTP host using the environment or request headers.\"\"\"\n        host = self._get_raw_host()\n\n        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.\n        allowed_hosts = settings.ALLOWED_HOSTS\n        if settings.DEBUG and not allowed_hosts:\n            allowed_hosts = [\".localhost\", \"127.0.0.1\", \"[::1]\"]\n\n        domain, port = split_domain_port(host)\n        if domain and validate_host(domain, allowed_hosts):\n            return host\n        else:\n            msg = \"Invalid HTTP_HOST header: %r.\" % host\n            if domain:\n                msg += \" You may need to add %r to ALLOWED_HOSTS.\" % domain\n            else:\n                msg += (\n                    \" The domain name provided is not valid according to RFC 1034/1035.\"\n                )\n            raise DisallowedHost(msg)",
+    "token_count": 221,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.get_host"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 221
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:113-129",
+    "content": "# django/http/request.py:113-129  (django.http.request.HttpRequest._get_raw_host)\nclass HttpRequest:\n    def _get_raw_host(self):\n        \"\"\"\n        Return the HTTP host using the environment or request headers. Skip\n        allowed hosts protection, so may return an insecure host.\n        \"\"\"\n        # We try three options, in order of decreasing preference.\n        if settings.USE_X_FORWARDED_HOST and (\"HTTP_X_FORWARDED_HOST\" in self.META):\n            host = self.META[\"HTTP_X_FORWARDED_HOST\"]\n        elif \"HTTP_HOST\" in self.META:\n            host = self.META[\"HTTP_HOST\"]\n        else:\n            # Reconstruct the host using the algorithm from PEP 333.\n            host = self.META[\"SERVER_NAME\"]\n            server_port = self.get_port()\n            if server_port != (\"443\" if self.is_secure() else \"80\"):\n                host = \"%s:%s\" % (host, server_port)\n        return host",
+    "token_count": 211,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._get_raw_host"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 211
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:153-159",
+    "content": "# django/http/request.py:153-159  (django.http.request.HttpRequest.get_port)\nclass HttpRequest:\n    def get_port(self):\n        \"\"\"Return the port number for the request as a string.\"\"\"\n        if settings.USE_X_FORWARDED_PORT and \"HTTP_X_FORWARDED_PORT\" in self.META:\n            port = self.META[\"HTTP_X_FORWARDED_PORT\"]\n        else:\n            port = self.META[\"SERVER_PORT\"]\n        return str(port)",
+    "token_count": 98,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.get_port"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:100-111",
+    "content": "# django/http/request.py:100-111  (django.http.request.HttpRequest._set_content_type_params)\nclass HttpRequest:\n    def _set_content_type_params(self, meta):\n        \"\"\"Set content_type, content_params, and encoding.\"\"\"\n        self.content_type, self.content_params = parse_header_parameters(\n            meta.get(\"CONTENT_TYPE\", \"\")\n        )\n        if \"charset\" in self.content_params:\n            try:\n                codecs.lookup(self.content_params[\"charset\"])\n            except LookupError:\n                pass\n            else:\n                self.encoding = self.content_params[\"charset\"]",
+    "token_count": 118,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._set_content_type_params"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 118
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:161-162",
+    "content": "# django/http/request.py:161-162  (django.http.request.HttpRequest.get_full_path)\nclass HttpRequest:\n    def get_full_path(self, force_append_slash=False):\n        return self._get_full_path(self.path, force_append_slash)",
+    "token_count": 55,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.get_full_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:95-98",
+    "content": "# django/http/request.py:95-98  (django.http.request.HttpRequest.accepts)\nclass HttpRequest:\n    def accepts(self, media_type):\n        return any(\n            accepted_type.match(media_type) for accepted_type in self.accepted_types\n        )",
+    "token_count": 54,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.accepts"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:164-165",
+    "content": "# django/http/request.py:164-165  (django.http.request.HttpRequest.get_full_path_info)\nclass HttpRequest:\n    def get_full_path_info(self, force_append_slash=False):\n        return self._get_full_path(self.path_info, force_append_slash)",
+    "token_count": 58,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.get_full_path_info"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:90-93",
+    "content": "# django/http/request.py:90-93  (django.http.request.HttpRequest.accepted_types)\nclass HttpRequest:\n    @cached_property\n    def accepted_types(self):\n        \"\"\"Return a list of MediaType instances.\"\"\"\n        return parse_accept_header(self.headers.get(\"Accept\", \"*/*\"))",
+    "token_count": 59,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.accepted_types"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:167-176",
+    "content": "# django/http/request.py:167-176  (django.http.request.HttpRequest._get_full_path)\nclass HttpRequest:\n    def _get_full_path(self, path, force_append_slash):\n        # RFC 3986 requires query string arguments to be in the ASCII range.\n        # Rather than crash if this doesn't happen, we encode defensively.\n        return \"%s%s%s\" % (\n            escape_uri_path(path),\n            \"/\" if force_append_slash and not path.endswith(\"/\") else \"\",\n            (\"?\" + iri_to_uri(self.META.get(\"QUERY_STRING\", \"\")))\n            if self.META.get(\"QUERY_STRING\", \"\")\n            else \"\",\n        )",
+    "token_count": 140,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._get_full_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:86-88",
+    "content": "# django/http/request.py:86-88  (django.http.request.HttpRequest.headers)\nclass HttpRequest:\n    @cached_property\n    def headers(self):\n        return HttpHeaders(self.META)",
+    "token_count": 40,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.headers"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:178-200",
+    "content": "# django/http/request.py:178-200  (django.http.request.HttpRequest.get_signed_cookie)\nclass HttpRequest:\n    def get_signed_cookie(self, key, default=RAISE_ERROR, salt=\"\", max_age=None):\n        \"\"\"\n        Attempt to return a signed cookie. If the signature fails or the\n        cookie has expired, raise an exception, unless the `default` argument\n        is provided,  in which case return that value.\n        \"\"\"\n        try:\n            cookie_value = self.COOKIES[key]\n        except KeyError:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        try:\n            value = signing.get_cookie_signer(salt=key + salt).unsign(\n                cookie_value, max_age=max_age\n            )\n        except signing.BadSignature:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        return value",
+    "token_count": 190,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.get_signed_cookie"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 190
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:77-84",
+    "content": "# django/http/request.py:77-84  (django.http.request.HttpRequest.__repr__)\nclass HttpRequest:\n    def __repr__(self):\n        if self.method is None or not self.get_full_path():\n            return \"<%s>\" % self.__class__.__name__\n        return \"<%s: %s %r>\" % (\n            self.__class__.__name__,\n            self.method,\n            self.get_full_path(),\n        )",
+    "token_count": 89,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.__repr__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:202-241",
+    "content": "# django/http/request.py:202-241  (django.http.request.HttpRequest.build_absolute_uri)\nclass HttpRequest:\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)",
+    "token_count": 442,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.build_absolute_uri"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 442
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:59-75",
+    "content": "# django/http/request.py:59-75  (django.http.request.HttpRequest.__init__)\nclass HttpRequest:\n    def __init__(self):\n        # WARNING: The `WSGIRequest` subclass doesn't call `super`.\n        # Any variable assignment made here should also happen in\n        # `WSGIRequest.__init__()`.\n\n        self.GET = QueryDict(mutable=True)\n        self.POST = QueryDict(mutable=True)\n        self.COOKIES = {}\n        self.META = {}\n        self.FILES = MultiValueDict()\n\n        self.path = \"\"\n        self.path_info = \"\"\n        self.method = None\n        self.resolver_match = None\n        self.content_type = None\n        self.content_params = None",
+    "token_count": 150,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.__init__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 150
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:243-245",
+    "content": "# django/http/request.py:243-245  (django.http.request.HttpRequest._current_scheme_host)\nclass HttpRequest:\n    @cached_property\n    def _current_scheme_host(self):\n        return \"{}://{}\".format(self.scheme, self.get_host())",
+    "token_count": 54,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._current_scheme_host"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:53-428",
+    "content": "# django/http/request.py:53-428  (django.http.request.HttpRequest)\nclass HttpRequest:\n    \"\"\"A basic HTTP request.\"\"\"\n\n    # The encoding used in GET/POST dicts. None means use default setting.\n    _encoding = None\n    _upload_handlers = []\n\n    def __init__(self):\n        # WARNING: The `WSGIRequest` subclass doesn't call `super`.\n        # Any variable assignment made here should also happen in\n        # `WSGIRequest.__init__()`.\n\n        self.GET = QueryDict(mutable=True)\n        self.POST = QueryDict(mutable=True)\n        self.COOKIES = {}\n        self.META = {}\n        self.FILES = MultiValueDict()\n\n        self.path = \"\"\n        self.path_info = \"\"\n        self.method = None\n        self.resolver_match = None\n        self.content_type = None\n        self.content_params = None\n\n    def __repr__(self):\n        if self.method is None or not self.get_full_path():\n            return \"<%s>\" % self.__class__.__name__\n        return \"<%s: %s %r>\" % (\n            self.__class__.__name__,\n            self.method,\n            self.get_full_path(),\n        )\n\n    @cached_property\n    def headers(self):\n        return HttpHeaders(self.META)\n\n    @cached_property\n    def accepted_types(self):\n        \"\"\"Return a list of MediaType instances.\"\"\"\n        return parse_accept_header(self.headers.get(\"Accept\", \"*/*\"))\n\n    def accepts(self, media_type):\n        return any(\n            accepted_type.match(media_type) for accepted_type in self.accepted_types\n        )\n\n    def _set_content_type_params(self, meta):\n        \"\"\"Set content_type, content_params, and encoding.\"\"\"\n        self.content_type, self.content_params = parse_header_parameters(\n            meta.get(\"CONTENT_TYPE\", \"\")\n        )\n        if \"charset\" in self.content_params:\n            try:\n                codecs.lookup(self.content_params[\"charset\"])\n            except LookupError:\n                pass\n            else:\n                self.encoding = self.content_params[\"charset\"]\n\n    def _get_raw_host(self):\n        \"\"\"\n        Return the HTTP host using the environment or request headers. Skip\n        allowed hosts protection, so may return an insecure host.\n        \"\"\"\n        # We try three options, in order of decreasing preference.\n        if settings.USE_X_FORWARDED_HOST and (\"HTTP_X_FORWARDED_HOST\" in self.META):\n            host = self.META[\"HTTP_X_FORWARDED_HOST\"]\n        elif \"HTTP_HOST\" in self.META:\n            host = self.META[\"HTTP_HOST\"]\n        else:\n            # Reconstruct the host using the algorithm from PEP 333.\n            host = self.META[\"SERVER_NAME\"]\n            server_port = self.get_port()\n            if server_port != (\"443\" if self.is_secure() else \"80\"):\n                host = \"%s:%s\" % (host, server_port)\n        return host\n\n    def get_host(self):\n        \"\"\"Return the HTTP host using the environment or request headers.\"\"\"\n        host = self._get_raw_host()\n\n        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.\n        allowed_hosts = settings.ALLOWED_HOSTS\n        if settings.DEBUG and not allowed_hosts:\n            allowed_hosts = [\".localhost\", \"127.0.0.1\", \"[::1]\"]\n\n        domain, port = split_domain_port(host)\n        if domain and validate_host(domain, allowed_hosts):\n            return host\n        else:\n            msg = \"Invalid HTTP_HOST header: %r.\" % host\n            if domain:\n                msg += \" You may need to add %r to ALLOWED_HOSTS.\" % domain\n            else:\n                msg += (\n                    \" The domain name provided is not valid according to RFC 1034/1035.\"\n                )\n            raise DisallowedHost(msg)\n\n    def get_port(self):\n        \"\"\"Return the port number for the request as a string.\"\"\"\n        if settings.USE_X_FORWARDED_PORT and \"HTTP_X_FORWARDED_PORT\" in self.META:\n            port = self.META[\"HTTP_X_FORWARDED_PORT\"]\n        else:\n            port = self.META[\"SERVER_PORT\"]\n        return str(port)\n\n    def get_full_path(self, force_append_slash=False):\n        return self._get_full_path(self.path, force_append_slash)\n\n    def get_full_path_info(self, force_append_slash=False):\n        return self._get_full_path(self.path_info, force_append_slash)\n\n    def _get_full_path(self, path, force_append_slash):\n        # RFC 3986 requires query string arguments to be in the ASCII range.\n        # Rather than crash if this doesn't happen, we encode defensively.\n        return \"%s%s%s\" % (\n            escape_uri_path(path),\n            \"/\" if force_append_slash and not path.endswith(\"/\") else \"\",\n            (\"?\" + iri_to_uri(self.META.get(\"QUERY_STRING\", \"\")))\n            if self.META.get(\"QUERY_STRING\", \"\")\n            else \"\",\n        )\n\n    def get_signed_cookie(self, key, default=RAISE_ERROR, salt=\"\", max_age=None):\n        \"\"\"\n        Attempt to return a signed cookie. If the signature fails or the\n        cookie has expired, raise an exception, unless the `default` argument\n        is provided,  in which case return that value.\n        \"\"\"\n        try:\n            cookie_value = self.COOKIES[key]\n        except KeyError:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        try:\n            value = signing.get_cookie_signer(salt=key + salt).unsign(\n                cookie_value, max_age=max_age\n            )\n        except signing.BadSignature:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        return value\n\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)\n\n    @cached_property\n    def _current_scheme_host(self):\n        return \"{}://{}\".format(self.scheme, self.get_host())\n\n    def _get_scheme(self):\n        \"\"\"\n        Hook for subclasses like WSGIRequest to implement. Return 'http' by\n        default.\n        \"\"\"\n        return \"http\"\n\n    @property\n    def scheme(self):\n        if settings.SECURE_PROXY_SSL_HEADER:\n            try:\n                header, secure_value = settings.SECURE_PROXY_SSL_HEADER\n            except ValueError:\n                raise ImproperlyConfigured(\n                    \"The SECURE_PROXY_SSL_HEADER setting must be a tuple containing \"\n                    \"two values.\"\n                )\n            header_value = self.META.get(header)\n            if header_value is not None:\n                header_value, *_ = header_value.split(\",\", 1)\n                return \"https\" if header_value.strip() == secure_value else \"http\"\n        return self._get_scheme()\n\n    def is_secure(self):\n        return self.scheme == \"https\"\n\n    @property\n    def encoding(self):\n        return self._encoding\n\n    @encoding.setter\n    def encoding(self, val):\n        \"\"\"\n        Set the encoding used for GET/POST accesses. If the GET or POST\n        dictionary has already been created, remove and recreate it on the\n        next access (so that it is decoded correctly).\n        \"\"\"\n        self._encoding = val\n        if hasattr(self, \"GET\"):\n            del self.GET\n        if hasattr(self, \"_post\"):\n            del self._post\n\n    def _initialize_handlers(self):\n        self._upload_handlers = [\n            uploadhandler.load_handler(handler, self)\n            for handler in settings.FILE_UPLOAD_HANDLERS\n        ]\n\n    @property\n    def upload_handlers(self):\n        if not self._upload_handlers:\n            # If there are no upload handlers defined, initialize them from settings.\n            self._initialize_handlers()\n        return self._upload_handlers\n\n    @upload_handlers.setter\n    def upload_handlers(self, upload_handlers):\n        if hasattr(self, \"_files\"):\n            raise AttributeError(\n                \"You cannot set the upload handlers after the upload has been \"\n                \"processed.\"\n            )\n        self._upload_handlers = upload_handlers\n\n    def parse_file_upload(self, META, post_data):\n        \"\"\"Return a tuple of (POST QueryDict, FILES MultiValueDict).\"\"\"\n        self.upload_handlers = ImmutableList(\n            self.upload_handlers,\n            warning=(\n                \"You cannot alter upload handlers after the upload has been \"\n                \"processed.\"\n            ),\n        )\n        parser = MultiPartParser(META, post_data, self.upload_handlers, self.encoding)\n        return parser.parse()\n\n    @property\n    def body(self):\n        if not hasattr(self, \"_body\"):\n            if self._read_started:\n                raise RawPostDataException(\n                    \"You cannot access body after reading from request's data stream\"\n                )\n\n            # Limit the maximum request data size that will be handled\n            # in-memory. Reject early when Content-Length is present and\n            # already exceeds the limit, avoiding reading the body at all.\n            self._check_data_too_big(int(self.META.get(\"CONTENT_LENGTH\") or 0))\n\n            # Content-Length can be absent or understated (e.g.\n            # `Transfer-Encoding: chunked` on ASGI), so for seekable\n            # streams (e.g. SpooledTemporaryFile on ASGI), check the actual\n            # buffered size before reading it all into memory.\n            if hasattr(self._stream, \"seekable\") and self._stream.seekable():\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n                did_check = True\n            else:\n                did_check = False\n\n            try:\n                if settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None and not did_check:\n                    # Read one byte past the limit to detect an oversize body\n                    # without loading it all into memory first.\n                    self._body = self.read(settings.DATA_UPLOAD_MAX_MEMORY_SIZE + 1)\n                else:\n                    self._body = self.read()\n            except OSError as e:\n                raise UnreadablePostError(*e.args) from e\n            finally:\n                self._stream.close()\n            self._stream = BytesIO(self._body)\n            if not did_check:\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n        return self._body\n\n    def _check_data_too_big(self, length):\n        if (\n            settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None\n            and length > settings.DATA_UPLOAD_MAX_MEMORY_SIZE\n        ):\n            msg = \"Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.\"\n            raise RequestDataTooBig(msg)\n\n    def _mark_post_parse_error(self):\n        self._post = QueryDict()\n        self._files = MultiValueDict()\n\n    def _load_post_and_files(self):\n        \"\"\"Populate self._post and self._files if the content-type is a form type\"\"\"\n        if self.method != \"POST\":\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n            return\n        if self._read_started and not hasattr(self, \"_body\"):\n            self._mark_post_parse_error()\n            return\n\n        if self.content_type == \"multipart/form-data\":\n            if hasattr(self, \"_body\"):\n                # Use already read data\n                data = BytesIO(self._body)\n            else:\n                data = self\n            try:\n                self._post, self._files = self.parse_file_upload(self.META, data)\n            except (MultiPartParserError, TooManyFilesSent):\n                # An error occurred while parsing POST data. Since when\n                # formatting the error the request handler might access\n                # self.POST, set self._post and self._file to prevent\n                # attempts to parse POST data again.\n                self._mark_post_parse_error()\n                raise\n        elif self.content_type == \"application/x-www-form-urlencoded\":\n            self._post, self._files = (\n                QueryDict(self.body, encoding=self._encoding),\n                MultiValueDict(),\n            )\n        else:\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n\n    def close(self):\n        if hasattr(self, \"_files\"):\n            for f in chain.from_iterable(list_[1] for list_ in self._files.lists()):\n                f.close()\n\n    # File-like and iterator interface.\n    #\n    # Expects self._stream to be set to an appropriate source of bytes by\n    # a corresponding request subclass (e.g. WSGIRequest).\n    # Also when request data has already been read by request.POST or\n    # request.body, self._stream points to a BytesIO instance\n    # containing that data.",
+    "token_count": 3057,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 3057
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:247-252",
+    "content": "# django/http/request.py:247-252  (django.http.request.HttpRequest._get_scheme)\nclass HttpRequest:\n    def _get_scheme(self):\n        \"\"\"\n        Hook for subclasses like WSGIRequest to implement. Return 'http' by\n        default.\n        \"\"\"\n        return \"http\"",
+    "token_count": 64,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._get_scheme"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:43-49",
+    "content": "# django/http/request.py:43-49  (django.http.request.RawPostDataException)\nclass RawPostDataException(Exception):\n    \"\"\"\n    You cannot access raw_post_data from a request that has\n    multipart/* POST data if it has been accessed via POST,\n    FILES, etc..\n    \"\"\"\n\n    pass",
+    "token_count": 65,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.RawPostDataException"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:254-268",
+    "content": "# django/http/request.py:254-268  (django.http.request.HttpRequest.scheme)\nclass HttpRequest:\n    @property\n    def scheme(self):\n        if settings.SECURE_PROXY_SSL_HEADER:\n            try:\n                header, secure_value = settings.SECURE_PROXY_SSL_HEADER\n            except ValueError:\n                raise ImproperlyConfigured(\n                    \"The SECURE_PROXY_SSL_HEADER setting must be a tuple containing \"\n                    \"two values.\"\n                )\n            header_value = self.META.get(header)\n            if header_value is not None:\n                header_value, *_ = header_value.split(\",\", 1)\n                return \"https\" if header_value.strip() == secure_value else \"http\"\n        return self._get_scheme()",
+    "token_count": 150,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.scheme"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 150
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:39-39",
+    "content": "# django/http/request.py:39-39  (django.http.request.UnreadablePostError)\nclass UnreadablePostError(OSError):\n    pass",
+    "token_count": 33,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.UnreadablePostError"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 33
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:270-271",
+    "content": "# django/http/request.py:270-271  (django.http.request.HttpRequest.is_secure)\nclass HttpRequest:\n    def is_secure(self):\n        return self.scheme == \"https\"",
+    "token_count": 40,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.is_secure"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:1024-1074#signature",
+    "content": "# tests/requests_tests/tests.py:1024-1074  (tests.requests_tests.tests.HostValidationTests.test_get_host_suggestion_of_allowed_host [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=[])\n    def test_get_host_suggestion_of_allowed_host(self):\n        'get_host() makes helpful suggestions if a valid-looking host is not in'\n        ...",
+    "token_count": 87,
+    "rank": 22,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_get_host_suggestion_of_allowed_host"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "stub",
+     "bm25_rank": 1,
+     "chunk_kind": "method",
+     "engine_token_count": 87
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:1-35",
+    "content": "# django/http/request.py:1-35  (django.http.request)\nimport codecs\nimport copy\nimport os\nfrom io import BytesIO\nfrom itertools import chain\nfrom urllib.parse import parse_qsl, quote, urlencode, urljoin, urlsplit\n\nfrom django.conf import settings\nfrom django.core import signing\nfrom django.core.exceptions import (\n    DisallowedHost,\n    ImproperlyConfigured,\n    RequestDataTooBig,\n    TooManyFieldsSent,\n)\nfrom django.core.files import uploadhandler\nfrom django.http.multipartparser import (\n    MultiPartParser,\n    MultiPartParserError,\n    TooManyFilesSent,\n)\nfrom django.utils.datastructures import (\n    CaseInsensitiveMapping,\n    ImmutableList,\n    MultiValueDict,\n)\nfrom django.utils.encoding import escape_uri_path, iri_to_uri\nfrom django.utils.functional import cached_property\nfrom django.utils.http import is_same_domain, parse_header_parameters\nfrom django.utils.regex_helper import _lazy_re_compile\n\nRAISE_ERROR = object()\nhost_validation_re = _lazy_re_compile(\n    r\"^([a-z0-9.-]+|\\[[a-f0-9]*:[a-f0-9\\.:]+\\])(:[0-9]+)?$\"\n)",
+    "token_count": 249,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 989,
+     "stub_priority": 1489,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 249
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:273-275",
+    "content": "# django/http/request.py:273-275  (django.http.request.HttpRequest.encoding)\nclass HttpRequest:\n    @property\n    def encoding(self):\n        return self._encoding",
+    "token_count": 39,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.encoding"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 989,
+     "stub_priority": 1489,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:277-288",
+    "content": "# django/http/request.py:277-288  (django.http.request.HttpRequest.encoding)\nclass HttpRequest:\n    @encoding.setter\n    def encoding(self, val):\n        \"\"\"\n        Set the encoding used for GET/POST accesses. If the GET or POST\n        dictionary has already been created, remove and recreate it on the\n        next access (so that it is decoded correctly).\n        \"\"\"\n        self._encoding = val\n        if hasattr(self, \"GET\"):\n            del self.GET\n        if hasattr(self, \"_post\"):\n            del self._post",
+    "token_count": 116,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.encoding"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 988,
+     "stub_priority": 1488,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 116
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:290-294",
+    "content": "# django/http/request.py:290-294  (django.http.request.HttpRequest._initialize_handlers)\nclass HttpRequest:\n    def _initialize_handlers(self):\n        self._upload_handlers = [\n            uploadhandler.load_handler(handler, self)\n            for handler in settings.FILE_UPLOAD_HANDLERS\n        ]",
+    "token_count": 63,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._initialize_handlers"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 987,
+     "stub_priority": 1487,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:296-301",
+    "content": "# django/http/request.py:296-301  (django.http.request.HttpRequest.upload_handlers)\nclass HttpRequest:\n    @property\n    def upload_handlers(self):\n        if not self._upload_handlers:\n            # If there are no upload handlers defined, initialize them from settings.\n            self._initialize_handlers()\n        return self._upload_handlers",
+    "token_count": 71,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.upload_handlers"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 986,
+     "stub_priority": 1486,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:303-310",
+    "content": "# django/http/request.py:303-310  (django.http.request.HttpRequest.upload_handlers)\nclass HttpRequest:\n    @upload_handlers.setter\n    def upload_handlers(self, upload_handlers):\n        if hasattr(self, \"_files\"):\n            raise AttributeError(\n                \"You cannot set the upload handlers after the upload has been \"\n                \"processed.\"\n            )\n        self._upload_handlers = upload_handlers",
+    "token_count": 81,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.upload_handlers"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 985,
+     "stub_priority": 1485,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:312-322",
+    "content": "# django/http/request.py:312-322  (django.http.request.HttpRequest.parse_file_upload)\nclass HttpRequest:\n    def parse_file_upload(self, META, post_data):\n        \"\"\"Return a tuple of (POST QueryDict, FILES MultiValueDict).\"\"\"\n        self.upload_handlers = ImmutableList(\n            self.upload_handlers,\n            warning=(\n                \"You cannot alter upload handlers after the upload has been \"\n                \"processed.\"\n            ),\n        )\n        parser = MultiPartParser(META, post_data, self.upload_handlers, self.encoding)\n        return parser.parse()",
+    "token_count": 116,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.parse_file_upload"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 984,
+     "stub_priority": 1484,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 116
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:324-365",
+    "content": "# django/http/request.py:324-365  (django.http.request.HttpRequest.body)\nclass HttpRequest:\n    @property\n    def body(self):\n        if not hasattr(self, \"_body\"):\n            if self._read_started:\n                raise RawPostDataException(\n                    \"You cannot access body after reading from request's data stream\"\n                )\n\n            # Limit the maximum request data size that will be handled\n            # in-memory. Reject early when Content-Length is present and\n            # already exceeds the limit, avoiding reading the body at all.\n            self._check_data_too_big(int(self.META.get(\"CONTENT_LENGTH\") or 0))\n\n            # Content-Length can be absent or understated (e.g.\n            # `Transfer-Encoding: chunked` on ASGI), so for seekable\n            # streams (e.g. SpooledTemporaryFile on ASGI), check the actual\n            # buffered size before reading it all into memory.\n            if hasattr(self._stream, \"seekable\") and self._stream.seekable():\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n                did_check = True\n            else:\n                did_check = False\n\n            try:\n                if settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None and not did_check:\n                    # Read one byte past the limit to detect an oversize body\n                    # without loading it all into memory first.\n                    self._body = self.read(settings.DATA_UPLOAD_MAX_MEMORY_SIZE + 1)\n                else:\n                    self._body = self.read()\n            except OSError as e:\n                raise UnreadablePostError(*e.args) from e\n            finally:\n                self._stream.close()\n            self._stream = BytesIO(self._body)\n            if not did_check:\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n        return self._body",
+    "token_count": 423,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.body"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 983,
+     "stub_priority": 1483,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 423
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:367-373",
+    "content": "# django/http/request.py:367-373  (django.http.request.HttpRequest._check_data_too_big)\nclass HttpRequest:\n    def _check_data_too_big(self, length):\n        if (\n            settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None\n            and length > settings.DATA_UPLOAD_MAX_MEMORY_SIZE\n        ):\n            msg = \"Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.\"\n            raise RequestDataTooBig(msg)",
+    "token_count": 91,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._check_data_too_big"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 982,
+     "stub_priority": 1482,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 91
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:375-377",
+    "content": "# django/http/request.py:375-377  (django.http.request.HttpRequest._mark_post_parse_error)\nclass HttpRequest:\n    def _mark_post_parse_error(self):\n        self._post = QueryDict()\n        self._files = MultiValueDict()",
+    "token_count": 55,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._mark_post_parse_error"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 981,
+     "stub_priority": 1481,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:379-415",
+    "content": "# django/http/request.py:379-415  (django.http.request.HttpRequest._load_post_and_files)\nclass HttpRequest:\n    def _load_post_and_files(self):\n        \"\"\"Populate self._post and self._files if the content-type is a form type\"\"\"\n        if self.method != \"POST\":\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n            return\n        if self._read_started and not hasattr(self, \"_body\"):\n            self._mark_post_parse_error()\n            return\n\n        if self.content_type == \"multipart/form-data\":\n            if hasattr(self, \"_body\"):\n                # Use already read data\n                data = BytesIO(self._body)\n            else:\n                data = self\n            try:\n                self._post, self._files = self.parse_file_upload(self.META, data)\n            except (MultiPartParserError, TooManyFilesSent):\n                # An error occurred while parsing POST data. Since when\n                # formatting the error the request handler might access\n                # self.POST, set self._post and self._file to prevent\n                # attempts to parse POST data again.\n                self._mark_post_parse_error()\n                raise\n        elif self.content_type == \"application/x-www-form-urlencoded\":\n            self._post, self._files = (\n                QueryDict(self.body, encoding=self._encoding),\n                MultiValueDict(),\n            )\n        else:\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )",
+    "token_count": 326,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest._load_post_and_files"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 980,
+     "stub_priority": 1480,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 326
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:1006-1022#signature",
+    "content": "# tests/requests_tests/tests.py:1006-1022  (tests.requests_tests.tests.HostValidationTests.test_host_validation_in_debug_mode [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(DEBUG=True, ALLOWED_HOSTS=[])\n    def test_host_validation_in_debug_mode(self):\n        'If ALLOWED_HOSTS is empty and DEBUG is True, variants of localhost are'\n        ...",
+    "token_count": 87,
+    "rank": 34,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_host_validation_in_debug_mode"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "stub",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 87
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:417-420",
+    "content": "# django/http/request.py:417-420  (django.http.request.HttpRequest.close)\nclass HttpRequest:\n    def close(self):\n        if hasattr(self, \"_files\"):\n            for f in chain.from_iterable(list_[1] for list_ in self._files.lists()):\n                f.close()",
+    "token_count": 63,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.close"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 979,
+     "stub_priority": 1479,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:430-435",
+    "content": "# django/http/request.py:430-435  (django.http.request.HttpRequest.read)\nclass HttpRequest:\n    def read(self, *args, **kwargs):\n        self._read_started = True\n        try:\n            return self._stream.read(*args, **kwargs)\n        except OSError as e:\n            raise UnreadablePostError(*e.args) from e",
+    "token_count": 78,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.read"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 978,
+     "stub_priority": 1478,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:437-442",
+    "content": "# django/http/request.py:437-442  (django.http.request.HttpRequest.readline)\nclass HttpRequest:\n    def readline(self, *args, **kwargs):\n        self._read_started = True\n        try:\n            return self._stream.readline(*args, **kwargs)\n        except OSError as e:\n            raise UnreadablePostError(*e.args) from e",
+    "token_count": 78,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.readline"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 977,
+     "stub_priority": 1477,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:444-445",
+    "content": "# django/http/request.py:444-445  (django.http.request.HttpRequest.__iter__)\nclass HttpRequest:\n    def __iter__(self):\n        return iter(self.readline, b\"\")",
+    "token_count": 42,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.__iter__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 976,
+     "stub_priority": 1476,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:447-448",
+    "content": "# django/http/request.py:447-448  (django.http.request.HttpRequest.readlines)\nclass HttpRequest:\n    def readlines(self):\n        return list(self)",
+    "token_count": 36,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpRequest.readlines"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 975,
+     "stub_priority": 1475,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:452-454",
+    "content": "# django/http/request.py:452-454  (django.http.request.HttpHeaders)\nclass HttpHeaders(CaseInsensitiveMapping):\n    HTTP_PREFIX = \"HTTP_\"\n    # PEP 333 gives two headers which aren't prepended with HTTP_.\n    UNPREFIXED_HEADERS = {\"CONTENT_TYPE\", \"CONTENT_LENGTH\"}",
+    "token_count": 70,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpHeaders"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 974,
+     "stub_priority": 1474,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:456-462",
+    "content": "# django/http/request.py:456-462  (django.http.request.HttpHeaders.__init__)\nclass HttpHeaders(CaseInsensitiveMapping):\n    def __init__(self, environ):\n        headers = {}\n        for header, value in environ.items():\n            name = self.parse_header_name(header)\n            if name:\n                headers[name] = value\n        super().__init__(headers)",
+    "token_count": 79,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpHeaders.__init__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 973,
+     "stub_priority": 1473,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:464-466",
+    "content": "# django/http/request.py:464-466  (django.http.request.HttpHeaders.__getitem__)\nclass HttpHeaders(CaseInsensitiveMapping):\n    def __getitem__(self, key):\n        \"\"\"Allow header lookup using underscores in place of hyphens.\"\"\"\n        return super().__getitem__(key.replace(\"_\", \"-\"))",
+    "token_count": 65,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpHeaders.__getitem__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 972,
+     "stub_priority": 1472,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:468-474",
+    "content": "# django/http/request.py:468-474  (django.http.request.HttpHeaders.parse_header_name)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def parse_header_name(cls, header):\n        if header.startswith(cls.HTTP_PREFIX):\n            header = header[len(cls.HTTP_PREFIX) :]\n        elif header not in cls.UNPREFIXED_HEADERS:\n            return None\n        return header.replace(\"_\", \"-\").title()",
+    "token_count": 87,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpHeaders.parse_header_name"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 971,
+     "stub_priority": 1471,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 87
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:476-481",
+    "content": "# django/http/request.py:476-481  (django.http.request.HttpHeaders.to_wsgi_name)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def to_wsgi_name(cls, header):\n        header = header.replace(\"-\", \"_\").upper()\n        if header in cls.UNPREFIXED_HEADERS:\n            return header\n        return f\"{cls.HTTP_PREFIX}{header}\"",
+    "token_count": 80,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpHeaders.to_wsgi_name"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 970,
+     "stub_priority": 1470,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:910-972#signature",
+    "content": "# tests/requests_tests/tests.py:910-972  (tests.requests_tests.tests.HostValidationTests.test_http_get_host_with_x_forwarded_host [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_HOST=True, ALLOWED_HOSTS=[\"*\"])\n    def test_http_get_host_with_x_forwarded_host(self):\n        # Check if X_FORWARDED_HOST is provided.\n        ...",
+    "token_count": 89,
+    "rank": 45,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_http_get_host_with_x_forwarded_host"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "stub",
+     "bm25_rank": 3,
+     "chunk_kind": "method",
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:483-485",
+    "content": "# django/http/request.py:483-485  (django.http.request.HttpHeaders.to_asgi_name)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def to_asgi_name(cls, header):\n        return header.replace(\"-\", \"_\").upper()",
+    "token_count": 55,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpHeaders.to_asgi_name"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 969,
+     "stub_priority": 1469,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:487-492",
+    "content": "# django/http/request.py:487-492  (django.http.request.HttpHeaders.to_wsgi_names)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def to_wsgi_names(cls, headers):\n        return {\n            cls.to_wsgi_name(header_name): value\n            for header_name, value in headers.items()\n        }",
+    "token_count": 72,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpHeaders.to_wsgi_names"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 968,
+     "stub_priority": 1468,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:494-499",
+    "content": "# django/http/request.py:494-499  (django.http.request.HttpHeaders.to_asgi_names)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def to_asgi_names(cls, headers):\n        return {\n            cls.to_asgi_name(header_name): value\n            for header_name, value in headers.items()\n        }",
+    "token_count": 72,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.HttpHeaders.to_asgi_names"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 967,
+     "stub_priority": 1467,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:503-520",
+    "content": "# django/http/request.py:503-520  (django.http.request.QueryDict)\nclass QueryDict(MultiValueDict):\n    \"\"\"\n    A specialized MultiValueDict which represents a query string.\n\n    A QueryDict can be used to represent GET or POST data. It subclasses\n    MultiValueDict since keys in such data can be repeated, for instance\n    in the data from a form with a <select multiple> field.\n\n    By default QueryDicts are immutable, though the copy() method\n    will always return a mutable copy.\n\n    Both keys and values set on this class are converted from the given encoding\n    (DEFAULT_CHARSET by default) to str.\n    \"\"\"\n\n    # These are both reset in __init__, but is specified here at the class\n    # level so that unpickling will have valid values\n    _mutable = True\n    _encoding = None",
+    "token_count": 184,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 966,
+     "stub_priority": 1466,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 184
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:522-550",
+    "content": "# django/http/request.py:522-550  (django.http.request.QueryDict.__init__)\nclass QueryDict(MultiValueDict):\n    def __init__(self, query_string=None, mutable=False, encoding=None):\n        super().__init__()\n        self.encoding = encoding or settings.DEFAULT_CHARSET\n        query_string = query_string or \"\"\n        parse_qsl_kwargs = {\n            \"keep_blank_values\": True,\n            \"encoding\": self.encoding,\n            \"max_num_fields\": settings.DATA_UPLOAD_MAX_NUMBER_FIELDS,\n        }\n        if isinstance(query_string, bytes):\n            # query_string normally contains URL-encoded data, a subset of ASCII.\n            try:\n                query_string = query_string.decode(self.encoding)\n            except UnicodeDecodeError:\n                # ... but some user agents are misbehaving :-(\n                query_string = query_string.decode(\"iso-8859-1\")\n        try:\n            for key, value in parse_qsl(query_string, **parse_qsl_kwargs):\n                self.appendlist(key, value)\n        except ValueError as e:\n            # ValueError can also be raised if the strict_parsing argument to\n            # parse_qsl() is True. As that is not used by Django, assume that\n            # the exception was raised by exceeding the value of max_num_fields\n            # instead of fragile checks of exception message strings.\n            raise TooManyFieldsSent(\n                \"The number of GET/POST parameters exceeded \"\n                \"settings.DATA_UPLOAD_MAX_NUMBER_FIELDS.\"\n            ) from e\n        self._mutable = mutable",
+    "token_count": 314,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.__init__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 965,
+     "stub_priority": 1465,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 314
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:552-563",
+    "content": "# django/http/request.py:552-563  (django.http.request.QueryDict.fromkeys)\nclass QueryDict(MultiValueDict):\n    @classmethod\n    def fromkeys(cls, iterable, value=\"\", mutable=False, encoding=None):\n        \"\"\"\n        Return a new QueryDict with keys (may be repeated) from an iterable and\n        values from value.\n        \"\"\"\n        q = cls(\"\", mutable=True, encoding=encoding)\n        for key in iterable:\n            q.appendlist(key, value)\n        if not mutable:\n            q._mutable = False\n        return q",
+    "token_count": 119,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.fromkeys"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 964,
+     "stub_priority": 1464,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:565-569",
+    "content": "# django/http/request.py:565-569  (django.http.request.QueryDict.encoding)\nclass QueryDict(MultiValueDict):\n    @property\n    def encoding(self):\n        if self._encoding is None:\n            self._encoding = settings.DEFAULT_CHARSET\n        return self._encoding",
+    "token_count": 61,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.encoding"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 963,
+     "stub_priority": 1463,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:571-573",
+    "content": "# django/http/request.py:571-573  (django.http.request.QueryDict.encoding)\nclass QueryDict(MultiValueDict):\n    @encoding.setter\n    def encoding(self, value):\n        self._encoding = value",
+    "token_count": 48,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.encoding"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 962,
+     "stub_priority": 1462,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:575-577",
+    "content": "# django/http/request.py:575-577  (django.http.request.QueryDict._assert_mutable)\nclass QueryDict(MultiValueDict):\n    def _assert_mutable(self):\n        if not self._mutable:\n            raise AttributeError(\"This QueryDict instance is immutable\")",
+    "token_count": 59,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict._assert_mutable"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 961,
+     "stub_priority": 1461,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:579-583",
+    "content": "# django/http/request.py:579-583  (django.http.request.QueryDict.__setitem__)\nclass QueryDict(MultiValueDict):\n    def __setitem__(self, key, value):\n        self._assert_mutable()\n        key = bytes_to_text(key, self.encoding)\n        value = bytes_to_text(value, self.encoding)\n        super().__setitem__(key, value)",
+    "token_count": 83,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.__setitem__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 960,
+     "stub_priority": 1460,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:827-908#signature",
+    "content": "# tests/requests_tests/tests.py:827-908  (tests.requests_tests.tests.HostValidationTests.test_http_get_host [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(\n        USE_X_FORWARDED_HOST=False,\n        ALLOWED_HOSTS=[\n            \"forward.com\",\n            \"example.com\",\n            \"internal.com\",\n            \"12.34.56.78\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"xn--4ca9at.com\",\n            \".multitenant.com\",\n            \"INSENSITIVE.com\",\n            \"[::ffff:169.254.169.254]\",\n        ],\n    )\n    def test_http_get_host(self):\n        # Check if X_FORWARDED_HOST is provided.\n        ...",
+    "token_count": 180,
+    "rank": 56,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_http_get_host"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "stub",
+     "bm25_rank": 4,
+     "chunk_kind": "method",
+     "engine_token_count": 180
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:585-587",
+    "content": "# django/http/request.py:585-587  (django.http.request.QueryDict.__delitem__)\nclass QueryDict(MultiValueDict):\n    def __delitem__(self, key):\n        self._assert_mutable()\n        super().__delitem__(key)",
+    "token_count": 57,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.__delitem__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 959,
+     "stub_priority": 1459,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:589-593",
+    "content": "# django/http/request.py:589-593  (django.http.request.QueryDict.__copy__)\nclass QueryDict(MultiValueDict):\n    def __copy__(self):\n        result = self.__class__(\"\", mutable=True, encoding=self.encoding)\n        for key, value in self.lists():\n            result.setlist(key, value)\n        return result",
+    "token_count": 73,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.__copy__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 958,
+     "stub_priority": 1458,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:595-600",
+    "content": "# django/http/request.py:595-600  (django.http.request.QueryDict.__deepcopy__)\nclass QueryDict(MultiValueDict):\n    def __deepcopy__(self, memo):\n        result = self.__class__(\"\", mutable=True, encoding=self.encoding)\n        memo[id(self)] = result\n        for key, value in self.lists():\n            result.setlist(copy.deepcopy(key, memo), copy.deepcopy(value, memo))\n        return result",
+    "token_count": 93,
+    "rank": 59,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.__deepcopy__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 957,
+     "stub_priority": 1457,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 93
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:602-606",
+    "content": "# django/http/request.py:602-606  (django.http.request.QueryDict.setlist)\nclass QueryDict(MultiValueDict):\n    def setlist(self, key, list_):\n        self._assert_mutable()\n        key = bytes_to_text(key, self.encoding)\n        list_ = [bytes_to_text(elt, self.encoding) for elt in list_]\n        super().setlist(key, list_)",
+    "token_count": 89,
+    "rank": 60,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.setlist"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 956,
+     "stub_priority": 1456,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:608-610",
+    "content": "# django/http/request.py:608-610  (django.http.request.QueryDict.setlistdefault)\nclass QueryDict(MultiValueDict):\n    def setlistdefault(self, key, default_list=None):\n        self._assert_mutable()\n        return super().setlistdefault(key, default_list)",
+    "token_count": 64,
+    "rank": 61,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.setlistdefault"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 955,
+     "stub_priority": 1455,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:612-616",
+    "content": "# django/http/request.py:612-616  (django.http.request.QueryDict.appendlist)\nclass QueryDict(MultiValueDict):\n    def appendlist(self, key, value):\n        self._assert_mutable()\n        key = bytes_to_text(key, self.encoding)\n        value = bytes_to_text(value, self.encoding)\n        super().appendlist(key, value)",
+    "token_count": 79,
+    "rank": 62,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.appendlist"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 954,
+     "stub_priority": 1454,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:618-620",
+    "content": "# django/http/request.py:618-620  (django.http.request.QueryDict.pop)\nclass QueryDict(MultiValueDict):\n    def pop(self, key, *args):\n        self._assert_mutable()\n        return super().pop(key, *args)",
+    "token_count": 57,
+    "rank": 63,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.pop"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 953,
+     "stub_priority": 1453,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:622-624",
+    "content": "# django/http/request.py:622-624  (django.http.request.QueryDict.popitem)\nclass QueryDict(MultiValueDict):\n    def popitem(self):\n        self._assert_mutable()\n        return super().popitem()",
+    "token_count": 51,
+    "rank": 64,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.popitem"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 952,
+     "stub_priority": 1452,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:626-628",
+    "content": "# django/http/request.py:626-628  (django.http.request.QueryDict.clear)\nclass QueryDict(MultiValueDict):\n    def clear(self):\n        self._assert_mutable()\n        super().clear()",
+    "token_count": 47,
+    "rank": 65,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.clear"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 951,
+     "stub_priority": 1451,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:630-634",
+    "content": "# django/http/request.py:630-634  (django.http.request.QueryDict.setdefault)\nclass QueryDict(MultiValueDict):\n    def setdefault(self, key, default=None):\n        self._assert_mutable()\n        key = bytes_to_text(key, self.encoding)\n        default = bytes_to_text(default, self.encoding)\n        return super().setdefault(key, default)",
+    "token_count": 80,
+    "rank": 66,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.setdefault"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 950,
+     "stub_priority": 1450,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:19-63#signature",
+    "content": "# django/views/i18n.py:19-63  (django.views.i18n.set_language [signature])\ndef set_language(request):\n    'Redirect to a given URL while setting the chosen language in the session'\n    ...",
+    "token_count": 50,
+    "rank": 67,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.views.i18n.set_language"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "stub",
+     "bm25_rank": 5,
+     "chunk_kind": "function",
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:636-638",
+    "content": "# django/http/request.py:636-638  (django.http.request.QueryDict.copy)\nclass QueryDict(MultiValueDict):\n    def copy(self):\n        \"\"\"Return a mutable copy of this object.\"\"\"\n        return self.__deepcopy__({})",
+    "token_count": 54,
+    "rank": 68,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.copy"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 949,
+     "stub_priority": 1449,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:640-670",
+    "content": "# django/http/request.py:640-670  (django.http.request.QueryDict.urlencode)\nclass QueryDict(MultiValueDict):\n    def urlencode(self, safe=None):\n        \"\"\"\n        Return an encoded string of all query string arguments.\n\n        `safe` specifies characters which don't require quoting, for example::\n\n            >>> q = QueryDict(mutable=True)\n            >>> q['next'] = '/a&b/'\n            >>> q.urlencode()\n            'next=%2Fa%26b%2F'\n            >>> q.urlencode(safe='/')\n            'next=/a%26b/'\n        \"\"\"\n        output = []\n        if safe:\n            safe = safe.encode(self.encoding)\n\n            def encode(k, v):\n                return \"%s=%s\" % ((quote(k, safe), quote(v, safe)))\n\n        else:\n\n            def encode(k, v):\n                return urlencode({k: v})\n\n        for k, list_ in self.lists():\n            output.extend(\n                encode(k.encode(self.encoding), str(v).encode(self.encoding))\n                for v in list_\n            )\n        return \"&\".join(output)",
+    "token_count": 233,
+    "rank": 69,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.QueryDict.urlencode"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 948,
+     "stub_priority": 1448,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 233
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:674-678",
+    "content": "# django/http/request.py:674-678  (django.http.request.MediaType.__init__)\nclass MediaType:\n    def __init__(self, media_type_raw_line):\n        full_type, self.params = parse_header_parameters(\n            media_type_raw_line if media_type_raw_line else \"\"\n        )\n        self.main_type, _, self.sub_type = full_type.partition(\"/\")",
+    "token_count": 76,
+    "rank": 70,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.MediaType.__init__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 947,
+     "stub_priority": 1447,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:680-686",
+    "content": "# django/http/request.py:680-686  (django.http.request.MediaType.__str__)\nclass MediaType:\n    def __str__(self):\n        params_str = \"\".join(\"; %s=%s\" % (k, v) for k, v in self.params.items())\n        return \"%s%s%s\" % (\n            self.main_type,\n            (\"/%s\" % self.sub_type) if self.sub_type else \"\",\n            params_str,\n        )",
+    "token_count": 95,
+    "rank": 71,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.MediaType.__str__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 946,
+     "stub_priority": 1446,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 95
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:688-689",
+    "content": "# django/http/request.py:688-689  (django.http.request.MediaType.__repr__)\nclass MediaType:\n    def __repr__(self):\n        return \"<%s: %s>\" % (self.__class__.__qualname__, self)",
+    "token_count": 52,
+    "rank": 72,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.MediaType.__repr__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 945,
+     "stub_priority": 1445,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:691-693",
+    "content": "# django/http/request.py:691-693  (django.http.request.MediaType.is_all_types)\nclass MediaType:\n    @property\n    def is_all_types(self):\n        return self.main_type == \"*\" and self.sub_type == \"*\"",
+    "token_count": 50,
+    "rank": 73,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.MediaType.is_all_types"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 944,
+     "stub_priority": 1444,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:695-701",
+    "content": "# django/http/request.py:695-701  (django.http.request.MediaType.match)\nclass MediaType:\n    def match(self, other):\n        if self.is_all_types:\n            return True\n        other = MediaType(other)\n        if self.main_type == other.main_type and self.sub_type in {\"*\", other.sub_type}:\n            return True\n        return False",
+    "token_count": 76,
+    "rank": 74,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.MediaType.match"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 943,
+     "stub_priority": 1443,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:704-706",
+    "content": "# django/http/request.py:704-706  (django.http.request)\n# It's neither necessary nor appropriate to use\n# django.utils.encoding.force_str() for parsing URLs and form inputs. Thus,\n# this slightly more restricted function, used by QueryDict.",
+    "token_count": 57,
+    "rank": 75,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 942,
+     "stub_priority": 1442,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:707-718",
+    "content": "# django/http/request.py:707-718  (django.http.request.bytes_to_text)\ndef bytes_to_text(s, encoding):\n    \"\"\"\n    Convert bytes objects to strings, using the given encoding. Illegally\n    encoded input characters are replaced with Unicode \"unknown\" codepoint\n    (\\ufffd).\n\n    Return any non-bytes objects without change.\n    \"\"\"\n    if isinstance(s, bytes):\n        return str(s, encoding, \"replace\")\n    else:\n        return s",
+    "token_count": 102,
+    "rank": 76,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.bytes_to_text"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 941,
+     "stub_priority": 1441,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 102
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:721-740",
+    "content": "# django/http/request.py:721-740  (django.http.request.split_domain_port)\ndef split_domain_port(host):\n    \"\"\"\n    Return a (domain, port) tuple from a given host.\n\n    Returned domain is lowercased. If the host is invalid, the domain will be\n    empty.\n    \"\"\"\n    host = host.lower()\n\n    if not host_validation_re.match(host):\n        return \"\", \"\"\n\n    if host[-1] == \"]\":\n        # It's an IPv6 address without a port.\n        return host, \"\"\n    bits = host.rsplit(\":\", 1)\n    domain, port = bits if len(bits) == 2 else (bits[0], \"\")\n    # Remove a trailing dot (if present) from the domain.\n    domain = domain[:-1] if domain.endswith(\".\") else domain\n    return domain, port",
+    "token_count": 176,
+    "rank": 77,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.split_domain_port"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 940,
+     "stub_priority": 1440,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 176
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:276-300#signature",
+    "content": "# django/middleware/csrf.py:276-300  (django.middleware.csrf.CsrfViewMiddleware._origin_verified [signature])\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def _origin_verified(self, request):\n        ...",
+    "token_count": 51,
+    "rank": 78,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.middleware.csrf.CsrfViewMiddleware._origin_verified"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "stub",
+     "bm25_rank": 6,
+     "chunk_kind": "method",
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:743-760",
+    "content": "# django/http/request.py:743-760  (django.http.request.validate_host)\ndef validate_host(host, allowed_hosts):\n    \"\"\"\n    Validate the given host for this site.\n\n    Check that the host looks valid and matches a host or host pattern in the\n    given list of ``allowed_hosts``. Any pattern beginning with a period\n    matches a domain and all its subdomains (e.g. ``.example.com`` matches\n    ``example.com`` and any subdomain), ``*`` matches anything, and anything\n    else must match exactly.\n\n    Note: This function assumes that the given host is lowercased and has\n    already had the port, if any, stripped off.\n\n    Return ``True`` for a valid host, ``False`` otherwise.\n    \"\"\"\n    return any(\n        pattern == \"*\" or is_same_domain(host, pattern) for pattern in allowed_hosts\n    )",
+    "token_count": 187,
+    "rank": 79,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.validate_host"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 939,
+     "stub_priority": 1439,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 187
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/http/request.py:763-764",
+    "content": "# django/http/request.py:763-764  (django.http.request.parse_accept_header)\ndef parse_accept_header(header):\n    return [MediaType(token) for token in header.split(\",\") if token.strip()]",
+    "token_count": 45,
+    "rank": 80,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.http.request.parse_accept_header"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 938,
+     "stub_priority": 1438,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sites_tests/tests.py:109-143#signature",
+    "content": "# tests/sites_tests/tests.py:109-143  (tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_no_site_id_and_handle_port_fallback [signature])\nclass SitesFrameworkTests(TestCase):\n    @override_settings(SITE_ID=None, ALLOWED_HOSTS=[\"example.com\", \"example.net\"])\n    def test_get_current_site_no_site_id_and_handle_port_fallback(self):\n        ...",
+    "token_count": 85,
+    "rank": 81,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_no_site_id_and_handle_port_fallback"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "stub",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:259-286#signature",
+    "content": "# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme [signature])\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    'Return ``True`` if the url uses an allowed host and a safe scheme.'\n    ...",
+    "token_count": 63,
+    "rank": 82,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.http.url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "stub",
+     "bm25_rank": 8,
+     "chunk_kind": "function",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_views.py:203-220#signature",
+    "content": "# tests/auth_tests/test_views.py:203-220  (tests.auth_tests.test_views.PasswordResetTest.test_poisoned_http_host [signature])\nclass PasswordResetTest(AuthViewsTestCase):\n    @override_settings(DEBUG_PROPAGATE_EXCEPTIONS=True)\n    def test_poisoned_http_host(self):\n        \"Poisoned HTTP_HOST headers can't be used for reset emails\"\n        ...",
+    "token_count": 82,
+    "rank": 83,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.auth_tests.test_views.PasswordResetTest.test_poisoned_http_host"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "stub",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sites/models.py:34-46#signature",
+    "content": "# django/contrib/sites/models.py:34-46  (django.contrib.sites.models.SiteManager._get_site_by_request [signature])\nclass SiteManager(models.Manager):\n    def _get_site_by_request(self, request):\n        ...",
+    "token_count": 49,
+    "rank": 84,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.sites.models.SiteManager._get_site_by_request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "stub",
+     "bm25_rank": 10,
+     "chunk_kind": "method",
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:302-345#signature",
+    "content": "# django/middleware/csrf.py:302-345  (django.middleware.csrf.CsrfViewMiddleware._check_referer [signature])\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def _check_referer(self, request):\n        ...",
+    "token_count": 53,
+    "rank": 85,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.middleware.csrf.CsrfViewMiddleware._check_referer"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "stub",
+     "bm25_rank": 11,
+     "chunk_kind": "method",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sites_tests/tests.py:96-107#signature",
+    "content": "# tests/sites_tests/tests.py:96-107  (tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_host_with_trailing_dot [signature])\nclass SitesFrameworkTests(TestCase):\n    @override_settings(SITE_ID=None, ALLOWED_HOSTS=[\"example.com\"])\n    def test_get_current_site_host_with_trailing_dot(self):\n        'The site is matched if the name in the request has a trailing dot.'\n        ...",
+    "token_count": 91,
+    "rank": 86,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_host_with_trailing_dot"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "stub",
+     "bm25_rank": 12,
+     "chunk_kind": "method",
+     "engine_token_count": 91
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:974-988#signature",
+    "content": "# tests/requests_tests/tests.py:974-988  (tests.requests_tests.tests.HostValidationTests.test_get_port [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_PORT=False)\n    def test_get_port(self):\n        ...",
+    "token_count": 59,
+    "rank": 87,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_get_port"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "stub",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:990-1004#signature",
+    "content": "# tests/requests_tests/tests.py:990-1004  (tests.requests_tests.tests.HostValidationTests.test_get_port_with_x_forwarded_port [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_PORT=True)\n    def test_get_port_with_x_forwarded_port(self):\n        ...",
+    "token_count": 70,
+    "rank": 88,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.requests_tests.tests.HostValidationTests.test_get_port_with_x_forwarded_port"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "stub",
+     "bm25_rank": 14,
+     "chunk_kind": "method",
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/requests_tests/tests.py:1090-1097#signature",
+    "content": "# tests/requests_tests/tests.py:1090-1097  (tests.requests_tests.tests.BuildAbsoluteURITests.test_host_retrieval [signature])\nclass BuildAbsoluteURITests(SimpleTestCase):\n    def test_host_retrieval(self):\n        ...",
+    "token_count": 57,
+    "rank": 89,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.requests_tests.tests.BuildAbsoluteURITests.test_host_retrieval"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "stub",
+     "bm25_rank": 15,
+     "chunk_kind": "method",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client_regress/tests.py:497-519#signature",
+    "content": "# tests/test_client_regress/tests.py:497-519  (tests.test_client_regress.tests.AssertRedirectsTests.test_redirect_to_different_host [signature])\nclass AssertRedirectsTests(SimpleTestCase):\n    @modify_settings(ALLOWED_HOSTS={\"append\": \"otherserver\"})\n    def test_redirect_to_different_host(self):\n        'The test client will preserve scheme, host and port changes'\n        ...",
+    "token_count": 86,
+    "rank": 90,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_client_regress.tests.AssertRedirectsTests.test_redirect_to_different_host"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "stub",
+     "bm25_rank": 16,
+     "chunk_kind": "method",
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:239-256#signature",
+    "content": "# django/utils/http.py:239-256  (django.utils.http.is_same_domain [signature])\ndef is_same_domain(host, pattern):\n    'Return ``True`` if the host is either an exact match or a match'\n    ...",
+    "token_count": 52,
+    "rank": 91,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.http.is_same_domain"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "stub",
+     "bm25_rank": 17,
+     "chunk_kind": "function",
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sites/requests.py:2-8#signature",
+    "content": "# django/contrib/sites/requests.py:2-8  (django.contrib.sites.requests.RequestSite [signature])\nclass RequestSite:\n    'A class that shares the primary interface of Site (i.e., it has ``domain``'\n    ...",
+    "token_count": 51,
+    "rank": 92,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.sites.requests.RequestSite"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "stub",
+     "bm25_rank": 18,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/security.py:21-31#signature",
+    "content": "# django/middleware/security.py:21-31  (django.middleware.security.SecurityMiddleware.process_request [signature])\nclass SecurityMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        ...",
+    "token_count": 41,
+    "rank": 93,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.middleware.security.SecurityMiddleware.process_request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "stub",
+     "bm25_rank": 19,
+     "chunk_kind": "method",
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:419-474#signature",
+    "content": "# django/middleware/csrf.py:419-474  (django.middleware.csrf.CsrfViewMiddleware.process_view [signature])\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def process_view(self, request, callback, callback_args, callback_kwargs):\n        ...",
+    "token_count": 57,
+    "rank": 94,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.middleware.csrf.CsrfViewMiddleware.process_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "stub",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:34-60#signature",
+    "content": "# django/middleware/common.py:34-60  (django.middleware.common.CommonMiddleware.process_request [signature])\nclass CommonMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        'Check for denied User-Agents and rewrite the URL based on'\n        ...",
+    "token_count": 57,
+    "rank": 95,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.process_request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "stub",
+     "bm25_rank": 21,
+     "chunk_kind": "method",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/debug.py:315-324#signature",
+    "content": "# django/views/debug.py:315-324  (django.views.debug.ExceptionReporter._get_raw_insecure_uri [signature])\nclass ExceptionReporter:\n    def _get_raw_insecure_uri(self):\n        'Return an absolute URI from variables available in this request. Skip'\n        ...",
+    "token_count": 60,
+    "rank": 96,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.views.debug.ExceptionReporter._get_raw_insecure_uri"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "stub",
+     "bm25_rank": 22,
+     "chunk_kind": "method",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:235-249#signature",
+    "content": "# tests/utils_tests/test_http.py:235-249  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts [signature])\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_no_allowed_hosts(self):\n        # A path without host is allowed.\n        ...",
+    "token_count": 66,
+    "rank": 97,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "stub",
+     "bm25_rank": 23,
+     "chunk_kind": "method",
+     "engine_token_count": 66
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:251-263#signature",
+    "content": "# tests/utils_tests/test_http.py:251-263  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str [signature])\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_allowed_hosts_str(self):\n        ...",
+    "token_count": 57,
+    "rank": 98,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "stub",
+     "bm25_rank": 24,
+     "chunk_kind": "method",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:368-395#signature",
+    "content": "# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme [signature])\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    ...",
+    "token_count": 81,
+    "rank": 99,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.http._url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "stub",
+     "bm25_rank": 25,
+     "chunk_kind": "function",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/sites_tests/tests.py:228-231#signature",
+    "content": "# tests/sites_tests/tests.py:228-231  (tests.sites_tests.tests.RequestSiteTests.setUp [signature])\nclass RequestSiteTests(SimpleTestCase):\n    def setUp(self):\n        ...",
+    "token_count": 43,
+    "rank": 100,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.sites_tests.tests.RequestSiteTests.setUp"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "stub",
+     "bm25_rank": 26,
+     "chunk_kind": "method",
+     "engine_token_count": 43
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/view_tests/tests/test_debug.py:1118-1124#signature",
+    "content": "# tests/view_tests/tests/test_debug.py:1118-1124  (tests.view_tests.tests.test_debug.ExceptionReporterTests.test_disallowed_host [signature])\nclass ExceptionReporterTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=\"example.com\")\n    def test_disallowed_host(self):\n        'An exception report can be generated even for a disallowed host.'\n        ...",
+    "token_count": 82,
+    "rank": 101,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.view_tests.tests.test_debug.ExceptionReporterTests.test_disallowed_host"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "stub",
+     "bm25_rank": 27,
+     "chunk_kind": "method",
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/view_tests/tests/test_debug.py:1328-1334#signature",
+    "content": "# tests/view_tests/tests/test_debug.py:1328-1334  (tests.view_tests.tests.test_debug.PlainTextReportTests.test_disallowed_host [signature])\nclass PlainTextReportTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=\"example.com\")\n    def test_disallowed_host(self):\n        'An exception report can be generated even for a disallowed host.'\n        ...",
+    "token_count": 85,
+    "rank": 102,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.view_tests.tests.test_debug.PlainTextReportTests.test_disallowed_host"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "stub",
+     "bm25_rank": 28,
+     "chunk_kind": "method",
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/views.py:114-125#signature",
+    "content": "# tests/test_client/views.py:114-125  (tests.test_client.views.json_view [signature])\ndef json_view(request):\n    \"A view that expects a request with the header 'application/json' and JSON\"\n    ...",
+    "token_count": 50,
+    "rank": 103,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_client.views.json_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "stub",
+     "bm25_rank": 29,
+     "chunk_kind": "function",
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/views.py:36-60#signature",
+    "content": "# tests/test_client/views.py:36-60  (tests.test_client.views.trace_view [signature])\ndef trace_view(request):\n    'A simple view that expects a TRACE request and echoes its status line.'\n    ...",
+    "token_count": 46,
+    "rank": 104,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_client.views.trace_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "stub",
+     "bm25_rank": 30,
+     "chunk_kind": "function",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/csrf_tests/tests.py:202-205#signature",
+    "content": "# tests/csrf_tests/tests.py:202-205  (tests.csrf_tests.tests.TestingHttpRequest [signature])\nclass TestingHttpRequest(HttpRequest):\n    'A version of HttpRequest that lets one track and change some things more'\n    ...",
+    "token_count": 51,
+    "rank": 105,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.csrf_tests.tests.TestingHttpRequest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "stub",
+     "bm25_rank": 31,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:119-143#signature",
+    "content": "# django/middleware/common.py:119-143  (django.middleware.common.BrokenLinkEmailsMiddleware.process_response [signature])\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        'Send broken link emails for relevant 404 NOT FOUND responses.'\n        ...",
+    "token_count": 68,
+    "rank": 106,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.middleware.common.BrokenLinkEmailsMiddleware.process_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "stub",
+     "bm25_rank": 32,
+     "chunk_kind": "method",
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_http.py:226-233#signature",
+    "content": "# tests/utils_tests/test_http.py:226-233  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth [signature])\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_basic_auth(self):\n        # Valid basic auth credentials are allowed.\n        ...",
+    "token_count": 64,
+    "rank": 107,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "stub",
+     "bm25_rank": 33,
+     "chunk_kind": "method",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sites/models.py:48-68#signature",
+    "content": "# django/contrib/sites/models.py:48-68  (django.contrib.sites.models.SiteManager.get_current [signature])\nclass SiteManager(models.Manager):\n    def get_current(self, request=None):\n        \"Return the current Site based on the SITE_ID in the project's settings.\"\n        ...",
+    "token_count": 61,
+    "rank": 108,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.sites.models.SiteManager.get_current"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "stub",
+     "bm25_rank": 34,
+     "chunk_kind": "method",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12967,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging how Django resolves and validates the HTTP Host\nheader in django/http/request.py. Starting from\n`HttpRequest.get_host`, trace the real causal pipeline that\nvalidates the host, in the order each stage is actually reached, up\nto and including the call that checks the parsed domain against\nALLOWED_HOSTS. Assume the parsed host has a non-empty domain\ncomponent, so the validation call is genuinely reached.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.http.request.HttpRequest.get_host\", \"django.http.request.HttpRequest._get_raw_host\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/http/request.py",
+   "cutoff": 650,
+   "n_components": 124,
+   "n_full": 74,
+   "n_stub": 34,
+   "n_dropped": 16,
+   "packed_tokens": 12967,
+   "latency_ms": {
+    "L_priority_sort": [
+     1226.871595
+    ],
+    "L_binary_search_tokenize": [
+     0.51243
+    ],
+    "L_retrieve": [
+     1232.701203
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12967,
+   "prompt_tokens": 13301,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13314,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/http/request.py:131-151  (django.http.request.HttpRequest.get_host)\nclass HttpRequest:\n    def get_host(self):\n        \"\"\"Return the HTTP host using the environment or request headers.\"\"\"\n        host = self._get_raw_host()\n\n        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.\n        allowed_hosts = settings.ALLOWED_HOSTS\n        if settings.DEBUG and not allowed_hosts:\n            allowed_hosts = [\".localhost\", \"127.0.0.1\", \"[::1]\"]\n\n        domain, port = split_domain_port(host)\n        if domain and validate_host(domain, allowed_hosts):\n            return host\n        else:\n            msg = \"Invalid HTTP_HOST header: %r.\" % host\n            if domain:\n                msg += \" You may need to add %r to ALLOWED_HOSTS.\" % domain\n            else:\n                msg += (\n                    \" The domain name provided is not valid according to RFC 1034/1035.\"\n                )\n            raise DisallowedHost(msg)\n\n# django/http/request.py:113-129  (django.http.request.HttpRequest._get_raw_host)\nclass HttpRequest:\n    def _get_raw_host(self):\n        \"\"\"\n        Return the HTTP host using the environment or request headers. Skip\n        allowed hosts protection, so may return an insecure host.\n        \"\"\"\n        # We try three options, in order of decreasing preference.\n        if settings.USE_X_FORWARDED_HOST and (\"HTTP_X_FORWARDED_HOST\" in self.META):\n            host = self.META[\"HTTP_X_FORWARDED_HOST\"]\n        elif \"HTTP_HOST\" in self.META:\n            host = self.META[\"HTTP_HOST\"]\n        else:\n            # Reconstruct the host using the algorithm from PEP 333.\n            host = self.META[\"SERVER_NAME\"]\n            server_port = self.get_port()\n            if server_port != (\"443\" if self.is_secure() else \"80\"):\n                host = \"%s:%s\" % (host, server_port)\n        return host\n\n# django/http/request.py:153-159  (django.http.request.HttpRequest.get_port)\nclass HttpRequest:\n    def get_port(self):\n        \"\"\"Return the port number for the request as a string.\"\"\"\n        if settings.USE_X_FORWARDED_PORT and \"HTTP_X_FORWARDED_PORT\" in self.META:\n            port = self.META[\"HTTP_X_FORWARDED_PORT\"]\n        else:\n            port = self.META[\"SERVER_PORT\"]\n        return str(port)\n\n# django/http/request.py:100-111  (django.http.request.HttpRequest._set_content_type_params)\nclass HttpRequest:\n    def _set_content_type_params(self, meta):\n        \"\"\"Set content_type, content_params, and encoding.\"\"\"\n        self.content_type, self.content_params = parse_header_parameters(\n            meta.get(\"CONTENT_TYPE\", \"\")\n        )\n        if \"charset\" in self.content_params:\n            try:\n                codecs.lookup(self.content_params[\"charset\"])\n            except LookupError:\n                pass\n            else:\n                self.encoding = self.content_params[\"charset\"]\n\n# django/http/request.py:161-162  (django.http.request.HttpRequest.get_full_path)\nclass HttpRequest:\n    def get_full_path(self, force_append_slash=False):\n        return self._get_full_path(self.path, force_append_slash)\n\n# django/http/request.py:95-98  (django.http.request.HttpRequest.accepts)\nclass HttpRequest:\n    def accepts(self, media_type):\n        return any(\n            accepted_type.match(media_type) for accepted_type in self.accepted_types\n        )\n\n# django/http/request.py:164-165  (django.http.request.HttpRequest.get_full_path_info)\nclass HttpRequest:\n    def get_full_path_info(self, force_append_slash=False):\n        return self._get_full_path(self.path_info, force_append_slash)\n\n# django/http/request.py:90-93  (django.http.request.HttpRequest.accepted_types)\nclass HttpRequest:\n    @cached_property\n    def accepted_types(self):\n        \"\"\"Return a list of MediaType instances.\"\"\"\n        return parse_accept_header(self.headers.get(\"Accept\", \"*/*\"))\n\n# django/http/request.py:167-176  (django.http.request.HttpRequest._get_full_path)\nclass HttpRequest:\n    def _get_full_path(self, path, force_append_slash):\n        # RFC 3986 requires query string arguments to be in the ASCII range.\n        # Rather than crash if this doesn't happen, we encode defensively.\n        return \"%s%s%s\" % (\n            escape_uri_path(path),\n            \"/\" if force_append_slash and not path.endswith(\"/\") else \"\",\n            (\"?\" + iri_to_uri(self.META.get(\"QUERY_STRING\", \"\")))\n            if self.META.get(\"QUERY_STRING\", \"\")\n            else \"\",\n        )\n\n# django/http/request.py:86-88  (django.http.request.HttpRequest.headers)\nclass HttpRequest:\n    @cached_property\n    def headers(self):\n        return HttpHeaders(self.META)\n\n# django/http/request.py:178-200  (django.http.request.HttpRequest.get_signed_cookie)\nclass HttpRequest:\n    def get_signed_cookie(self, key, default=RAISE_ERROR, salt=\"\", max_age=None):\n        \"\"\"\n        Attempt to return a signed cookie. If the signature fails or the\n        cookie has expired, raise an exception, unless the `default` argument\n        is provided,  in which case return that value.\n        \"\"\"\n        try:\n            cookie_value = self.COOKIES[key]\n        except KeyError:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        try:\n            value = signing.get_cookie_signer(salt=key + salt).unsign(\n                cookie_value, max_age=max_age\n            )\n        except signing.BadSignature:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        return value\n\n# django/http/request.py:77-84  (django.http.request.HttpRequest.__repr__)\nclass HttpRequest:\n    def __repr__(self):\n        if self.method is None or not self.get_full_path():\n            return \"<%s>\" % self.__class__.__name__\n        return \"<%s: %s %r>\" % (\n            self.__class__.__name__,\n            self.method,\n            self.get_full_path(),\n        )\n\n# django/http/request.py:202-241  (django.http.request.HttpRequest.build_absolute_uri)\nclass HttpRequest:\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)\n\n# django/http/request.py:59-75  (django.http.request.HttpRequest.__init__)\nclass HttpRequest:\n    def __init__(self):\n        # WARNING: The `WSGIRequest` subclass doesn't call `super`.\n        # Any variable assignment made here should also happen in\n        # `WSGIRequest.__init__()`.\n\n        self.GET = QueryDict(mutable=True)\n        self.POST = QueryDict(mutable=True)\n        self.COOKIES = {}\n        self.META = {}\n        self.FILES = MultiValueDict()\n\n        self.path = \"\"\n        self.path_info = \"\"\n        self.method = None\n        self.resolver_match = None\n        self.content_type = None\n        self.content_params = None\n\n# django/http/request.py:243-245  (django.http.request.HttpRequest._current_scheme_host)\nclass HttpRequest:\n    @cached_property\n    def _current_scheme_host(self):\n        return \"{}://{}\".format(self.scheme, self.get_host())\n\n# django/http/request.py:53-428  (django.http.request.HttpRequest)\nclass HttpRequest:\n    \"\"\"A basic HTTP request.\"\"\"\n\n    # The encoding used in GET/POST dicts. None means use default setting.\n    _encoding = None\n    _upload_handlers = []\n\n    def __init__(self):\n        # WARNING: The `WSGIRequest` subclass doesn't call `super`.\n        # Any variable assignment made here should also happen in\n        # `WSGIRequest.__init__()`.\n\n        self.GET = QueryDict(mutable=True)\n        self.POST = QueryDict(mutable=True)\n        self.COOKIES = {}\n        self.META = {}\n        self.FILES = MultiValueDict()\n\n        self.path = \"\"\n        self.path_info = \"\"\n        self.method = None\n        self.resolver_match = None\n        self.content_type = None\n        self.content_params = None\n\n    def __repr__(self):\n        if self.method is None or not self.get_full_path():\n            return \"<%s>\" % self.__class__.__name__\n        return \"<%s: %s %r>\" % (\n            self.__class__.__name__,\n            self.method,\n            self.get_full_path(),\n        )\n\n    @cached_property\n    def headers(self):\n        return HttpHeaders(self.META)\n\n    @cached_property\n    def accepted_types(self):\n        \"\"\"Return a list of MediaType instances.\"\"\"\n        return parse_accept_header(self.headers.get(\"Accept\", \"*/*\"))\n\n    def accepts(self, media_type):\n        return any(\n            accepted_type.match(media_type) for accepted_type in self.accepted_types\n        )\n\n    def _set_content_type_params(self, meta):\n        \"\"\"Set content_type, content_params, and encoding.\"\"\"\n        self.content_type, self.content_params = parse_header_parameters(\n            meta.get(\"CONTENT_TYPE\", \"\")\n        )\n        if \"charset\" in self.content_params:\n            try:\n                codecs.lookup(self.content_params[\"charset\"])\n            except LookupError:\n                pass\n            else:\n                self.encoding = self.content_params[\"charset\"]\n\n    def _get_raw_host(self):\n        \"\"\"\n        Return the HTTP host using the environment or request headers. Skip\n        allowed hosts protection, so may return an insecure host.\n        \"\"\"\n        # We try three options, in order of decreasing preference.\n        if settings.USE_X_FORWARDED_HOST and (\"HTTP_X_FORWARDED_HOST\" in self.META):\n            host = self.META[\"HTTP_X_FORWARDED_HOST\"]\n        elif \"HTTP_HOST\" in self.META:\n            host = self.META[\"HTTP_HOST\"]\n        else:\n            # Reconstruct the host using the algorithm from PEP 333.\n            host = self.META[\"SERVER_NAME\"]\n            server_port = self.get_port()\n            if server_port != (\"443\" if self.is_secure() else \"80\"):\n                host = \"%s:%s\" % (host, server_port)\n        return host\n\n    def get_host(self):\n        \"\"\"Return the HTTP host using the environment or request headers.\"\"\"\n        host = self._get_raw_host()\n\n        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.\n        allowed_hosts = settings.ALLOWED_HOSTS\n        if settings.DEBUG and not allowed_hosts:\n            allowed_hosts = [\".localhost\", \"127.0.0.1\", \"[::1]\"]\n\n        domain, port = split_domain_port(host)\n        if domain and validate_host(domain, allowed_hosts):\n            return host\n        else:\n            msg = \"Invalid HTTP_HOST header: %r.\" % host\n            if domain:\n                msg += \" You may need to add %r to ALLOWED_HOSTS.\" % domain\n            else:\n                msg += (\n                    \" The domain name provided is not valid according to RFC 1034/1035.\"\n                )\n            raise DisallowedHost(msg)\n\n    def get_port(self):\n        \"\"\"Return the port number for the request as a string.\"\"\"\n        if settings.USE_X_FORWARDED_PORT and \"HTTP_X_FORWARDED_PORT\" in self.META:\n            port = self.META[\"HTTP_X_FORWARDED_PORT\"]\n        else:\n            port = self.META[\"SERVER_PORT\"]\n        return str(port)\n\n    def get_full_path(self, force_append_slash=False):\n        return self._get_full_path(self.path, force_append_slash)\n\n    def get_full_path_info(self, force_append_slash=False):\n        return self._get_full_path(self.path_info, force_append_slash)\n\n    def _get_full_path(self, path, force_append_slash):\n        # RFC 3986 requires query string arguments to be in the ASCII range.\n        # Rather than crash if this doesn't happen, we encode defensively.\n        return \"%s%s%s\" % (\n            escape_uri_path(path),\n            \"/\" if force_append_slash and not path.endswith(\"/\") else \"\",\n            (\"?\" + iri_to_uri(self.META.get(\"QUERY_STRING\", \"\")))\n            if self.META.get(\"QUERY_STRING\", \"\")\n            else \"\",\n        )\n\n    def get_signed_cookie(self, key, default=RAISE_ERROR, salt=\"\", max_age=None):\n        \"\"\"\n        Attempt to return a signed cookie. If the signature fails or the\n        cookie has expired, raise an exception, unless the `default` argument\n        is provided,  in which case return that value.\n        \"\"\"\n        try:\n            cookie_value = self.COOKIES[key]\n        except KeyError:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        try:\n            value = signing.get_cookie_signer(salt=key + salt).unsign(\n                cookie_value, max_age=max_age\n            )\n        except signing.BadSignature:\n            if default is not RAISE_ERROR:\n                return default\n            else:\n                raise\n        return value\n\n    def build_absolute_uri(self, location=None):\n        \"\"\"\n        Build an absolute URI from the location and the variables available in\n        this request. If no ``location`` is specified, build the absolute URI\n        using request.get_full_path(). If the location is absolute, convert it\n        to an RFC 3987 compliant URI and return it. If location is relative or\n        is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base\n        URL constructed from the request variables.\n        \"\"\"\n        if location is None:\n            # Make it an absolute url (but schemeless and domainless) for the\n            # edge case that the path starts with '//'.\n            location = \"//%s\" % self.get_full_path()\n        else:\n            # Coerce lazy locations.\n            location = str(location)\n        bits = urlsplit(location)\n        if not (bits.scheme and bits.netloc):\n            # Handle the simple, most common case. If the location is absolute\n            # and a scheme or host (netloc) isn't provided, skip an expensive\n            # urljoin() as long as no path segments are '.' or '..'.\n            if (\n                bits.path.startswith(\"/\")\n                and not bits.scheme\n                and not bits.netloc\n                and \"/./\" not in bits.path\n                and \"/../\" not in bits.path\n            ):\n                # If location starts with '//' but has no netloc, reuse the\n                # schema and netloc from the current request. Strip the double\n                # slashes and continue as if it wasn't specified.\n                if location.startswith(\"//\"):\n                    location = location[2:]\n                location = self._current_scheme_host + location\n            else:\n                # Join the constructed URL with the provided location, which\n                # allows the provided location to apply query strings to the\n                # base path.\n                location = urljoin(self._current_scheme_host + self.path, location)\n        return iri_to_uri(location)\n\n    @cached_property\n    def _current_scheme_host(self):\n        return \"{}://{}\".format(self.scheme, self.get_host())\n\n    def _get_scheme(self):\n        \"\"\"\n        Hook for subclasses like WSGIRequest to implement. Return 'http' by\n        default.\n        \"\"\"\n        return \"http\"\n\n    @property\n    def scheme(self):\n        if settings.SECURE_PROXY_SSL_HEADER:\n            try:\n                header, secure_value = settings.SECURE_PROXY_SSL_HEADER\n            except ValueError:\n                raise ImproperlyConfigured(\n                    \"The SECURE_PROXY_SSL_HEADER setting must be a tuple containing \"\n                    \"two values.\"\n                )\n            header_value = self.META.get(header)\n            if header_value is not None:\n                header_value, *_ = header_value.split(\",\", 1)\n                return \"https\" if header_value.strip() == secure_value else \"http\"\n        return self._get_scheme()\n\n    def is_secure(self):\n        return self.scheme == \"https\"\n\n    @property\n    def encoding(self):\n        return self._encoding\n\n    @encoding.setter\n    def encoding(self, val):\n        \"\"\"\n        Set the encoding used for GET/POST accesses. If the GET or POST\n        dictionary has already been created, remove and recreate it on the\n        next access (so that it is decoded correctly).\n        \"\"\"\n        self._encoding = val\n        if hasattr(self, \"GET\"):\n            del self.GET\n        if hasattr(self, \"_post\"):\n            del self._post\n\n    def _initialize_handlers(self):\n        self._upload_handlers = [\n            uploadhandler.load_handler(handler, self)\n            for handler in settings.FILE_UPLOAD_HANDLERS\n        ]\n\n    @property\n    def upload_handlers(self):\n        if not self._upload_handlers:\n            # If there are no upload handlers defined, initialize them from settings.\n            self._initialize_handlers()\n        return self._upload_handlers\n\n    @upload_handlers.setter\n    def upload_handlers(self, upload_handlers):\n        if hasattr(self, \"_files\"):\n            raise AttributeError(\n                \"You cannot set the upload handlers after the upload has been \"\n                \"processed.\"\n            )\n        self._upload_handlers = upload_handlers\n\n    def parse_file_upload(self, META, post_data):\n        \"\"\"Return a tuple of (POST QueryDict, FILES MultiValueDict).\"\"\"\n        self.upload_handlers = ImmutableList(\n            self.upload_handlers,\n            warning=(\n                \"You cannot alter upload handlers after the upload has been \"\n                \"processed.\"\n            ),\n        )\n        parser = MultiPartParser(META, post_data, self.upload_handlers, self.encoding)\n        return parser.parse()\n\n    @property\n    def body(self):\n        if not hasattr(self, \"_body\"):\n            if self._read_started:\n                raise RawPostDataException(\n                    \"You cannot access body after reading from request's data stream\"\n                )\n\n            # Limit the maximum request data size that will be handled\n            # in-memory. Reject early when Content-Length is present and\n            # already exceeds the limit, avoiding reading the body at all.\n            self._check_data_too_big(int(self.META.get(\"CONTENT_LENGTH\") or 0))\n\n            # Content-Length can be absent or understated (e.g.\n            # `Transfer-Encoding: chunked` on ASGI), so for seekable\n            # streams (e.g. SpooledTemporaryFile on ASGI), check the actual\n            # buffered size before reading it all into memory.\n            if hasattr(self._stream, \"seekable\") and self._stream.seekable():\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n                did_check = True\n            else:\n                did_check = False\n\n            try:\n                if settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None and not did_check:\n                    # Read one byte past the limit to detect an oversize body\n                    # without loading it all into memory first.\n                    self._body = self.read(settings.DATA_UPLOAD_MAX_MEMORY_SIZE + 1)\n                else:\n                    self._body = self.read()\n            except OSError as e:\n                raise UnreadablePostError(*e.args) from e\n            finally:\n                self._stream.close()\n            self._stream = BytesIO(self._body)\n            if not did_check:\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n        return self._body\n\n    def _check_data_too_big(self, length):\n        if (\n            settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None\n            and length > settings.DATA_UPLOAD_MAX_MEMORY_SIZE\n        ):\n            msg = \"Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.\"\n            raise RequestDataTooBig(msg)\n\n    def _mark_post_parse_error(self):\n        self._post = QueryDict()\n        self._files = MultiValueDict()\n\n    def _load_post_and_files(self):\n        \"\"\"Populate self._post and self._files if the content-type is a form type\"\"\"\n        if self.method != \"POST\":\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n            return\n        if self._read_started and not hasattr(self, \"_body\"):\n            self._mark_post_parse_error()\n            return\n\n        if self.content_type == \"multipart/form-data\":\n            if hasattr(self, \"_body\"):\n                # Use already read data\n                data = BytesIO(self._body)\n            else:\n                data = self\n            try:\n                self._post, self._files = self.parse_file_upload(self.META, data)\n            except (MultiPartParserError, TooManyFilesSent):\n                # An error occurred while parsing POST data. Since when\n                # formatting the error the request handler might access\n                # self.POST, set self._post and self._file to prevent\n                # attempts to parse POST data again.\n                self._mark_post_parse_error()\n                raise\n        elif self.content_type == \"application/x-www-form-urlencoded\":\n            self._post, self._files = (\n                QueryDict(self.body, encoding=self._encoding),\n                MultiValueDict(),\n            )\n        else:\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n\n    def close(self):\n        if hasattr(self, \"_files\"):\n            for f in chain.from_iterable(list_[1] for list_ in self._files.lists()):\n                f.close()\n\n    # File-like and iterator interface.\n    #\n    # Expects self._stream to be set to an appropriate source of bytes by\n    # a corresponding request subclass (e.g. WSGIRequest).\n    # Also when request data has already been read by request.POST or\n    # request.body, self._stream points to a BytesIO instance\n    # containing that data.\n\n# django/http/request.py:247-252  (django.http.request.HttpRequest._get_scheme)\nclass HttpRequest:\n    def _get_scheme(self):\n        \"\"\"\n        Hook for subclasses like WSGIRequest to implement. Return 'http' by\n        default.\n        \"\"\"\n        return \"http\"\n\n# django/http/request.py:43-49  (django.http.request.RawPostDataException)\nclass RawPostDataException(Exception):\n    \"\"\"\n    You cannot access raw_post_data from a request that has\n    multipart/* POST data if it has been accessed via POST,\n    FILES, etc..\n    \"\"\"\n\n    pass\n\n# django/http/request.py:254-268  (django.http.request.HttpRequest.scheme)\nclass HttpRequest:\n    @property\n    def scheme(self):\n        if settings.SECURE_PROXY_SSL_HEADER:\n            try:\n                header, secure_value = settings.SECURE_PROXY_SSL_HEADER\n            except ValueError:\n                raise ImproperlyConfigured(\n                    \"The SECURE_PROXY_SSL_HEADER setting must be a tuple containing \"\n                    \"two values.\"\n                )\n            header_value = self.META.get(header)\n            if header_value is not None:\n                header_value, *_ = header_value.split(\",\", 1)\n                return \"https\" if header_value.strip() == secure_value else \"http\"\n        return self._get_scheme()\n\n# django/http/request.py:39-39  (django.http.request.UnreadablePostError)\nclass UnreadablePostError(OSError):\n    pass\n\n# django/http/request.py:270-271  (django.http.request.HttpRequest.is_secure)\nclass HttpRequest:\n    def is_secure(self):\n        return self.scheme == \"https\"\n\n# tests/requests_tests/tests.py:1024-1074  (tests.requests_tests.tests.HostValidationTests.test_get_host_suggestion_of_allowed_host [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=[])\n    def test_get_host_suggestion_of_allowed_host(self):\n        'get_host() makes helpful suggestions if a valid-looking host is not in'\n        ...\n\n# django/http/request.py:1-35  (django.http.request)\nimport codecs\nimport copy\nimport os\nfrom io import BytesIO\nfrom itertools import chain\nfrom urllib.parse import parse_qsl, quote, urlencode, urljoin, urlsplit\n\nfrom django.conf import settings\nfrom django.core import signing\nfrom django.core.exceptions import (\n    DisallowedHost,\n    ImproperlyConfigured,\n    RequestDataTooBig,\n    TooManyFieldsSent,\n)\nfrom django.core.files import uploadhandler\nfrom django.http.multipartparser import (\n    MultiPartParser,\n    MultiPartParserError,\n    TooManyFilesSent,\n)\nfrom django.utils.datastructures import (\n    CaseInsensitiveMapping,\n    ImmutableList,\n    MultiValueDict,\n)\nfrom django.utils.encoding import escape_uri_path, iri_to_uri\nfrom django.utils.functional import cached_property\nfrom django.utils.http import is_same_domain, parse_header_parameters\nfrom django.utils.regex_helper import _lazy_re_compile\n\nRAISE_ERROR = object()\nhost_validation_re = _lazy_re_compile(\n    r\"^([a-z0-9.-]+|\\[[a-f0-9]*:[a-f0-9\\.:]+\\])(:[0-9]+)?$\"\n)\n\n# django/http/request.py:273-275  (django.http.request.HttpRequest.encoding)\nclass HttpRequest:\n    @property\n    def encoding(self):\n        return self._encoding\n\n# django/http/request.py:277-288  (django.http.request.HttpRequest.encoding)\nclass HttpRequest:\n    @encoding.setter\n    def encoding(self, val):\n        \"\"\"\n        Set the encoding used for GET/POST accesses. If the GET or POST\n        dictionary has already been created, remove and recreate it on the\n        next access (so that it is decoded correctly).\n        \"\"\"\n        self._encoding = val\n        if hasattr(self, \"GET\"):\n            del self.GET\n        if hasattr(self, \"_post\"):\n            del self._post\n\n# django/http/request.py:290-294  (django.http.request.HttpRequest._initialize_handlers)\nclass HttpRequest:\n    def _initialize_handlers(self):\n        self._upload_handlers = [\n            uploadhandler.load_handler(handler, self)\n            for handler in settings.FILE_UPLOAD_HANDLERS\n        ]\n\n# django/http/request.py:296-301  (django.http.request.HttpRequest.upload_handlers)\nclass HttpRequest:\n    @property\n    def upload_handlers(self):\n        if not self._upload_handlers:\n            # If there are no upload handlers defined, initialize them from settings.\n            self._initialize_handlers()\n        return self._upload_handlers\n\n# django/http/request.py:303-310  (django.http.request.HttpRequest.upload_handlers)\nclass HttpRequest:\n    @upload_handlers.setter\n    def upload_handlers(self, upload_handlers):\n        if hasattr(self, \"_files\"):\n            raise AttributeError(\n                \"You cannot set the upload handlers after the upload has been \"\n                \"processed.\"\n            )\n        self._upload_handlers = upload_handlers\n\n# django/http/request.py:312-322  (django.http.request.HttpRequest.parse_file_upload)\nclass HttpRequest:\n    def parse_file_upload(self, META, post_data):\n        \"\"\"Return a tuple of (POST QueryDict, FILES MultiValueDict).\"\"\"\n        self.upload_handlers = ImmutableList(\n            self.upload_handlers,\n            warning=(\n                \"You cannot alter upload handlers after the upload has been \"\n                \"processed.\"\n            ),\n        )\n        parser = MultiPartParser(META, post_data, self.upload_handlers, self.encoding)\n        return parser.parse()\n\n# django/http/request.py:324-365  (django.http.request.HttpRequest.body)\nclass HttpRequest:\n    @property\n    def body(self):\n        if not hasattr(self, \"_body\"):\n            if self._read_started:\n                raise RawPostDataException(\n                    \"You cannot access body after reading from request's data stream\"\n                )\n\n            # Limit the maximum request data size that will be handled\n            # in-memory. Reject early when Content-Length is present and\n            # already exceeds the limit, avoiding reading the body at all.\n            self._check_data_too_big(int(self.META.get(\"CONTENT_LENGTH\") or 0))\n\n            # Content-Length can be absent or understated (e.g.\n            # `Transfer-Encoding: chunked` on ASGI), so for seekable\n            # streams (e.g. SpooledTemporaryFile on ASGI), check the actual\n            # buffered size before reading it all into memory.\n            if hasattr(self._stream, \"seekable\") and self._stream.seekable():\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n                did_check = True\n            else:\n                did_check = False\n\n            try:\n                if settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None and not did_check:\n                    # Read one byte past the limit to detect an oversize body\n                    # without loading it all into memory first.\n                    self._body = self.read(settings.DATA_UPLOAD_MAX_MEMORY_SIZE + 1)\n                else:\n                    self._body = self.read()\n            except OSError as e:\n                raise UnreadablePostError(*e.args) from e\n            finally:\n                self._stream.close()\n            self._stream = BytesIO(self._body)\n            if not did_check:\n                stream_size = self._stream.seek(0, os.SEEK_END)\n                self._check_data_too_big(stream_size)\n                self._stream.seek(0)\n        return self._body\n\n# django/http/request.py:367-373  (django.http.request.HttpRequest._check_data_too_big)\nclass HttpRequest:\n    def _check_data_too_big(self, length):\n        if (\n            settings.DATA_UPLOAD_MAX_MEMORY_SIZE is not None\n            and length > settings.DATA_UPLOAD_MAX_MEMORY_SIZE\n        ):\n            msg = \"Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.\"\n            raise RequestDataTooBig(msg)\n\n# django/http/request.py:375-377  (django.http.request.HttpRequest._mark_post_parse_error)\nclass HttpRequest:\n    def _mark_post_parse_error(self):\n        self._post = QueryDict()\n        self._files = MultiValueDict()\n\n# django/http/request.py:379-415  (django.http.request.HttpRequest._load_post_and_files)\nclass HttpRequest:\n    def _load_post_and_files(self):\n        \"\"\"Populate self._post and self._files if the content-type is a form type\"\"\"\n        if self.method != \"POST\":\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n            return\n        if self._read_started and not hasattr(self, \"_body\"):\n            self._mark_post_parse_error()\n            return\n\n        if self.content_type == \"multipart/form-data\":\n            if hasattr(self, \"_body\"):\n                # Use already read data\n                data = BytesIO(self._body)\n            else:\n                data = self\n            try:\n                self._post, self._files = self.parse_file_upload(self.META, data)\n            except (MultiPartParserError, TooManyFilesSent):\n                # An error occurred while parsing POST data. Since when\n                # formatting the error the request handler might access\n                # self.POST, set self._post and self._file to prevent\n                # attempts to parse POST data again.\n                self._mark_post_parse_error()\n                raise\n        elif self.content_type == \"application/x-www-form-urlencoded\":\n            self._post, self._files = (\n                QueryDict(self.body, encoding=self._encoding),\n                MultiValueDict(),\n            )\n        else:\n            self._post, self._files = (\n                QueryDict(encoding=self._encoding),\n                MultiValueDict(),\n            )\n\n# tests/requests_tests/tests.py:1006-1022  (tests.requests_tests.tests.HostValidationTests.test_host_validation_in_debug_mode [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(DEBUG=True, ALLOWED_HOSTS=[])\n    def test_host_validation_in_debug_mode(self):\n        'If ALLOWED_HOSTS is empty and DEBUG is True, variants of localhost are'\n        ...\n\n# django/http/request.py:417-420  (django.http.request.HttpRequest.close)\nclass HttpRequest:\n    def close(self):\n        if hasattr(self, \"_files\"):\n            for f in chain.from_iterable(list_[1] for list_ in self._files.lists()):\n                f.close()\n\n# django/http/request.py:430-435  (django.http.request.HttpRequest.read)\nclass HttpRequest:\n    def read(self, *args, **kwargs):\n        self._read_started = True\n        try:\n            return self._stream.read(*args, **kwargs)\n        except OSError as e:\n            raise UnreadablePostError(*e.args) from e\n\n# django/http/request.py:437-442  (django.http.request.HttpRequest.readline)\nclass HttpRequest:\n    def readline(self, *args, **kwargs):\n        self._read_started = True\n        try:\n            return self._stream.readline(*args, **kwargs)\n        except OSError as e:\n            raise UnreadablePostError(*e.args) from e\n\n# django/http/request.py:444-445  (django.http.request.HttpRequest.__iter__)\nclass HttpRequest:\n    def __iter__(self):\n        return iter(self.readline, b\"\")\n\n# django/http/request.py:447-448  (django.http.request.HttpRequest.readlines)\nclass HttpRequest:\n    def readlines(self):\n        return list(self)\n\n# django/http/request.py:452-454  (django.http.request.HttpHeaders)\nclass HttpHeaders(CaseInsensitiveMapping):\n    HTTP_PREFIX = \"HTTP_\"\n    # PEP 333 gives two headers which aren't prepended with HTTP_.\n    UNPREFIXED_HEADERS = {\"CONTENT_TYPE\", \"CONTENT_LENGTH\"}\n\n# django/http/request.py:456-462  (django.http.request.HttpHeaders.__init__)\nclass HttpHeaders(CaseInsensitiveMapping):\n    def __init__(self, environ):\n        headers = {}\n        for header, value in environ.items():\n            name = self.parse_header_name(header)\n            if name:\n                headers[name] = value\n        super().__init__(headers)\n\n# django/http/request.py:464-466  (django.http.request.HttpHeaders.__getitem__)\nclass HttpHeaders(CaseInsensitiveMapping):\n    def __getitem__(self, key):\n        \"\"\"Allow header lookup using underscores in place of hyphens.\"\"\"\n        return super().__getitem__(key.replace(\"_\", \"-\"))\n\n# django/http/request.py:468-474  (django.http.request.HttpHeaders.parse_header_name)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def parse_header_name(cls, header):\n        if header.startswith(cls.HTTP_PREFIX):\n            header = header[len(cls.HTTP_PREFIX) :]\n        elif header not in cls.UNPREFIXED_HEADERS:\n            return None\n        return header.replace(\"_\", \"-\").title()\n\n# django/http/request.py:476-481  (django.http.request.HttpHeaders.to_wsgi_name)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def to_wsgi_name(cls, header):\n        header = header.replace(\"-\", \"_\").upper()\n        if header in cls.UNPREFIXED_HEADERS:\n            return header\n        return f\"{cls.HTTP_PREFIX}{header}\"\n\n# tests/requests_tests/tests.py:910-972  (tests.requests_tests.tests.HostValidationTests.test_http_get_host_with_x_forwarded_host [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_HOST=True, ALLOWED_HOSTS=[\"*\"])\n    def test_http_get_host_with_x_forwarded_host(self):\n        # Check if X_FORWARDED_HOST is provided.\n        ...\n\n# django/http/request.py:483-485  (django.http.request.HttpHeaders.to_asgi_name)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def to_asgi_name(cls, header):\n        return header.replace(\"-\", \"_\").upper()\n\n# django/http/request.py:487-492  (django.http.request.HttpHeaders.to_wsgi_names)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def to_wsgi_names(cls, headers):\n        return {\n            cls.to_wsgi_name(header_name): value\n            for header_name, value in headers.items()\n        }\n\n# django/http/request.py:494-499  (django.http.request.HttpHeaders.to_asgi_names)\nclass HttpHeaders(CaseInsensitiveMapping):\n    @classmethod\n    def to_asgi_names(cls, headers):\n        return {\n            cls.to_asgi_name(header_name): value\n            for header_name, value in headers.items()\n        }\n\n# django/http/request.py:503-520  (django.http.request.QueryDict)\nclass QueryDict(MultiValueDict):\n    \"\"\"\n    A specialized MultiValueDict which represents a query string.\n\n    A QueryDict can be used to represent GET or POST data. It subclasses\n    MultiValueDict since keys in such data can be repeated, for instance\n    in the data from a form with a <select multiple> field.\n\n    By default QueryDicts are immutable, though the copy() method\n    will always return a mutable copy.\n\n    Both keys and values set on this class are converted from the given encoding\n    (DEFAULT_CHARSET by default) to str.\n    \"\"\"\n\n    # These are both reset in __init__, but is specified here at the class\n    # level so that unpickling will have valid values\n    _mutable = True\n    _encoding = None\n\n# django/http/request.py:522-550  (django.http.request.QueryDict.__init__)\nclass QueryDict(MultiValueDict):\n    def __init__(self, query_string=None, mutable=False, encoding=None):\n        super().__init__()\n        self.encoding = encoding or settings.DEFAULT_CHARSET\n        query_string = query_string or \"\"\n        parse_qsl_kwargs = {\n            \"keep_blank_values\": True,\n            \"encoding\": self.encoding,\n            \"max_num_fields\": settings.DATA_UPLOAD_MAX_NUMBER_FIELDS,\n        }\n        if isinstance(query_string, bytes):\n            # query_string normally contains URL-encoded data, a subset of ASCII.\n            try:\n                query_string = query_string.decode(self.encoding)\n            except UnicodeDecodeError:\n                # ... but some user agents are misbehaving :-(\n                query_string = query_string.decode(\"iso-8859-1\")\n        try:\n            for key, value in parse_qsl(query_string, **parse_qsl_kwargs):\n                self.appendlist(key, value)\n        except ValueError as e:\n            # ValueError can also be raised if the strict_parsing argument to\n            # parse_qsl() is True. As that is not used by Django, assume that\n            # the exception was raised by exceeding the value of max_num_fields\n            # instead of fragile checks of exception message strings.\n            raise TooManyFieldsSent(\n                \"The number of GET/POST parameters exceeded \"\n                \"settings.DATA_UPLOAD_MAX_NUMBER_FIELDS.\"\n            ) from e\n        self._mutable = mutable\n\n# django/http/request.py:552-563  (django.http.request.QueryDict.fromkeys)\nclass QueryDict(MultiValueDict):\n    @classmethod\n    def fromkeys(cls, iterable, value=\"\", mutable=False, encoding=None):\n        \"\"\"\n        Return a new QueryDict with keys (may be repeated) from an iterable and\n        values from value.\n        \"\"\"\n        q = cls(\"\", mutable=True, encoding=encoding)\n        for key in iterable:\n            q.appendlist(key, value)\n        if not mutable:\n            q._mutable = False\n        return q\n\n# django/http/request.py:565-569  (django.http.request.QueryDict.encoding)\nclass QueryDict(MultiValueDict):\n    @property\n    def encoding(self):\n        if self._encoding is None:\n            self._encoding = settings.DEFAULT_CHARSET\n        return self._encoding\n\n# django/http/request.py:571-573  (django.http.request.QueryDict.encoding)\nclass QueryDict(MultiValueDict):\n    @encoding.setter\n    def encoding(self, value):\n        self._encoding = value\n\n# django/http/request.py:575-577  (django.http.request.QueryDict._assert_mutable)\nclass QueryDict(MultiValueDict):\n    def _assert_mutable(self):\n        if not self._mutable:\n            raise AttributeError(\"This QueryDict instance is immutable\")\n\n# django/http/request.py:579-583  (django.http.request.QueryDict.__setitem__)\nclass QueryDict(MultiValueDict):\n    def __setitem__(self, key, value):\n        self._assert_mutable()\n        key = bytes_to_text(key, self.encoding)\n        value = bytes_to_text(value, self.encoding)\n        super().__setitem__(key, value)\n\n# tests/requests_tests/tests.py:827-908  (tests.requests_tests.tests.HostValidationTests.test_http_get_host [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(\n        USE_X_FORWARDED_HOST=False,\n        ALLOWED_HOSTS=[\n            \"forward.com\",\n            \"example.com\",\n            \"internal.com\",\n            \"12.34.56.78\",\n            \"[2001:19f0:feee::dead:beef:cafe]\",\n            \"xn--4ca9at.com\",\n            \".multitenant.com\",\n            \"INSENSITIVE.com\",\n            \"[::ffff:169.254.169.254]\",\n        ],\n    )\n    def test_http_get_host(self):\n        # Check if X_FORWARDED_HOST is provided.\n        ...\n\n# django/http/request.py:585-587  (django.http.request.QueryDict.__delitem__)\nclass QueryDict(MultiValueDict):\n    def __delitem__(self, key):\n        self._assert_mutable()\n        super().__delitem__(key)\n\n# django/http/request.py:589-593  (django.http.request.QueryDict.__copy__)\nclass QueryDict(MultiValueDict):\n    def __copy__(self):\n        result = self.__class__(\"\", mutable=True, encoding=self.encoding)\n        for key, value in self.lists():\n            result.setlist(key, value)\n        return result\n\n# django/http/request.py:595-600  (django.http.request.QueryDict.__deepcopy__)\nclass QueryDict(MultiValueDict):\n    def __deepcopy__(self, memo):\n        result = self.__class__(\"\", mutable=True, encoding=self.encoding)\n        memo[id(self)] = result\n        for key, value in self.lists():\n            result.setlist(copy.deepcopy(key, memo), copy.deepcopy(value, memo))\n        return result\n\n# django/http/request.py:602-606  (django.http.request.QueryDict.setlist)\nclass QueryDict(MultiValueDict):\n    def setlist(self, key, list_):\n        self._assert_mutable()\n        key = bytes_to_text(key, self.encoding)\n        list_ = [bytes_to_text(elt, self.encoding) for elt in list_]\n        super().setlist(key, list_)\n\n# django/http/request.py:608-610  (django.http.request.QueryDict.setlistdefault)\nclass QueryDict(MultiValueDict):\n    def setlistdefault(self, key, default_list=None):\n        self._assert_mutable()\n        return super().setlistdefault(key, default_list)\n\n# django/http/request.py:612-616  (django.http.request.QueryDict.appendlist)\nclass QueryDict(MultiValueDict):\n    def appendlist(self, key, value):\n        self._assert_mutable()\n        key = bytes_to_text(key, self.encoding)\n        value = bytes_to_text(value, self.encoding)\n        super().appendlist(key, value)\n\n# django/http/request.py:618-620  (django.http.request.QueryDict.pop)\nclass QueryDict(MultiValueDict):\n    def pop(self, key, *args):\n        self._assert_mutable()\n        return super().pop(key, *args)\n\n# django/http/request.py:622-624  (django.http.request.QueryDict.popitem)\nclass QueryDict(MultiValueDict):\n    def popitem(self):\n        self._assert_mutable()\n        return super().popitem()\n\n# django/http/request.py:626-628  (django.http.request.QueryDict.clear)\nclass QueryDict(MultiValueDict):\n    def clear(self):\n        self._assert_mutable()\n        super().clear()\n\n# django/http/request.py:630-634  (django.http.request.QueryDict.setdefault)\nclass QueryDict(MultiValueDict):\n    def setdefault(self, key, default=None):\n        self._assert_mutable()\n        key = bytes_to_text(key, self.encoding)\n        default = bytes_to_text(default, self.encoding)\n        return super().setdefault(key, default)\n\n# django/views/i18n.py:19-63  (django.views.i18n.set_language [signature])\ndef set_language(request):\n    'Redirect to a given URL while setting the chosen language in the session'\n    ...\n\n# django/http/request.py:636-638  (django.http.request.QueryDict.copy)\nclass QueryDict(MultiValueDict):\n    def copy(self):\n        \"\"\"Return a mutable copy of this object.\"\"\"\n        return self.__deepcopy__({})\n\n# django/http/request.py:640-670  (django.http.request.QueryDict.urlencode)\nclass QueryDict(MultiValueDict):\n    def urlencode(self, safe=None):\n        \"\"\"\n        Return an encoded string of all query string arguments.\n\n        `safe` specifies characters which don't require quoting, for example::\n\n            >>> q = QueryDict(mutable=True)\n            >>> q['next'] = '/a&b/'\n            >>> q.urlencode()\n            'next=%2Fa%26b%2F'\n            >>> q.urlencode(safe='/')\n            'next=/a%26b/'\n        \"\"\"\n        output = []\n        if safe:\n            safe = safe.encode(self.encoding)\n\n            def encode(k, v):\n                return \"%s=%s\" % ((quote(k, safe), quote(v, safe)))\n\n        else:\n\n            def encode(k, v):\n                return urlencode({k: v})\n\n        for k, list_ in self.lists():\n            output.extend(\n                encode(k.encode(self.encoding), str(v).encode(self.encoding))\n                for v in list_\n            )\n        return \"&\".join(output)\n\n# django/http/request.py:674-678  (django.http.request.MediaType.__init__)\nclass MediaType:\n    def __init__(self, media_type_raw_line):\n        full_type, self.params = parse_header_parameters(\n            media_type_raw_line if media_type_raw_line else \"\"\n        )\n        self.main_type, _, self.sub_type = full_type.partition(\"/\")\n\n# django/http/request.py:680-686  (django.http.request.MediaType.__str__)\nclass MediaType:\n    def __str__(self):\n        params_str = \"\".join(\"; %s=%s\" % (k, v) for k, v in self.params.items())\n        return \"%s%s%s\" % (\n            self.main_type,\n            (\"/%s\" % self.sub_type) if self.sub_type else \"\",\n            params_str,\n        )\n\n# django/http/request.py:688-689  (django.http.request.MediaType.__repr__)\nclass MediaType:\n    def __repr__(self):\n        return \"<%s: %s>\" % (self.__class__.__qualname__, self)\n\n# django/http/request.py:691-693  (django.http.request.MediaType.is_all_types)\nclass MediaType:\n    @property\n    def is_all_types(self):\n        return self.main_type == \"*\" and self.sub_type == \"*\"\n\n# django/http/request.py:695-701  (django.http.request.MediaType.match)\nclass MediaType:\n    def match(self, other):\n        if self.is_all_types:\n            return True\n        other = MediaType(other)\n        if self.main_type == other.main_type and self.sub_type in {\"*\", other.sub_type}:\n            return True\n        return False\n\n# django/http/request.py:704-706  (django.http.request)\n# It's neither necessary nor appropriate to use\n# django.utils.encoding.force_str() for parsing URLs and form inputs. Thus,\n# this slightly more restricted function, used by QueryDict.\n\n# django/http/request.py:707-718  (django.http.request.bytes_to_text)\ndef bytes_to_text(s, encoding):\n    \"\"\"\n    Convert bytes objects to strings, using the given encoding. Illegally\n    encoded input characters are replaced with Unicode \"unknown\" codepoint\n    (\\ufffd).\n\n    Return any non-bytes objects without change.\n    \"\"\"\n    if isinstance(s, bytes):\n        return str(s, encoding, \"replace\")\n    else:\n        return s\n\n# django/http/request.py:721-740  (django.http.request.split_domain_port)\ndef split_domain_port(host):\n    \"\"\"\n    Return a (domain, port) tuple from a given host.\n\n    Returned domain is lowercased. If the host is invalid, the domain will be\n    empty.\n    \"\"\"\n    host = host.lower()\n\n    if not host_validation_re.match(host):\n        return \"\", \"\"\n\n    if host[-1] == \"]\":\n        # It's an IPv6 address without a port.\n        return host, \"\"\n    bits = host.rsplit(\":\", 1)\n    domain, port = bits if len(bits) == 2 else (bits[0], \"\")\n    # Remove a trailing dot (if present) from the domain.\n    domain = domain[:-1] if domain.endswith(\".\") else domain\n    return domain, port\n\n# django/middleware/csrf.py:276-300  (django.middleware.csrf.CsrfViewMiddleware._origin_verified [signature])\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def _origin_verified(self, request):\n        ...\n\n# django/http/request.py:743-760  (django.http.request.validate_host)\ndef validate_host(host, allowed_hosts):\n    \"\"\"\n    Validate the given host for this site.\n\n    Check that the host looks valid and matches a host or host pattern in the\n    given list of ``allowed_hosts``. Any pattern beginning with a period\n    matches a domain and all its subdomains (e.g. ``.example.com`` matches\n    ``example.com`` and any subdomain), ``*`` matches anything, and anything\n    else must match exactly.\n\n    Note: This function assumes that the given host is lowercased and has\n    already had the port, if any, stripped off.\n\n    Return ``True`` for a valid host, ``False`` otherwise.\n    \"\"\"\n    return any(\n        pattern == \"*\" or is_same_domain(host, pattern) for pattern in allowed_hosts\n    )\n\n# django/http/request.py:763-764  (django.http.request.parse_accept_header)\ndef parse_accept_header(header):\n    return [MediaType(token) for token in header.split(\",\") if token.strip()]\n\n# tests/sites_tests/tests.py:109-143  (tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_no_site_id_and_handle_port_fallback [signature])\nclass SitesFrameworkTests(TestCase):\n    @override_settings(SITE_ID=None, ALLOWED_HOSTS=[\"example.com\", \"example.net\"])\n    def test_get_current_site_no_site_id_and_handle_port_fallback(self):\n        ...\n\n# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme [signature])\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    'Return ``True`` if the url uses an allowed host and a safe scheme.'\n    ...\n\n# tests/auth_tests/test_views.py:203-220  (tests.auth_tests.test_views.PasswordResetTest.test_poisoned_http_host [signature])\nclass PasswordResetTest(AuthViewsTestCase):\n    @override_settings(DEBUG_PROPAGATE_EXCEPTIONS=True)\n    def test_poisoned_http_host(self):\n        \"Poisoned HTTP_HOST headers can't be used for reset emails\"\n        ...\n\n# django/contrib/sites/models.py:34-46  (django.contrib.sites.models.SiteManager._get_site_by_request [signature])\nclass SiteManager(models.Manager):\n    def _get_site_by_request(self, request):\n        ...\n\n# django/middleware/csrf.py:302-345  (django.middleware.csrf.CsrfViewMiddleware._check_referer [signature])\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def _check_referer(self, request):\n        ...\n\n# tests/sites_tests/tests.py:96-107  (tests.sites_tests.tests.SitesFrameworkTests.test_get_current_site_host_with_trailing_dot [signature])\nclass SitesFrameworkTests(TestCase):\n    @override_settings(SITE_ID=None, ALLOWED_HOSTS=[\"example.com\"])\n    def test_get_current_site_host_with_trailing_dot(self):\n        'The site is matched if the name in the request has a trailing dot.'\n        ...\n\n# tests/requests_tests/tests.py:974-988  (tests.requests_tests.tests.HostValidationTests.test_get_port [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_PORT=False)\n    def test_get_port(self):\n        ...\n\n# tests/requests_tests/tests.py:990-1004  (tests.requests_tests.tests.HostValidationTests.test_get_port_with_x_forwarded_port [signature])\nclass HostValidationTests(SimpleTestCase):\n    @override_settings(USE_X_FORWARDED_PORT=True)\n    def test_get_port_with_x_forwarded_port(self):\n        ...\n\n# tests/requests_tests/tests.py:1090-1097  (tests.requests_tests.tests.BuildAbsoluteURITests.test_host_retrieval [signature])\nclass BuildAbsoluteURITests(SimpleTestCase):\n    def test_host_retrieval(self):\n        ...\n\n# tests/test_client_regress/tests.py:497-519  (tests.test_client_regress.tests.AssertRedirectsTests.test_redirect_to_different_host [signature])\nclass AssertRedirectsTests(SimpleTestCase):\n    @modify_settings(ALLOWED_HOSTS={\"append\": \"otherserver\"})\n    def test_redirect_to_different_host(self):\n        'The test client will preserve scheme, host and port changes'\n        ...\n\n# django/utils/http.py:239-256  (django.utils.http.is_same_domain [signature])\ndef is_same_domain(host, pattern):\n    'Return ``True`` if the host is either an exact match or a match'\n    ...\n\n# django/contrib/sites/requests.py:2-8  (django.contrib.sites.requests.RequestSite [signature])\nclass RequestSite:\n    'A class that shares the primary interface of Site (i.e., it has ``domain``'\n    ...\n\n# django/middleware/security.py:21-31  (django.middleware.security.SecurityMiddleware.process_request [signature])\nclass SecurityMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        ...\n\n# django/middleware/csrf.py:419-474  (django.middleware.csrf.CsrfViewMiddleware.process_view [signature])\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def process_view(self, request, callback, callback_args, callback_kwargs):\n        ...\n\n# django/middleware/common.py:34-60  (django.middleware.common.CommonMiddleware.process_request [signature])\nclass CommonMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        'Check for denied User-Agents and rewrite the URL based on'\n        ...\n\n# django/views/debug.py:315-324  (django.views.debug.ExceptionReporter._get_raw_insecure_uri [signature])\nclass ExceptionReporter:\n    def _get_raw_insecure_uri(self):\n        'Return an absolute URI from variables available in this request. Skip'\n        ...\n\n# tests/utils_tests/test_http.py:235-249  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_no_allowed_hosts [signature])\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_no_allowed_hosts(self):\n        # A path without host is allowed.\n        ...\n\n# tests/utils_tests/test_http.py:251-263  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_allowed_hosts_str [signature])\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_allowed_hosts_str(self):\n        ...\n\n# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme [signature])\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    ...\n\n# tests/sites_tests/tests.py:228-231  (tests.sites_tests.tests.RequestSiteTests.setUp [signature])\nclass RequestSiteTests(SimpleTestCase):\n    def setUp(self):\n        ...\n\n# tests/view_tests/tests/test_debug.py:1118-1124  (tests.view_tests.tests.test_debug.ExceptionReporterTests.test_disallowed_host [signature])\nclass ExceptionReporterTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=\"example.com\")\n    def test_disallowed_host(self):\n        'An exception report can be generated even for a disallowed host.'\n        ...\n\n# tests/view_tests/tests/test_debug.py:1328-1334  (tests.view_tests.tests.test_debug.PlainTextReportTests.test_disallowed_host [signature])\nclass PlainTextReportTests(SimpleTestCase):\n    @override_settings(ALLOWED_HOSTS=\"example.com\")\n    def test_disallowed_host(self):\n        'An exception report can be generated even for a disallowed host.'\n        ...\n\n# tests/test_client/views.py:114-125  (tests.test_client.views.json_view [signature])\ndef json_view(request):\n    \"A view that expects a request with the header 'application/json' and JSON\"\n    ...\n\n# tests/test_client/views.py:36-60  (tests.test_client.views.trace_view [signature])\ndef trace_view(request):\n    'A simple view that expects a TRACE request and echoes its status line.'\n    ...\n\n# tests/csrf_tests/tests.py:202-205  (tests.csrf_tests.tests.TestingHttpRequest [signature])\nclass TestingHttpRequest(HttpRequest):\n    'A version of HttpRequest that lets one track and change some things more'\n    ...\n\n# django/middleware/common.py:119-143  (django.middleware.common.BrokenLinkEmailsMiddleware.process_response [signature])\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        'Send broken link emails for relevant 404 NOT FOUND responses.'\n        ...\n\n# tests/utils_tests/test_http.py:226-233  (tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.test_basic_auth [signature])\nclass URLHasAllowedHostAndSchemeTests(unittest.TestCase):\n    def test_basic_auth(self):\n        # Valid basic auth credentials are allowed.\n        ...\n\n# django/contrib/sites/models.py:48-68  (django.contrib.sites.models.SiteManager.get_current [signature])\nclass SiteManager(models.Manager):\n    def get_current(self, request=None):\n        \"Return the current Site based on the SITE_ID in the project's settings.\"\n        ...\n\n## Task\n\nYou are debugging how Django resolves and validates the HTTP Host\nheader in django/http/request.py. Starting from\n`HttpRequest.get_host`, trace the real causal pipeline that\nvalidates the host, in the order each stage is actually reached, up\nto and including the call that checks the parsed domain against\nALLOWED_HOSTS. Assume the parsed host has a non-empty domain\ncomponent, so the validation call is genuinely reached.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.http.request.HttpRequest.get_host\", \"django.http.request.HttpRequest._get_raw_host\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

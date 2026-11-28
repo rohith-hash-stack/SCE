@@ -160,37 +160,44 @@ def _subword_token_count(word: str) -> int:
     return max(total, 1)
 
 
+#: The official SHA-256 of `cl100k_base.tiktoken`, as pinned by `tiktoken` itself (`tiktoken_ext.openai_public`,
+#: `expected_hash`). The vendored asset is used only if it matches.
+CL100K_SHA256 = "223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7"
+CL100K_URL = "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken"
+
+
 def get_offline_bpe_encoding():
-    """Construct a real `tiktoken.Encoding` directly from
-    `OFFLINE_BPE_ASSET_PATH`, bypassing `tiktoken.get_encoding`'s network
-    fetch entirely - `load_tiktoken_bpe` only ever reads the local file
-    this points at. Raises `FileNotFoundError` if that asset isn't
-    present (the caller, `_TokenizerState.resolve` below, catches this
-    and falls through to the network-attempting path instead - the
-    presence of this file is optional, checked once per process, never
-    required).
+    """The real `cl100k_base` encoding from the vendored asset at `OFFLINE_BPE_ASSET_PATH`, with no network call.
+
+    The asset is checked against `CL100K_SHA256` first; a missing asset raises `FileNotFoundError`, a mismatched one
+    `ValueError` (the caller, `_TokenizerState.resolve`, then falls through to tiktoken's own loading). It is then
+    served to `tiktoken.get_encoding` from a private cache directory under tiktoken's own cache key, so the encoding
+    is built by tiktoken's own constructor - the same pattern, special tokens and hash check as on a machine that
+    downloads it - and token counts are identical on every machine.
     """
+    import hashlib
+    import os
+    import shutil
+    import tempfile
+
     import tiktoken
-    from tiktoken.load import load_tiktoken_bpe
 
     if not OFFLINE_BPE_ASSET_PATH.exists():
         raise FileNotFoundError(f"No vendored offline BPE asset at {OFFLINE_BPE_ASSET_PATH}")
-    mergeable_ranks = load_tiktoken_bpe(str(OFFLINE_BPE_ASSET_PATH))
-    return tiktoken.Encoding(
-        name="cl100k_base_offline",
-        pat_str=(
-            r"""(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}"""
-            r"""| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"""
-        ),
-        mergeable_ranks=mergeable_ranks,
-        special_tokens={
-            "<|endoftext|>": 100257,
-            "<|fim_prefix|>": 100258,
-            "<|fim_middle|>": 100259,
-            "<|fim_suffix|>": 100260,
-            "<|endofprompt|>": 100276,
-        },
-    )
+    digest = hashlib.sha256(OFFLINE_BPE_ASSET_PATH.read_bytes()).hexdigest()
+    if digest != CL100K_SHA256:
+        raise ValueError(f"vendored BPE asset checksum mismatch: {digest} != {CL100K_SHA256}")
+    with tempfile.TemporaryDirectory(prefix="prism_tiktoken_") as cache:
+        shutil.copyfile(OFFLINE_BPE_ASSET_PATH, os.path.join(cache, hashlib.sha1(CL100K_URL.encode()).hexdigest()))
+        previous = os.environ.get("TIKTOKEN_CACHE_DIR")
+        os.environ["TIKTOKEN_CACHE_DIR"] = cache
+        try:
+            return tiktoken.get_encoding(TIKTOKEN_ENCODING_NAME)
+        finally:
+            if previous is None:
+                os.environ.pop("TIKTOKEN_CACHE_DIR", None)
+            else:
+                os.environ["TIKTOKEN_CACHE_DIR"] = previous
 
 
 class _TokenizerState:

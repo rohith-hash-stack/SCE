@@ -1,0 +1,1201 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t13_001_blast_reverse",
+  "items": [
+   {
+    "source_id": "django/urls/base.py:27-88",
+    "content": "# django/urls/base.py:27-88  (django.urls.base.reverse)\ndef reverse(viewname, urlconf=None, args=None, kwargs=None, current_app=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    resolver = get_resolver(urlconf)\n    args = args or []\n    kwargs = kwargs or {}\n\n    prefix = get_script_prefix()\n\n    if not isinstance(viewname, str):\n        view = viewname\n    else:\n        *path, view = viewname.split(\":\")\n\n        if current_app:\n            current_path = current_app.split(\":\")\n            current_path.reverse()\n        else:\n            current_path = None\n\n        resolved_path = []\n        ns_pattern = \"\"\n        ns_converters = {}\n        for ns in path:\n            current_ns = current_path.pop() if current_path else None\n            # Lookup the name to see if it could be an app identifier.\n            try:\n                app_list = resolver.app_dict[ns]\n                # Yes! Path part matches an app in the current Resolver.\n                if current_ns and current_ns in app_list:\n                    # If we are reversing for a particular app, use that\n                    # namespace.\n                    ns = current_ns\n                elif ns not in app_list:\n                    # The name isn't shared by one of the instances (i.e.,\n                    # the default) so pick the first instance as the default.\n                    ns = app_list[0]\n            except KeyError:\n                pass\n\n            if ns != current_ns:\n                current_path = None\n\n            try:\n                extra, resolver = resolver.namespace_dict[ns]\n                resolved_path.append(ns)\n                ns_pattern += extra\n                ns_converters.update(resolver.pattern.converters)\n            except KeyError as key:\n                if resolved_path:\n                    raise NoReverseMatch(\n                        \"%s is not a registered namespace inside '%s'\"\n                        % (key, \":\".join(resolved_path))\n                    )\n                else:\n                    raise NoReverseMatch(\"%s is not a registered namespace\" % key)\n        if ns_pattern:\n            resolver = get_ns_resolver(\n                ns_pattern, resolver, tuple(ns_converters.items())\n            )\n\n    return resolver._reverse_with_prefix(view, prefix, *args, **kwargs)",
+    "token_count": 459,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.reverse"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 459
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:21-24",
+    "content": "# django/urls/base.py:21-24  (django.urls.base.resolve)\ndef resolve(path, urlconf=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    return get_resolver(urlconf).resolve(path)",
+    "token_count": 52,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.resolve"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:91-91",
+    "content": "# django/urls/base.py:91-91  (django.urls.base)\nreverse_lazy = lazy(reverse, str)",
+    "token_count": 26,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 26
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:1-18",
+    "content": "# django/urls/base.py:1-18  (django.urls.base)\nfrom urllib.parse import unquote, urlsplit, urlunsplit\n\nfrom asgiref.local import Local\n\nfrom django.utils.functional import lazy\nfrom django.utils.translation import override\n\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import _get_cached_resolver, get_ns_resolver, get_resolver\nfrom .utils import get_callable\n\n# SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for\n# the current thread (which is the only one we ever access), it is assumed to\n# be empty.\n_prefixes = Local()\n\n# Overridden URLconfs for each thread are stored here.\n_urlconfs = Local()",
+    "token_count": 156,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:94-97",
+    "content": "# django/urls/base.py:94-97  (django.urls.base.clear_url_caches)\ndef clear_url_caches():\n    get_callable.cache_clear()\n    _get_cached_resolver.cache_clear()\n    get_ns_resolver.cache_clear()",
+    "token_count": 49,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.clear_url_caches"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:100-106",
+    "content": "# django/urls/base.py:100-106  (django.urls.base.set_script_prefix)\ndef set_script_prefix(prefix):\n    \"\"\"\n    Set the script prefix for the current thread.\n    \"\"\"\n    if not prefix.endswith(\"/\"):\n        prefix += \"/\"\n    _prefixes.value = prefix",
+    "token_count": 61,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.set_script_prefix"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:109-115",
+    "content": "# django/urls/base.py:109-115  (django.urls.base.get_script_prefix)\ndef get_script_prefix():\n    \"\"\"\n    Return the currently active script prefix. Useful for client code that\n    wishes to construct their own URLs manually (although accessing the request\n    instance is normally going to be a lot cleaner).\n    \"\"\"\n    return getattr(_prefixes, \"value\", \"/\")",
+    "token_count": 83,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.get_script_prefix"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:118-125",
+    "content": "# django/urls/base.py:118-125  (django.urls.base.clear_script_prefix)\ndef clear_script_prefix():\n    \"\"\"\n    Unset the script prefix for the current thread.\n    \"\"\"\n    try:\n        del _prefixes.value\n    except AttributeError:\n        pass",
+    "token_count": 59,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.clear_script_prefix"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:128-137",
+    "content": "# django/urls/base.py:128-137  (django.urls.base.set_urlconf)\ndef set_urlconf(urlconf_name):\n    \"\"\"\n    Set the URLconf for the current thread (overriding the default one in\n    settings). If urlconf_name is None, revert back to the default.\n    \"\"\"\n    if urlconf_name:\n        _urlconfs.value = urlconf_name\n    else:\n        if hasattr(_urlconfs, \"value\"):\n            del _urlconfs.value",
+    "token_count": 106,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.set_urlconf"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 106
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:140-145",
+    "content": "# django/urls/base.py:140-145  (django.urls.base.get_urlconf)\ndef get_urlconf(default=None):\n    \"\"\"\n    Return the root URLconf to use for the current thread if it has been\n    changed from the default one.\n    \"\"\"\n    return getattr(_urlconfs, \"value\", default)",
+    "token_count": 71,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.get_urlconf"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:148-157",
+    "content": "# django/urls/base.py:148-157  (django.urls.base.is_valid_path)\ndef is_valid_path(path, urlconf=None):\n    \"\"\"\n    Return the ResolverMatch if the given path resolves against the default URL\n    resolver, False otherwise. This is a convenience method to make working\n    with \"is this a match?\" cases easier, avoiding try...except blocks.\n    \"\"\"\n    try:\n        return resolve(path, urlconf)\n    except Resolver404:\n        return False",
+    "token_count": 105,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.is_valid_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 105
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:160-187",
+    "content": "# django/urls/base.py:160-187  (django.urls.base.translate_url)\ndef translate_url(url, lang_code):\n    \"\"\"\n    Given a URL (absolute or relative), try to get its translated version in\n    the `lang_code` language (either by i18n_patterns or by translated regex).\n    Return the original URL if no translated version is found.\n    \"\"\"\n    parsed = urlsplit(url)\n    try:\n        # URL may be encoded.\n        match = resolve(unquote(parsed.path))\n    except Resolver404:\n        pass\n    else:\n        to_be_reversed = (\n            \"%s:%s\" % (match.namespace, match.url_name)\n            if match.namespace\n            else match.url_name\n        )\n        with override(lang_code):\n            try:\n                url = reverse(to_be_reversed, args=match.args, kwargs=match.kwargs)\n            except NoReverseMatch:\n                pass\n            else:\n                url = urlunsplit(\n                    (parsed.scheme, parsed.netloc, url, parsed.query, parsed.fragment)\n                )\n    return url",
+    "token_count": 226,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.translate_url"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 226
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaulttags.py:1163-1228#signature",
+    "content": "# django/template/defaulttags.py:1163-1228  (django.template.defaulttags.regroup [signature])\n@register.tag\ndef regroup(parser, token):\n    'Regroup a list of alike objects by a common attribute.'\n    ...",
+    "token_count": 53,
+    "rank": 13,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.defaulttags.regroup"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "stub",
+     "bm25_rank": 16,
+     "chunk_kind": "function",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaultfilters.py:576-585#signature",
+    "content": "# django/template/defaultfilters.py:576-585  (django.template.defaultfilters.dictsortreversed [signature])\n@register.filter(is_safe=False)\ndef dictsortreversed(value, arg):\n    'Given a list of dicts, return that list sorted in reverse order by the'\n    ...",
+    "token_count": 62,
+    "rank": 14,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.defaultfilters.dictsortreversed"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "stub",
+     "bm25_rank": 17,
+     "chunk_kind": "function",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:2775-2786#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:2775-2786  (tests.forms_tests.tests.test_forms.FormsTestCase.test_boundfield_value_disabled_callable_initial [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_boundfield_value_disabled_callable_initial(self):\n        ...",
+    "token_count": 117,
+    "rank": 15,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_boundfield_value_disabled_callable_initial"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "stub",
+     "bm25_rank": 18,
+     "chunk_kind": "method",
+     "engine_token_count": 117
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/deletion.py:118-140#signature",
+    "content": "# django/db/models/deletion.py:118-140  (django.db.models.deletion.Collector.add [signature])\nclass Collector:\n    def add(self, objs, source=None, nullable=False, reverse_dependency=False):\n        \"Add 'objs' to the collection of objects to be deleted.  If the call is\"\n        ...",
+    "token_count": 72,
+    "rank": 16,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.deletion.Collector.add"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "stub",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/related_descriptors.py:953-958#signature",
+    "content": "# django/db/models/fields/related_descriptors.py:953-958  (django.db.models.fields.related_descriptors.ManyToManyDescriptor.through [signature])\nclass ManyToManyDescriptor(ReverseManyToOneDescriptor):\n    @property\n    def through(self):\n        # through is provided so that you have easy access to the through\n        # model (Book.authors.through) for inlines, etc. This is done as\n        # a property to ensure that the fully resolved value is returned.\n        ...",
+    "token_count": 105,
+    "rank": 17,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.fields.related_descriptors.ManyToManyDescriptor.through"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "stub",
+     "bm25_rank": 21,
+     "chunk_kind": "method",
+     "engine_token_count": 105
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/base.py:184-268#signature",
+    "content": "# django/core/management/base.py:184-268  (django.core.management.base.BaseCommand [signature])\nclass BaseCommand:\n    'The base class from which all management commands ultimately'\n    ...",
+    "token_count": 44,
+    "rank": 18,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.core.management.base.BaseCommand"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "stub",
+     "bm25_rank": 22,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 44
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:741-828#signature",
+    "content": "# django/urls/resolvers.py:741-828  (django.urls.resolvers.URLResolver._reverse_with_prefix [signature])\nclass URLResolver:\n    def _reverse_with_prefix(self, lookup_view, _prefix, *args, **kwargs):\n        ...",
+    "token_count": 56,
+    "rank": 19,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.urls.resolvers.URLResolver._reverse_with_prefix"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "stub",
+     "bm25_rank": 23,
+     "chunk_kind": "method",
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context.py:172-187#signature",
+    "content": "# django/template/context.py:172-187  (django.template.context.RenderContext [signature])\nclass RenderContext(BaseContext):\n    'A stack container for storing Template state.'\n    ...",
+    "token_count": 41,
+    "rank": 20,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.context.RenderContext"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "stub",
+     "bm25_rank": 25,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/operations.py:114-126#signature",
+    "content": "# django/db/backends/base/operations.py:114-126  (django.db.backends.base.operations.BaseDatabaseOperations.date_trunc_sql [signature])\nclass BaseDatabaseOperations:\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"Given a lookup_type of 'year', 'month', or 'day', return the SQL that\"\n        ...",
+    "token_count": 82,
+    "rank": 21,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.backends.base.operations.BaseDatabaseOperations.date_trunc_sql"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "stub",
+     "bm25_rank": 26,
+     "chunk_kind": "method",
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/operations.py:168-179#signature",
+    "content": "# django/db/backends/base/operations.py:168-179  (django.db.backends.base.operations.BaseDatabaseOperations.time_trunc_sql [signature])\nclass BaseDatabaseOperations:\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\"\n        ...",
+    "token_count": 81,
+    "rank": 22,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.backends.base.operations.BaseDatabaseOperations.time_trunc_sql"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "stub",
+     "bm25_rank": 27,
+     "chunk_kind": "method",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/checks.py:430-458#signature",
+    "content": "# django/contrib/admin/checks.py:430-458  (django.contrib.admin.checks.BaseModelAdminChecks._check_field_spec_item [signature])\nclass BaseModelAdminChecks:\n    def _check_field_spec_item(self, obj, field_name, label):\n        ...",
+    "token_count": 58,
+    "rank": 23,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.checks.BaseModelAdminChecks._check_field_spec_item"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "stub",
+     "bm25_rank": 28,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaulttags.py:1325-1391#signature",
+    "content": "# django/template/defaulttags.py:1325-1391  (django.template.defaulttags.url [signature])\n@register.tag\ndef url(parser, token):\n    'Return an absolute URL matching the given view with its parameters.'\n    ...",
+    "token_count": 51,
+    "rank": 24,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.defaulttags.url"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "stub",
+     "bm25_rank": 29,
+     "chunk_kind": "function",
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/migrations/graph.py:64-84#signature",
+    "content": "# django/db/migrations/graph.py:64-84  (django.db.migrations.graph.MigrationGraph [signature])\nclass MigrationGraph:\n    'Represent the digraph of all migrations in a project.'\n    ...",
+    "token_count": 45,
+    "rank": 25,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.migrations.graph.MigrationGraph"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "stub",
+     "bm25_rank": 30,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/utils.py:23-45#signature",
+    "content": "# django/forms/utils.py:23-45  (django.forms.utils.flatatt [signature])\ndef flatatt(attrs):\n    'Convert a dictionary of attributes to a single string.'\n    ...",
+    "token_count": 40,
+    "rank": 26,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.utils.flatatt"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "stub",
+     "bm25_rank": 31,
+     "chunk_kind": "function",
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/options.py:870-953#part1of2#signature",
+    "content": "# django/db/models/options.py:870-953#part1of2  (django.db.models.options.Options._get_fields [signature])\nclass Options:\n    def _get_fields(\n        self,\n        forward=True,\n        reverse=True,\n        include_parents=True,\n        include_hidden=False,\n        seen_models=None,\n    ):\n        'Internal helper function to return fields of the model.'\n        ...",
+    "token_count": 83,
+    "rank": 27,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.options.Options._get_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "stub",
+     "bm25_rank": 32,
+     "chunk_kind": "function_part",
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/options.py:660-685#signature",
+    "content": "# django/db/models/options.py:660-685  (django.db.models.options.Options.get_field [signature])\nclass Options:\n    def get_field(self, field_name):\n        'Return a field instance given the name of a forward or reverse field.'\n        ...",
+    "token_count": 56,
+    "rank": 28,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.options.Options.get_field"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "stub",
+     "bm25_rank": 33,
+     "chunk_kind": "method",
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:368-395#signature",
+    "content": "# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme [signature])\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    ...",
+    "token_count": 81,
+    "rank": 29,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.http._url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "stub",
+     "bm25_rank": 34,
+     "chunk_kind": "function",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/migrations/operations/base.py:5-34#signature",
+    "content": "# django/db/migrations/operations/base.py:5-34  (django.db.migrations.operations.base.Operation [signature])\nclass Operation:\n    'Base class for migration operations.'\n    ...",
+    "token_count": 39,
+    "rank": 30,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.migrations.operations.base.Operation"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "stub",
+     "bm25_rank": 35,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/serializers/__init__.py:167-254#signature",
+    "content": "# django/core/serializers/__init__.py:167-254  (django.core.serializers.sort_dependencies [signature])\ndef sort_dependencies(app_list, allow_cycles=False):\n    'Sort a list of (app_config, models) pairs into a single list of models.'\n    ...",
+    "token_count": 61,
+    "rank": 31,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.core.serializers.sort_dependencies"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "stub",
+     "bm25_rank": 37,
+     "chunk_kind": "function",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:1296-1340#signature",
+    "content": "# django/db/models/sql/query.py:1296-1340  (django.db.models.sql.query.Query.build_lookup [signature])\nclass Query(BaseExpression):\n    def build_lookup(self, lookups, lhs, rhs):\n        'Try to extract transforms and lookup from given lhs.'\n        ...",
+    "token_count": 62,
+    "rank": 32,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.sql.query.Query.build_lookup"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "stub",
+     "bm25_rank": 38,
+     "chunk_kind": "method",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/runner.py:1160-1196#signature",
+    "content": "# django/test/runner.py:1160-1196  (django.test.runner.reorder_tests [signature])\ndef reorder_tests(tests, classes, reverse=False, shuffler=None):\n    'Reorder an iterable of tests, grouping by the given TestCase classes.'\n    ...",
+    "token_count": 61,
+    "rank": 33,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.test.runner.reorder_tests"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "stub",
+     "bm25_rank": 39,
+     "chunk_kind": "function",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/autoreload.py:172-200#signature",
+    "content": "# django/utils/autoreload.py:172-200  (django.utils.autoreload.common_roots [signature])\n@lru_cache(maxsize=1)\ndef common_roots(paths):\n    'Return a tuple of common roots that are shared between the given paths.'\n    ...",
+    "token_count": 62,
+    "rank": 34,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.autoreload.common_roots"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "stub",
+     "bm25_rank": 40,
+     "chunk_kind": "function",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:3080-3083#part1of4#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:3080-3083#part1of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_forms_with_prefixes [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_forms_with_prefixes(self):\n        # Sometimes it's necessary to have multiple forms display on the same\n        # HTML page, or multiple copies of the same form. We can accomplish\n        # this with form prefixes. Pass the keyword argument 'prefix' to the\n        # Form constructor to use this feature. This value will be prepended to\n        # each HTML form field name. One way to think about this is \"namespaces\n        # for HTML forms\". Notice that in the data argument, each field's key\n        # has the prefix, in this case 'person1', prepended to the actual field\n        # name.\n        ...",
+    "token_count": 245,
+    "rank": 35,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_forms_with_prefixes"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "stub",
+     "bm25_rank": 41,
+     "chunk_kind": "function_part",
+     "engine_token_count": 245
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/decorators.py:25-53#signature",
+    "content": "# django/utils/decorators.py:25-53  (django.utils.decorators._multi_decorate [signature])\ndef _multi_decorate(decorators, method):\n    'Decorate `method` with one or more function decorators. `decorators` can be'\n    ...",
+    "token_count": 58,
+    "rank": 36,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.decorators._multi_decorate"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "stub",
+     "bm25_rank": 42,
+     "chunk_kind": "function",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/options.py:789-827#signature",
+    "content": "# django/db/models/options.py:789-827  (django.db.models.options.Options._populate_directed_relation_graph [signature])\nclass Options:\n    def _populate_directed_relation_graph(self):\n        'This method is used by each model to find its reverse objects. As this'\n        ...",
+    "token_count": 63,
+    "rank": 37,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.options.Options._populate_directed_relation_graph"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "stub",
+     "bm25_rank": 43,
+     "chunk_kind": "method",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaulttags.py:454-482#signature",
+    "content": "# django/template/defaulttags.py:454-482  (django.template.defaulttags.URLNode.render [signature])\nclass URLNode(Node):\n    def render(self, context):\n        ...",
+    "token_count": 40,
+    "rank": 38,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.defaulttags.URLNode.render"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "stub",
+     "bm25_rank": 44,
+     "chunk_kind": "method",
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/base.py:867-942#signature",
+    "content": "# django/template/base.py:867-942  (django.template.base.Variable._resolve_lookup [signature])\nclass Variable:\n    def _resolve_lookup(self, context):\n        'Perform resolution of a real variable (i.e. not a literal) against the'\n        ...",
+    "token_count": 58,
+    "rank": 39,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.base.Variable._resolve_lookup"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "stub",
+     "bm25_rank": 45,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/shortcuts.py:28-48#signature",
+    "content": "# django/shortcuts.py:28-48  (django.shortcuts.redirect [signature])\ndef redirect(to, *args, permanent=False, **kwargs):\n    'Return an HttpResponseRedirect to the appropriate URL for the arguments'\n    ...",
+    "token_count": 48,
+    "rank": 40,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.shortcuts.redirect"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "stub",
+     "bm25_rank": 46,
+     "chunk_kind": "function",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/testcases.py:573-595#signature",
+    "content": "# django/test/testcases.py:573-595  (django.test.testcases.SimpleTestCase.assertURLEqual [signature])\nclass SimpleTestCase(unittest.TestCase):\n    # The class we'll use for the test client self.client.\n    # Can be overridden in derived classes.\n    def assertURLEqual(self, url1, url2, msg_prefix=\"\"):\n        'Assert that two URLs are the same, ignoring the order of query string'\n        ...",
+    "token_count": 95,
+    "rank": 41,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.test.testcases.SimpleTestCase.assertURLEqual"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "stub",
+     "bm25_rank": 47,
+     "chunk_kind": "method",
+     "engine_token_count": 95
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/decorators.py:56-90#signature",
+    "content": "# django/utils/decorators.py:56-90  (django.utils.decorators.method_decorator [signature])\ndef method_decorator(decorator, name=\"\"):\n    'Convert a function decorator into a method decorator'\n    ...",
+    "token_count": 46,
+    "rank": 42,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.utils.decorators.method_decorator"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "stub",
+     "bm25_rank": 48,
+     "chunk_kind": "function",
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1963-1967#part1of3#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:1963-1967#part1of3  (tests.forms_tests.tests.test_forms.FormsTestCase.test_hidden_widget [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_hidden_widget(self):\n        # HiddenInput widgets are displayed differently in the as_table(), as_ul())\n        # and as_p() output of a Form -- their verbose names are not displayed, and a\n        # separate row is not displayed. They're displayed in the last row of the\n        # form, directly after that row's form element.\n        ...",
+    "token_count": 181,
+    "rank": 43,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_hidden_widget"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "stub",
+     "bm25_rank": 50,
+     "chunk_kind": "function_part",
+     "engine_token_count": 181
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/regex_helper.py:1-26",
+    "content": "# django/utils/regex_helper.py:1-26  (django.utils.regex_helper)\n\"\"\"\nFunctions for reversing a regular expression (used in reverse URL resolving).\nUsed internally by Django and not intended for external use.\n\nThis is not, and is not intended to be, a complete reg-exp decompiler. It\nshould be good enough for a large class of URLS, however.\n\"\"\"\nimport re\n\nfrom django.utils.functional import SimpleLazyObject\n\n# Mapping of an escape character to a representative of that class. So, e.g.,\n# \"\\w\" is replaced by \"x\" in a reverse URL. A value of None means to ignore\n# this sequence. Any missing key is mapped to itself.\nESCAPE_MAPPINGS = {\n    \"A\": None,\n    \"b\": None,\n    \"B\": None,\n    \"d\": \"0\",\n    \"D\": \"x\",\n    \"s\": \" \",\n    \"S\": \"x\",\n    \"w\": \"x\",\n    \"W\": \"!\",\n    \"Z\": None,\n}",
+    "token_count": 216,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "module_block",
+     "engine_token_count": 216
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/transaction.py:143-174",
+    "content": "# django/db/transaction.py:143-174  (django.db.transaction.Atomic)\nclass Atomic(ContextDecorator):\n    \"\"\"\n    Guarantee the atomic execution of a given block.\n\n    An instance can be used either as a decorator or as a context manager.\n\n    When it's used as a decorator, __call__ wraps the execution of the\n    decorated function in the instance itself, used as a context manager.\n\n    When it's used as a context manager, __enter__ creates a transaction or a\n    savepoint, depending on whether a transaction is already in progress, and\n    __exit__ commits the transaction or releases the savepoint on normal exit,\n    and rolls back the transaction or to the savepoint on exceptions.\n\n    It's possible to disable the creation of savepoints if the goal is to\n    ensure that some code runs within a transaction without creating overhead.\n\n    A stack of savepoints identifiers is maintained as an attribute of the\n    connection. None denotes the absence of a savepoint.\n\n    This allows reentrancy even if the same AtomicWrapper is reused. For\n    example, it's possible to define `oa = atomic('other')` and use `@oa` or\n    `with oa:` multiple times.\n\n    Since database connections are thread-local, this is thread-safe.\n\n    An atomic block can be tagged as durable. In this case, raise a\n    RuntimeError if it's nested within another atomic block. This guarantees\n    that database changes in a durable block are committed to the database when\n    the block exists without error.\n\n    This is a private API.\n    \"\"\"",
+    "token_count": 332,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.transaction.Atomic"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 332
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/regex_helper.py:42-76#part1of3",
+    "content": "# django/utils/regex_helper.py:42-76#part1of3  (django.utils.regex_helper.normalize)\ndef normalize(pattern):\n    r\"\"\"\n    Given a reg-exp pattern, normalize it to an iterable of forms that\n    suffice for reverse matching. This does the following:\n\n    (1) For any repeating sections, keeps the minimum number of occurrences\n        permitted (this means zero for optional groups).\n    (2) If an optional group includes parameters, include one occurrence of\n        that group (along with the zero occurrence case from step (1)).\n    (3) Select the first (essentially an arbitrary) element from any character\n        class. Select an arbitrary character for any unordered class (e.g. '.'\n        or '\\w') in the pattern.\n    (4) Ignore look-ahead and look-behind assertions.\n    (5) Raise an error on any disjunctive ('|') constructs.\n\n    Django's URLs for forward resolving are either all positional arguments or\n    all keyword arguments. That is assumed here, as well. Although reverse\n    resolving can be done using positional args when keyword args are\n    specified, the two cannot be mixed in the same reverse() call.\n    \"\"\"\n    # Do a linear scan to work out the special features of this pattern. The\n    # idea is that we scan once here and collect all the information we need to\n    # make future decisions.\n    result = []\n    non_capturing_groups = []\n    consume_next = True\n    pattern_iter = next_char(iter(pattern))\n    num_args = 0\n\n    # A \"while\" loop is used here because later on we need to be able to peek\n    # at the next character and possibly go around without consuming another\n    # one at the top of the loop.\n    try:\n        ch, escaped = next(pattern_iter)\n    except StopIteration:\n        return [(\"\", [])]",
+    "token_count": 396,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.regex_helper.normalize"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "function_part",
+     "engine_token_count": 396
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/shortcuts.py:117-155",
+    "content": "# django/shortcuts.py:117-155  (django.shortcuts.resolve_url)\ndef resolve_url(to, *args, **kwargs):\n    \"\"\"\n    Return a URL appropriate for the arguments passed.\n\n    The arguments could be:\n\n        * A model: the model's `get_absolute_url()` function will be called.\n\n        * A view name, possibly with arguments: `urls.reverse()` will be used\n          to reverse-resolve the name.\n\n        * A URL, which will be returned as-is.\n    \"\"\"\n    # If it's a model, use get_absolute_url()\n    if hasattr(to, \"get_absolute_url\"):\n        return to.get_absolute_url()\n\n    if isinstance(to, Promise):\n        # Expand the lazy instance, as it can cause issues when it is passed\n        # further to some Python functions like urlparse.\n        to = str(to)\n\n    # Handle relative URLs\n    if isinstance(to, str) and to.startswith((\"./\", \"../\")):\n        return to\n\n    # Next try a reverse URL resolution.\n    try:\n        return reverse(to, args=args, kwargs=kwargs)\n    except NoReverseMatch:\n        # If this is a callable, re-raise.\n        if callable(to):\n            raise\n        # If this doesn't \"feel\" like a URL, re-raise.\n        if \"/\" not in to and \".\" not in to:\n            raise\n\n    # Finally, fall back and assume it's a URL\n    return to",
+    "token_count": 302,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.shortcuts.resolve_url"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "function",
+     "engine_token_count": 302
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/related_descriptors.py:1-82",
+    "content": "# django/db/models/fields/related_descriptors.py:1-82  (django.db.models.fields.related_descriptors)\n\"\"\"\nAccessors for related objects.\n\nWhen a field defines a relation between two models, each model class provides\nan attribute to access related instances of the other model class (unless the\nreverse accessor has been disabled with related_name='+').\n\nAccessors are implemented as descriptors in order to customize access and\nassignment. This module defines the descriptor classes.\n\nForward accessors follow foreign keys. Reverse accessors trace them back. For\nexample, with the following models::\n\n    class Parent(Model):\n        pass\n\n    class Child(Model):\n        parent = ForeignKey(Parent, related_name='children')\n\n ``child.parent`` is a forward many-to-one relation. ``parent.children`` is a\nreverse many-to-one relation.\n\nThere are three types of relations (many-to-one, one-to-one, and many-to-many)\nand two directions (forward and reverse) for a total of six combinations.\n\n1. Related instance on the forward side of a many-to-one relation:\n   ``ForwardManyToOneDescriptor``.\n\n   Uniqueness of foreign key values is irrelevant to accessing the related\n   instance, making the many-to-one and one-to-one cases identical as far as\n   the descriptor is concerned. The constraint is checked upstream (unicity\n   validation in forms) or downstream (unique indexes in the database).\n\n2. Related instance on the forward side of a one-to-one\n   relation: ``ForwardOneToOneDescriptor``.\n\n   It avoids querying the database when accessing the parent link field in\n   a multi-table inheritance scenario.\n\n3. Related instance on the reverse side of a one-to-one relation:\n   ``ReverseOneToOneDescriptor``.\n\n   One-to-one relations are asymmetrical, despite the apparent symmetry of the\n   name, because they're implemented in the database with a foreign key from\n   one table to another. As a consequence ``ReverseOneToOneDescriptor`` is\n   slightly different from ``ForwardManyToOneDescriptor``.\n\n4. Related objects manager for related instances on the reverse side of a\n   many-to-one relation: ``ReverseManyToOneDescriptor``.\n\n   Unlike the previous two classes, this one provides access to a collection\n   of objects. It returns a manager rather than an instance.\n\n5. Related objects manager for related instances on the forward or reverse\n   sides of a many-to-many relation: ``ManyToManyDescriptor``.\n\n   Many-to-many relations are symmetrical. The syntax of Django models\n   requires declaring them on one side but that's an implementation detail.\n   They could be declared on the other side without any change in behavior.\n   Therefore the forward and reverse descriptors can be the same.\n\n   If you're looking for ``ForwardManyToManyDescriptor`` or\n   ``ReverseManyToManyDescriptor``, use ``ManyToManyDescriptor`` instead.\n\"\"\"\n\nfrom asgiref.sync import sync_to_async\n\nfrom django.core.exceptions import FieldError\nfrom django.db import (\n    DEFAULT_DB_ALIAS,\n    NotSupportedError,\n    connections,\n    router,\n    transaction,\n)\nfrom django.db.models import Q, Window, signals\nfrom django.db.models.functions import RowNumber\nfrom django.db.models.lookups import GreaterThan, LessThanOrEqual\nfrom django.db.models.query import QuerySet\nfrom django.db.models.query_utils import DeferredAttribute\nfrom django.db.models.utils import AltersData, resolve_callables\nfrom django.utils.functional import cached_property",
+    "token_count": 703,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "module_block",
+     "engine_token_count": 703
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context_processors.py:17-33",
+    "content": "# django/template/context_processors.py:17-33  (django.template.context_processors.csrf)\ndef csrf(request):\n    \"\"\"\n    Context processor that provides a CSRF token, or the string 'NOTPROVIDED' if\n    it has not been provided by either a view decorator or the middleware\n    \"\"\"\n\n    def _get_val():\n        token = get_token(request)\n        if token is None:\n            # In order to be able to provide debugging info in the\n            # case of misconfiguration, we use a sentinel value\n            # instead of returning an empty dict.\n            return \"NOTPROVIDED\"\n        else:\n            return token\n\n    return {\"csrf_token\": SimpleLazyObject(_get_val)}",
+    "token_count": 146,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.context_processors.csrf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "function",
+     "engine_token_count": 146
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/base.py:216-233",
+    "content": "# django/core/cache/backends/base.py:216-233  (django.core.cache.backends.base.BaseCache.get_or_set)\nclass BaseCache:\n    def get_or_set(self, key, default, timeout=DEFAULT_TIMEOUT, version=None):\n        \"\"\"\n        Fetch a given key from the cache. If the key does not exist,\n        add the key and set it to the default value. The default value can\n        also be any callable. If timeout is given, use that timeout for the\n        key; otherwise use the default cache timeout.\n\n        Return the value of the key stored or retrieved.\n        \"\"\"\n        val = self.get(key, self._missing_key, version=version)\n        if val is self._missing_key:\n            if callable(default):\n                default = default()\n            self.add(key, default, timeout=timeout, version=version)\n            # Fetch the value again to avoid a race condition if another caller\n            # added a value between the first get() and the add() above.\n            return self.get(key, default, version=version)\n        return val",
+    "token_count": 223,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.base.BaseCache.get_or_set"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 223
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/operations.py:16-500",
+    "content": "# django/db/backends/base/operations.py:16-500  (django.db.backends.base.operations.BaseDatabaseOperations)\nclass BaseDatabaseOperations:\n    \"\"\"\n    Encapsulate backend-specific differences, such as the way a backend\n    performs ordering or calculates the ID of a recently-inserted row.\n    \"\"\"\n\n    compiler_module = \"django.db.models.sql.compiler\"\n\n    # Integer field safe ranges by `internal_type` as documented\n    # in docs/ref/models/fields.txt.\n    integer_field_ranges = {\n        \"SmallIntegerField\": (-32768, 32767),\n        \"IntegerField\": (-2147483648, 2147483647),\n        \"BigIntegerField\": (-9223372036854775808, 9223372036854775807),\n        \"PositiveBigIntegerField\": (0, 9223372036854775807),\n        \"PositiveSmallIntegerField\": (0, 32767),\n        \"PositiveIntegerField\": (0, 2147483647),\n        \"SmallAutoField\": (-32768, 32767),\n        \"AutoField\": (-2147483648, 2147483647),\n        \"BigAutoField\": (-9223372036854775808, 9223372036854775807),\n    }\n    set_operators = {\n        \"union\": \"UNION\",\n        \"intersection\": \"INTERSECT\",\n        \"difference\": \"EXCEPT\",\n    }\n    # Mapping of Field.get_internal_type() (typically the model field's class\n    # name) to the data type to use for the Cast() function, if different from\n    # DatabaseWrapper.data_types.\n    cast_data_types = {}\n    # CharField data type if the max_length argument isn't provided.\n    cast_char_field_without_max_length = None\n\n    # Start and end points for window expressions.\n    PRECEDING = \"PRECEDING\"\n    FOLLOWING = \"FOLLOWING\"\n    UNBOUNDED_PRECEDING = \"UNBOUNDED \" + PRECEDING\n    UNBOUNDED_FOLLOWING = \"UNBOUNDED \" + FOLLOWING\n    CURRENT_ROW = \"CURRENT ROW\"\n\n    # Prefix for EXPLAIN queries, or None EXPLAIN isn't supported.\n    explain_prefix = None\n\n    def __init__(self, connection):\n        self.connection = connection\n        self._cache = None\n\n    def autoinc_sql(self, table, column):\n        \"\"\"\n        Return any SQL needed to support auto-incrementing primary keys, or\n        None if no SQL is necessary.\n\n        This SQL is executed when a table is created.\n        \"\"\"\n        return None\n\n    def bulk_batch_size(self, fields, objs):\n        \"\"\"\n        Return the maximum allowed batch size for the backend. The fields\n        are the fields going to be inserted in the batch, the objs contains\n        all the objects to be inserted.\n        \"\"\"\n        return len(objs)\n\n    def format_for_duration_arithmetic(self, sql):\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"format_for_duration_arithmetic() method.\"\n        )\n\n    def cache_key_culling_sql(self):\n        \"\"\"\n        Return an SQL query that retrieves the first cache key greater than the\n        n smallest.\n\n        This is used by the 'db' cache backend to determine where to start\n        culling.\n        \"\"\"\n        cache_key = self.quote_name(\"cache_key\")\n        return f\"SELECT {cache_key} FROM %s ORDER BY {cache_key} LIMIT 1 OFFSET %%s\"\n\n    def unification_cast_sql(self, output_field):\n        \"\"\"\n        Given a field instance, return the SQL that casts the result of a union\n        to that type. The resulting string should contain a '%s' placeholder\n        for the expression being cast.\n        \"\"\"\n        return \"%s\"\n\n    def date_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        extracts a value from the given date field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_extract_sql() \"\n            \"method\"\n        )\n\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        truncates the given date or datetime field field_name to a date object\n        with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_trunc_sql() \"\n            \"method.\"\n        )\n\n    def datetime_cast_date_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to date value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_date_sql() method.\"\n        )\n\n    def datetime_cast_time_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to time value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_time_sql() method\"\n        )\n\n    def datetime_extract_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that extracts a value from the given\n        datetime field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_extract_sql() \"\n            \"method\"\n        )\n\n    def datetime_trunc_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that truncates the given datetime field\n        field_name to a datetime object with only the given specificity.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_trunc_sql() \"\n            \"method\"\n        )\n\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\n        that truncates the given time or datetime field field_name to a time\n        object with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a time_trunc_sql() method\"\n        )\n\n    def time_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute', or 'second', return the SQL\n        that extracts a value from the given time field field_name.\n        \"\"\"\n        return self.date_extract_sql(lookup_type, sql, params)\n\n    def deferrable_sql(self):\n        \"\"\"\n        Return the SQL to make a constraint \"initially deferred\" during a\n        CREATE TABLE statement.\n        \"\"\"\n        return \"\"\n\n    def distinct_sql(self, fields, params):\n        \"\"\"\n        Return an SQL DISTINCT clause which removes duplicate rows from the\n        result set. If any fields are given, only check the given fields for\n        duplicates.\n        \"\"\"\n        if fields:\n            raise NotSupportedError(\n                \"DISTINCT ON fields is not supported by this database backend\"\n            )\n        else:\n            return [\"DISTINCT\"], []\n\n    def fetch_returned_insert_columns(self, cursor, returning_params):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT...RETURNING\n        statement into a table, return the newly created data.\n        \"\"\"\n        return cursor.fetchone()\n\n    def field_cast_sql(self, db_type, internal_type):\n        \"\"\"\n        Given a column type (e.g. 'BLOB', 'VARCHAR') and an internal type\n        (e.g. 'GenericIPAddressField'), return the SQL to cast it before using\n        it in a WHERE statement. The resulting string should contain a '%s'\n        placeholder for the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def force_no_ordering(self):\n        \"\"\"\n        Return a list used in the \"ORDER BY\" clause to force no ordering at\n        all. Return an empty list to include nothing in the ordering.\n        \"\"\"\n        return []\n\n    def for_update_sql(self, nowait=False, skip_locked=False, of=(), no_key=False):\n        \"\"\"\n        Return the FOR UPDATE SQL clause to lock rows for an update operation.\n        \"\"\"\n        return \"FOR%s UPDATE%s%s%s\" % (\n            \" NO KEY\" if no_key else \"\",\n            \" OF %s\" % \", \".join(of) if of else \"\",\n            \" NOWAIT\" if nowait else \"\",\n            \" SKIP LOCKED\" if skip_locked else \"\",\n        )\n\n    def _get_limit_offset_params(self, low_mark, high_mark):\n        offset = low_mark or 0\n        if high_mark is not None:\n            return (high_mark - offset), offset\n        elif offset:\n            return self.connection.ops.no_limit_value(), offset\n        return None, offset\n\n    def limit_offset_sql(self, low_mark, high_mark):\n        \"\"\"Return LIMIT/OFFSET SQL clause.\"\"\"\n        limit, offset = self._get_limit_offset_params(low_mark, high_mark)\n        return \" \".join(\n            sql\n            for sql in (\n                (\"LIMIT %d\" % limit) if limit else None,\n                (\"OFFSET %d\" % offset) if offset else None,\n            )\n            if sql\n        )\n\n    def last_executed_query(self, cursor, sql, params):\n        \"\"\"\n        Return a string of the query last executed by the given cursor, with\n        placeholders replaced with actual values.\n\n        `sql` is the raw query containing placeholders and `params` is the\n        sequence of parameters. These are used by default, but this method\n        exists for database backends to provide a better implementation\n        according to their own quoting schemes.\n        \"\"\"\n\n        # Convert params to contain string values.\n        def to_string(s):\n            return force_str(s, strings_only=True, errors=\"replace\")\n\n        if isinstance(params, (list, tuple)):\n            u_params = tuple(to_string(val) for val in params)\n        elif params is None:\n            u_params = ()\n        else:\n            u_params = {to_string(k): to_string(v) for k, v in params.items()}\n\n        return \"QUERY = %r - PARAMS = %r\" % (sql, u_params)\n\n    def last_insert_id(self, cursor, table_name, pk_name):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT statement into\n        a table that has an auto-incrementing ID, return the newly created ID.\n\n        `pk_name` is the name of the primary-key column.\n        \"\"\"\n        return cursor.lastrowid\n\n    def lookup_cast(self, lookup_type, internal_type=None):\n        \"\"\"\n        Return the string to use in a query when performing lookups\n        (\"contains\", \"like\", etc.). It should contain a '%s' placeholder for\n        the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def max_in_list_size(self):\n        \"\"\"\n        Return the maximum number of items that can be passed in a single 'IN'\n        list condition, or None if the backend does not impose a limit.\n        \"\"\"\n        return None\n\n    def max_name_length(self):\n        \"\"\"\n        Return the maximum length of table and column names, or None if there\n        is no limit.\n        \"\"\"\n        return None\n\n    def no_limit_value(self):\n        \"\"\"\n        Return the value to use for the LIMIT when we are wanting \"LIMIT\n        infinity\". Return None if the limit clause can be omitted in this case.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a no_limit_value() method\"\n        )\n\n    def pk_default_value(self):\n        \"\"\"\n        Return the value to use during an INSERT statement to specify that\n        the field should use its default value.\n        \"\"\"\n        return \"DEFAULT\"\n\n    def prepare_sql_script(self, sql):\n        \"\"\"\n        Take an SQL script that may contain multiple lines and return a list\n        of statements to feed to successive cursor.execute() calls.\n\n        Since few databases are able to process raw SQL scripts in a single\n        cursor.execute() call and PEP 249 doesn't talk about this use case,\n        the default implementation is conservative.\n        \"\"\"\n        return [\n            sqlparse.format(statement, strip_comments=True)\n            for statement in sqlparse.split(sql)\n            if statement\n        ]\n\n    def process_clob(self, value):\n        \"\"\"\n        Return the value of a CLOB column, for backends that return a locator\n        object that requires additional processing.\n        \"\"\"\n        return value\n\n    def return_insert_columns(self, fields):\n        \"\"\"\n        For backends that support returning columns as part of an insert query,\n        return the SQL and params to append to the INSERT query. The returned\n        fragment should contain a format string to hold the appropriate column.\n        \"\"\"\n        pass\n\n    def compiler(self, compiler_name):\n        \"\"\"\n        Return the SQLCompiler class corresponding to the given name,\n        in the namespace corresponding to the `compiler_module` attribute\n        on this backend.\n        \"\"\"\n        if self._cache is None:\n            self._cache = import_module(self.compiler_module)\n        return getattr(self._cache, compiler_name)\n\n    def quote_name(self, name):\n        \"\"\"\n        Return a quoted version of the given table, index, or column name. Do\n        not quote the given name if it's already been quoted.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a quote_name() method\"\n        )\n\n    def regex_lookup(self, lookup_type):\n        \"\"\"\n        Return the string to use in a query when performing regular expression\n        lookups (using \"regex\" or \"iregex\"). It should contain a '%s'\n        placeholder for the column being searched against.\n\n        If the feature is not supported (or part of it is not supported), raise\n        NotImplementedError.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a regex_lookup() method\"\n        )\n\n    def savepoint_create_sql(self, sid):\n        \"\"\"\n        Return the SQL for starting a new savepoint. Only required if the\n        \"uses_savepoints\" feature is True. The \"sid\" parameter is a string\n        for the savepoint id.\n        \"\"\"\n        return \"SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_commit_sql(self, sid):\n        \"\"\"\n        Return the SQL for committing the given savepoint.\n        \"\"\"\n        return \"RELEASE SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_rollback_sql(self, sid):\n        \"\"\"\n        Return the SQL for rolling back the given savepoint.\n        \"\"\"\n        return \"ROLLBACK TO SAVEPOINT %s\" % self.quote_name(sid)\n\n    def set_time_zone_sql(self):\n        \"\"\"\n        Return the SQL that will set the connection's time zone.\n\n        Return '' if the backend doesn't support time zones.\n        \"\"\"\n        return \"\"\n\n    def sql_flush(self, style, tables, *, reset_sequences=False, allow_cascade=False):\n        \"\"\"\n        Return a list of SQL statements required to remove all data from\n        the given database tables (without actually removing the tables\n        themselves).\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n\n        If `reset_sequences` is True, the list includes SQL statements required\n        to reset the sequences.\n\n        The `allow_cascade` argument determines whether truncation may cascade\n        to tables with foreign keys pointing the tables being truncated.\n        PostgreSQL requires a cascade even if these tables are empty.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations must provide an sql_flush() method\"\n        )\n\n    def execute_sql_flush(self, sql_list):\n        \"\"\"Execute a list of SQL statements to flush the database.\"\"\"\n        with transaction.atomic(\n            using=self.connection.alias,\n            savepoint=self.connection.features.can_rollback_ddl,\n        ):\n            with self.connection.cursor() as cursor:\n                for sql in sql_list:\n                    cursor.execute(sql)\n\n    def sequence_reset_by_name_sql(self, style, sequences):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences\n        passed in `sequences`.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []\n\n    def sequence_reset_sql(self, style, model_list):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences for\n        the given models.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []  # No sequence reset required by default.\n\n    def start_transaction_sql(self):\n        \"\"\"Return the SQL statement required to start a transaction.\"\"\"\n        return \"BEGIN;\"\n\n    def end_transaction_sql(self, success=True):\n        \"\"\"Return the SQL statement required to end a transaction.\"\"\"\n        if not success:\n            return \"ROLLBACK;\"\n        return \"COMMIT;\"\n\n    def tablespace_sql(self, tablespace, inline=False):\n        \"\"\"\n        Return the SQL that will be used in a query to define the tablespace.\n\n        Return '' if the backend doesn't support tablespaces.\n\n        If `inline` is True, append the SQL to a row; otherwise append it to\n        the entire CREATE TABLE or CREATE INDEX statement.\n        \"\"\"\n        return \"\"\n\n    def prep_for_like_query(self, x):\n        \"\"\"Prepare a value for use in a LIKE query.\"\"\"\n        return str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(\"%\", r\"\\%\").replace(\"_\", r\"\\_\")\n\n    # Same as prep_for_like_query(), but called for \"iexact\" matches, which\n    # need not necessarily be implemented using \"LIKE\" in the backend.\n    prep_for_iexact_query = prep_for_like_query",
+    "token_count": 3912,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.operations.BaseDatabaseOperations"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 3912
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/templatetags/i18n.py:358-453",
+    "content": "# django/templatetags/i18n.py:358-453  (django.templatetags.i18n.do_translate)\n@register.tag(\"translate\")\n@register.tag(\"trans\")\ndef do_translate(parser, token):\n    \"\"\"\n    Mark a string for translation and translate the string for the current\n    language.\n\n    Usage::\n\n        {% translate \"this is a test\" %}\n\n    This marks the string for translation so it will be pulled out by\n    makemessages into the .po files and runs the string through the translation\n    engine.\n\n    There is a second form::\n\n        {% translate \"this is a test\" noop %}\n\n    This marks the string for translation, but returns the string unchanged.\n    Use it when you need to store values into forms that should be translated\n    later on.\n\n    You can use variables instead of constant strings\n    to translate stuff you marked somewhere else::\n\n        {% translate variable %}\n\n    This tries to translate the contents of the variable ``variable``. Make\n    sure that the string in there is something that is in the .po file.\n\n    It is possible to store the translated string into a variable::\n\n        {% translate \"this is a test\" as var %}\n        {{ var }}\n\n    Contextual translations are also supported::\n\n        {% translate \"this is a test\" context \"greeting\" %}\n\n    This is equivalent to calling pgettext instead of (u)gettext.\n    \"\"\"\n    bits = token.split_contents()\n    if len(bits) < 2:\n        raise TemplateSyntaxError(\"'%s' takes at least one argument\" % bits[0])\n    message_string = parser.compile_filter(bits[1])\n    remaining = bits[2:]\n\n    noop = False\n    asvar = None\n    message_context = None\n    seen = set()\n    invalid_context = {\"as\", \"noop\"}\n\n    while remaining:\n        option = remaining.pop(0)\n        if option in seen:\n            raise TemplateSyntaxError(\n                \"The '%s' option was specified more than once.\" % option,\n            )\n        elif option == \"noop\":\n            noop = True\n        elif option == \"context\":\n            try:\n                value = remaining.pop(0)\n            except IndexError:\n                raise TemplateSyntaxError(\n                    \"No argument provided to the '%s' tag for the context option.\"\n                    % bits[0]\n                )\n            if value in invalid_context:\n                raise TemplateSyntaxError(\n                    \"Invalid argument '%s' provided to the '%s' tag for the context \"\n                    \"option\" % (value, bits[0]),\n                )\n            message_context = parser.compile_filter(value)\n        elif option == \"as\":\n            try:\n                value = remaining.pop(0)\n            except IndexError:\n                raise TemplateSyntaxError(\n                    \"No argument provided to the '%s' tag for the as option.\" % bits[0]\n                )\n            asvar = value\n        else:\n            raise TemplateSyntaxError(\n                \"Unknown argument for '%s' tag: '%s'. The only options \"\n                \"available are 'noop', 'context' \\\"xxx\\\", and 'as VAR'.\"\n                % (\n                    bits[0],\n                    option,\n                )\n            )\n        seen.add(option)\n\n    return TranslateNode(message_string, noop, asvar, message_context)",
+    "token_count": 684,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.templatetags.i18n.do_translate"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "function",
+     "engine_token_count": 684
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/nested_foreign_keys/tests.py:1-32",
+    "content": "# tests/nested_foreign_keys/tests.py:1-32  (tests.nested_foreign_keys.tests)\nfrom django.test import TestCase\n\nfrom .models import (\n    Event,\n    Movie,\n    Package,\n    PackageNullFK,\n    Person,\n    Screening,\n    ScreeningNullFK,\n)\n\n\n# These are tests for #16715. The basic scheme is always the same: 3 models with\n# 2 relations. The first relation may be null, while the second is non-nullable.\n# In some cases, Django would pick the wrong join type for the second relation,\n# resulting in missing objects in the queryset.\n#\n#   Model A\n#   | (Relation A/B : nullable)\n#   Model B\n#   | (Relation B/C : non-nullable)\n#   Model C\n#\n# Because of the possibility of NULL rows resulting from the LEFT OUTER JOIN\n# between Model A and Model B (i.e. instances of A without reference to B),\n# the second join must also be LEFT OUTER JOIN, so that we do not ignore\n# instances of A that do not reference B.\n#\n# Relation A/B can either be an explicit foreign key or an implicit reverse\n# relation such as introduced by one-to-one relations (through multi-table\n# inheritance).",
+    "token_count": 266,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "module_block",
+     "engine_token_count": 266
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/loader_tags.py:277-298",
+    "content": "# django/template/loader_tags.py:277-298  (django.template.loader_tags.do_extends)\n@register.tag(\"extends\")\ndef do_extends(parser, token):\n    \"\"\"\n    Signal that this template extends a parent template.\n\n    This tag may be used in two ways: ``{% extends \"base\" %}`` (with quotes)\n    uses the literal value \"base\" as the name of the parent template to extend,\n    or ``{% extends variable %}`` uses the value of ``variable`` as either the\n    name of the parent template to extend (if it evaluates to a string) or as\n    the parent template itself (if it evaluates to a Template object).\n    \"\"\"\n    bits = token.split_contents()\n    if len(bits) != 2:\n        raise TemplateSyntaxError(\"'%s' takes one argument\" % bits[0])\n    bits[1] = construct_relative_path(parser.origin.template_name, bits[1])\n    parent_name = parser.compile_filter(bits[1])\n    nodelist = parser.parse()\n    if nodelist.get_nodes_by_type(ExtendsNode):\n        raise TemplateSyntaxError(\n            \"'%s' cannot appear more than once in the same template\" % bits[0]\n        )\n    return ExtendsNode(nodelist, parent_name)",
+    "token_count": 267,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.loader_tags.do_extends"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "function",
+     "engine_token_count": 267
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1628-1629#part4of4",
+    "content": "# tests/forms_tests/tests/test_forms.py:1628-1629#part4of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        with self.assertRaisesMessage(ValueError, \"has no field named\"):\n            f.add_error(\"missing_field\", \"Some error.\")",
+    "token_count": 280,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "function_part",
+     "engine_token_count": 280
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:594-641",
+    "content": "# tests/urlpatterns_reverse/tests.py:594-641  (tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names)\nclass ResolverTests(SimpleTestCase):\n    def test_404_tried_urls_have_names(self):\n        \"\"\"\n        The list of URLs that come back from a Resolver404 exception contains\n        a list in the right format for printing out in the DEBUG 404 page with\n        both the patterns and URL names, if available.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        # this list matches the expected URL types and names returned when\n        # you try to resolve a nonexistent URL in the first level of included\n        # URLs in named_urls.py (e.g., '/included/nonexistent-url')\n        url_types_names = [\n            [{\"type\": URLPattern, \"name\": \"named-url1\"}],\n            [{\"type\": URLPattern, \"name\": \"named-url2\"}],\n            [{\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url3\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url4\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLResolver}],\n        ]\n        with self.assertRaisesMessage(Resolver404, \"tried\") as cm:\n            resolve(\"/included/nonexistent-url\", urlconf=urls)\n        e = cm.exception\n        # make sure we at least matched the root ('/') url resolver:\n        self.assertIn(\"tried\", e.args[0])\n        self.assertEqual(\n            len(e.args[0][\"tried\"]),\n            len(url_types_names),\n            \"Wrong number of tried URLs returned.  Expected %s, got %s.\"\n            % (len(url_types_names), len(e.args[0][\"tried\"])),\n        )\n        for tried, expected in zip(e.args[0][\"tried\"], url_types_names):\n            for t, e in zip(tried, expected):\n                with self.subTest(t):\n                    self.assertIsInstance(\n                        t, e[\"type\"]\n                    ), \"%s is not an instance of %s\" % (t, e[\"type\"])\n                    if \"name\" in e:\n                        if not e[\"name\"]:\n                            self.assertIsNone(\n                                t.name, \"Expected no URL name but found %s.\" % t.name\n                            )\n                        else:\n                            self.assertEqual(\n                                t.name,\n                                e[\"name\"],\n                                'Wrong URL name.  Expected \"%s\", got \"%s\".'\n                                % (e[\"name\"], t.name),\n                            )",
+    "token_count": 567,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 567
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:1786-1869#part1of2",
+    "content": "# django/db/models/sql/query.py:1786-1869#part1of2  (django.db.models.sql.query.Query.setup_joins)\nclass Query(BaseExpression):\n    def setup_joins(\n        self,\n        names,\n        opts,\n        alias,\n        can_reuse=None,\n        allow_many=True,\n        reuse_with_filtered_relation=False,\n    ):\n        \"\"\"\n        Compute the necessary table joins for the passage through the fields\n        given in 'names'. 'opts' is the Options class for the current model\n        (which gives the table we are starting from), 'alias' is the alias for\n        the table to start the joining from.\n\n        The 'can_reuse' defines the reverse foreign key joins we can reuse. It\n        can be None in which case all joins are reusable or a set of aliases\n        that can be reused. Note that non-reverse foreign keys are always\n        reusable when using setup_joins().\n\n        The 'reuse_with_filtered_relation' can be used to force 'can_reuse'\n        parameter and force the relation on the given connections.\n\n        If 'allow_many' is False, then any reverse foreign key seen will\n        generate a MultiJoin exception.\n\n        Return the final field involved in the joins, the target field (used\n        for any 'where' constraint), the final 'opts' value, the joins, the\n        field path traveled to generate the joins, and a transform function\n        that takes a field and alias and is equivalent to `field.get_col(alias)`\n        in the simple case but wraps field transforms if they were included in\n        names.\n\n        The target field is the field containing the concrete value. Final\n        field can be something different, for example foreign key pointing to\n        that value. Final field is needed for example in some value\n        conversions (convert 'obj' in fk__id=obj to pk val using the foreign\n        key field for example).\n        \"\"\"\n        joins = [alias]\n        # The transform can't be applied yet, as joins must be trimmed later.\n        # To avoid making every caller of this method look up transforms\n        # directly, compute transforms here and create a partial that converts\n        # fields to the appropriate wrapped version.\n\n        def final_transformer(field, alias):\n            if not self.alias_cols:\n                alias = None\n            return field.get_col(alias)\n\n        # Try resolving all the names as fields first. If there's an error,\n        # treat trailing names as lookups until a field can be resolved.\n        last_field_exception = None\n        for pivot in range(len(names), 0, -1):\n            try:\n                path, final_field, targets, rest = self.names_to_path(\n                    names[:pivot],\n                    opts,\n                    allow_many,\n                    fail_on_missing=True,\n                )\n            except FieldError as exc:\n                if pivot == 1:\n                    # The first item cannot be a lookup, so it's safe\n                    # to raise the field error here.\n                    raise\n                else:\n                    last_field_exception = exc\n            else:\n                # The transforms are the remaining items that couldn't be\n                # resolved into fields.\n                transforms = names[pivot:]\n                break\n        for name in transforms:\n\n            def transform(field, alias, *, name, previous):\n                try:\n                    wrapped = previous(field, alias)\n                    return self.try_transform(wrapped, name)\n                except FieldError:\n                    # FieldError is raised if the transform doesn't exist.\n                    if isinstance(final_field, Field) and last_field_exception:\n                        raise last_field_exception\n                    else:\n                        raise\n\n            final_transformer = functools.partial(\n                transform, name=name, previous=final_transformer\n            )\n            final_transformer.has_transforms = True\n        # Then, add the path to the query's joins. Note that we can't trim\n        # joins at this stage - we will need the information about join type\n        # of the trimmed joins.",
+    "token_count": 825,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.setup_joins"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "function_part",
+     "engine_token_count": 825
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/utils.py:400-410",
+    "content": "# django/test/utils.py:400-410  (django.test.utils.TestContextDecorator)\nclass TestContextDecorator:\n    \"\"\"\n    A base class that can either be used as a context manager during tests\n    or as a test function or unittest.TestCase subclass decorator to perform\n    temporary alterations.\n\n    `attr_name`: attribute assigned the return value of enable() if used as\n                 a class decorator.\n\n    `kwarg_name`: keyword argument passing the return value of enable() if\n                  used as a function decorator.\n    \"\"\"",
+    "token_count": 111,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.utils.TestContextDecorator"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12929,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are assessing the blast radius of changing the return value shape\nof `django.urls.base.reverse` (e.g. changing it from a plain URL\nstring to a wrapper object) in django/urls/base.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `reverse`'s return value (a plain `x = reverse(...)`\nassignment, or a caller of such a caller two hops out) - callers that\nmerely pass `reverse(...)` straight through to another function\nwithout binding it locally do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/urls/base.py",
+   "cutoff": 350,
+   "n_components": 62,
+   "n_full": 27,
+   "n_stub": 31,
+   "n_dropped": 4,
+   "packed_tokens": 12929,
+   "latency_ms": {
+    "L_priority_sort": [
+     1257.964917
+    ],
+    "L_binary_search_tokenize": [
+     0.343923
+    ],
+    "L_retrieve": [
+     1264.373903
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12929,
+   "prompt_tokens": 13198,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13211,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/urls/base.py:27-88  (django.urls.base.reverse)\ndef reverse(viewname, urlconf=None, args=None, kwargs=None, current_app=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    resolver = get_resolver(urlconf)\n    args = args or []\n    kwargs = kwargs or {}\n\n    prefix = get_script_prefix()\n\n    if not isinstance(viewname, str):\n        view = viewname\n    else:\n        *path, view = viewname.split(\":\")\n\n        if current_app:\n            current_path = current_app.split(\":\")\n            current_path.reverse()\n        else:\n            current_path = None\n\n        resolved_path = []\n        ns_pattern = \"\"\n        ns_converters = {}\n        for ns in path:\n            current_ns = current_path.pop() if current_path else None\n            # Lookup the name to see if it could be an app identifier.\n            try:\n                app_list = resolver.app_dict[ns]\n                # Yes! Path part matches an app in the current Resolver.\n                if current_ns and current_ns in app_list:\n                    # If we are reversing for a particular app, use that\n                    # namespace.\n                    ns = current_ns\n                elif ns not in app_list:\n                    # The name isn't shared by one of the instances (i.e.,\n                    # the default) so pick the first instance as the default.\n                    ns = app_list[0]\n            except KeyError:\n                pass\n\n            if ns != current_ns:\n                current_path = None\n\n            try:\n                extra, resolver = resolver.namespace_dict[ns]\n                resolved_path.append(ns)\n                ns_pattern += extra\n                ns_converters.update(resolver.pattern.converters)\n            except KeyError as key:\n                if resolved_path:\n                    raise NoReverseMatch(\n                        \"%s is not a registered namespace inside '%s'\"\n                        % (key, \":\".join(resolved_path))\n                    )\n                else:\n                    raise NoReverseMatch(\"%s is not a registered namespace\" % key)\n        if ns_pattern:\n            resolver = get_ns_resolver(\n                ns_pattern, resolver, tuple(ns_converters.items())\n            )\n\n    return resolver._reverse_with_prefix(view, prefix, *args, **kwargs)\n\n# django/urls/base.py:21-24  (django.urls.base.resolve)\ndef resolve(path, urlconf=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    return get_resolver(urlconf).resolve(path)\n\n# django/urls/base.py:91-91  (django.urls.base)\nreverse_lazy = lazy(reverse, str)\n\n# django/urls/base.py:1-18  (django.urls.base)\nfrom urllib.parse import unquote, urlsplit, urlunsplit\n\nfrom asgiref.local import Local\n\nfrom django.utils.functional import lazy\nfrom django.utils.translation import override\n\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import _get_cached_resolver, get_ns_resolver, get_resolver\nfrom .utils import get_callable\n\n# SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for\n# the current thread (which is the only one we ever access), it is assumed to\n# be empty.\n_prefixes = Local()\n\n# Overridden URLconfs for each thread are stored here.\n_urlconfs = Local()\n\n# django/urls/base.py:94-97  (django.urls.base.clear_url_caches)\ndef clear_url_caches():\n    get_callable.cache_clear()\n    _get_cached_resolver.cache_clear()\n    get_ns_resolver.cache_clear()\n\n# django/urls/base.py:100-106  (django.urls.base.set_script_prefix)\ndef set_script_prefix(prefix):\n    \"\"\"\n    Set the script prefix for the current thread.\n    \"\"\"\n    if not prefix.endswith(\"/\"):\n        prefix += \"/\"\n    _prefixes.value = prefix\n\n# django/urls/base.py:109-115  (django.urls.base.get_script_prefix)\ndef get_script_prefix():\n    \"\"\"\n    Return the currently active script prefix. Useful for client code that\n    wishes to construct their own URLs manually (although accessing the request\n    instance is normally going to be a lot cleaner).\n    \"\"\"\n    return getattr(_prefixes, \"value\", \"/\")\n\n# django/urls/base.py:118-125  (django.urls.base.clear_script_prefix)\ndef clear_script_prefix():\n    \"\"\"\n    Unset the script prefix for the current thread.\n    \"\"\"\n    try:\n        del _prefixes.value\n    except AttributeError:\n        pass\n\n# django/urls/base.py:128-137  (django.urls.base.set_urlconf)\ndef set_urlconf(urlconf_name):\n    \"\"\"\n    Set the URLconf for the current thread (overriding the default one in\n    settings). If urlconf_name is None, revert back to the default.\n    \"\"\"\n    if urlconf_name:\n        _urlconfs.value = urlconf_name\n    else:\n        if hasattr(_urlconfs, \"value\"):\n            del _urlconfs.value\n\n# django/urls/base.py:140-145  (django.urls.base.get_urlconf)\ndef get_urlconf(default=None):\n    \"\"\"\n    Return the root URLconf to use for the current thread if it has been\n    changed from the default one.\n    \"\"\"\n    return getattr(_urlconfs, \"value\", default)\n\n# django/urls/base.py:148-157  (django.urls.base.is_valid_path)\ndef is_valid_path(path, urlconf=None):\n    \"\"\"\n    Return the ResolverMatch if the given path resolves against the default URL\n    resolver, False otherwise. This is a convenience method to make working\n    with \"is this a match?\" cases easier, avoiding try...except blocks.\n    \"\"\"\n    try:\n        return resolve(path, urlconf)\n    except Resolver404:\n        return False\n\n# django/urls/base.py:160-187  (django.urls.base.translate_url)\ndef translate_url(url, lang_code):\n    \"\"\"\n    Given a URL (absolute or relative), try to get its translated version in\n    the `lang_code` language (either by i18n_patterns or by translated regex).\n    Return the original URL if no translated version is found.\n    \"\"\"\n    parsed = urlsplit(url)\n    try:\n        # URL may be encoded.\n        match = resolve(unquote(parsed.path))\n    except Resolver404:\n        pass\n    else:\n        to_be_reversed = (\n            \"%s:%s\" % (match.namespace, match.url_name)\n            if match.namespace\n            else match.url_name\n        )\n        with override(lang_code):\n            try:\n                url = reverse(to_be_reversed, args=match.args, kwargs=match.kwargs)\n            except NoReverseMatch:\n                pass\n            else:\n                url = urlunsplit(\n                    (parsed.scheme, parsed.netloc, url, parsed.query, parsed.fragment)\n                )\n    return url\n\n# django/template/defaulttags.py:1163-1228  (django.template.defaulttags.regroup [signature])\n@register.tag\ndef regroup(parser, token):\n    'Regroup a list of alike objects by a common attribute.'\n    ...\n\n# django/template/defaultfilters.py:576-585  (django.template.defaultfilters.dictsortreversed [signature])\n@register.filter(is_safe=False)\ndef dictsortreversed(value, arg):\n    'Given a list of dicts, return that list sorted in reverse order by the'\n    ...\n\n# tests/forms_tests/tests/test_forms.py:2775-2786  (tests.forms_tests.tests.test_forms.FormsTestCase.test_boundfield_value_disabled_callable_initial [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_boundfield_value_disabled_callable_initial(self):\n        ...\n\n# django/db/models/deletion.py:118-140  (django.db.models.deletion.Collector.add [signature])\nclass Collector:\n    def add(self, objs, source=None, nullable=False, reverse_dependency=False):\n        \"Add 'objs' to the collection of objects to be deleted.  If the call is\"\n        ...\n\n# django/db/models/fields/related_descriptors.py:953-958  (django.db.models.fields.related_descriptors.ManyToManyDescriptor.through [signature])\nclass ManyToManyDescriptor(ReverseManyToOneDescriptor):\n    @property\n    def through(self):\n        # through is provided so that you have easy access to the through\n        # model (Book.authors.through) for inlines, etc. This is done as\n        # a property to ensure that the fully resolved value is returned.\n        ...\n\n# django/core/management/base.py:184-268  (django.core.management.base.BaseCommand [signature])\nclass BaseCommand:\n    'The base class from which all management commands ultimately'\n    ...\n\n# django/urls/resolvers.py:741-828  (django.urls.resolvers.URLResolver._reverse_with_prefix [signature])\nclass URLResolver:\n    def _reverse_with_prefix(self, lookup_view, _prefix, *args, **kwargs):\n        ...\n\n# django/template/context.py:172-187  (django.template.context.RenderContext [signature])\nclass RenderContext(BaseContext):\n    'A stack container for storing Template state.'\n    ...\n\n# django/db/backends/base/operations.py:114-126  (django.db.backends.base.operations.BaseDatabaseOperations.date_trunc_sql [signature])\nclass BaseDatabaseOperations:\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"Given a lookup_type of 'year', 'month', or 'day', return the SQL that\"\n        ...\n\n# django/db/backends/base/operations.py:168-179  (django.db.backends.base.operations.BaseDatabaseOperations.time_trunc_sql [signature])\nclass BaseDatabaseOperations:\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\"\n        ...\n\n# django/contrib/admin/checks.py:430-458  (django.contrib.admin.checks.BaseModelAdminChecks._check_field_spec_item [signature])\nclass BaseModelAdminChecks:\n    def _check_field_spec_item(self, obj, field_name, label):\n        ...\n\n# django/template/defaulttags.py:1325-1391  (django.template.defaulttags.url [signature])\n@register.tag\ndef url(parser, token):\n    'Return an absolute URL matching the given view with its parameters.'\n    ...\n\n# django/db/migrations/graph.py:64-84  (django.db.migrations.graph.MigrationGraph [signature])\nclass MigrationGraph:\n    'Represent the digraph of all migrations in a project.'\n    ...\n\n# django/forms/utils.py:23-45  (django.forms.utils.flatatt [signature])\ndef flatatt(attrs):\n    'Convert a dictionary of attributes to a single string.'\n    ...\n\n# django/db/models/options.py:870-953#part1of2  (django.db.models.options.Options._get_fields [signature])\nclass Options:\n    def _get_fields(\n        self,\n        forward=True,\n        reverse=True,\n        include_parents=True,\n        include_hidden=False,\n        seen_models=None,\n    ):\n        'Internal helper function to return fields of the model.'\n        ...\n\n# django/db/models/options.py:660-685  (django.db.models.options.Options.get_field [signature])\nclass Options:\n    def get_field(self, field_name):\n        'Return a field instance given the name of a forward or reverse field.'\n        ...\n\n# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme [signature])\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    ...\n\n# django/db/migrations/operations/base.py:5-34  (django.db.migrations.operations.base.Operation [signature])\nclass Operation:\n    'Base class for migration operations.'\n    ...\n\n# django/core/serializers/__init__.py:167-254  (django.core.serializers.sort_dependencies [signature])\ndef sort_dependencies(app_list, allow_cycles=False):\n    'Sort a list of (app_config, models) pairs into a single list of models.'\n    ...\n\n# django/db/models/sql/query.py:1296-1340  (django.db.models.sql.query.Query.build_lookup [signature])\nclass Query(BaseExpression):\n    def build_lookup(self, lookups, lhs, rhs):\n        'Try to extract transforms and lookup from given lhs.'\n        ...\n\n# django/test/runner.py:1160-1196  (django.test.runner.reorder_tests [signature])\ndef reorder_tests(tests, classes, reverse=False, shuffler=None):\n    'Reorder an iterable of tests, grouping by the given TestCase classes.'\n    ...\n\n# django/utils/autoreload.py:172-200  (django.utils.autoreload.common_roots [signature])\n@lru_cache(maxsize=1)\ndef common_roots(paths):\n    'Return a tuple of common roots that are shared between the given paths.'\n    ...\n\n# tests/forms_tests/tests/test_forms.py:3080-3083#part1of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_forms_with_prefixes [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_forms_with_prefixes(self):\n        # Sometimes it's necessary to have multiple forms display on the same\n        # HTML page, or multiple copies of the same form. We can accomplish\n        # this with form prefixes. Pass the keyword argument 'prefix' to the\n        # Form constructor to use this feature. This value will be prepended to\n        # each HTML form field name. One way to think about this is \"namespaces\n        # for HTML forms\". Notice that in the data argument, each field's key\n        # has the prefix, in this case 'person1', prepended to the actual field\n        # name.\n        ...\n\n# django/utils/decorators.py:25-53  (django.utils.decorators._multi_decorate [signature])\ndef _multi_decorate(decorators, method):\n    'Decorate `method` with one or more function decorators. `decorators` can be'\n    ...\n\n# django/db/models/options.py:789-827  (django.db.models.options.Options._populate_directed_relation_graph [signature])\nclass Options:\n    def _populate_directed_relation_graph(self):\n        'This method is used by each model to find its reverse objects. As this'\n        ...\n\n# django/template/defaulttags.py:454-482  (django.template.defaulttags.URLNode.render [signature])\nclass URLNode(Node):\n    def render(self, context):\n        ...\n\n# django/template/base.py:867-942  (django.template.base.Variable._resolve_lookup [signature])\nclass Variable:\n    def _resolve_lookup(self, context):\n        'Perform resolution of a real variable (i.e. not a literal) against the'\n        ...\n\n# django/shortcuts.py:28-48  (django.shortcuts.redirect [signature])\ndef redirect(to, *args, permanent=False, **kwargs):\n    'Return an HttpResponseRedirect to the appropriate URL for the arguments'\n    ...\n\n# django/test/testcases.py:573-595  (django.test.testcases.SimpleTestCase.assertURLEqual [signature])\nclass SimpleTestCase(unittest.TestCase):\n    # The class we'll use for the test client self.client.\n    # Can be overridden in derived classes.\n    def assertURLEqual(self, url1, url2, msg_prefix=\"\"):\n        'Assert that two URLs are the same, ignoring the order of query string'\n        ...\n\n# django/utils/decorators.py:56-90  (django.utils.decorators.method_decorator [signature])\ndef method_decorator(decorator, name=\"\"):\n    'Convert a function decorator into a method decorator'\n    ...\n\n# tests/forms_tests/tests/test_forms.py:1963-1967#part1of3  (tests.forms_tests.tests.test_forms.FormsTestCase.test_hidden_widget [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_hidden_widget(self):\n        # HiddenInput widgets are displayed differently in the as_table(), as_ul())\n        # and as_p() output of a Form -- their verbose names are not displayed, and a\n        # separate row is not displayed. They're displayed in the last row of the\n        # form, directly after that row's form element.\n        ...\n\n# django/utils/regex_helper.py:1-26  (django.utils.regex_helper)\n\"\"\"\nFunctions for reversing a regular expression (used in reverse URL resolving).\nUsed internally by Django and not intended for external use.\n\nThis is not, and is not intended to be, a complete reg-exp decompiler. It\nshould be good enough for a large class of URLS, however.\n\"\"\"\nimport re\n\nfrom django.utils.functional import SimpleLazyObject\n\n# Mapping of an escape character to a representative of that class. So, e.g.,\n# \"\\w\" is replaced by \"x\" in a reverse URL. A value of None means to ignore\n# this sequence. Any missing key is mapped to itself.\nESCAPE_MAPPINGS = {\n    \"A\": None,\n    \"b\": None,\n    \"B\": None,\n    \"d\": \"0\",\n    \"D\": \"x\",\n    \"s\": \" \",\n    \"S\": \"x\",\n    \"w\": \"x\",\n    \"W\": \"!\",\n    \"Z\": None,\n}\n\n# django/db/transaction.py:143-174  (django.db.transaction.Atomic)\nclass Atomic(ContextDecorator):\n    \"\"\"\n    Guarantee the atomic execution of a given block.\n\n    An instance can be used either as a decorator or as a context manager.\n\n    When it's used as a decorator, __call__ wraps the execution of the\n    decorated function in the instance itself, used as a context manager.\n\n    When it's used as a context manager, __enter__ creates a transaction or a\n    savepoint, depending on whether a transaction is already in progress, and\n    __exit__ commits the transaction or releases the savepoint on normal exit,\n    and rolls back the transaction or to the savepoint on exceptions.\n\n    It's possible to disable the creation of savepoints if the goal is to\n    ensure that some code runs within a transaction without creating overhead.\n\n    A stack of savepoints identifiers is maintained as an attribute of the\n    connection. None denotes the absence of a savepoint.\n\n    This allows reentrancy even if the same AtomicWrapper is reused. For\n    example, it's possible to define `oa = atomic('other')` and use `@oa` or\n    `with oa:` multiple times.\n\n    Since database connections are thread-local, this is thread-safe.\n\n    An atomic block can be tagged as durable. In this case, raise a\n    RuntimeError if it's nested within another atomic block. This guarantees\n    that database changes in a durable block are committed to the database when\n    the block exists without error.\n\n    This is a private API.\n    \"\"\"\n\n# django/utils/regex_helper.py:42-76#part1of3  (django.utils.regex_helper.normalize)\ndef normalize(pattern):\n    r\"\"\"\n    Given a reg-exp pattern, normalize it to an iterable of forms that\n    suffice for reverse matching. This does the following:\n\n    (1) For any repeating sections, keeps the minimum number of occurrences\n        permitted (this means zero for optional groups).\n    (2) If an optional group includes parameters, include one occurrence of\n        that group (along with the zero occurrence case from step (1)).\n    (3) Select the first (essentially an arbitrary) element from any character\n        class. Select an arbitrary character for any unordered class (e.g. '.'\n        or '\\w') in the pattern.\n    (4) Ignore look-ahead and look-behind assertions.\n    (5) Raise an error on any disjunctive ('|') constructs.\n\n    Django's URLs for forward resolving are either all positional arguments or\n    all keyword arguments. That is assumed here, as well. Although reverse\n    resolving can be done using positional args when keyword args are\n    specified, the two cannot be mixed in the same reverse() call.\n    \"\"\"\n    # Do a linear scan to work out the special features of this pattern. The\n    # idea is that we scan once here and collect all the information we need to\n    # make future decisions.\n    result = []\n    non_capturing_groups = []\n    consume_next = True\n    pattern_iter = next_char(iter(pattern))\n    num_args = 0\n\n    # A \"while\" loop is used here because later on we need to be able to peek\n    # at the next character and possibly go around without consuming another\n    # one at the top of the loop.\n    try:\n        ch, escaped = next(pattern_iter)\n    except StopIteration:\n        return [(\"\", [])]\n\n# django/shortcuts.py:117-155  (django.shortcuts.resolve_url)\ndef resolve_url(to, *args, **kwargs):\n    \"\"\"\n    Return a URL appropriate for the arguments passed.\n\n    The arguments could be:\n\n        * A model: the model's `get_absolute_url()` function will be called.\n\n        * A view name, possibly with arguments: `urls.reverse()` will be used\n          to reverse-resolve the name.\n\n        * A URL, which will be returned as-is.\n    \"\"\"\n    # If it's a model, use get_absolute_url()\n    if hasattr(to, \"get_absolute_url\"):\n        return to.get_absolute_url()\n\n    if isinstance(to, Promise):\n        # Expand the lazy instance, as it can cause issues when it is passed\n        # further to some Python functions like urlparse.\n        to = str(to)\n\n    # Handle relative URLs\n    if isinstance(to, str) and to.startswith((\"./\", \"../\")):\n        return to\n\n    # Next try a reverse URL resolution.\n    try:\n        return reverse(to, args=args, kwargs=kwargs)\n    except NoReverseMatch:\n        # If this is a callable, re-raise.\n        if callable(to):\n            raise\n        # If this doesn't \"feel\" like a URL, re-raise.\n        if \"/\" not in to and \".\" not in to:\n            raise\n\n    # Finally, fall back and assume it's a URL\n    return to\n\n# django/db/models/fields/related_descriptors.py:1-82  (django.db.models.fields.related_descriptors)\n\"\"\"\nAccessors for related objects.\n\nWhen a field defines a relation between two models, each model class provides\nan attribute to access related instances of the other model class (unless the\nreverse accessor has been disabled with related_name='+').\n\nAccessors are implemented as descriptors in order to customize access and\nassignment. This module defines the descriptor classes.\n\nForward accessors follow foreign keys. Reverse accessors trace them back. For\nexample, with the following models::\n\n    class Parent(Model):\n        pass\n\n    class Child(Model):\n        parent = ForeignKey(Parent, related_name='children')\n\n ``child.parent`` is a forward many-to-one relation. ``parent.children`` is a\nreverse many-to-one relation.\n\nThere are three types of relations (many-to-one, one-to-one, and many-to-many)\nand two directions (forward and reverse) for a total of six combinations.\n\n1. Related instance on the forward side of a many-to-one relation:\n   ``ForwardManyToOneDescriptor``.\n\n   Uniqueness of foreign key values is irrelevant to accessing the related\n   instance, making the many-to-one and one-to-one cases identical as far as\n   the descriptor is concerned. The constraint is checked upstream (unicity\n   validation in forms) or downstream (unique indexes in the database).\n\n2. Related instance on the forward side of a one-to-one\n   relation: ``ForwardOneToOneDescriptor``.\n\n   It avoids querying the database when accessing the parent link field in\n   a multi-table inheritance scenario.\n\n3. Related instance on the reverse side of a one-to-one relation:\n   ``ReverseOneToOneDescriptor``.\n\n   One-to-one relations are asymmetrical, despite the apparent symmetry of the\n   name, because they're implemented in the database with a foreign key from\n   one table to another. As a consequence ``ReverseOneToOneDescriptor`` is\n   slightly different from ``ForwardManyToOneDescriptor``.\n\n4. Related objects manager for related instances on the reverse side of a\n   many-to-one relation: ``ReverseManyToOneDescriptor``.\n\n   Unlike the previous two classes, this one provides access to a collection\n   of objects. It returns a manager rather than an instance.\n\n5. Related objects manager for related instances on the forward or reverse\n   sides of a many-to-many relation: ``ManyToManyDescriptor``.\n\n   Many-to-many relations are symmetrical. The syntax of Django models\n   requires declaring them on one side but that's an implementation detail.\n   They could be declared on the other side without any change in behavior.\n   Therefore the forward and reverse descriptors can be the same.\n\n   If you're looking for ``ForwardManyToManyDescriptor`` or\n   ``ReverseManyToManyDescriptor``, use ``ManyToManyDescriptor`` instead.\n\"\"\"\n\nfrom asgiref.sync import sync_to_async\n\nfrom django.core.exceptions import FieldError\nfrom django.db import (\n    DEFAULT_DB_ALIAS,\n    NotSupportedError,\n    connections,\n    router,\n    transaction,\n)\nfrom django.db.models import Q, Window, signals\nfrom django.db.models.functions import RowNumber\nfrom django.db.models.lookups import GreaterThan, LessThanOrEqual\nfrom django.db.models.query import QuerySet\nfrom django.db.models.query_utils import DeferredAttribute\nfrom django.db.models.utils import AltersData, resolve_callables\nfrom django.utils.functional import cached_property\n\n# django/template/context_processors.py:17-33  (django.template.context_processors.csrf)\ndef csrf(request):\n    \"\"\"\n    Context processor that provides a CSRF token, or the string 'NOTPROVIDED' if\n    it has not been provided by either a view decorator or the middleware\n    \"\"\"\n\n    def _get_val():\n        token = get_token(request)\n        if token is None:\n            # In order to be able to provide debugging info in the\n            # case of misconfiguration, we use a sentinel value\n            # instead of returning an empty dict.\n            return \"NOTPROVIDED\"\n        else:\n            return token\n\n    return {\"csrf_token\": SimpleLazyObject(_get_val)}\n\n# django/core/cache/backends/base.py:216-233  (django.core.cache.backends.base.BaseCache.get_or_set)\nclass BaseCache:\n    def get_or_set(self, key, default, timeout=DEFAULT_TIMEOUT, version=None):\n        \"\"\"\n        Fetch a given key from the cache. If the key does not exist,\n        add the key and set it to the default value. The default value can\n        also be any callable. If timeout is given, use that timeout for the\n        key; otherwise use the default cache timeout.\n\n        Return the value of the key stored or retrieved.\n        \"\"\"\n        val = self.get(key, self._missing_key, version=version)\n        if val is self._missing_key:\n            if callable(default):\n                default = default()\n            self.add(key, default, timeout=timeout, version=version)\n            # Fetch the value again to avoid a race condition if another caller\n            # added a value between the first get() and the add() above.\n            return self.get(key, default, version=version)\n        return val\n\n# django/db/backends/base/operations.py:16-500  (django.db.backends.base.operations.BaseDatabaseOperations)\nclass BaseDatabaseOperations:\n    \"\"\"\n    Encapsulate backend-specific differences, such as the way a backend\n    performs ordering or calculates the ID of a recently-inserted row.\n    \"\"\"\n\n    compiler_module = \"django.db.models.sql.compiler\"\n\n    # Integer field safe ranges by `internal_type` as documented\n    # in docs/ref/models/fields.txt.\n    integer_field_ranges = {\n        \"SmallIntegerField\": (-32768, 32767),\n        \"IntegerField\": (-2147483648, 2147483647),\n        \"BigIntegerField\": (-9223372036854775808, 9223372036854775807),\n        \"PositiveBigIntegerField\": (0, 9223372036854775807),\n        \"PositiveSmallIntegerField\": (0, 32767),\n        \"PositiveIntegerField\": (0, 2147483647),\n        \"SmallAutoField\": (-32768, 32767),\n        \"AutoField\": (-2147483648, 2147483647),\n        \"BigAutoField\": (-9223372036854775808, 9223372036854775807),\n    }\n    set_operators = {\n        \"union\": \"UNION\",\n        \"intersection\": \"INTERSECT\",\n        \"difference\": \"EXCEPT\",\n    }\n    # Mapping of Field.get_internal_type() (typically the model field's class\n    # name) to the data type to use for the Cast() function, if different from\n    # DatabaseWrapper.data_types.\n    cast_data_types = {}\n    # CharField data type if the max_length argument isn't provided.\n    cast_char_field_without_max_length = None\n\n    # Start and end points for window expressions.\n    PRECEDING = \"PRECEDING\"\n    FOLLOWING = \"FOLLOWING\"\n    UNBOUNDED_PRECEDING = \"UNBOUNDED \" + PRECEDING\n    UNBOUNDED_FOLLOWING = \"UNBOUNDED \" + FOLLOWING\n    CURRENT_ROW = \"CURRENT ROW\"\n\n    # Prefix for EXPLAIN queries, or None EXPLAIN isn't supported.\n    explain_prefix = None\n\n    def __init__(self, connection):\n        self.connection = connection\n        self._cache = None\n\n    def autoinc_sql(self, table, column):\n        \"\"\"\n        Return any SQL needed to support auto-incrementing primary keys, or\n        None if no SQL is necessary.\n\n        This SQL is executed when a table is created.\n        \"\"\"\n        return None\n\n    def bulk_batch_size(self, fields, objs):\n        \"\"\"\n        Return the maximum allowed batch size for the backend. The fields\n        are the fields going to be inserted in the batch, the objs contains\n        all the objects to be inserted.\n        \"\"\"\n        return len(objs)\n\n    def format_for_duration_arithmetic(self, sql):\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"format_for_duration_arithmetic() method.\"\n        )\n\n    def cache_key_culling_sql(self):\n        \"\"\"\n        Return an SQL query that retrieves the first cache key greater than the\n        n smallest.\n\n        This is used by the 'db' cache backend to determine where to start\n        culling.\n        \"\"\"\n        cache_key = self.quote_name(\"cache_key\")\n        return f\"SELECT {cache_key} FROM %s ORDER BY {cache_key} LIMIT 1 OFFSET %%s\"\n\n    def unification_cast_sql(self, output_field):\n        \"\"\"\n        Given a field instance, return the SQL that casts the result of a union\n        to that type. The resulting string should contain a '%s' placeholder\n        for the expression being cast.\n        \"\"\"\n        return \"%s\"\n\n    def date_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        extracts a value from the given date field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_extract_sql() \"\n            \"method\"\n        )\n\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        truncates the given date or datetime field field_name to a date object\n        with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_trunc_sql() \"\n            \"method.\"\n        )\n\n    def datetime_cast_date_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to date value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_date_sql() method.\"\n        )\n\n    def datetime_cast_time_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to time value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_time_sql() method\"\n        )\n\n    def datetime_extract_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that extracts a value from the given\n        datetime field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_extract_sql() \"\n            \"method\"\n        )\n\n    def datetime_trunc_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that truncates the given datetime field\n        field_name to a datetime object with only the given specificity.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_trunc_sql() \"\n            \"method\"\n        )\n\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\n        that truncates the given time or datetime field field_name to a time\n        object with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a time_trunc_sql() method\"\n        )\n\n    def time_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute', or 'second', return the SQL\n        that extracts a value from the given time field field_name.\n        \"\"\"\n        return self.date_extract_sql(lookup_type, sql, params)\n\n    def deferrable_sql(self):\n        \"\"\"\n        Return the SQL to make a constraint \"initially deferred\" during a\n        CREATE TABLE statement.\n        \"\"\"\n        return \"\"\n\n    def distinct_sql(self, fields, params):\n        \"\"\"\n        Return an SQL DISTINCT clause which removes duplicate rows from the\n        result set. If any fields are given, only check the given fields for\n        duplicates.\n        \"\"\"\n        if fields:\n            raise NotSupportedError(\n                \"DISTINCT ON fields is not supported by this database backend\"\n            )\n        else:\n            return [\"DISTINCT\"], []\n\n    def fetch_returned_insert_columns(self, cursor, returning_params):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT...RETURNING\n        statement into a table, return the newly created data.\n        \"\"\"\n        return cursor.fetchone()\n\n    def field_cast_sql(self, db_type, internal_type):\n        \"\"\"\n        Given a column type (e.g. 'BLOB', 'VARCHAR') and an internal type\n        (e.g. 'GenericIPAddressField'), return the SQL to cast it before using\n        it in a WHERE statement. The resulting string should contain a '%s'\n        placeholder for the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def force_no_ordering(self):\n        \"\"\"\n        Return a list used in the \"ORDER BY\" clause to force no ordering at\n        all. Return an empty list to include nothing in the ordering.\n        \"\"\"\n        return []\n\n    def for_update_sql(self, nowait=False, skip_locked=False, of=(), no_key=False):\n        \"\"\"\n        Return the FOR UPDATE SQL clause to lock rows for an update operation.\n        \"\"\"\n        return \"FOR%s UPDATE%s%s%s\" % (\n            \" NO KEY\" if no_key else \"\",\n            \" OF %s\" % \", \".join(of) if of else \"\",\n            \" NOWAIT\" if nowait else \"\",\n            \" SKIP LOCKED\" if skip_locked else \"\",\n        )\n\n    def _get_limit_offset_params(self, low_mark, high_mark):\n        offset = low_mark or 0\n        if high_mark is not None:\n            return (high_mark - offset), offset\n        elif offset:\n            return self.connection.ops.no_limit_value(), offset\n        return None, offset\n\n    def limit_offset_sql(self, low_mark, high_mark):\n        \"\"\"Return LIMIT/OFFSET SQL clause.\"\"\"\n        limit, offset = self._get_limit_offset_params(low_mark, high_mark)\n        return \" \".join(\n            sql\n            for sql in (\n                (\"LIMIT %d\" % limit) if limit else None,\n                (\"OFFSET %d\" % offset) if offset else None,\n            )\n            if sql\n        )\n\n    def last_executed_query(self, cursor, sql, params):\n        \"\"\"\n        Return a string of the query last executed by the given cursor, with\n        placeholders replaced with actual values.\n\n        `sql` is the raw query containing placeholders and `params` is the\n        sequence of parameters. These are used by default, but this method\n        exists for database backends to provide a better implementation\n        according to their own quoting schemes.\n        \"\"\"\n\n        # Convert params to contain string values.\n        def to_string(s):\n            return force_str(s, strings_only=True, errors=\"replace\")\n\n        if isinstance(params, (list, tuple)):\n            u_params = tuple(to_string(val) for val in params)\n        elif params is None:\n            u_params = ()\n        else:\n            u_params = {to_string(k): to_string(v) for k, v in params.items()}\n\n        return \"QUERY = %r - PARAMS = %r\" % (sql, u_params)\n\n    def last_insert_id(self, cursor, table_name, pk_name):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT statement into\n        a table that has an auto-incrementing ID, return the newly created ID.\n\n        `pk_name` is the name of the primary-key column.\n        \"\"\"\n        return cursor.lastrowid\n\n    def lookup_cast(self, lookup_type, internal_type=None):\n        \"\"\"\n        Return the string to use in a query when performing lookups\n        (\"contains\", \"like\", etc.). It should contain a '%s' placeholder for\n        the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def max_in_list_size(self):\n        \"\"\"\n        Return the maximum number of items that can be passed in a single 'IN'\n        list condition, or None if the backend does not impose a limit.\n        \"\"\"\n        return None\n\n    def max_name_length(self):\n        \"\"\"\n        Return the maximum length of table and column names, or None if there\n        is no limit.\n        \"\"\"\n        return None\n\n    def no_limit_value(self):\n        \"\"\"\n        Return the value to use for the LIMIT when we are wanting \"LIMIT\n        infinity\". Return None if the limit clause can be omitted in this case.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a no_limit_value() method\"\n        )\n\n    def pk_default_value(self):\n        \"\"\"\n        Return the value to use during an INSERT statement to specify that\n        the field should use its default value.\n        \"\"\"\n        return \"DEFAULT\"\n\n    def prepare_sql_script(self, sql):\n        \"\"\"\n        Take an SQL script that may contain multiple lines and return a list\n        of statements to feed to successive cursor.execute() calls.\n\n        Since few databases are able to process raw SQL scripts in a single\n        cursor.execute() call and PEP 249 doesn't talk about this use case,\n        the default implementation is conservative.\n        \"\"\"\n        return [\n            sqlparse.format(statement, strip_comments=True)\n            for statement in sqlparse.split(sql)\n            if statement\n        ]\n\n    def process_clob(self, value):\n        \"\"\"\n        Return the value of a CLOB column, for backends that return a locator\n        object that requires additional processing.\n        \"\"\"\n        return value\n\n    def return_insert_columns(self, fields):\n        \"\"\"\n        For backends that support returning columns as part of an insert query,\n        return the SQL and params to append to the INSERT query. The returned\n        fragment should contain a format string to hold the appropriate column.\n        \"\"\"\n        pass\n\n    def compiler(self, compiler_name):\n        \"\"\"\n        Return the SQLCompiler class corresponding to the given name,\n        in the namespace corresponding to the `compiler_module` attribute\n        on this backend.\n        \"\"\"\n        if self._cache is None:\n            self._cache = import_module(self.compiler_module)\n        return getattr(self._cache, compiler_name)\n\n    def quote_name(self, name):\n        \"\"\"\n        Return a quoted version of the given table, index, or column name. Do\n        not quote the given name if it's already been quoted.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a quote_name() method\"\n        )\n\n    def regex_lookup(self, lookup_type):\n        \"\"\"\n        Return the string to use in a query when performing regular expression\n        lookups (using \"regex\" or \"iregex\"). It should contain a '%s'\n        placeholder for the column being searched against.\n\n        If the feature is not supported (or part of it is not supported), raise\n        NotImplementedError.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a regex_lookup() method\"\n        )\n\n    def savepoint_create_sql(self, sid):\n        \"\"\"\n        Return the SQL for starting a new savepoint. Only required if the\n        \"uses_savepoints\" feature is True. The \"sid\" parameter is a string\n        for the savepoint id.\n        \"\"\"\n        return \"SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_commit_sql(self, sid):\n        \"\"\"\n        Return the SQL for committing the given savepoint.\n        \"\"\"\n        return \"RELEASE SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_rollback_sql(self, sid):\n        \"\"\"\n        Return the SQL for rolling back the given savepoint.\n        \"\"\"\n        return \"ROLLBACK TO SAVEPOINT %s\" % self.quote_name(sid)\n\n    def set_time_zone_sql(self):\n        \"\"\"\n        Return the SQL that will set the connection's time zone.\n\n        Return '' if the backend doesn't support time zones.\n        \"\"\"\n        return \"\"\n\n    def sql_flush(self, style, tables, *, reset_sequences=False, allow_cascade=False):\n        \"\"\"\n        Return a list of SQL statements required to remove all data from\n        the given database tables (without actually removing the tables\n        themselves).\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n\n        If `reset_sequences` is True, the list includes SQL statements required\n        to reset the sequences.\n\n        The `allow_cascade` argument determines whether truncation may cascade\n        to tables with foreign keys pointing the tables being truncated.\n        PostgreSQL requires a cascade even if these tables are empty.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations must provide an sql_flush() method\"\n        )\n\n    def execute_sql_flush(self, sql_list):\n        \"\"\"Execute a list of SQL statements to flush the database.\"\"\"\n        with transaction.atomic(\n            using=self.connection.alias,\n            savepoint=self.connection.features.can_rollback_ddl,\n        ):\n            with self.connection.cursor() as cursor:\n                for sql in sql_list:\n                    cursor.execute(sql)\n\n    def sequence_reset_by_name_sql(self, style, sequences):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences\n        passed in `sequences`.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []\n\n    def sequence_reset_sql(self, style, model_list):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences for\n        the given models.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []  # No sequence reset required by default.\n\n    def start_transaction_sql(self):\n        \"\"\"Return the SQL statement required to start a transaction.\"\"\"\n        return \"BEGIN;\"\n\n    def end_transaction_sql(self, success=True):\n        \"\"\"Return the SQL statement required to end a transaction.\"\"\"\n        if not success:\n            return \"ROLLBACK;\"\n        return \"COMMIT;\"\n\n    def tablespace_sql(self, tablespace, inline=False):\n        \"\"\"\n        Return the SQL that will be used in a query to define the tablespace.\n\n        Return '' if the backend doesn't support tablespaces.\n\n        If `inline` is True, append the SQL to a row; otherwise append it to\n        the entire CREATE TABLE or CREATE INDEX statement.\n        \"\"\"\n        return \"\"\n\n    def prep_for_like_query(self, x):\n        \"\"\"Prepare a value for use in a LIKE query.\"\"\"\n        return str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(\"%\", r\"\\%\").replace(\"_\", r\"\\_\")\n\n    # Same as prep_for_like_query(), but called for \"iexact\" matches, which\n    # need not necessarily be implemented using \"LIKE\" in the backend.\n    prep_for_iexact_query = prep_for_like_query\n\n# django/templatetags/i18n.py:358-453  (django.templatetags.i18n.do_translate)\n@register.tag(\"translate\")\n@register.tag(\"trans\")\ndef do_translate(parser, token):\n    \"\"\"\n    Mark a string for translation and translate the string for the current\n    language.\n\n    Usage::\n\n        {% translate \"this is a test\" %}\n\n    This marks the string for translation so it will be pulled out by\n    makemessages into the .po files and runs the string through the translation\n    engine.\n\n    There is a second form::\n\n        {% translate \"this is a test\" noop %}\n\n    This marks the string for translation, but returns the string unchanged.\n    Use it when you need to store values into forms that should be translated\n    later on.\n\n    You can use variables instead of constant strings\n    to translate stuff you marked somewhere else::\n\n        {% translate variable %}\n\n    This tries to translate the contents of the variable ``variable``. Make\n    sure that the string in there is something that is in the .po file.\n\n    It is possible to store the translated string into a variable::\n\n        {% translate \"this is a test\" as var %}\n        {{ var }}\n\n    Contextual translations are also supported::\n\n        {% translate \"this is a test\" context \"greeting\" %}\n\n    This is equivalent to calling pgettext instead of (u)gettext.\n    \"\"\"\n    bits = token.split_contents()\n    if len(bits) < 2:\n        raise TemplateSyntaxError(\"'%s' takes at least one argument\" % bits[0])\n    message_string = parser.compile_filter(bits[1])\n    remaining = bits[2:]\n\n    noop = False\n    asvar = None\n    message_context = None\n    seen = set()\n    invalid_context = {\"as\", \"noop\"}\n\n    while remaining:\n        option = remaining.pop(0)\n        if option in seen:\n            raise TemplateSyntaxError(\n                \"The '%s' option was specified more than once.\" % option,\n            )\n        elif option == \"noop\":\n            noop = True\n        elif option == \"context\":\n            try:\n                value = remaining.pop(0)\n            except IndexError:\n                raise TemplateSyntaxError(\n                    \"No argument provided to the '%s' tag for the context option.\"\n                    % bits[0]\n                )\n            if value in invalid_context:\n                raise TemplateSyntaxError(\n                    \"Invalid argument '%s' provided to the '%s' tag for the context \"\n                    \"option\" % (value, bits[0]),\n                )\n            message_context = parser.compile_filter(value)\n        elif option == \"as\":\n            try:\n                value = remaining.pop(0)\n            except IndexError:\n                raise TemplateSyntaxError(\n                    \"No argument provided to the '%s' tag for the as option.\" % bits[0]\n                )\n            asvar = value\n        else:\n            raise TemplateSyntaxError(\n                \"Unknown argument for '%s' tag: '%s'. The only options \"\n                \"available are 'noop', 'context' \\\"xxx\\\", and 'as VAR'.\"\n                % (\n                    bits[0],\n                    option,\n                )\n            )\n        seen.add(option)\n\n    return TranslateNode(message_string, noop, asvar, message_context)\n\n# tests/nested_foreign_keys/tests.py:1-32  (tests.nested_foreign_keys.tests)\nfrom django.test import TestCase\n\nfrom .models import (\n    Event,\n    Movie,\n    Package,\n    PackageNullFK,\n    Person,\n    Screening,\n    ScreeningNullFK,\n)\n\n\n# These are tests for #16715. The basic scheme is always the same: 3 models with\n# 2 relations. The first relation may be null, while the second is non-nullable.\n# In some cases, Django would pick the wrong join type for the second relation,\n# resulting in missing objects in the queryset.\n#\n#   Model A\n#   | (Relation A/B : nullable)\n#   Model B\n#   | (Relation B/C : non-nullable)\n#   Model C\n#\n# Because of the possibility of NULL rows resulting from the LEFT OUTER JOIN\n# between Model A and Model B (i.e. instances of A without reference to B),\n# the second join must also be LEFT OUTER JOIN, so that we do not ignore\n# instances of A that do not reference B.\n#\n# Relation A/B can either be an explicit foreign key or an implicit reverse\n# relation such as introduced by one-to-one relations (through multi-table\n# inheritance).\n\n# django/template/loader_tags.py:277-298  (django.template.loader_tags.do_extends)\n@register.tag(\"extends\")\ndef do_extends(parser, token):\n    \"\"\"\n    Signal that this template extends a parent template.\n\n    This tag may be used in two ways: ``{% extends \"base\" %}`` (with quotes)\n    uses the literal value \"base\" as the name of the parent template to extend,\n    or ``{% extends variable %}`` uses the value of ``variable`` as either the\n    name of the parent template to extend (if it evaluates to a string) or as\n    the parent template itself (if it evaluates to a Template object).\n    \"\"\"\n    bits = token.split_contents()\n    if len(bits) != 2:\n        raise TemplateSyntaxError(\"'%s' takes one argument\" % bits[0])\n    bits[1] = construct_relative_path(parser.origin.template_name, bits[1])\n    parent_name = parser.compile_filter(bits[1])\n    nodelist = parser.parse()\n    if nodelist.get_nodes_by_type(ExtendsNode):\n        raise TemplateSyntaxError(\n            \"'%s' cannot appear more than once in the same template\" % bits[0]\n        )\n    return ExtendsNode(nodelist, parent_name)\n\n# tests/forms_tests/tests/test_forms.py:1628-1629#part4of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        with self.assertRaisesMessage(ValueError, \"has no field named\"):\n            f.add_error(\"missing_field\", \"Some error.\")\n\n# tests/urlpatterns_reverse/tests.py:594-641  (tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names)\nclass ResolverTests(SimpleTestCase):\n    def test_404_tried_urls_have_names(self):\n        \"\"\"\n        The list of URLs that come back from a Resolver404 exception contains\n        a list in the right format for printing out in the DEBUG 404 page with\n        both the patterns and URL names, if available.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        # this list matches the expected URL types and names returned when\n        # you try to resolve a nonexistent URL in the first level of included\n        # URLs in named_urls.py (e.g., '/included/nonexistent-url')\n        url_types_names = [\n            [{\"type\": URLPattern, \"name\": \"named-url1\"}],\n            [{\"type\": URLPattern, \"name\": \"named-url2\"}],\n            [{\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url3\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url4\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLResolver}],\n        ]\n        with self.assertRaisesMessage(Resolver404, \"tried\") as cm:\n            resolve(\"/included/nonexistent-url\", urlconf=urls)\n        e = cm.exception\n        # make sure we at least matched the root ('/') url resolver:\n        self.assertIn(\"tried\", e.args[0])\n        self.assertEqual(\n            len(e.args[0][\"tried\"]),\n            len(url_types_names),\n            \"Wrong number of tried URLs returned.  Expected %s, got %s.\"\n            % (len(url_types_names), len(e.args[0][\"tried\"])),\n        )\n        for tried, expected in zip(e.args[0][\"tried\"], url_types_names):\n            for t, e in zip(tried, expected):\n                with self.subTest(t):\n                    self.assertIsInstance(\n                        t, e[\"type\"]\n                    ), \"%s is not an instance of %s\" % (t, e[\"type\"])\n                    if \"name\" in e:\n                        if not e[\"name\"]:\n                            self.assertIsNone(\n                                t.name, \"Expected no URL name but found %s.\" % t.name\n                            )\n                        else:\n                            self.assertEqual(\n                                t.name,\n                                e[\"name\"],\n                                'Wrong URL name.  Expected \"%s\", got \"%s\".'\n                                % (e[\"name\"], t.name),\n                            )\n\n# django/db/models/sql/query.py:1786-1869#part1of2  (django.db.models.sql.query.Query.setup_joins)\nclass Query(BaseExpression):\n    def setup_joins(\n        self,\n        names,\n        opts,\n        alias,\n        can_reuse=None,\n        allow_many=True,\n        reuse_with_filtered_relation=False,\n    ):\n        \"\"\"\n        Compute the necessary table joins for the passage through the fields\n        given in 'names'. 'opts' is the Options class for the current model\n        (which gives the table we are starting from), 'alias' is the alias for\n        the table to start the joining from.\n\n        The 'can_reuse' defines the reverse foreign key joins we can reuse. It\n        can be None in which case all joins are reusable or a set of aliases\n        that can be reused. Note that non-reverse foreign keys are always\n        reusable when using setup_joins().\n\n        The 'reuse_with_filtered_relation' can be used to force 'can_reuse'\n        parameter and force the relation on the given connections.\n\n        If 'allow_many' is False, then any reverse foreign key seen will\n        generate a MultiJoin exception.\n\n        Return the final field involved in the joins, the target field (used\n        for any 'where' constraint), the final 'opts' value, the joins, the\n        field path traveled to generate the joins, and a transform function\n        that takes a field and alias and is equivalent to `field.get_col(alias)`\n        in the simple case but wraps field transforms if they were included in\n        names.\n\n        The target field is the field containing the concrete value. Final\n        field can be something different, for example foreign key pointing to\n        that value. Final field is needed for example in some value\n        conversions (convert 'obj' in fk__id=obj to pk val using the foreign\n        key field for example).\n        \"\"\"\n        joins = [alias]\n        # The transform can't be applied yet, as joins must be trimmed later.\n        # To avoid making every caller of this method look up transforms\n        # directly, compute transforms here and create a partial that converts\n        # fields to the appropriate wrapped version.\n\n        def final_transformer(field, alias):\n            if not self.alias_cols:\n                alias = None\n            return field.get_col(alias)\n\n        # Try resolving all the names as fields first. If there's an error,\n        # treat trailing names as lookups until a field can be resolved.\n        last_field_exception = None\n        for pivot in range(len(names), 0, -1):\n            try:\n                path, final_field, targets, rest = self.names_to_path(\n                    names[:pivot],\n                    opts,\n                    allow_many,\n                    fail_on_missing=True,\n                )\n            except FieldError as exc:\n                if pivot == 1:\n                    # The first item cannot be a lookup, so it's safe\n                    # to raise the field error here.\n                    raise\n                else:\n                    last_field_exception = exc\n            else:\n                # The transforms are the remaining items that couldn't be\n                # resolved into fields.\n                transforms = names[pivot:]\n                break\n        for name in transforms:\n\n            def transform(field, alias, *, name, previous):\n                try:\n                    wrapped = previous(field, alias)\n                    return self.try_transform(wrapped, name)\n                except FieldError:\n                    # FieldError is raised if the transform doesn't exist.\n                    if isinstance(final_field, Field) and last_field_exception:\n                        raise last_field_exception\n                    else:\n                        raise\n\n            final_transformer = functools.partial(\n                transform, name=name, previous=final_transformer\n            )\n            final_transformer.has_transforms = True\n        # Then, add the path to the query's joins. Note that we can't trim\n        # joins at this stage - we will need the information about join type\n        # of the trimmed joins.\n\n# django/test/utils.py:400-410  (django.test.utils.TestContextDecorator)\nclass TestContextDecorator:\n    \"\"\"\n    A base class that can either be used as a context manager during tests\n    or as a test function or unittest.TestCase subclass decorator to perform\n    temporary alterations.\n\n    `attr_name`: attribute assigned the return value of enable() if used as\n                 a class decorator.\n\n    `kwarg_name`: keyword argument passing the return value of enable() if\n                  used as a function decorator.\n    \"\"\"\n\n## Task\n\nYou are assessing the blast radius of changing the return value shape\nof `django.urls.base.reverse` (e.g. changing it from a plain URL\nstring to a wrapper object) in django/urls/base.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `reverse`'s return value (a plain `x = reverse(...)`\nassignment, or a caller of such a caller two hops out) - callers that\nmerely pass `reverse(...)` straight through to another function\nwithout binding it locally do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

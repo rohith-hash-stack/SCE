@@ -1,0 +1,258 @@
+diff --git a/src/cattrs/_compat.py b/src/cattrs/_compat.py
+index 45ed2e5..d4c5cf4 100644
+--- a/src/cattrs/_compat.py
++++ b/src/cattrs/_compat.py
+@@ -405,7 +405,7 @@ def is_counter(type):
+     )
+ 
+ 
+-def is_generic(type) -> bool:
++def is_generic(*, type) -> bool:
+     """Whether `type` is a generic type."""
+     # Inheriting from protocol will inject `Generic` into the MRO
+     # without `__orig_bases__`.
+@@ -433,4 +433,4 @@ def get_full_type_hints(obj, globalns=None, localns=None):
+ 
+ def is_generic_attrs(type) -> bool:
+     """Return True for both specialized (A[int]) and unspecialized (A) generics."""
+-    return is_generic(type) and has(type.__origin__)
++    return is_generic(type=type) and has(type.__origin__)
+diff --git a/src/cattrs/_generics.py b/src/cattrs/_generics.py
+index 5d3fde8..fe0a44f 100644
+--- a/src/cattrs/_generics.py
++++ b/src/cattrs/_generics.py
+@@ -22,7 +22,7 @@ def deep_copy_with(t, mapping: Mapping[str, Any], self_is=NOTHING):
+                 else (
+                     mapping[a.__name__]
+                     if hasattr(a, "__name__") and a.__name__ in mapping
+-                    else (deep_copy_with(a, mapping, self_is) if is_generic(a) else a)
++                    else (deep_copy_with(a, mapping, self_is) if is_generic(type=a) else a)
+                 )
+             )
+             for a in args
+diff --git a/src/cattrs/converters.py b/src/cattrs/converters.py
+index 70c19b4..86674ae 100644
+--- a/src/cattrs/converters.py
++++ b/src/cattrs/converters.py
+@@ -1388,7 +1388,7 @@ class Converter(BaseConverter):
+         self, cl: type[T]
+     ) -> Callable[[Mapping[str, Any], Any], T]:
+         origin = get_origin(cl)
+-        attribs = fields(origin or cl if is_generic(cl) else cl)
++        attribs = fields(origin or cl if is_generic(type=cl) else cl)
+         if attrs_has(cl) and any(isinstance(a.type, str) for a in attribs):
+             # PEP 563 annotations - need to be resolved.
+             resolve_types(origin or cl)
+diff --git a/src/cattrs/gen/__init__.py b/src/cattrs/gen/__init__.py
+index 79d318e..ee6c3b7 100644
+--- a/src/cattrs/gen/__init__.py
++++ b/src/cattrs/gen/__init__.py
+@@ -159,7 +159,7 @@ def make_dict_unstructure_fn_from_attrs(
+                         t = typevar_map[t.__name__]
+                     else:
+                         handler = converter.unstructure
+-                elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++                elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                     t = deep_copy_with(t, typevar_map, cl)
+ 
+                 if handler is None:
+@@ -296,7 +296,7 @@ def make_dict_unstructure_fn(
+     if _cattrs_use_alias == "from_converter":
+         # BaseConverter doesn't have it so we're careful.
+         _cattrs_use_alias = getattr(converter, "use_alias", False)
+-    if is_generic(cl):
++    if is_generic(type=cl):
+         mapping = generate_mapping(cl, mapping)
+ 
+         if origin is not None:
+@@ -444,7 +444,7 @@ def make_dict_structure_fn_from_attrs(
+             t = a.type
+             if isinstance(t, TypeVar):
+                 t = typevar_map.get(t.__name__, t)
+-            elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++            elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                 t = deep_copy_with(t, typevar_map, cl)
+ 
+             # For each attribute, we try resolving the type here and now.
+@@ -588,7 +588,7 @@ def make_dict_structure_fn_from_attrs(
+             t = a.type
+             if isinstance(t, TypeVar):
+                 t = typevar_map.get(t.__name__, t)
+-            elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++            elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                 t = deep_copy_with(t, typevar_map, cl)
+ 
+             # For each attribute, we try resolving the type here and now.
+@@ -656,7 +656,7 @@ def make_dict_structure_fn_from_attrs(
+                 t = a.type
+                 if isinstance(t, TypeVar):
+                     t = typevar_map.get(t.__name__, t)
+-                elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++                elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                     t = deep_copy_with(t, typevar_map, cl)
+ 
+                 # For each attribute, we try resolving the type here and now.
+@@ -808,14 +808,14 @@ def make_dict_structure_fn(
+     """
+ 
+     mapping = {}
+-    if is_generic(cl):
++    if is_generic(type=cl):
+         base = get_origin(cl)
+         mapping = generate_mapping(cl, mapping)
+         if base is not None:
+             cl = base
+ 
+     for base in getattr(cl, "__orig_bases__", ()):
+-        if is_generic(base) and not str(base).startswith("typing.Generic"):
++        if is_generic(type=base) and not str(base).startswith("typing.Generic"):
+             mapping = generate_mapping(base, mapping)
+             break
+ 
+diff --git a/src/cattrs/gen/_generics.py b/src/cattrs/gen/_generics.py
+index 069c48c..8cd8954 100644
+--- a/src/cattrs/gen/_generics.py
++++ b/src/cattrs/gen/_generics.py
+@@ -50,7 +50,7 @@ def generate_mapping(cl: type, old_mapping: dict[str, type] = {}) -> dict[str, t
+                 continue
+             mapping[p.__name__] = t
+ 
+-    elif is_generic(cl):
++    elif is_generic(type=cl):
+         # Origin is None, so this may be a subclass of a generic class.
+         orig_bases = cl.__orig_bases__
+         for base in orig_bases:
+diff --git a/src/cattrs/gen/typeddicts.py b/src/cattrs/gen/typeddicts.py
+index b12a6d9..805d37e 100644
+--- a/src/cattrs/gen/typeddicts.py
++++ b/src/cattrs/gen/typeddicts.py
+@@ -64,11 +64,11 @@ def make_dict_unstructure_fn(
+     req_keys = _required_keys(origin or cl)
+ 
+     mapping = {}
+-    if is_generic(cl):
++    if is_generic(type=cl):
+         mapping = generate_mapping(cl, mapping)
+ 
+         for base in getattr(origin, "__orig_bases__", ()):
+-            if is_generic(base) and not str(base).startswith("typing.Generic"):
++            if is_generic(type=base) and not str(base).startswith("typing.Generic"):
+                 mapping = generate_mapping(base, mapping)
+                 break
+ 
+@@ -123,7 +123,7 @@ def make_dict_unstructure_fn(
+                 else:
+                     # Unbound typevars use late binding.
+                     handler = converter.unstructure
+-            elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++            elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                 t = deep_copy_with(t, mapping, cl)
+ 
+             if handler is None:
+@@ -176,7 +176,7 @@ def make_dict_unstructure_fn(
+                         t = mapping[t.__name__]
+                     else:
+                         handler = converter.unstructure
+-                elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++                elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                     t = deep_copy_with(t, mapping, cl)
+ 
+                 if handler is None:
+@@ -264,7 +264,7 @@ def make_dict_structure_fn(
+     """
+ 
+     mapping = {}
+-    if is_generic(cl):
++    if is_generic(type=cl):
+         base = get_origin(cl)
+         mapping = generate_mapping(cl, mapping)
+         if base is not None:
+@@ -273,7 +273,7 @@ def make_dict_structure_fn(
+             cl = base
+ 
+     for base in getattr(cl, "__orig_bases__", ()):
+-        if is_generic(base) and not str(base).startswith("typing.Generic"):
++        if is_generic(type=base) and not str(base).startswith("typing.Generic"):
+             mapping = generate_mapping(base, mapping)
+             break
+ 
+@@ -351,10 +351,10 @@ def make_dict_structure_fn(
+ 
+             if isinstance(t, TypeVar):
+                 t = mapping.get(t.__name__, t)
+-            elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++            elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                 t = deep_copy_with(t, mapping, cl)
+ 
+-            if is_generic(t) and not is_bare(t) and not is_annotated(t):
++            if is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                 t = deep_copy_with(t, mapping, cl)
+ 
+             # For each attribute, we try resolving the type here and now.
+@@ -431,7 +431,7 @@ def make_dict_structure_fn(
+ 
+             if isinstance(t, TypeVar):
+                 t = mapping.get(t.__name__, t)
+-            elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++            elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                 t = deep_copy_with(t, mapping, cl)
+ 
+             nrb = get_notrequired_base(t)
+@@ -483,7 +483,7 @@ def make_dict_structure_fn(
+ 
+                 if isinstance(t, TypeVar):
+                     t = mapping.get(t.__name__, t)
+-                elif is_generic(t) and not is_bare(t) and not is_annotated(t):
++                elif is_generic(type=t) and not is_bare(t) and not is_annotated(t):
+                     t = deep_copy_with(t, mapping, cl)
+ 
+                 if override.struct_hook is not None:
+@@ -566,7 +566,7 @@ def _adapted_fields(cls: Any) -> list[Attribute]:
+ 
+ def _is_extensions_typeddict(cls) -> bool:
+     return cls.__class__ is _TypedDictMeta or (
+-        is_generic(cls) and (cls.__origin__.__class__ is _TypedDictMeta)
++        is_generic(type=cls) and (cls.__origin__.__class__ is _TypedDictMeta)
+     )
+ 
+ 
+diff --git a/src/cattrs/typealiases.py b/src/cattrs/typealiases.py
+index d3a20c4..5e633ee 100644
+--- a/src/cattrs/typealiases.py
++++ b/src/cattrs/typealiases.py
+@@ -43,7 +43,7 @@ def get_type_alias_base(type: Any) -> Any:
+ 
+ def type_alias_structure_factory(type: Any, converter: BaseConverter) -> StructureHook:
+     base = get_type_alias_base(type)
+-    if is_generic(type):
++    if is_generic(type=type):
+         mapping = generate_mapping(type)
+         if base.__name__ in mapping:
+             # Probably just type T = T
+diff --git a/tests/test_phase2_signature_is_generic.py b/tests/test_phase2_signature_is_generic.py
+new file mode 100644
+index 0000000..9aff7e8
+--- /dev/null
++++ b/tests/test_phase2_signature_is_generic.py
+@@ -0,0 +1,8 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_type():
++    owner = importlib.import_module('cattrs._compat')
++    p = inspect.signature(getattr(owner, 'is_generic')).parameters['type']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY
+diff --git a/tests/test_typeddicts.py b/tests/test_typeddicts.py
+index b76da4c..9927c5c 100644
+--- a/tests/test_typeddicts.py
++++ b/tests/test_typeddicts.py
+@@ -54,7 +54,7 @@ def mk_converter(detailed_validation: bool = True) -> Converter:
+ 
+ def get_annot(t) -> dict:
+     """Our version, handling type vars properly."""
+-    if is_generic(t):
++    if is_generic(type=t):
+         # This will have typevars.
+         origin = getattr(t, "__origin__", None)
+         if origin is not None:

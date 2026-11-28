@@ -202,3 +202,41 @@ def test_canonical_path_rejects_traversal_sequence_once_pinned(tmp_path, monkeyp
 
     with pytest.raises(SecurityError):
         GraphCache.canonical_path(str(root / ".." / "secret"))
+
+
+# --------------------------------------------------------------------- #
+# Phase 1, item 4: the rejection states the accepted form (and, for a
+# path-like name, the dotted suggestion); the validator itself is unchanged.
+# --------------------------------------------------------------------- #
+def _message(name):
+    with pytest.raises(SecurityError) as exc:
+        validate_symbol_name(name)
+    return str(exc.value)
+
+
+def test_rejection_message_states_the_accepted_form():
+    msg = _message("a/b/c")
+    assert msg.startswith("invalid symbol name: 'a/b/c'.")
+    assert "dotted names, not file paths" in msg and "pkg.module.Class.method" in msg
+
+
+def test_rejection_suggests_the_dotted_form_of_a_path_like_name():
+    # the exact name devstral sent in Phase 0 (delete-01, turn 5)
+    assert "Did you mean `packages.zod.src.v4.classic.schemas.object`?" in _message(
+        "packages/zod/src/v4/classic/schemas.object")
+    assert "Did you mean `pkg.mod.Klass.run`?" in _message("pkg/mod.py::Klass.run")
+    assert "Did you mean `src.app.handler`?" in _message("./src/app.ts::handler")
+
+
+def test_no_suggestion_for_traversal_absolute_or_hostile_names():
+    for name in ("../../etc/passwd", "a/../../b", "/etc/passwd", "a//b", "a/b\x00c", "a/b c", "x" * 600):
+        msg = _message(name)
+        assert "Did you mean" not in msg
+        assert "invalid symbol name" in msg
+
+
+def test_the_validator_still_rejects_every_path_form():
+    for name in ("packages/zod/src/v4/classic/schemas.object", "pkg/mod.py::Klass.run", "a\\b", "a::b"):
+        with pytest.raises(SecurityError):
+            validate_symbol_name(name)
+    assert validate_symbol_name("packages.zod.src.v4.classic.schemas.object") == "packages.zod.src.v4.classic.schemas.object"

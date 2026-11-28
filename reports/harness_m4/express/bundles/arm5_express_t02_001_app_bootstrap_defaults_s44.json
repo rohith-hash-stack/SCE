@@ -1,0 +1,195 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_001_app_bootstrap_defaults",
+  "items": [
+   {
+    "source_id": "lib/application.js:64-70",
+    "content": "# lib/application.js:64-70  (lib.application.init)\napp.init = function init() {\n  this.cache = {};\n  this.engines = {};\n  this.settings = {};\n\n  this.defaultConfiguration();\n};",
+    "token_count": 45,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.init"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 29,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:77-134",
+    "content": "# lib/application.js:77-134  (lib.application.defaultConfiguration)\napp.defaultConfiguration = function defaultConfiguration() {\n  var env = process.env.NODE_ENV || 'development';\n\n  // default settings\n  this.enable('x-powered-by');\n  this.set('etag', 'weak');\n  this.set('env', env);\n  this.set('query parser', 'extended');\n  this.set('subdomain offset', 2);\n  this.set('trust proxy', false);\n\n  // trust proxy inherit back-compat\n  Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n    configurable: true,\n    value: true\n  });\n\n  debug('booting in %s mode', env);\n\n  this.on('mount', function onmount(parent) {\n    // inherit trust proxy\n    if (this.settings[trustProxyDefaultSymbol] === true\n      && typeof parent.settings['trust proxy fn'] === 'function') {\n      delete this.settings['trust proxy'];\n      delete this.settings['trust proxy fn'];\n    }\n\n    // inherit protos\n    setPrototypeOf(this.request, parent.request)\n    setPrototypeOf(this.response, parent.response)\n    setPrototypeOf(this.engines, parent.engines)\n    setPrototypeOf(this.settings, parent.settings)\n  });\n\n  // setup locals\n  this.locals = Object.create(null);\n\n  // top-most app is mounted at /\n  this.mountpath = '/';\n\n  // default locals\n  this.locals.settings = this.settings;\n\n  // default configuration\n  this.set('view', View);\n  this.set('views', resolve('views'));\n  this.set('jsonp callback name', 'callback');\n\n  if (env === 'production') {\n    this.enable('view cache');\n  }\n\n  Object.defineProperty(this, 'router', {\n    get: function() {\n      throw new Error('\\'app.router\\' is deprecated!\\nPlease see the 3.x to 4.x migration guide for details on how to update your app.');\n    }\n  });\n};\n\n# Referenced module constants:\nvar View = require('./view');\nvar debug = require('debug')('express:application');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';",
+    "token_count": 462,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.defaultConfiguration"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 438,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:469-471",
+    "content": "# lib/application.js:469-471  (lib.application.enable)\napp.enable = function enable(setting) {\n  return this.set(setting, true);\n};",
+    "token_count": 35,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.enable"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 17,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:359-401",
+    "content": "# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar hasOwnProperty = Object.prototype.hasOwnProperty",
+    "token_count": 291,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.set"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 267,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:150-172",
+    "content": "# lib/utils.js:150-172  (lib.utils.compileETag)\nexports.compileETag = function(val) {\n  var fn;\n\n  if (typeof val === 'function') {\n    return val;\n  }\n\n  switch (val) {\n    case true:\n    case 'weak':\n      fn = exports.wetag;\n      break;\n    case false:\n      break;\n    case 'strong':\n      fn = exports.etag;\n      break;\n    default:\n      throw new TypeError('unknown value for etag function: ' + val);\n  }\n\n  return fn;\n}",
+    "token_count": 122,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.utils.compileETag"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 102,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:182-205",
+    "content": "# lib/utils.js:182-205  (lib.utils.compileQueryParser)\nexports.compileQueryParser = function compileQueryParser(val) {\n  var fn;\n\n  if (typeof val === 'function') {\n    return val;\n  }\n\n  switch (val) {\n    case true:\n    case 'simple':\n      fn = querystring.parse;\n      break;\n    case false:\n      fn = newObject;\n      break;\n    case 'extended':\n      fn = parseExtendedQueryString;\n      break;\n    default:\n      throw new TypeError('unknown value for query parser function: ' + val);\n  }\n\n  return fn;\n}\n\n# Referenced module constants:\nvar querystring = require('querystring');",
+    "token_count": 146,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.utils.compileQueryParser"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 120,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:215-235",
+    "content": "# lib/utils.js:215-235  (lib.utils.compileTrust)\nexports.compileTrust = function(val) {\n  if (typeof val === 'function') return val;\n\n  if (val === true) {\n    // Support plain true/false\n    return function(){ return true };\n  }\n\n  if (typeof val === 'number') {\n    // Support trusting hop count\n    return function(a, i){ return i < val };\n  }\n\n  if (typeof val === 'string') {\n    // Support comma-separated values\n    val = val.split(',')\n      .map(function (v) { return v.trim() })\n  }\n\n  return proxyaddr.compile(val || []);\n}\n\n# Referenced module constants:\nvar proxyaddr = require('proxy-addr');",
+    "token_count": 157,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.utils.compileTrust"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 132,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1258,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating Express's application bootstrap in lib/application.js. Starting from `init`, trace the exact causal pipeline that runs when a new Express application object is initialized: what default configuration gets applied, and which real config-mutation methods it goes through to do so.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.init\", \"lib.application.defaultConfiguration\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.application.init",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 9,
+   "manifest_candidates_unfiltered": 9,
+   "requested_symbols": [
+    "lib.application.init",
+    "lib.application.defaultConfiguration",
+    "lib.application.enable",
+    "lib.application.set",
+    "lib.utils.compileETag",
+    "lib.utils.compileQueryParser",
+    "lib.utils.compileTrust",
+    "proxy-addr.compile"
+   ],
+   "turn1_requested_count": 8,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "proxy-addr.compile"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The Express application initialization pipeline starts with the `init` method, which triggers the `defaultConfiguration` method. This method sets up various default configurations by calling other methods like `enable` and `set`, which in turn may call utility functions for specific settings.\",\n  \"requested_symbols\": [\n    \"lib.application.init\",\n    \"lib.application.defaultConfiguration\",\n    \"lib.application.enable\",\n    \"lib.application.set\",\n    \"lib.utils.compileETag\",\n    \"lib.utils.compileQueryParser\",\n    \"lib.utils.compileTrust\",\n    \"proxy-addr.compile\"\n  ]\n}\n```",
+     "prompt_tokens": 700,
+     "completion_tokens": 128,
+     "latency_seconds": 8.992290759000753,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     12.658522
+    ],
+    "L_turn2_hydrate": [
+     49.910703
+    ],
+    "L_retrieve": [
+     9059.167701
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1258,
+   "prompt_tokens": 1522,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1535,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/application.js:64-70  (lib.application.init)\napp.init = function init() {\n  this.cache = {};\n  this.engines = {};\n  this.settings = {};\n\n  this.defaultConfiguration();\n};\n\n# lib/application.js:77-134  (lib.application.defaultConfiguration)\napp.defaultConfiguration = function defaultConfiguration() {\n  var env = process.env.NODE_ENV || 'development';\n\n  // default settings\n  this.enable('x-powered-by');\n  this.set('etag', 'weak');\n  this.set('env', env);\n  this.set('query parser', 'extended');\n  this.set('subdomain offset', 2);\n  this.set('trust proxy', false);\n\n  // trust proxy inherit back-compat\n  Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n    configurable: true,\n    value: true\n  });\n\n  debug('booting in %s mode', env);\n\n  this.on('mount', function onmount(parent) {\n    // inherit trust proxy\n    if (this.settings[trustProxyDefaultSymbol] === true\n      && typeof parent.settings['trust proxy fn'] === 'function') {\n      delete this.settings['trust proxy'];\n      delete this.settings['trust proxy fn'];\n    }\n\n    // inherit protos\n    setPrototypeOf(this.request, parent.request)\n    setPrototypeOf(this.response, parent.response)\n    setPrototypeOf(this.engines, parent.engines)\n    setPrototypeOf(this.settings, parent.settings)\n  });\n\n  // setup locals\n  this.locals = Object.create(null);\n\n  // top-most app is mounted at /\n  this.mountpath = '/';\n\n  // default locals\n  this.locals.settings = this.settings;\n\n  // default configuration\n  this.set('view', View);\n  this.set('views', resolve('views'));\n  this.set('jsonp callback name', 'callback');\n\n  if (env === 'production') {\n    this.enable('view cache');\n  }\n\n  Object.defineProperty(this, 'router', {\n    get: function() {\n      throw new Error('\\'app.router\\' is deprecated!\\nPlease see the 3.x to 4.x migration guide for details on how to update your app.');\n    }\n  });\n};\n\n# Referenced module constants:\nvar View = require('./view');\nvar debug = require('debug')('express:application');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n# lib/application.js:469-471  (lib.application.enable)\napp.enable = function enable(setting) {\n  return this.set(setting, true);\n};\n\n# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar hasOwnProperty = Object.prototype.hasOwnProperty\n\n# lib/utils.js:150-172  (lib.utils.compileETag)\nexports.compileETag = function(val) {\n  var fn;\n\n  if (typeof val === 'function') {\n    return val;\n  }\n\n  switch (val) {\n    case true:\n    case 'weak':\n      fn = exports.wetag;\n      break;\n    case false:\n      break;\n    case 'strong':\n      fn = exports.etag;\n      break;\n    default:\n      throw new TypeError('unknown value for etag function: ' + val);\n  }\n\n  return fn;\n}\n\n# lib/utils.js:182-205  (lib.utils.compileQueryParser)\nexports.compileQueryParser = function compileQueryParser(val) {\n  var fn;\n\n  if (typeof val === 'function') {\n    return val;\n  }\n\n  switch (val) {\n    case true:\n    case 'simple':\n      fn = querystring.parse;\n      break;\n    case false:\n      fn = newObject;\n      break;\n    case 'extended':\n      fn = parseExtendedQueryString;\n      break;\n    default:\n      throw new TypeError('unknown value for query parser function: ' + val);\n  }\n\n  return fn;\n}\n\n# Referenced module constants:\nvar querystring = require('querystring');\n\n# lib/utils.js:215-235  (lib.utils.compileTrust)\nexports.compileTrust = function(val) {\n  if (typeof val === 'function') return val;\n\n  if (val === true) {\n    // Support plain true/false\n    return function(){ return true };\n  }\n\n  if (typeof val === 'number') {\n    // Support trusting hop count\n    return function(a, i){ return i < val };\n  }\n\n  if (typeof val === 'string') {\n    // Support comma-separated values\n    val = val.split(',')\n      .map(function (v) { return v.trim() })\n  }\n\n  return proxyaddr.compile(val || []);\n}\n\n# Referenced module constants:\nvar proxyaddr = require('proxy-addr');\n\n## Task\n\nYou are investigating Express's application bootstrap in lib/application.js. Starting from `init`, trace the exact causal pipeline that runs when a new Express application object is initialized: what default configuration gets applied, and which real config-mutation methods it goes through to do so.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.init\", \"lib.application.defaultConfiguration\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

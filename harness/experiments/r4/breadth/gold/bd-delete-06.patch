@@ -1,0 +1,75 @@
+diff --git a/src/werkzeug/wsgi.py b/src/werkzeug/wsgi.py
+index 900d80e4..93d383fa 100644
+--- a/src/werkzeug/wsgi.py
++++ b/src/werkzeug/wsgi.py
+@@ -5,6 +5,7 @@ import typing as t
+ from functools import partial
+ from functools import update_wrapper
+ 
++from ._internal import _wsgi_decoding_dance
+ from .exceptions import ClientDisconnected
+ from .exceptions import RequestEntityTooLarge
+ from .sansio import utils as _sansio_utils
+@@ -206,18 +207,20 @@ def _get_input_stream(
+     return stream
+ 
+ 
+-def get_path_info(environ: WSGIEnvironment) -> str:
++def _get_path_info(environ: WSGIEnvironment) -> str:
+     """Return ``PATH_INFO`` from  the WSGI environment.
+ 
+     :param environ: WSGI environment to get the path from.
+ 
++    .. deprecated:: 3.2
++        Will be removed in Werkzeug 4.0. Use ``request.path`` instead.
++
+     .. versionchanged:: 3.0
+         The ``charset`` and ``errors`` parameters were removed.
+ 
+     .. versionadded:: 0.9
+     """
+-    path: bytes = environ.get("PATH_INFO", "").encode("latin1")
+-    return path.decode(errors="replace")
++    return _wsgi_decoding_dance(environ.get("PATH_INFO", ""))
+ 
+ 
+ class ClosingIterator:
+@@ -659,4 +662,13 @@ if not t.TYPE_CHECKING:
+             )
+             return _get_content_length
+ 
++        if name == "get_path_info":
++            warnings.warn(
++                "The 'get_path_info' function is deprecated and will be removed in"
++                " Werkzeug 4.0. Use 'Request.path' instead.",
++                DeprecationWarning,
++                stacklevel=2,
++            )
++            return _get_path_info
++
+         raise AttributeError(name)
+diff --git a/tests/test_wsgi.py b/tests/test_wsgi.py
+index 28f2aa4d..a4260245 100644
+--- a/tests/test_wsgi.py
++++ b/tests/test_wsgi.py
+@@ -11,6 +11,7 @@ from werkzeug import wsgi
+ from werkzeug.exceptions import BadRequest
+ from werkzeug.exceptions import ClientDisconnected
+ from werkzeug.test import create_environ
++from werkzeug.test import EnvironBuilder
+ from werkzeug.test import run_wsgi_app
+ from werkzeug.wrappers import Response
+ from werkzeug.wsgi import _RangeWrapper
+@@ -73,8 +74,10 @@ def test_get_host_validate_trusted_hosts():
+ 
+ 
+ def test_path_info_and_script_name_fetching():
+-    env = create_environ("/\N{SNOWMAN}", "http://example.com/\N{COMET}/")
+-    assert wsgi.get_path_info(env) == "/\N{SNOWMAN}"
++    request = EnvironBuilder(
++        "/\N{SNOWMAN}", "http://example.com/\N{COMET}/"
++    ).get_request()
++    assert request.path == "/\N{SNOWMAN}"
+ 
+ 
+ def test_limited_stream():

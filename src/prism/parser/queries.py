@@ -58,13 +58,31 @@ _JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION = """
             right: [(function_expression) (arrow_function)] @def.function)
 """
 
+# `const f = () => {}` / `export const f = function () {}` / `let g =
+# function* () {}` - a function bound to a variable by declaration, the
+# dominant style of modern TS/JS APIs (Hono's whole public surface; zod and
+# tRPC helpers) and of nested closures. Like the property-assigned shape
+# above, the captured node is the function itself; `concrete_builder.py`'s
+# `_declarator_bound_function_name` supplies the binding name (it wins over
+# a function expression's own internal name - callers use the binding) and
+# `outer_definition_node` reports the whole `[export] const ...` statement
+# as its line range. Destructuring targets and computed values (`const f =
+# wrap(() => {})`) are not definitions and are not matched; `export default
+# () => {}` has no binding name and stays unregistered.
+_JS_CONST_BOUND_FUNCTION_DEFINITION = """
+        (variable_declarator
+            name: (identifier)
+            value: [(function_expression) (arrow_function) (generator_function)] @def.function)
+"""
+
 JAVASCRIPT_QUERIES = {
     "definitions": """
         (class_declaration name: (identifier) @def.name) @def.class
         (function_declaration name: (identifier) @def.name) @def.function
         (method_definition name: (property_identifier) @def.name) @def.function
     """
-    + _JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION,
+    + _JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION
+    + _JS_CONST_BOUND_FUNCTION_DEFINITION,
     "imports": """
         (import_statement) @import.stmt
     """,
@@ -84,7 +102,8 @@ TYPESCRIPT_QUERIES = {
         (function_declaration name: (identifier) @def.name) @def.function
         (method_definition name: (property_identifier) @def.name) @def.function
     """
-    + _JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION,
+    + _JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION
+    + _JS_CONST_BOUND_FUNCTION_DEFINITION,
     "imports": JAVASCRIPT_QUERIES["imports"],
     "calls": JAVASCRIPT_QUERIES["calls"],
     "decorators": JAVASCRIPT_QUERIES["decorators"],

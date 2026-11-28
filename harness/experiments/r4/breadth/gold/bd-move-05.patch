@@ -1,0 +1,133 @@
+diff --git a/rich/color.py b/rich/color.py
+index e2c23a6..e244cba 100644
+--- a/rich/color.py
++++ b/rich/color.py
+@@ -577,20 +577,6 @@ def parse_rgb_hex(hex_color: str) -> ColorTriplet:
+     return color
+ 
+ 
+-def blend_rgb(
+-    color1: ColorTriplet, color2: ColorTriplet, cross_fade: float = 0.5
+-) -> ColorTriplet:
+-    """Blend one RGB color in to another."""
+-    r1, g1, b1 = color1
+-    r2, g2, b2 = color2
+-    new_color = ColorTriplet(
+-        int(r1 + (r2 - r1) * cross_fade),
+-        int(g1 + (g2 - g1) * cross_fade),
+-        int(b1 + (b2 - b1) * cross_fade),
+-    )
+-    return new_color
+-
+-
+ if __name__ == "__main__":  # pragma: no cover
+     from .console import Console
+     from .table import Table
+diff --git a/rich/color_blend_rgb.py b/rich/color_blend_rgb.py
+new file mode 100644
+index 0000000..b66fab1
+--- /dev/null
++++ b/rich/color_blend_rgb.py
+@@ -0,0 +1,15 @@
++from .color_triplet import ColorTriplet
++
++
++def blend_rgb(
++    color1: ColorTriplet, color2: ColorTriplet, cross_fade: float = 0.5
++) -> ColorTriplet:
++    """Blend one RGB color in to another."""
++    r1, g1, b1 = color1
++    r2, g2, b2 = color2
++    new_color = ColorTriplet(
++        int(r1 + (r2 - r1) * cross_fade),
++        int(g1 + (g2 - g1) * cross_fade),
++        int(b1 + (b2 - b1) * cross_fade),
++    )
++    return new_color
+diff --git a/rich/console.py b/rich/console.py
+index 0bdce76..d2e5440 100644
+--- a/rich/console.py
++++ b/rich/console.py
+@@ -39,7 +39,8 @@ from ._export_format import CONSOLE_HTML_FORMAT, CONSOLE_SVG_FORMAT
+ from ._fileno import get_fileno
+ from ._log_render import FormatTimeCallable, LogRender
+ from .align import Align, AlignMethod
+-from .color import ColorSystem, blend_rgb
++from .color import ColorSystem
++from .color_blend_rgb import blend_rgb
+ from .control import Control
+ from .emoji import EmojiVariant
+ from .highlighter import NullHighlighter, ReprHighlighter
+diff --git a/rich/progress_bar.py b/rich/progress_bar.py
+index 41794f7..80e09ee 100644
+--- a/rich/progress_bar.py
++++ b/rich/progress_bar.py
+@@ -3,7 +3,8 @@ from functools import lru_cache
+ from time import monotonic
+ from typing import Iterable, List, Optional
+ 
+-from .color import Color, blend_rgb
++from .color import Color
++from .color_blend_rgb import blend_rgb
+ from .color_triplet import ColorTriplet
+ from .console import Console, ConsoleOptions, RenderResult
+ from .jupyter import JupyterMixin
+diff --git a/rich/style.py b/rich/style.py
+index 3806a8c..85eff3b 100644
+--- a/rich/style.py
++++ b/rich/style.py
+@@ -7,7 +7,8 @@ from random import getrandbits
+ from typing import Any, Dict, Iterable, List, Optional, Type, Union, cast
+ 
+ from . import errors
+-from .color import Color, ColorParseError, ColorSystem, blend_rgb
++from .color import Color, ColorParseError, ColorSystem
++from .color_blend_rgb import blend_rgb
+ from .repr import Result, rich_repr
+ from .terminal_theme import DEFAULT_TERMINAL_THEME, TerminalTheme
+ 
+diff --git a/rich/syntax.py b/rich/syntax.py
+index 8c8f831..25a667a 100644
+--- a/rich/syntax.py
++++ b/rich/syntax.py
+@@ -47,7 +47,8 @@ from rich.padding import Padding, PaddingDimensions
+ 
+ from ._loop import loop_first
+ from .cells import cell_len
+-from .color import Color, blend_rgb
++from .color import Color
++from .color_blend_rgb import blend_rgb
+ from .jupyter import JupyterMixin
+ from .measure import Measurement
+ from .segment import Segment, Segments
+diff --git a/tests/test_color.py b/tests/test_color.py
+index 010d797..028e0d3 100644
+--- a/tests/test_color.py
++++ b/tests/test_color.py
+@@ -1,12 +1,5 @@
+-from rich.color import (
+-    blend_rgb,
+-    parse_rgb_hex,
+-    Color,
+-    ColorParseError,
+-    ColorSystem,
+-    ColorType,
+-    ColorTriplet,
+-)
++from rich.color import parse_rgb_hex, Color, ColorParseError, ColorSystem, ColorType, ColorTriplet
++from rich.color_blend_rgb import blend_rgb
+ from rich.style import Style
+ from rich.text import Text, Span
+ 
+diff --git a/tests/test_phase2_move_blend_rgb.py b/tests/test_phase2_move_blend_rgb.py
+new file mode 100644
+index 0000000..8b085f4
+--- /dev/null
++++ b/tests/test_phase2_move_blend_rgb.py
+@@ -0,0 +1,6 @@
++import importlib
++
++
++def test_phase2_moved_blend_rgb():
++    new = importlib.import_module('rich.color_blend_rgb')
++    assert getattr(new, 'blend_rgb').__module__ == 'rich.color_blend_rgb'

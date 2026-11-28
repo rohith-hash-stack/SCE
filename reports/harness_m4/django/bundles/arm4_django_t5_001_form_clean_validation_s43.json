@@ -1,0 +1,294 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t5_001_form_clean_validation",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"glob\": \"**/*.py\", \"pattern\": \"BaseForm\\\\.full_clean\"})\ntests/forms_tests/tests/test_formsets.py:213:        mocked_full_clean, full_clean_counter = make_method_counter(BaseForm.full_clean)\ntests/forms_tests/tests/test_formsets.py:220:        ), mock.patch(\"django.forms.forms.BaseForm.full_clean\", mocked_full_clean):",
+    "token_count": 85,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_validation_count"
+    ],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "BaseForm\\.full_clean",
+      "glob": "**/*.py"
+     },
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (glob {\"pattern\": \"**/forms.py\"})\ndjango/contrib/admin/forms.py\ndjango/contrib/auth/forms.py\ndjango/contrib/contenttypes/forms.py\ndjango/contrib/flatpages/forms.py\ndjango/forms/forms.py\ntests/admin_views/forms.py\ntests/generic_views/forms.py\ntests/i18n/forms.py\ntests/timezones/forms.py",
+    "token_count": 78,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "glob",
+     "args": {
+      "pattern": "**/forms.py"
+     },
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 200, \"path\": \"django/forms/forms.py\", \"start_line\": 100})\n100:         self._errors = None  # Stores the errors after clean() has been called.\n101: \n102:         # The base_fields class attribute is the *class-wide* definition of\n103:         # fields. Because a particular *instance* of the class might want to\n104:         # alter self.fields, we create self.fields here by copying base_fields.\n105:         # Instances should always modify self.fields; they should not modify\n106:         # self.base_fields.\n107:         self.fields = copy.deepcopy(self.base_fields)\n108:         self._bound_fields_cache = {}\n109:         self.order_fields(self.field_order if field_order is None else field_order)\n110: \n111:         if use_required_attribute is not None:\n112:             self.use_required_attribute = use_required_attribute\n113: \n114:         if self.empty_permitted and self.use_required_attribute:\n115:             raise ValueError(\n116:                 \"The empty_permitted and use_required_attribute arguments may \"\n117:                 \"not both be True.\"\n118:             )\n119: \n120:         # Initialize form renderer. Use a global default if not specified\n121:         # either as an argument or as self.default_renderer.\n122:         if renderer is None:\n123:             if self.default_renderer is None:\n124:                 renderer = get_default_renderer()\n125:             else:\n126:                 renderer = self.default_renderer\n127:                 if isinstance(self.default_renderer, type):\n128:                     renderer = renderer()\n129:         self.renderer = renderer\n130: \n131:     def order_fields(self, field_order):\n132:         \"\"\"\n133:         Rearrange the fields according to field_order.\n134: \n135:         field_order is a list of field names specifying the order. Append fields\n136:         not included in the list in the default order for backward compatibility\n137:         with subclasses not overriding field_order. If field_order is None,\n138:         keep all fields in the order defined in the class. Ignore unknown\n139:         fields in field_order to allow disabling fields in form subclasses\n140:         without redefining ordering.\n141:         \"\"\"\n142:         if field_order is None:\n143:             return\n144:         fields = {}\n145:         for key in field_order:\n146:             try:\n147:                 fields[key] = self.fields.pop(key)\n148:             except KeyError:  # ignore unknown fields\n149:                 pass\n150:         fields.update(self.fields)  # add remaining fields in original order\n151:         self.fields = fields\n152: \n153:     def __repr__(self):\n154:         if self._errors is None:\n155:             is_valid = \"Unknown\"\n156:         else:\n157:             is_valid = self.is_bound and not self._errors\n158:         return \"<%(cls)s bound=%(bound)s, valid=%(valid)s, fields=(%(fields)s)>\" % {\n159:             \"cls\": self.__class__.__name__,\n160:             \"bound\": self.is_bound,\n161:             \"valid\": is_valid,\n162:             \"fields\": \";\".join(self.fields),\n163:         }\n164: \n165:     def _bound_items(self):\n166:         \"\"\"Yield (name, bf) pairs, where bf is a BoundField object.\"\"\"\n167:         for name in self.fields:\n168:             yield name, self[name]\n169: \n170:     def __iter__(self):\n171:         \"\"\"Yield the form's fields as BoundField objects.\"\"\"\n172:         for name in self.fields:\n173:             yield self[name]\n174: \n175:     def __getitem__(self, name):\n176:         \"\"\"Return a BoundField with the given name.\"\"\"\n177:         try:\n178:             field = self.fields[name]\n179:         except KeyError:\n180:             raise KeyError(\n181:                 \"Key '%s' not found in '%s'. Choices are: %s.\"\n182:                 % (\n183:                     name,\n184:                     self.__class__.__name__,\n185:                     \", \".join(sorted(self.fields)),\n186:                 )\n187:             )\n188:         if name not in self._bound_fields_cache:\n189:             self._bound_fields_cache[name] = field.get_bound_field(self, name)\n190:         return self._bound_fields_cache[name]\n191: \n192:     @property\n193:     def errors(self):\n194:         \"\"\"Return an ErrorDict for the data provided for the form.\"\"\"\n195:         if self._errors is None:\n196:             self.full_clean()\n197:         return self._errors\n198: \n199:     def is_valid(self):\n200:         \"\"\"Return True if the form has no errors, or False otherwise.\"\"\"\n[lines 100-200 of 540]",
+    "token_count": 1247,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.forms.forms.BaseForm",
+     "django.forms.forms.BaseForm.__init__",
+     "django.forms.forms.BaseForm.order_fields",
+     "django.forms.forms.BaseForm.__repr__",
+     "django.forms.forms.BaseForm._bound_items",
+     "django.forms.forms.BaseForm.__iter__",
+     "django.forms.forms.BaseForm.__getitem__",
+     "django.forms.forms.BaseForm.errors",
+     "django.forms.forms.BaseForm.is_valid"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "django/forms/forms.py",
+      "start_line": 100,
+      "end_line": 200
+     },
+     "engine_token_count": 1247
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.2",
+    "content": "# r2.2  (read {\"end_line\": 300, \"path\": \"tests/forms_tests/tests/test_formsets.py\", \"start_line\": 200})\n200:             \"\"\"Add a counter to func for the number of times it's called.\"\"\"\n201:             counter = Counter()\n202:             counter.call_count = 0\n203: \n204:             def mocked_func(*args, **kwargs):\n205:                 counter.call_count += 1\n206:                 return func(*args, **kwargs)\n207: \n208:             return mocked_func, counter\n209: \n210:         mocked_is_valid, is_valid_counter = make_method_counter(\n211:             formsets.ManagementForm.is_valid\n212:         )\n213:         mocked_full_clean, full_clean_counter = make_method_counter(BaseForm.full_clean)\n214:         formset = self.make_choiceformset(\n215:             [(\"Calexico\", \"100\"), (\"Any1\", \"42\"), (\"Any2\", \"101\")]\n216:         )\n217: \n218:         with mock.patch(\n219:             \"django.forms.formsets.ManagementForm.is_valid\", mocked_is_valid\n220:         ), mock.patch(\"django.forms.forms.BaseForm.full_clean\", mocked_full_clean):\n221:             self.assertTrue(formset.is_valid())\n222:         self.assertEqual(is_valid_counter.call_count, 1)\n223:         self.assertEqual(full_clean_counter.call_count, 4)\n224: \n225:     def test_formset_has_changed(self):\n226:         \"\"\"\n227:         FormSet.has_changed() is True if any data is passed to its forms, even\n228:         if the formset didn't validate.\n229:         \"\"\"\n230:         blank_formset = self.make_choiceformset([(\"\", \"\")])\n231:         self.assertFalse(blank_formset.has_changed())\n232:         # invalid formset\n233:         invalid_formset = self.make_choiceformset([(\"Calexico\", \"\")])\n234:         self.assertFalse(invalid_formset.is_valid())\n235:         self.assertTrue(invalid_formset.has_changed())\n236:         # valid formset\n237:         valid_formset = self.make_choiceformset([(\"Calexico\", \"100\")])\n238:         self.assertTrue(valid_formset.is_valid())\n239:         self.assertTrue(valid_formset.has_changed())\n240: \n241:     def test_formset_initial_data(self):\n242:         \"\"\"\n243:         A FormSet can be prefilled with existing data by providing a list of\n244:         dicts to the `initial` argument. By default, an extra blank form is\n245:         included.\n246:         \"\"\"\n247:         formset = self.make_choiceformset(\n248:             initial=[{\"choice\": \"Calexico\", \"votes\": 100}]\n249:         )\n250:         self.assertHTMLEqual(\n251:             \"\\n\".join(form.as_ul() for form in formset.forms),\n252:             '<li>Choice: <input type=\"text\" name=\"choices-0-choice\" value=\"Calexico\">'\n253:             \"</li>\"\n254:             '<li>Votes: <input type=\"number\" name=\"choices-0-votes\" value=\"100\"></li>'\n255:             '<li>Choice: <input type=\"text\" name=\"choices-1-choice\"></li>'\n256:             '<li>Votes: <input type=\"number\" name=\"choices-1-votes\"></li>',\n257:         )\n258: \n259:     def test_blank_form_unfilled(self):\n260:         \"\"\"A form that's displayed as blank may be submitted as blank.\"\"\"\n261:         formset = self.make_choiceformset(\n262:             [(\"Calexico\", \"100\"), (\"\", \"\")], initial_forms=1\n263:         )\n264:         self.assertTrue(formset.is_valid())\n265:         self.assertEqual(\n266:             [form.cleaned_data for form in formset.forms],\n267:             [{\"votes\": 100, \"choice\": \"Calexico\"}, {}],\n268:         )\n269: \n270:     def test_second_form_partially_filled(self):\n271:         \"\"\"\n272:         If at least one field is filled out on a blank form, it will be\n273:         validated.\n274:         \"\"\"\n275:         formset = self.make_choiceformset(\n276:             [(\"Calexico\", \"100\"), (\"The Decemberists\", \"\")], initial_forms=1\n277:         )\n278:         self.assertFalse(formset.is_valid())\n279:         self.assertEqual(formset.errors, [{}, {\"votes\": [\"This field is required.\"]}])\n280: \n281:     def test_delete_prefilled_data(self):\n282:         \"\"\"\n283:         Deleting prefilled data is an error. Removing data from form fields\n284:         isn't the proper way to delete it.\n285:         \"\"\"\n286:         formset = self.make_choiceformset([(\"\", \"\"), (\"\", \"\")], initial_forms=1)\n287:         self.assertFalse(formset.is_valid())\n288:         self.assertEqual(\n289:             formset.errors,\n290:             [\n291:                 {\n292:                     \"votes\": [\"This field is required.\"],\n293:                     \"choice\": [\"This field is required.\"],\n294:                 },\n295:                 {},\n296:             ],\n297:         )\n298: \n299:     def test_displaying_more_than_one_blank_form(self):\n300:         \"\"\"\n[lines 200-300 of 1929]",
+    "token_count": 1366,
+    "rank": 4,
+    "kind": "tool_result_read",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_validation_count",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_validation_count.make_method_counter",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_validation_count.make_method_counter.mocked_func",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_has_changed",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_initial_data",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_blank_form_unfilled",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_second_form_partially_filled",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_delete_prefilled_data",
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_displaying_more_than_one_blank_form"
+    ],
+    "provenance": {
+     "msg_id": "r2.2",
+     "tool": "read",
+     "args": {
+      "path": "tests/forms_tests/tests/test_formsets.py",
+      "start_line": 200,
+      "end_line": 300
+     },
+     "engine_token_count": 1366
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2776,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "What breaks if `django.forms.forms.BaseForm.full_clean` changes?",
+   "task_type": "T5_blast_radius",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 4,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"BaseForm\\\\.full_clean\", \"glob\": \"**/*.py\"}}</tools>\n<tools>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/forms.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "BaseForm\\.full_clean",
+        "glob": "**/*.py"
+       }
+      },
+      {
+       "name": "glob",
+       "arguments": {
+        "pattern": "**/forms.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "BaseForm\\.full_clean",
+        "glob": "**/*.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "glob",
+       "args": {
+        "pattern": "**/forms.py"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 54,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/forms/forms.py\", \"start_line\": 100, \"end_line\": 200}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"tests/forms_tests/tests/test_formsets.py\", \"start_line\": 200, \"end_line\": 300}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/forms/forms.py",
+        "start_line": 100,
+        "end_line": 200
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "tests/forms_tests/tests/test_formsets.py",
+        "start_line": 200,
+        "end_line": 300
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/forms/forms.py",
+        "start_line": 100,
+        "end_line": 200
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "tests/forms_tests/tests/test_formsets.py",
+        "start_line": 200,
+        "end_line": 300
+       },
+       "msg_id": "r2.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 85,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"If django.forms.forms.BaseForm.full_clean changes, it will affect any form that overrides or uses this method. Specifically, the test_formset_validity test in tests/forms_tests/tests/test_formsets.py patches BaseForm.full_clean to count its calls. Any changes to full_clean could break this test or similar tests that rely on its behavior.\\\", \\\"symbols\\\": [\\\"django.forms.forms.BaseForm.full_clean\\\", \\\"tests.forms_tests.tests.test_formsets.test_formset_validity\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"If django.forms.forms.BaseForm.full_clean changes, it will affect any form that overrides or uses this method. Specifically, the test_formset_validity test in tests/forms_tests/tests/test_formsets.py patches BaseForm.full_clean to count its calls. Any changes to full_clean could break this test or similar tests that rely on its behavior.\", \"symbols\": [\"django.forms.forms.BaseForm.full_clean\", \"tests.forms_tests.tests.test_formsets.test_formset_validity\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 127,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     4422.722067,
+     5605.066122,
+     11387.159691
+    ],
+    "L_tool_exec": [
+     67.260052,
+     68.18324,
+     0.399033,
+     0.416949
+    ],
+    "L_retrieve": [
+     21592.893228
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 3545,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"If django.forms.forms.BaseForm.full_clean changes, it will affect any form that overrides or uses this method. Specifically, the test_formset_validity test in tests/forms_tests/tests/test_formsets.py patches BaseForm.full_clean to count its calls. Any changes to full_clean could break this test or similar tests that rely on its behavior.\", \"symbols\": [\"django.forms.forms.BaseForm.full_clean\", \"tests.forms_tests.tests.test_formsets.test_formset_validity\"]}\n```",
+    "generation_tokens": 127,
+    "latency_seconds": 11.386960446001467,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 3578,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2776,
+   "prompt_tokens": 3545,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3578,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

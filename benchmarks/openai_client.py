@@ -103,6 +103,17 @@ class CallResult:
     cost_usd: float | None
     latency_seconds: float
     seed: int | None = None
+    #: The provider's own backend-configuration fingerprint
+    #: (`ChatCompletion.system_fingerprint`) - the only signal OpenAI
+    #: exposes for "the same pinned snapshot, but a different serving
+    #: config", which can change outputs under a fixed seed. `None` when
+    #: the endpoint doesn't report one (Ollama, most compat servers).
+    system_fingerprint: str | None = None
+    #: The model name the *server* reports having served
+    #: (`ChatCompletion.model`), as opposed to `model` above (what the
+    #: caller requested). Lets a sweep verify a pinned snapshot really
+    #: was served rather than assuming it. `None` when not reported.
+    response_model: str | None = None
 
 
 class LLMClient:

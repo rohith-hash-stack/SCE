@@ -1,0 +1,1057 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t02_011_permissions_backend_check",
+  "items": [
+   {
+    "source_id": "django/contrib/auth/models.py:298-311",
+    "content": "# django/contrib/auth/models.py:298-311  (django.contrib.auth.models.PermissionsMixin.has_perm)\nclass PermissionsMixin(models.Model):\n    def has_perm(self, perm, obj=None):\n        \"\"\"\n        Return True if the user has the specified permission. Query all\n        available auth backends, but return immediately if any backend returns\n        True. Thus, a user who has permission from a single auth backend is\n        assumed to have permission in general. If an object is provided, check\n        permissions for that object.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        # Otherwise we need to check the backends.\n        return _user_has_perm(self, perm, obj)",
+    "token_count": 161,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin.has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 5,
+     "rerank_score": 0.6769617795944214,
+     "bm25_rank": 1,
+     "dense_rank": 33,
+     "oversized_chunk": false,
+     "engine_token_count": 161
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:313-320",
+    "content": "# django/contrib/auth/models.py:313-320  (django.contrib.auth.models.PermissionsMixin.has_perms)\nclass PermissionsMixin(models.Model):\n    def has_perms(self, perm_list, obj=None):\n        \"\"\"\n        Return True if the user has each of the specified permissions. If\n        object is passed, check if the user has all required perms for it.\n        \"\"\"\n        if not is_iterable(perm_list) or isinstance(perm_list, str):\n            raise ValueError(\"perm_list must be an iterable of permissions.\")\n        return all(self.has_perm(perm, obj) for perm in perm_list)",
+    "token_count": 128,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin.has_perms"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": 0.16763938963413239,
+     "bm25_rank": 3,
+     "dense_rank": 54,
+     "oversized_chunk": false,
+     "engine_token_count": 128
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:322-331",
+    "content": "# django/contrib/auth/models.py:322-331  (django.contrib.auth.models.PermissionsMixin.has_module_perms)\nclass PermissionsMixin(models.Model):\n    def has_module_perms(self, app_label):\n        \"\"\"\n        Return True if the user has any permissions in the given app label.\n        Use similar logic as has_perm(), above.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        return _user_has_module_perms(self, app_label)",
+    "token_count": 108,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin.has_module_perms"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": -0.15617287158966064,
+     "bm25_rank": 4,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 108
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:39-84",
+    "content": "# django/contrib/auth/models.py:39-84  (django.contrib.auth.models.Permission)\nclass Permission(models.Model):\n    \"\"\"\n    The permissions system provides a way to assign permissions to specific\n    users and groups of users.\n\n    The permission system is used by the Django admin site, but may also be\n    useful in your own code. The Django admin site uses permissions as follows:\n\n        - The \"add\" permission limits the user's ability to view the \"add\" form\n          and add an object.\n        - The \"change\" permission limits a user's ability to view the change\n          list, view the \"change\" form and change an object.\n        - The \"delete\" permission limits the ability to delete an object.\n        - The \"view\" permission limits the ability to view an object.\n\n    Permissions are set globally per type of object, not per specific object\n    instance. It is possible to say \"Mary may change news stories,\" but it's\n    not currently possible to say \"Mary may change news stories, but only the\n    ones she created herself\" or \"Mary may only change news stories that have a\n    certain status or publication date.\"\n\n    The permissions listed above are automatically created for each model.\n    \"\"\"\n\n    name = models.CharField(_(\"name\"), max_length=255)\n    content_type = models.ForeignKey(\n        ContentType,\n        models.CASCADE,\n        verbose_name=_(\"content type\"),\n    )\n    codename = models.CharField(_(\"codename\"), max_length=100)\n\n    objects = PermissionManager()\n\n    class Meta:\n        verbose_name = _(\"permission\")\n        verbose_name_plural = _(\"permissions\")\n        unique_together = [[\"content_type\", \"codename\"]]\n        ordering = [\"content_type__app_label\", \"content_type__model\", \"codename\"]\n\n    def __str__(self):\n        return \"%s | %s\" % (self.content_type, self.name)\n\n    def natural_key(self):\n        return (self.codename,) + self.content_type.natural_key()\n\n    natural_key.dependencies = [\"contenttypes.contenttype\"]",
+    "token_count": 427,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.Permission"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 34,
+     "rerank_score": -0.23130540549755096,
+     "bm25_rank": 42,
+     "dense_rank": 82,
+     "oversized_chunk": false,
+     "engine_token_count": 427
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:279-285",
+    "content": "# django/contrib/auth/models.py:279-285  (django.contrib.auth.models.PermissionsMixin.get_user_permissions)\nclass PermissionsMixin(models.Model):\n    def get_user_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has directly.\n        Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"user\")",
+    "token_count": 97,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin.get_user_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 8,
+     "rerank_score": -0.29014843702316284,
+     "bm25_rank": 18,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:287-293",
+    "content": "# django/contrib/auth/models.py:287-293  (django.contrib.auth.models.PermissionsMixin.get_group_permissions)\nclass PermissionsMixin(models.Model):\n    def get_group_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has through their\n        groups. Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"group\")",
+    "token_count": 100,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin.get_group_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 14,
+     "rerank_score": -0.6721605062484741,
+     "bm25_rank": 23,
+     "dense_rank": 28,
+     "oversized_chunk": false,
+     "engine_token_count": 100
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:212-224",
+    "content": "# django/contrib/auth/models.py:212-224  (django.contrib.auth.models._user_has_perm)\ndef _user_has_perm(user, perm, obj):\n    \"\"\"\n    A backend can raise `PermissionDenied` to short-circuit permission checking.\n    \"\"\"\n    for backend in auth.get_backends():\n        if not hasattr(backend, \"has_perm\"):\n            continue\n        try:\n            if backend.has_perm(user, perm, obj):\n                return True\n        except PermissionDenied:\n            return False\n    return False",
+    "token_count": 110,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models._user_has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 4,
+     "rerank_score": -0.710864782333374,
+     "bm25_rank": 2,
+     "dense_rank": 30,
+     "oversized_chunk": false,
+     "engine_token_count": 110
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:124-157",
+    "content": "# django/contrib/auth/backends.py:124-157  (django.contrib.auth.backends.ModelBackend.with_perm)\nclass ModelBackend(BaseBackend):\n    def with_perm(self, perm, is_active=True, include_superusers=True, obj=None):\n        \"\"\"\n        Return users that have permission \"perm\". By default, filter out\n        inactive users and include superusers.\n        \"\"\"\n        if isinstance(perm, str):\n            try:\n                app_label, codename = perm.split(\".\")\n            except ValueError:\n                raise ValueError(\n                    \"Permission name should be in the form \"\n                    \"app_label.permission_codename.\"\n                )\n        elif not isinstance(perm, Permission):\n            raise TypeError(\n                \"The `perm` argument must be a string or a permission instance.\"\n            )\n\n        if obj is not None:\n            return UserModel._default_manager.none()\n\n        permission_q = Q(group__user=OuterRef(\"pk\")) | Q(user=OuterRef(\"pk\"))\n        if isinstance(perm, Permission):\n            permission_q &= Q(pk=perm.pk)\n        else:\n            permission_q &= Q(codename=codename, content_type__app_label=app_label)\n\n        user_q = Exists(Permission.objects.filter(permission_q))\n        if include_superusers:\n            user_q |= Q(is_superuser=True)\n        if is_active is not None:\n            user_q &= Q(is_active=is_active)\n\n        return UserModel._default_manager.filter(user_q)",
+    "token_count": 296,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.with_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 30,
+     "rerank_score": -1.0122066736221313,
+     "bm25_rank": 35,
+     "dense_rank": 76,
+     "oversized_chunk": false,
+     "engine_token_count": 296
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:112-113",
+    "content": "# django/contrib/auth/backends.py:112-113  (django.contrib.auth.backends.ModelBackend.has_perm)\nclass ModelBackend(BaseBackend):\n    def has_perm(self, user_obj, perm, obj=None):\n        return user_obj.is_active and super().has_perm(user_obj, perm, obj=obj)",
+    "token_count": 66,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": -1.1770397424697876,
+     "bm25_rank": 5,
+     "dense_rank": 39,
+     "oversized_chunk": false,
+     "engine_token_count": 66
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:243-274",
+    "content": "# django/contrib/auth/models.py:243-274  (django.contrib.auth.models.PermissionsMixin)\nclass PermissionsMixin(models.Model):\n    \"\"\"\n    Add the fields and methods necessary to support the Group and Permission\n    models using the ModelBackend.\n    \"\"\"\n\n    is_superuser = models.BooleanField(\n        _(\"superuser status\"),\n        default=False,\n        help_text=_(\n            \"Designates that this user has all permissions without \"\n            \"explicitly assigning them.\"\n        ),\n    )\n    groups = models.ManyToManyField(\n        Group,\n        verbose_name=_(\"groups\"),\n        blank=True,\n        help_text=_(\n            \"The groups this user belongs to. A user will get all permissions \"\n            \"granted to each of their groups.\"\n        ),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n    user_permissions = models.ManyToManyField(\n        Permission,\n        verbose_name=_(\"user permissions\"),\n        blank=True,\n        help_text=_(\"Specific permissions for this user.\"),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )",
+    "token_count": 216,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 18,
+     "rerank_score": -1.2488387823104858,
+     "bm25_rank": 20,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 216
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/mixins.py:99-104",
+    "content": "# django/contrib/auth/mixins.py:99-104  (django.contrib.auth.mixins.PermissionRequiredMixin.has_permission)\nclass PermissionRequiredMixin(AccessMixin):\n    def has_permission(self):\n        \"\"\"\n        Override this method to customize the way permissions are checked.\n        \"\"\"\n        perms = self.get_permission_required()\n        return self.request.user.has_perms(perms)",
+    "token_count": 75,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.mixins.PermissionRequiredMixin.has_permission"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 40,
+     "rerank_score": -1.3265421390533447,
+     "bm25_rank": 100,
+     "dense_rank": 51,
+     "oversized_chunk": false,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:227-239",
+    "content": "# django/contrib/auth/models.py:227-239  (django.contrib.auth.models._user_has_module_perms)\ndef _user_has_module_perms(user, app_label):\n    \"\"\"\n    A backend can raise `PermissionDenied` to short-circuit permission checking.\n    \"\"\"\n    for backend in auth.get_backends():\n        if not hasattr(backend, \"has_module_perms\"):\n            continue\n        try:\n            if backend.has_module_perms(user, app_label):\n                return True\n        except PermissionDenied:\n            return False\n    return False",
+    "token_count": 112,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models._user_has_module_perms"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 27,
+     "rerank_score": -1.3510440587997437,
+     "bm25_rank": 49,
+     "dense_rank": 34,
+     "oversized_chunk": false,
+     "engine_token_count": 112
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:91-96",
+    "content": "# django/contrib/auth/backends.py:91-96  (django.contrib.auth.backends.ModelBackend.get_user_permissions)\nclass ModelBackend(BaseBackend):\n    def get_user_permissions(self, user_obj, obj=None):\n        \"\"\"\n        Return a set of permission strings the user `user_obj` has from their\n        `user_permissions`.\n        \"\"\"\n        return self._get_permissions(user_obj, obj, \"user\")",
+    "token_count": 85,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.get_user_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 20,
+     "rerank_score": -1.6422300338745117,
+     "bm25_rank": 68,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:596-597",
+    "content": "# tests/auth_tests/test_auth_backends.py:596-597  (tests.auth_tests.test_auth_backends.PermissionDeniedBackend.has_perm)\nclass PermissionDeniedBackend:\n    def has_perm(self, user_obj, perm, obj=None):\n        raise PermissionDenied",
+    "token_count": 55,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.PermissionDeniedBackend.has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 13,
+     "rerank_score": -1.680930733680725,
+     "bm25_rank": 12,
+     "dense_rank": 41,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:70-89",
+    "content": "# django/contrib/auth/backends.py:70-89  (django.contrib.auth.backends.ModelBackend._get_permissions)\nclass ModelBackend(BaseBackend):\n    def _get_permissions(self, user_obj, obj, from_name):\n        \"\"\"\n        Return the permissions of `user_obj` from `from_name`. `from_name` can\n        be either \"group\" or \"user\" to return permissions from\n        `_get_group_permissions` or `_get_user_permissions` respectively.\n        \"\"\"\n        if not user_obj.is_active or user_obj.is_anonymous or obj is not None:\n            return set()\n\n        perm_cache_name = \"_%s_perm_cache\" % from_name\n        if not hasattr(user_obj, perm_cache_name):\n            if user_obj.is_superuser:\n                perms = Permission.objects.all()\n            else:\n                perms = getattr(self, \"_get_%s_permissions\" % from_name)(user_obj)\n            perms = perms.values_list(\"content_type__app_label\", \"codename\").order_by()\n            setattr(\n                user_obj, perm_cache_name, {\"%s.%s\" % (ct, name) for ct, name in perms}\n            )\n        return getattr(user_obj, perm_cache_name)",
+    "token_count": 247,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend._get_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 6,
+     "rerank_score": -1.7267802953720093,
+     "bm25_rank": 26,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 247
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:31-32",
+    "content": "# django/contrib/auth/backends.py:31-32  (django.contrib.auth.backends.BaseBackend.has_perm)\nclass BaseBackend:\n    def has_perm(self, user_obj, perm, obj=None):\n        return perm in self.get_all_permissions(user_obj, obj=obj)",
+    "token_count": 57,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.BaseBackend.has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 1,
+     "rerank_score": -1.8733391761779785,
+     "bm25_rank": 6,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:649-658",
+    "content": "# tests/auth_tests/test_auth_backends.py:649-658  (tests.auth_tests.test_auth_backends.PermissionDeniedBackendTest.test_has_perm)\nclass PermissionDeniedBackendTest(TestCase):\n    @modify_settings(AUTHENTICATION_BACKENDS={\"append\": backend})\n    def test_has_perm(self):\n        content_type = ContentType.objects.get_for_model(Group)\n        perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test\"\n        )\n        self.user1.user_permissions.add(perm)\n\n        self.assertIs(self.user1.has_perm(\"auth.test\"), True)\n        self.assertIs(self.user1.has_module_perms(\"auth\"), True)",
+    "token_count": 136,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.PermissionDeniedBackendTest.test_has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 15,
+     "rerank_score": -2.144435405731201,
+     "bm25_rank": 13,
+     "dense_rank": 43,
+     "oversized_chunk": false,
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:98-103",
+    "content": "# django/contrib/auth/backends.py:98-103  (django.contrib.auth.backends.ModelBackend.get_group_permissions)\nclass ModelBackend(BaseBackend):\n    def get_group_permissions(self, user_obj, obj=None):\n        \"\"\"\n        Return a set of permission strings the user `user_obj` has from the\n        groups they belong.\n        \"\"\"\n        return self._get_permissions(user_obj, obj, \"group\")",
+    "token_count": 86,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.get_group_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 26,
+     "rerank_score": -2.382260322570801,
+     "bm25_rank": 62,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/mixins.py:77-79",
+    "content": "# django/contrib/auth/mixins.py:77-79  (django.contrib.auth.mixins.PermissionRequiredMixin)\nclass PermissionRequiredMixin(AccessMixin):\n    \"\"\"Verify that the current user has all specified permissions.\"\"\"\n\n    permission_required = None",
+    "token_count": 49,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.mixins.PermissionRequiredMixin"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 46,
+     "rerank_score": -2.3869638442993164,
+     "bm25_rank": 95,
+     "dense_rank": 69,
+     "oversized_chunk": false,
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:638-647",
+    "content": "# tests/auth_tests/test_auth_backends.py:638-647  (tests.auth_tests.test_auth_backends.PermissionDeniedBackendTest.test_has_perm_denied)\nclass PermissionDeniedBackendTest(TestCase):\n    @modify_settings(AUTHENTICATION_BACKENDS={\"prepend\": backend})\n    def test_has_perm_denied(self):\n        content_type = ContentType.objects.get_for_model(Group)\n        perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test\"\n        )\n        self.user1.user_permissions.add(perm)\n\n        self.assertIs(self.user1.has_perm(\"auth.test\"), False)\n        self.assertIs(self.user1.has_module_perms(\"auth\"), False)",
+    "token_count": 140,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.PermissionDeniedBackendTest.test_has_perm_denied"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": -2.4572787284851074,
+     "bm25_rank": 14,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:115-122",
+    "content": "# django/contrib/auth/backends.py:115-122  (django.contrib.auth.backends.ModelBackend.has_module_perms)\nclass ModelBackend(BaseBackend):\n    def has_module_perms(self, user_obj, app_label):\n        \"\"\"\n        Return True if user_obj has any permissions in the given app_label.\n        \"\"\"\n        return user_obj.is_active and any(\n            perm[: perm.index(\".\")] == app_label\n            for perm in self.get_all_permissions(user_obj)\n        )",
+    "token_count": 99,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.has_module_perms"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": -2.458932399749756,
+     "bm25_rank": 8,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 99
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:105-110",
+    "content": "# django/contrib/auth/backends.py:105-110  (django.contrib.auth.backends.ModelBackend.get_all_permissions)\nclass ModelBackend(BaseBackend):\n    def get_all_permissions(self, user_obj, obj=None):\n        if not user_obj.is_active or user_obj.is_anonymous or obj is not None:\n            return set()\n        if not hasattr(user_obj, \"_perm_cache\"):\n            user_obj._perm_cache = super().get_all_permissions(user_obj)\n        return user_obj._perm_cache",
+    "token_count": 103,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.get_all_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": -2.518129587173462,
+     "bm25_rank": 58,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 103
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:110-126",
+    "content": "# tests/auth_tests/test_auth_backends.py:110-126  (tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_has_perm)\nclass BaseModelBackendTest:\n    def test_has_perm(self):\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        self.assertIs(user.has_perm(\"auth.test\"), False)\n\n        user.is_staff = True\n        user.save()\n        self.assertIs(user.has_perm(\"auth.test\"), False)\n\n        user.is_superuser = True\n        user.save()\n        self.assertIs(user.has_perm(\"auth.test\"), True)\n\n        user.is_staff = True\n        user.is_superuser = True\n        user.is_active = False\n        user.save()\n        self.assertIs(user.has_perm(\"auth.test\"), False)",
+    "token_count": 156,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 22,
+     "rerank_score": -2.562081813812256,
+     "bm25_rank": 10,
+     "dense_rank": 74,
+     "oversized_chunk": false,
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:39-40",
+    "content": "# tests/auth_tests/test_auth_backends.py:39-40  (tests.auth_tests.test_auth_backends.SimpleBackend.get_user_permissions)\nclass SimpleBackend(BaseBackend):\n    def get_user_permissions(self, user_obj, obj=None):\n        return [\"user_perm\"]",
+    "token_count": 55,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.SimpleBackend.get_user_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 36,
+     "rerank_score": -2.73933482170105,
+     "bm25_rank": null,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:425-436",
+    "content": "# tests/auth_tests/test_auth_backends.py:425-436  (tests.auth_tests.test_auth_backends.SimpleRowlevelBackend.has_perm)\nclass SimpleRowlevelBackend:\n    def has_perm(self, user, perm, obj=None):\n        if not obj:\n            return  # We only support row level perms\n\n        if isinstance(obj, TestObj):\n            if user.username == \"test2\":\n                return True\n            elif user.is_anonymous and perm == \"anon\":\n                return True\n            elif not user.is_active and perm == \"inactive\":\n                return True\n        return False",
+    "token_count": 124,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.SimpleRowlevelBackend.has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 47,
+     "rerank_score": -2.878894567489624,
+     "bm25_rank": 11,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 124
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:19-20",
+    "content": "# django/contrib/auth/backends.py:19-20  (django.contrib.auth.backends.BaseBackend.get_user_permissions)\nclass BaseBackend:\n    def get_user_permissions(self, user_obj, obj=None):\n        return set()",
+    "token_count": 47,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.BaseBackend.get_user_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 49,
+     "rerank_score": -3.2073795795440674,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:128-175",
+    "content": "# tests/auth_tests/test_auth_backends.py:128-175  (tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_custom_perms)\nclass BaseModelBackendTest:\n    def test_custom_perms(self):\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        content_type = ContentType.objects.get_for_model(Group)\n        perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test\"\n        )\n        user.user_permissions.add(perm)\n\n        # reloading user to purge the _perm_cache\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        self.assertEqual(user.get_all_permissions(), {\"auth.test\"})\n        self.assertEqual(user.get_user_permissions(), {\"auth.test\"})\n        self.assertEqual(user.get_group_permissions(), set())\n        self.assertIs(user.has_module_perms(\"Group\"), False)\n        self.assertIs(user.has_module_perms(\"auth\"), True)\n\n        perm = Permission.objects.create(\n            name=\"test2\", content_type=content_type, codename=\"test2\"\n        )\n        user.user_permissions.add(perm)\n        perm = Permission.objects.create(\n            name=\"test3\", content_type=content_type, codename=\"test3\"\n        )\n        user.user_permissions.add(perm)\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        expected_user_perms = {\"auth.test2\", \"auth.test\", \"auth.test3\"}\n        self.assertEqual(user.get_all_permissions(), expected_user_perms)\n        self.assertIs(user.has_perm(\"test\"), False)\n        self.assertIs(user.has_perm(\"auth.test\"), True)\n        self.assertIs(user.has_perms([\"auth.test2\", \"auth.test3\"]), True)\n\n        perm = Permission.objects.create(\n            name=\"test_group\", content_type=content_type, codename=\"test_group\"\n        )\n        group = Group.objects.create(name=\"test_group\")\n        group.permissions.add(perm)\n        user.groups.add(group)\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        self.assertEqual(\n            user.get_all_permissions(), {*expected_user_perms, \"auth.test_group\"}\n        )\n        self.assertEqual(user.get_user_permissions(), expected_user_perms)\n        self.assertEqual(user.get_group_permissions(), {\"auth.test_group\"})\n        self.assertIs(user.has_perms([\"auth.test3\", \"auth.test_group\"]), True)\n\n        user = AnonymousUser()\n        self.assertIs(user.has_perm(\"test\"), False)\n        self.assertIs(user.has_perms([\"auth.test2\", \"auth.test3\"]), False)",
+    "token_count": 512,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_custom_perms"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 19,
+     "rerank_score": -3.3995437622070312,
+     "bm25_rank": 32,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 512
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/modeladmin/tests.py:816-817",
+    "content": "# tests/modeladmin/tests.py:816-817  (tests.modeladmin.tests.ModelAdminPermissionTests.MockViewUser.has_perm)\nclass ModelAdminPermissionTests(SimpleTestCase):\n    class MockViewUser(MockUser):\n        def has_perm(self, perm, obj=None):\n            return perm == \"modeladmin.view_band\"",
+    "token_count": 67,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.modeladmin.tests.ModelAdminPermissionTests.MockViewUser.has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 45,
+     "rerank_score": -3.4539084434509277,
+     "bm25_rank": 69,
+     "dense_rank": 93,
+     "oversized_chunk": false,
+     "engine_token_count": 67
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:25-29",
+    "content": "# django/contrib/auth/backends.py:25-29  (django.contrib.auth.backends.BaseBackend.get_all_permissions)\nclass BaseBackend:\n    def get_all_permissions(self, user_obj, obj=None):\n        return {\n            *self.get_user_permissions(user_obj, obj=obj),\n            *self.get_group_permissions(user_obj, obj=obj),\n        }",
+    "token_count": 72,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.BaseBackend.get_all_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 41,
+     "rerank_score": -3.574995994567871,
+     "bm25_rank": null,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:42-43",
+    "content": "# tests/auth_tests/test_auth_backends.py:42-43  (tests.auth_tests.test_auth_backends.SimpleBackend.get_group_permissions)\nclass SimpleBackend(BaseBackend):\n    def get_group_permissions(self, user_obj, obj=None):\n        return [\"group_perm\"]",
+    "token_count": 55,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.SimpleBackend.get_group_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 42,
+     "rerank_score": -3.58467698097229,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_context_processors.py:18-19",
+    "content": "# tests/auth_tests/test_context_processors.py:18-19  (tests.auth_tests.test_context_processors.MockUser.has_perm)\nclass MockUser:\n    def has_perm(self, perm, obj=None):\n        return perm == \"mockapp.someperm\"",
+    "token_count": 52,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_context_processors.MockUser.has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 32,
+     "rerank_score": -3.7505812644958496,
+     "bm25_rank": 48,
+     "dense_rank": 68,
+     "oversized_chunk": false,
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:177-189",
+    "content": "# tests/auth_tests/test_auth_backends.py:177-189  (tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_has_no_object_perm)\nclass BaseModelBackendTest:\n    def test_has_no_object_perm(self):\n        \"\"\"Regressiontest for #12462\"\"\"\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        content_type = ContentType.objects.get_for_model(Group)\n        perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test\"\n        )\n        user.user_permissions.add(perm)\n\n        self.assertIs(user.has_perm(\"auth.test\", \"object\"), False)\n        self.assertEqual(user.get_all_permissions(\"object\"), set())\n        self.assertIs(user.has_perm(\"auth.test\"), True)\n        self.assertEqual(user.get_all_permissions(), {\"auth.test\"})",
+    "token_count": 172,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_has_no_object_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 10,
+     "rerank_score": -3.9746294021606445,
+     "bm25_rank": 16,
+     "dense_rank": 29,
+     "oversized_chunk": false,
+     "engine_token_count": 172
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/models/custom_user.py:63-64",
+    "content": "# tests/auth_tests/models/custom_user.py:63-64  (tests.auth_tests.models.custom_user.CustomUser.has_perm)\nclass CustomUser(AbstractBaseUser):\n    def has_perm(self, perm, obj=None):\n        return True",
+    "token_count": 48,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.models.custom_user.CustomUser.has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 31,
+     "rerank_score": -4.14920711517334,
+     "bm25_rank": 51,
+     "dense_rank": 60,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:589-591",
+    "content": "# tests/auth_tests/test_auth_backends.py:589-591  (tests.auth_tests.test_auth_backends.PermissionDeniedBackend)\nclass PermissionDeniedBackend:\n    \"\"\"\n    Always raises PermissionDenied in `authenticate`, `has_perm` and `has_module_perms`.\n    \"\"\"",
+    "token_count": 58,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.PermissionDeniedBackend"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 21,
+     "rerank_score": -4.157296657562256,
+     "bm25_rank": 28,
+     "dense_rank": 36,
+     "oversized_chunk": false,
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/context_processors.py:12-13",
+    "content": "# django/contrib/auth/context_processors.py:12-13  (django.contrib.auth.context_processors.PermLookupDict.__getitem__)\nclass PermLookupDict:\n    def __getitem__(self, perm_name):\n        return self.user.has_perm(\"%s.%s\" % (self.app_label, perm_name))",
+    "token_count": 63,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.context_processors.PermLookupDict.__getitem__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 12,
+     "rerank_score": -4.159125328063965,
+     "bm25_rank": 43,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/context_processors.py:9-10",
+    "content": "# django/contrib/auth/context_processors.py:9-10  (django.contrib.auth.context_processors.PermLookupDict.__repr__)\nclass PermLookupDict:\n    def __repr__(self):\n        return str(self.user.get_all_permissions())",
+    "token_count": 48,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.context_processors.PermLookupDict.__repr__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 37,
+     "rerank_score": -4.182048797607422,
+     "bm25_rank": null,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:223-255",
+    "content": "# tests/auth_tests/test_auth_backends.py:223-255  (tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_inactive_has_no_permissions)\nclass BaseModelBackendTest:\n    def test_inactive_has_no_permissions(self):\n        \"\"\"\n        #17903 -- Inactive users shouldn't have permissions in\n        ModelBackend.get_(all|user|group)_permissions().\n        \"\"\"\n        backend = ModelBackend()\n\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        content_type = ContentType.objects.get_for_model(Group)\n        user_perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test_user\"\n        )\n        group_perm = Permission.objects.create(\n            name=\"test2\", content_type=content_type, codename=\"test_group\"\n        )\n        user.user_permissions.add(user_perm)\n\n        group = Group.objects.create(name=\"test_group\")\n        user.groups.add(group)\n        group.permissions.add(group_perm)\n\n        self.assertEqual(\n            backend.get_all_permissions(user), {\"auth.test_user\", \"auth.test_group\"}\n        )\n        self.assertEqual(backend.get_user_permissions(user), {\"auth.test_user\"})\n        self.assertEqual(backend.get_group_permissions(user), {\"auth.test_group\"})\n\n        user.is_active = False\n        user.save()\n\n        self.assertEqual(backend.get_all_permissions(user), set())\n        self.assertEqual(backend.get_user_permissions(user), set())\n        self.assertEqual(backend.get_group_permissions(user), set())",
+    "token_count": 304,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_inactive_has_no_permissions"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 35,
+     "rerank_score": -4.21260404586792,
+     "bm25_rank": 45,
+     "dense_rank": 77,
+     "oversized_chunk": false,
+     "engine_token_count": 304
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/context_processors.py:20-21",
+    "content": "# django/contrib/auth/context_processors.py:20-21  (django.contrib.auth.context_processors.PermLookupDict.__bool__)\nclass PermLookupDict:\n    def __bool__(self):\n        return self.user.has_module_perms(self.app_label)",
+    "token_count": 51,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.context_processors.PermLookupDict.__bool__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 44,
+     "rerank_score": -4.492339611053467,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/context_processors.py:1-2",
+    "content": "# django/contrib/auth/context_processors.py:1-2  (django.contrib.auth.context_processors)\n# PermWrapper and PermLookupDict proxy the permissions system into objects that\n# the template system can understand.",
+    "token_count": 42,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -4.6510114669799805,
+     "bm25_rank": 64,
+     "dense_rank": 35,
+     "oversized_chunk": false,
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_context_processors.py:113-125",
+    "content": "# tests/auth_tests/test_context_processors.py:113-125  (tests.auth_tests.test_context_processors.AuthContextProcessorTests.test_perm_in_perms_attrs)\nclass AuthContextProcessorTests(TestCase):\n    def test_perm_in_perms_attrs(self):\n        u = User.objects.create_user(username=\"normal\", password=\"secret\")\n        u.user_permissions.add(\n            Permission.objects.get(\n                content_type=ContentType.objects.get_for_model(Permission),\n                codename=\"add_permission\",\n            )\n        )\n        self.client.login(username=\"normal\", password=\"secret\")\n        response = self.client.get(\"/auth_processor_perm_in_perms/\")\n        self.assertContains(response, \"Has auth permissions\")\n        self.assertContains(response, \"Has auth.add_permission permissions\")\n        self.assertNotContains(response, \"nonexistent\")",
+    "token_count": 158,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_context_processors.AuthContextProcessorTests.test_perm_in_perms_attrs"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 25,
+     "rerank_score": -4.692699909210205,
+     "bm25_rank": 63,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 158
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_models.py:426-435",
+    "content": "# tests/auth_tests/test_models.py:426-435  (tests.auth_tests.test_models.UserWithPermTestCase.test_custom_backend)\nclass UserWithPermTestCase(TestCase):\n    @override_settings(\n        AUTHENTICATION_BACKENDS=[\"auth_tests.test_models.CustomModelBackend\"]\n    )\n    def test_custom_backend(self):\n        for perm in (\"auth.test\", self.permission):\n            with self.subTest(perm):\n                self.assertCountEqual(\n                    User.objects.with_perm(perm),\n                    [self.user_charlie, self.user_charlie_b],\n                )",
+    "token_count": 113,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_models.UserWithPermTestCase.test_custom_backend"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 50,
+     "rerank_score": -4.694929122924805,
+     "bm25_rank": 74,
+     "dense_rank": 98,
+     "oversized_chunk": false,
+     "engine_token_count": 113
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:523-525",
+    "content": "# tests/auth_tests/test_auth_backends.py:523-525  (tests.auth_tests.test_auth_backends.AnonymousUserBackendTest.test_has_perm)\nclass AnonymousUserBackendTest(SimpleTestCase):\n    def test_has_perm(self):\n        self.assertIs(self.user1.has_perm(\"perm\", TestObj()), False)\n        self.assertIs(self.user1.has_perm(\"anon\", TestObj()), True)",
+    "token_count": 84,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.AnonymousUserBackendTest.test_has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 28,
+     "rerank_score": -4.76970100402832,
+     "bm25_rank": 30,
+     "dense_rank": 70,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:579-581",
+    "content": "# tests/auth_tests/test_auth_backends.py:579-581  (tests.auth_tests.test_auth_backends.InActiveUserBackendTest.test_has_perm)\nclass InActiveUserBackendTest(TestCase):\n    def test_has_perm(self):\n        self.assertIs(self.user1.has_perm(\"perm\", TestObj()), False)\n        self.assertIs(self.user1.has_perm(\"inactive\", TestObj()), True)",
+    "token_count": 82,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.InActiveUserBackendTest.test_has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 16,
+     "rerank_score": -4.779129505157471,
+     "bm25_rank": 7,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:531-536",
+    "content": "# tests/auth_tests/test_auth_backends.py:531-536  (tests.auth_tests.test_auth_backends.AnonymousUserBackendTest.test_has_perms_perm_list_invalid)\nclass AnonymousUserBackendTest(SimpleTestCase):\n    def test_has_perms_perm_list_invalid(self):\n        msg = \"perm_list must be an iterable of permissions.\"\n        with self.assertRaisesMessage(ValueError, msg):\n            self.user1.has_perms(\"perm\")\n        with self.assertRaisesMessage(ValueError, msg):\n            self.user1.has_perms(object())",
+    "token_count": 106,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.AnonymousUserBackendTest.test_has_perms_perm_list_invalid"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 38,
+     "rerank_score": -4.842380523681641,
+     "bm25_rank": 59,
+     "dense_rank": 79,
+     "oversized_chunk": false,
+     "engine_token_count": 106
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:63-66",
+    "content": "# tests/auth_tests/test_auth_backends.py:63-66  (tests.auth_tests.test_auth_backends.BaseBackendTest.test_has_perm)\nclass BaseBackendTest(TestCase):\n    def test_has_perm(self):\n        self.assertIs(self.user.has_perm(\"user_perm\"), True)\n        self.assertIs(self.user.has_perm(\"group_perm\"), True)\n        self.assertIs(self.user.has_perm(\"other_perm\", TestObj()), False)",
+    "token_count": 86,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.BaseBackendTest.test_has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 11,
+     "rerank_score": -4.98585319519043,
+     "bm25_rank": 19,
+     "dense_rank": 27,
+     "oversized_chunk": false,
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:490-497",
+    "content": "# tests/auth_tests/test_auth_backends.py:490-497  (tests.auth_tests.test_auth_backends.RowlevelBackendTest.test_has_perm)\nclass RowlevelBackendTest(TestCase):\n    def test_has_perm(self):\n        self.assertIs(self.user1.has_perm(\"perm\", TestObj()), False)\n        self.assertIs(self.user2.has_perm(\"perm\", TestObj()), True)\n        self.assertIs(self.user2.has_perm(\"perm\"), False)\n        self.assertIs(self.user2.has_perms([\"simple\", \"advanced\"], TestObj()), True)\n        self.assertIs(self.user3.has_perm(\"perm\", TestObj()), False)\n        self.assertIs(self.user3.has_perm(\"anon\", TestObj()), False)\n        self.assertIs(self.user3.has_perms([\"simple\", \"advanced\"], TestObj()), False)",
+    "token_count": 163,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.RowlevelBackendTest.test_has_perm"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 23,
+     "rerank_score": -5.074989318847656,
+     "bm25_rank": 24,
+     "dense_rank": 42,
+     "oversized_chunk": false,
+     "engine_token_count": 163
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:68-73",
+    "content": "# tests/auth_tests/test_auth_backends.py:68-73  (tests.auth_tests.test_auth_backends.BaseBackendTest.test_has_perms_perm_list_invalid)\nclass BaseBackendTest(TestCase):\n    def test_has_perms_perm_list_invalid(self):\n        msg = \"perm_list must be an iterable of permissions.\"\n        with self.assertRaisesMessage(ValueError, msg):\n            self.user.has_perms(\"user_perm\")\n        with self.assertRaisesMessage(ValueError, msg):\n            self.user.has_perms(object())",
+    "token_count": 97,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.BaseBackendTest.test_has_perms_perm_list_invalid"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": -5.104336738586426,
+     "bm25_rank": 53,
+     "dense_rank": 63,
+     "oversized_chunk": false,
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_models.py:437-446",
+    "content": "# tests/auth_tests/test_models.py:437-446  (tests.auth_tests.test_models.UserWithPermTestCase.test_custom_backend_pass_obj)\nclass UserWithPermTestCase(TestCase):\n    @override_settings(\n        AUTHENTICATION_BACKENDS=[\"auth_tests.test_models.CustomModelBackend\"]\n    )\n    def test_custom_backend_pass_obj(self):\n        for perm in (\"auth.test\", self.permission):\n            with self.subTest(perm):\n                self.assertSequenceEqual(\n                    User.objects.with_perm(perm, obj=self.user_charlie_b),\n                    [self.user_charlie_b],\n                )",
+    "token_count": 119,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_models.UserWithPermTestCase.test_custom_backend_pass_obj"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 48,
+     "rerank_score": -5.326578140258789,
+     "bm25_rank": 81,
+     "dense_rank": 86,
+     "oversized_chunk": false,
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/urls.py:57-58",
+    "content": "# tests/auth_tests/urls.py:57-58  (tests.auth_tests.urls.auth_processor_perm_in_perms)\ndef auth_processor_perm_in_perms(request):\n    return render(request, \"context_processors/auth_attrs_perm_in_perms.html\")",
+    "token_count": 48,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.urls.auth_processor_perm_in_perms"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 39,
+     "rerank_score": -5.390974521636963,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:2450-2468",
+    "content": "# django/contrib/admin/options.py:2450-2468  (django.contrib.admin.options.InlineModelAdmin._has_any_perms_for_target_model)\nclass InlineModelAdmin(BaseModelAdmin):\n    def _has_any_perms_for_target_model(self, request, perms):\n        \"\"\"\n        This method is called only when the ModelAdmin's model is for an\n        ManyToManyField's implicit through model (if self.opts.auto_created).\n        Return True if the user has any of the given permissions ('add',\n        'change', etc.) for the model that points to the through model.\n        \"\"\"\n        opts = self.opts\n        # Find the target model of an auto-created many-to-many relationship.\n        for field in opts.fields:\n            if field.remote_field and field.remote_field.model != self.parent_model:\n                opts = field.remote_field.model._meta\n                break\n        return any(\n            request.user.has_perm(\n                \"%s.%s\" % (opts.app_label, get_permission_codename(perm, opts))\n            )\n            for perm in perms\n        )",
+    "token_count": 221,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.InlineModelAdmin._has_any_perms_for_target_model"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 43,
+     "rerank_score": -5.990354061126709,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 221
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 6156,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are debugging Django's permission-check dispatch in\ndjango/contrib/auth/models.py. Starting from\n`PermissionsMixin.has_perm`, trace the real causal pipeline that\ndetermines which authentication backends will be consulted for the\npermission check, in the order each stage is actually reached, up to\nand including the call that enumerates those backends. Assume the\nuser is not an active superuser, so the real backend-checking path is\nreached. Do not trace into any individual backend's own `has_perm`\ncall - which backend's implementation actually runs, and how many\nare consulted, is resolved dynamically at runtime, not statically in\nthis pipeline.\n\nYour symbols array should contain exactly 3 entries, no repeats.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.models.PermissionsMixin.has_perm\", \"django.contrib.auth.models._user_has_perm\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1464.647119
+    ],
+    "L_embed_query": [
+     398.012492
+    ],
+    "L_dense": [
+     51.700564
+    ],
+    "L_rrf": [
+     0.16384
+    ],
+    "L_rerank": [
+     23828.777928
+    ],
+    "L_retrieve": [
+     25771.26637
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 6156,
+   "prompt_tokens": 6537,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 6550,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/auth/models.py:298-311  (django.contrib.auth.models.PermissionsMixin.has_perm)\nclass PermissionsMixin(models.Model):\n    def has_perm(self, perm, obj=None):\n        \"\"\"\n        Return True if the user has the specified permission. Query all\n        available auth backends, but return immediately if any backend returns\n        True. Thus, a user who has permission from a single auth backend is\n        assumed to have permission in general. If an object is provided, check\n        permissions for that object.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        # Otherwise we need to check the backends.\n        return _user_has_perm(self, perm, obj)\n\n# django/contrib/auth/models.py:313-320  (django.contrib.auth.models.PermissionsMixin.has_perms)\nclass PermissionsMixin(models.Model):\n    def has_perms(self, perm_list, obj=None):\n        \"\"\"\n        Return True if the user has each of the specified permissions. If\n        object is passed, check if the user has all required perms for it.\n        \"\"\"\n        if not is_iterable(perm_list) or isinstance(perm_list, str):\n            raise ValueError(\"perm_list must be an iterable of permissions.\")\n        return all(self.has_perm(perm, obj) for perm in perm_list)\n\n# django/contrib/auth/models.py:322-331  (django.contrib.auth.models.PermissionsMixin.has_module_perms)\nclass PermissionsMixin(models.Model):\n    def has_module_perms(self, app_label):\n        \"\"\"\n        Return True if the user has any permissions in the given app label.\n        Use similar logic as has_perm(), above.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        return _user_has_module_perms(self, app_label)\n\n# django/contrib/auth/models.py:39-84  (django.contrib.auth.models.Permission)\nclass Permission(models.Model):\n    \"\"\"\n    The permissions system provides a way to assign permissions to specific\n    users and groups of users.\n\n    The permission system is used by the Django admin site, but may also be\n    useful in your own code. The Django admin site uses permissions as follows:\n\n        - The \"add\" permission limits the user's ability to view the \"add\" form\n          and add an object.\n        - The \"change\" permission limits a user's ability to view the change\n          list, view the \"change\" form and change an object.\n        - The \"delete\" permission limits the ability to delete an object.\n        - The \"view\" permission limits the ability to view an object.\n\n    Permissions are set globally per type of object, not per specific object\n    instance. It is possible to say \"Mary may change news stories,\" but it's\n    not currently possible to say \"Mary may change news stories, but only the\n    ones she created herself\" or \"Mary may only change news stories that have a\n    certain status or publication date.\"\n\n    The permissions listed above are automatically created for each model.\n    \"\"\"\n\n    name = models.CharField(_(\"name\"), max_length=255)\n    content_type = models.ForeignKey(\n        ContentType,\n        models.CASCADE,\n        verbose_name=_(\"content type\"),\n    )\n    codename = models.CharField(_(\"codename\"), max_length=100)\n\n    objects = PermissionManager()\n\n    class Meta:\n        verbose_name = _(\"permission\")\n        verbose_name_plural = _(\"permissions\")\n        unique_together = [[\"content_type\", \"codename\"]]\n        ordering = [\"content_type__app_label\", \"content_type__model\", \"codename\"]\n\n    def __str__(self):\n        return \"%s | %s\" % (self.content_type, self.name)\n\n    def natural_key(self):\n        return (self.codename,) + self.content_type.natural_key()\n\n    natural_key.dependencies = [\"contenttypes.contenttype\"]\n\n# django/contrib/auth/models.py:279-285  (django.contrib.auth.models.PermissionsMixin.get_user_permissions)\nclass PermissionsMixin(models.Model):\n    def get_user_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has directly.\n        Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"user\")\n\n# django/contrib/auth/models.py:287-293  (django.contrib.auth.models.PermissionsMixin.get_group_permissions)\nclass PermissionsMixin(models.Model):\n    def get_group_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has through their\n        groups. Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"group\")\n\n# django/contrib/auth/models.py:212-224  (django.contrib.auth.models._user_has_perm)\ndef _user_has_perm(user, perm, obj):\n    \"\"\"\n    A backend can raise `PermissionDenied` to short-circuit permission checking.\n    \"\"\"\n    for backend in auth.get_backends():\n        if not hasattr(backend, \"has_perm\"):\n            continue\n        try:\n            if backend.has_perm(user, perm, obj):\n                return True\n        except PermissionDenied:\n            return False\n    return False\n\n# django/contrib/auth/backends.py:124-157  (django.contrib.auth.backends.ModelBackend.with_perm)\nclass ModelBackend(BaseBackend):\n    def with_perm(self, perm, is_active=True, include_superusers=True, obj=None):\n        \"\"\"\n        Return users that have permission \"perm\". By default, filter out\n        inactive users and include superusers.\n        \"\"\"\n        if isinstance(perm, str):\n            try:\n                app_label, codename = perm.split(\".\")\n            except ValueError:\n                raise ValueError(\n                    \"Permission name should be in the form \"\n                    \"app_label.permission_codename.\"\n                )\n        elif not isinstance(perm, Permission):\n            raise TypeError(\n                \"The `perm` argument must be a string or a permission instance.\"\n            )\n\n        if obj is not None:\n            return UserModel._default_manager.none()\n\n        permission_q = Q(group__user=OuterRef(\"pk\")) | Q(user=OuterRef(\"pk\"))\n        if isinstance(perm, Permission):\n            permission_q &= Q(pk=perm.pk)\n        else:\n            permission_q &= Q(codename=codename, content_type__app_label=app_label)\n\n        user_q = Exists(Permission.objects.filter(permission_q))\n        if include_superusers:\n            user_q |= Q(is_superuser=True)\n        if is_active is not None:\n            user_q &= Q(is_active=is_active)\n\n        return UserModel._default_manager.filter(user_q)\n\n# django/contrib/auth/backends.py:112-113  (django.contrib.auth.backends.ModelBackend.has_perm)\nclass ModelBackend(BaseBackend):\n    def has_perm(self, user_obj, perm, obj=None):\n        return user_obj.is_active and super().has_perm(user_obj, perm, obj=obj)\n\n# django/contrib/auth/models.py:243-274  (django.contrib.auth.models.PermissionsMixin)\nclass PermissionsMixin(models.Model):\n    \"\"\"\n    Add the fields and methods necessary to support the Group and Permission\n    models using the ModelBackend.\n    \"\"\"\n\n    is_superuser = models.BooleanField(\n        _(\"superuser status\"),\n        default=False,\n        help_text=_(\n            \"Designates that this user has all permissions without \"\n            \"explicitly assigning them.\"\n        ),\n    )\n    groups = models.ManyToManyField(\n        Group,\n        verbose_name=_(\"groups\"),\n        blank=True,\n        help_text=_(\n            \"The groups this user belongs to. A user will get all permissions \"\n            \"granted to each of their groups.\"\n        ),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n    user_permissions = models.ManyToManyField(\n        Permission,\n        verbose_name=_(\"user permissions\"),\n        blank=True,\n        help_text=_(\"Specific permissions for this user.\"),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n\n# django/contrib/auth/mixins.py:99-104  (django.contrib.auth.mixins.PermissionRequiredMixin.has_permission)\nclass PermissionRequiredMixin(AccessMixin):\n    def has_permission(self):\n        \"\"\"\n        Override this method to customize the way permissions are checked.\n        \"\"\"\n        perms = self.get_permission_required()\n        return self.request.user.has_perms(perms)\n\n# django/contrib/auth/models.py:227-239  (django.contrib.auth.models._user_has_module_perms)\ndef _user_has_module_perms(user, app_label):\n    \"\"\"\n    A backend can raise `PermissionDenied` to short-circuit permission checking.\n    \"\"\"\n    for backend in auth.get_backends():\n        if not hasattr(backend, \"has_module_perms\"):\n            continue\n        try:\n            if backend.has_module_perms(user, app_label):\n                return True\n        except PermissionDenied:\n            return False\n    return False\n\n# django/contrib/auth/backends.py:91-96  (django.contrib.auth.backends.ModelBackend.get_user_permissions)\nclass ModelBackend(BaseBackend):\n    def get_user_permissions(self, user_obj, obj=None):\n        \"\"\"\n        Return a set of permission strings the user `user_obj` has from their\n        `user_permissions`.\n        \"\"\"\n        return self._get_permissions(user_obj, obj, \"user\")\n\n# tests/auth_tests/test_auth_backends.py:596-597  (tests.auth_tests.test_auth_backends.PermissionDeniedBackend.has_perm)\nclass PermissionDeniedBackend:\n    def has_perm(self, user_obj, perm, obj=None):\n        raise PermissionDenied\n\n# django/contrib/auth/backends.py:70-89  (django.contrib.auth.backends.ModelBackend._get_permissions)\nclass ModelBackend(BaseBackend):\n    def _get_permissions(self, user_obj, obj, from_name):\n        \"\"\"\n        Return the permissions of `user_obj` from `from_name`. `from_name` can\n        be either \"group\" or \"user\" to return permissions from\n        `_get_group_permissions` or `_get_user_permissions` respectively.\n        \"\"\"\n        if not user_obj.is_active or user_obj.is_anonymous or obj is not None:\n            return set()\n\n        perm_cache_name = \"_%s_perm_cache\" % from_name\n        if not hasattr(user_obj, perm_cache_name):\n            if user_obj.is_superuser:\n                perms = Permission.objects.all()\n            else:\n                perms = getattr(self, \"_get_%s_permissions\" % from_name)(user_obj)\n            perms = perms.values_list(\"content_type__app_label\", \"codename\").order_by()\n            setattr(\n                user_obj, perm_cache_name, {\"%s.%s\" % (ct, name) for ct, name in perms}\n            )\n        return getattr(user_obj, perm_cache_name)\n\n# django/contrib/auth/backends.py:31-32  (django.contrib.auth.backends.BaseBackend.has_perm)\nclass BaseBackend:\n    def has_perm(self, user_obj, perm, obj=None):\n        return perm in self.get_all_permissions(user_obj, obj=obj)\n\n# tests/auth_tests/test_auth_backends.py:649-658  (tests.auth_tests.test_auth_backends.PermissionDeniedBackendTest.test_has_perm)\nclass PermissionDeniedBackendTest(TestCase):\n    @modify_settings(AUTHENTICATION_BACKENDS={\"append\": backend})\n    def test_has_perm(self):\n        content_type = ContentType.objects.get_for_model(Group)\n        perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test\"\n        )\n        self.user1.user_permissions.add(perm)\n\n        self.assertIs(self.user1.has_perm(\"auth.test\"), True)\n        self.assertIs(self.user1.has_module_perms(\"auth\"), True)\n\n# django/contrib/auth/backends.py:98-103  (django.contrib.auth.backends.ModelBackend.get_group_permissions)\nclass ModelBackend(BaseBackend):\n    def get_group_permissions(self, user_obj, obj=None):\n        \"\"\"\n        Return a set of permission strings the user `user_obj` has from the\n        groups they belong.\n        \"\"\"\n        return self._get_permissions(user_obj, obj, \"group\")\n\n# django/contrib/auth/mixins.py:77-79  (django.contrib.auth.mixins.PermissionRequiredMixin)\nclass PermissionRequiredMixin(AccessMixin):\n    \"\"\"Verify that the current user has all specified permissions.\"\"\"\n\n    permission_required = None\n\n# tests/auth_tests/test_auth_backends.py:638-647  (tests.auth_tests.test_auth_backends.PermissionDeniedBackendTest.test_has_perm_denied)\nclass PermissionDeniedBackendTest(TestCase):\n    @modify_settings(AUTHENTICATION_BACKENDS={\"prepend\": backend})\n    def test_has_perm_denied(self):\n        content_type = ContentType.objects.get_for_model(Group)\n        perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test\"\n        )\n        self.user1.user_permissions.add(perm)\n\n        self.assertIs(self.user1.has_perm(\"auth.test\"), False)\n        self.assertIs(self.user1.has_module_perms(\"auth\"), False)\n\n# django/contrib/auth/backends.py:115-122  (django.contrib.auth.backends.ModelBackend.has_module_perms)\nclass ModelBackend(BaseBackend):\n    def has_module_perms(self, user_obj, app_label):\n        \"\"\"\n        Return True if user_obj has any permissions in the given app_label.\n        \"\"\"\n        return user_obj.is_active and any(\n            perm[: perm.index(\".\")] == app_label\n            for perm in self.get_all_permissions(user_obj)\n        )\n\n# django/contrib/auth/backends.py:105-110  (django.contrib.auth.backends.ModelBackend.get_all_permissions)\nclass ModelBackend(BaseBackend):\n    def get_all_permissions(self, user_obj, obj=None):\n        if not user_obj.is_active or user_obj.is_anonymous or obj is not None:\n            return set()\n        if not hasattr(user_obj, \"_perm_cache\"):\n            user_obj._perm_cache = super().get_all_permissions(user_obj)\n        return user_obj._perm_cache\n\n# tests/auth_tests/test_auth_backends.py:110-126  (tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_has_perm)\nclass BaseModelBackendTest:\n    def test_has_perm(self):\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        self.assertIs(user.has_perm(\"auth.test\"), False)\n\n        user.is_staff = True\n        user.save()\n        self.assertIs(user.has_perm(\"auth.test\"), False)\n\n        user.is_superuser = True\n        user.save()\n        self.assertIs(user.has_perm(\"auth.test\"), True)\n\n        user.is_staff = True\n        user.is_superuser = True\n        user.is_active = False\n        user.save()\n        self.assertIs(user.has_perm(\"auth.test\"), False)\n\n# tests/auth_tests/test_auth_backends.py:39-40  (tests.auth_tests.test_auth_backends.SimpleBackend.get_user_permissions)\nclass SimpleBackend(BaseBackend):\n    def get_user_permissions(self, user_obj, obj=None):\n        return [\"user_perm\"]\n\n# tests/auth_tests/test_auth_backends.py:425-436  (tests.auth_tests.test_auth_backends.SimpleRowlevelBackend.has_perm)\nclass SimpleRowlevelBackend:\n    def has_perm(self, user, perm, obj=None):\n        if not obj:\n            return  # We only support row level perms\n\n        if isinstance(obj, TestObj):\n            if user.username == \"test2\":\n                return True\n            elif user.is_anonymous and perm == \"anon\":\n                return True\n            elif not user.is_active and perm == \"inactive\":\n                return True\n        return False\n\n# django/contrib/auth/backends.py:19-20  (django.contrib.auth.backends.BaseBackend.get_user_permissions)\nclass BaseBackend:\n    def get_user_permissions(self, user_obj, obj=None):\n        return set()\n\n# tests/auth_tests/test_auth_backends.py:128-175  (tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_custom_perms)\nclass BaseModelBackendTest:\n    def test_custom_perms(self):\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        content_type = ContentType.objects.get_for_model(Group)\n        perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test\"\n        )\n        user.user_permissions.add(perm)\n\n        # reloading user to purge the _perm_cache\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        self.assertEqual(user.get_all_permissions(), {\"auth.test\"})\n        self.assertEqual(user.get_user_permissions(), {\"auth.test\"})\n        self.assertEqual(user.get_group_permissions(), set())\n        self.assertIs(user.has_module_perms(\"Group\"), False)\n        self.assertIs(user.has_module_perms(\"auth\"), True)\n\n        perm = Permission.objects.create(\n            name=\"test2\", content_type=content_type, codename=\"test2\"\n        )\n        user.user_permissions.add(perm)\n        perm = Permission.objects.create(\n            name=\"test3\", content_type=content_type, codename=\"test3\"\n        )\n        user.user_permissions.add(perm)\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        expected_user_perms = {\"auth.test2\", \"auth.test\", \"auth.test3\"}\n        self.assertEqual(user.get_all_permissions(), expected_user_perms)\n        self.assertIs(user.has_perm(\"test\"), False)\n        self.assertIs(user.has_perm(\"auth.test\"), True)\n        self.assertIs(user.has_perms([\"auth.test2\", \"auth.test3\"]), True)\n\n        perm = Permission.objects.create(\n            name=\"test_group\", content_type=content_type, codename=\"test_group\"\n        )\n        group = Group.objects.create(name=\"test_group\")\n        group.permissions.add(perm)\n        user.groups.add(group)\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        self.assertEqual(\n            user.get_all_permissions(), {*expected_user_perms, \"auth.test_group\"}\n        )\n        self.assertEqual(user.get_user_permissions(), expected_user_perms)\n        self.assertEqual(user.get_group_permissions(), {\"auth.test_group\"})\n        self.assertIs(user.has_perms([\"auth.test3\", \"auth.test_group\"]), True)\n\n        user = AnonymousUser()\n        self.assertIs(user.has_perm(\"test\"), False)\n        self.assertIs(user.has_perms([\"auth.test2\", \"auth.test3\"]), False)\n\n# tests/modeladmin/tests.py:816-817  (tests.modeladmin.tests.ModelAdminPermissionTests.MockViewUser.has_perm)\nclass ModelAdminPermissionTests(SimpleTestCase):\n    class MockViewUser(MockUser):\n        def has_perm(self, perm, obj=None):\n            return perm == \"modeladmin.view_band\"\n\n# django/contrib/auth/backends.py:25-29  (django.contrib.auth.backends.BaseBackend.get_all_permissions)\nclass BaseBackend:\n    def get_all_permissions(self, user_obj, obj=None):\n        return {\n            *self.get_user_permissions(user_obj, obj=obj),\n            *self.get_group_permissions(user_obj, obj=obj),\n        }\n\n# tests/auth_tests/test_auth_backends.py:42-43  (tests.auth_tests.test_auth_backends.SimpleBackend.get_group_permissions)\nclass SimpleBackend(BaseBackend):\n    def get_group_permissions(self, user_obj, obj=None):\n        return [\"group_perm\"]\n\n# tests/auth_tests/test_context_processors.py:18-19  (tests.auth_tests.test_context_processors.MockUser.has_perm)\nclass MockUser:\n    def has_perm(self, perm, obj=None):\n        return perm == \"mockapp.someperm\"\n\n# tests/auth_tests/test_auth_backends.py:177-189  (tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_has_no_object_perm)\nclass BaseModelBackendTest:\n    def test_has_no_object_perm(self):\n        \"\"\"Regressiontest for #12462\"\"\"\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        content_type = ContentType.objects.get_for_model(Group)\n        perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test\"\n        )\n        user.user_permissions.add(perm)\n\n        self.assertIs(user.has_perm(\"auth.test\", \"object\"), False)\n        self.assertEqual(user.get_all_permissions(\"object\"), set())\n        self.assertIs(user.has_perm(\"auth.test\"), True)\n        self.assertEqual(user.get_all_permissions(), {\"auth.test\"})\n\n# tests/auth_tests/models/custom_user.py:63-64  (tests.auth_tests.models.custom_user.CustomUser.has_perm)\nclass CustomUser(AbstractBaseUser):\n    def has_perm(self, perm, obj=None):\n        return True\n\n# tests/auth_tests/test_auth_backends.py:589-591  (tests.auth_tests.test_auth_backends.PermissionDeniedBackend)\nclass PermissionDeniedBackend:\n    \"\"\"\n    Always raises PermissionDenied in `authenticate`, `has_perm` and `has_module_perms`.\n    \"\"\"\n\n# django/contrib/auth/context_processors.py:12-13  (django.contrib.auth.context_processors.PermLookupDict.__getitem__)\nclass PermLookupDict:\n    def __getitem__(self, perm_name):\n        return self.user.has_perm(\"%s.%s\" % (self.app_label, perm_name))\n\n# django/contrib/auth/context_processors.py:9-10  (django.contrib.auth.context_processors.PermLookupDict.__repr__)\nclass PermLookupDict:\n    def __repr__(self):\n        return str(self.user.get_all_permissions())\n\n# tests/auth_tests/test_auth_backends.py:223-255  (tests.auth_tests.test_auth_backends.BaseModelBackendTest.test_inactive_has_no_permissions)\nclass BaseModelBackendTest:\n    def test_inactive_has_no_permissions(self):\n        \"\"\"\n        #17903 -- Inactive users shouldn't have permissions in\n        ModelBackend.get_(all|user|group)_permissions().\n        \"\"\"\n        backend = ModelBackend()\n\n        user = self.UserModel._default_manager.get(pk=self.user.pk)\n        content_type = ContentType.objects.get_for_model(Group)\n        user_perm = Permission.objects.create(\n            name=\"test\", content_type=content_type, codename=\"test_user\"\n        )\n        group_perm = Permission.objects.create(\n            name=\"test2\", content_type=content_type, codename=\"test_group\"\n        )\n        user.user_permissions.add(user_perm)\n\n        group = Group.objects.create(name=\"test_group\")\n        user.groups.add(group)\n        group.permissions.add(group_perm)\n\n        self.assertEqual(\n            backend.get_all_permissions(user), {\"auth.test_user\", \"auth.test_group\"}\n        )\n        self.assertEqual(backend.get_user_permissions(user), {\"auth.test_user\"})\n        self.assertEqual(backend.get_group_permissions(user), {\"auth.test_group\"})\n\n        user.is_active = False\n        user.save()\n\n        self.assertEqual(backend.get_all_permissions(user), set())\n        self.assertEqual(backend.get_user_permissions(user), set())\n        self.assertEqual(backend.get_group_permissions(user), set())\n\n# django/contrib/auth/context_processors.py:20-21  (django.contrib.auth.context_processors.PermLookupDict.__bool__)\nclass PermLookupDict:\n    def __bool__(self):\n        return self.user.has_module_perms(self.app_label)\n\n# django/contrib/auth/context_processors.py:1-2  (django.contrib.auth.context_processors)\n# PermWrapper and PermLookupDict proxy the permissions system into objects that\n# the template system can understand.\n\n# tests/auth_tests/test_context_processors.py:113-125  (tests.auth_tests.test_context_processors.AuthContextProcessorTests.test_perm_in_perms_attrs)\nclass AuthContextProcessorTests(TestCase):\n    def test_perm_in_perms_attrs(self):\n        u = User.objects.create_user(username=\"normal\", password=\"secret\")\n        u.user_permissions.add(\n            Permission.objects.get(\n                content_type=ContentType.objects.get_for_model(Permission),\n                codename=\"add_permission\",\n            )\n        )\n        self.client.login(username=\"normal\", password=\"secret\")\n        response = self.client.get(\"/auth_processor_perm_in_perms/\")\n        self.assertContains(response, \"Has auth permissions\")\n        self.assertContains(response, \"Has auth.add_permission permissions\")\n        self.assertNotContains(response, \"nonexistent\")\n\n# tests/auth_tests/test_models.py:426-435  (tests.auth_tests.test_models.UserWithPermTestCase.test_custom_backend)\nclass UserWithPermTestCase(TestCase):\n    @override_settings(\n        AUTHENTICATION_BACKENDS=[\"auth_tests.test_models.CustomModelBackend\"]\n    )\n    def test_custom_backend(self):\n        for perm in (\"auth.test\", self.permission):\n            with self.subTest(perm):\n                self.assertCountEqual(\n                    User.objects.with_perm(perm),\n                    [self.user_charlie, self.user_charlie_b],\n                )\n\n# tests/auth_tests/test_auth_backends.py:523-525  (tests.auth_tests.test_auth_backends.AnonymousUserBackendTest.test_has_perm)\nclass AnonymousUserBackendTest(SimpleTestCase):\n    def test_has_perm(self):\n        self.assertIs(self.user1.has_perm(\"perm\", TestObj()), False)\n        self.assertIs(self.user1.has_perm(\"anon\", TestObj()), True)\n\n# tests/auth_tests/test_auth_backends.py:579-581  (tests.auth_tests.test_auth_backends.InActiveUserBackendTest.test_has_perm)\nclass InActiveUserBackendTest(TestCase):\n    def test_has_perm(self):\n        self.assertIs(self.user1.has_perm(\"perm\", TestObj()), False)\n        self.assertIs(self.user1.has_perm(\"inactive\", TestObj()), True)\n\n# tests/auth_tests/test_auth_backends.py:531-536  (tests.auth_tests.test_auth_backends.AnonymousUserBackendTest.test_has_perms_perm_list_invalid)\nclass AnonymousUserBackendTest(SimpleTestCase):\n    def test_has_perms_perm_list_invalid(self):\n        msg = \"perm_list must be an iterable of permissions.\"\n        with self.assertRaisesMessage(ValueError, msg):\n            self.user1.has_perms(\"perm\")\n        with self.assertRaisesMessage(ValueError, msg):\n            self.user1.has_perms(object())\n\n# tests/auth_tests/test_auth_backends.py:63-66  (tests.auth_tests.test_auth_backends.BaseBackendTest.test_has_perm)\nclass BaseBackendTest(TestCase):\n    def test_has_perm(self):\n        self.assertIs(self.user.has_perm(\"user_perm\"), True)\n        self.assertIs(self.user.has_perm(\"group_perm\"), True)\n        self.assertIs(self.user.has_perm(\"other_perm\", TestObj()), False)\n\n# tests/auth_tests/test_auth_backends.py:490-497  (tests.auth_tests.test_auth_backends.RowlevelBackendTest.test_has_perm)\nclass RowlevelBackendTest(TestCase):\n    def test_has_perm(self):\n        self.assertIs(self.user1.has_perm(\"perm\", TestObj()), False)\n        self.assertIs(self.user2.has_perm(\"perm\", TestObj()), True)\n        self.assertIs(self.user2.has_perm(\"perm\"), False)\n        self.assertIs(self.user2.has_perms([\"simple\", \"advanced\"], TestObj()), True)\n        self.assertIs(self.user3.has_perm(\"perm\", TestObj()), False)\n        self.assertIs(self.user3.has_perm(\"anon\", TestObj()), False)\n        self.assertIs(self.user3.has_perms([\"simple\", \"advanced\"], TestObj()), False)\n\n# tests/auth_tests/test_auth_backends.py:68-73  (tests.auth_tests.test_auth_backends.BaseBackendTest.test_has_perms_perm_list_invalid)\nclass BaseBackendTest(TestCase):\n    def test_has_perms_perm_list_invalid(self):\n        msg = \"perm_list must be an iterable of permissions.\"\n        with self.assertRaisesMessage(ValueError, msg):\n            self.user.has_perms(\"user_perm\")\n        with self.assertRaisesMessage(ValueError, msg):\n            self.user.has_perms(object())\n\n# tests/auth_tests/test_models.py:437-446  (tests.auth_tests.test_models.UserWithPermTestCase.test_custom_backend_pass_obj)\nclass UserWithPermTestCase(TestCase):\n    @override_settings(\n        AUTHENTICATION_BACKENDS=[\"auth_tests.test_models.CustomModelBackend\"]\n    )\n    def test_custom_backend_pass_obj(self):\n        for perm in (\"auth.test\", self.permission):\n            with self.subTest(perm):\n                self.assertSequenceEqual(\n                    User.objects.with_perm(perm, obj=self.user_charlie_b),\n                    [self.user_charlie_b],\n                )\n\n# tests/auth_tests/urls.py:57-58  (tests.auth_tests.urls.auth_processor_perm_in_perms)\ndef auth_processor_perm_in_perms(request):\n    return render(request, \"context_processors/auth_attrs_perm_in_perms.html\")\n\n# django/contrib/admin/options.py:2450-2468  (django.contrib.admin.options.InlineModelAdmin._has_any_perms_for_target_model)\nclass InlineModelAdmin(BaseModelAdmin):\n    def _has_any_perms_for_target_model(self, request, perms):\n        \"\"\"\n        This method is called only when the ModelAdmin's model is for an\n        ManyToManyField's implicit through model (if self.opts.auto_created).\n        Return True if the user has any of the given permissions ('add',\n        'change', etc.) for the model that points to the through model.\n        \"\"\"\n        opts = self.opts\n        # Find the target model of an auto-created many-to-many relationship.\n        for field in opts.fields:\n            if field.remote_field and field.remote_field.model != self.parent_model:\n                opts = field.remote_field.model._meta\n                break\n        return any(\n            request.user.has_perm(\n                \"%s.%s\" % (opts.app_label, get_permission_codename(perm, opts))\n            )\n            for perm in perms\n        )\n\n## Task\n\nYou are debugging Django's permission-check dispatch in\ndjango/contrib/auth/models.py. Starting from\n`PermissionsMixin.has_perm`, trace the real causal pipeline that\ndetermines which authentication backends will be consulted for the\npermission check, in the order each stage is actually reached, up to\nand including the call that enumerates those backends. Assume the\nuser is not an active superuser, so the real backend-checking path is\nreached. Do not trace into any individual backend's own `has_perm`\ncall - which backend's implementation actually runs, and how many\nare consulted, is resolved dynamically at runtime, not statically in\nthis pipeline.\n\nYour symbols array should contain exactly 3 entries, no repeats.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.models.PermissionsMixin.has_perm\", \"django.contrib.auth.models._user_has_perm\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

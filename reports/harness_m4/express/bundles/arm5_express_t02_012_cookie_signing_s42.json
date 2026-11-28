@@ -1,0 +1,124 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_012_cookie_signing",
+  "items": [
+   {
+    "source_id": "lib/response.js:862-895",
+    "content": "# lib/response.js:862-895  (lib.response.cookie)\nres.cookie = function (name, value, options) {\n  var opts = merge({}, options);\n  var secret = this.req.secret;\n  var signed = opts.signed;\n\n  if (signed && !secret) {\n    throw new Error('cookieParser(\"secret\") required for signed cookies');\n  }\n\n  var val = typeof value === 'object'\n    ? 'j:' + JSON.stringify(value)\n    : String(value);\n\n  if (signed) {\n    val = 's:' + sign(val, secret);\n  }\n\n  if (opts.maxAge != null) {\n    var maxAge = opts.maxAge - 0\n\n    if (!isNaN(maxAge)) {\n      opts.expires = new Date(Date.now() + maxAge)\n      opts.maxAge = Math.floor(maxAge / 1000)\n    }\n  }\n\n  if (opts.path == null) {\n    opts.path = '/';\n  }\n\n  this.append('Set-Cookie', cookie.serialize(name, String(val), opts));\n\n  return this;\n};\n\n# Referenced module constants:\nvar merge = require('utils-merge');\nvar sign = require('cookie-signature').sign;",
+    "token_count": 252,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.cookie"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 226,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:744-756",
+    "content": "# lib/response.js:744-756  (lib.response.append)\nres.append = function append(field, val) {\n  var prev = this.get(field);\n  var value = val;\n\n  if (prev) {\n    // concat the new and prev vals\n    value = Array.isArray(prev) ? prev.concat(val)\n      : Array.isArray(val) ? [prev].concat(val)\n        : [prev, val]\n  }\n\n  return this.set(field, value);\n};",
+    "token_count": 100,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.append"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 82,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:1155-1179",
+    "content": "# lib/response.js:1155-1179  (lib.response.stringify)\nfunction stringify (value, replacer, spaces, escape) {\n  // v8 checks arguments.length for optimizing simple call\n  // https://bugs.chromium.org/p/v8/issues/detail?id=4730\n  var json = replacer || spaces\n    ? JSON.stringify(value, replacer, spaces)\n    : JSON.stringify(value);\n\n  if (escape && typeof json === 'string') {\n    json = json.replace(/[<>&]/g, function (c) {\n      switch (c.charCodeAt(0)) {\n        case 0x3c:\n          return '\\\\u003c'\n        case 0x3e:\n          return '\\\\u003e'\n        case 0x26:\n          return '\\\\u0026'\n        /* istanbul ignore next: unreachable default */\n        default:\n          return c\n      }\n    })\n  }\n\n  return json\n}",
+    "token_count": 208,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.stringify"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 179,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 560,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how Express serializes an outgoing cookie, starting from `res.cookie` in lib/response.js. Identify the real third-party npm package function it delegates the actual name=value;attributes string construction to, and that function's own real signature and thrown-exception behavior.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.cookie\", \"cookie.index.serialize\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.response.cookie",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 13,
+   "manifest_candidates_unfiltered": 13,
+   "requested_symbols": [
+    "lib.response.cookie",
+    "cookie.serialize"
+   ],
+   "turn1_requested_count": 2,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "cookie.serialize"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `res.cookie` function in `lib/response.js` constructs the cookie string by calling `cookie.serialize`. This function is part of the `cookie` npm package and is responsible for serializing the cookie name, value, and attributes into the final string format.\",\n  \"requested_symbols\": [\"lib.response.cookie\", \"cookie.serialize\"]\n}\n```",
+     "prompt_tokens": 882,
+     "completion_tokens": 80,
+     "latency_seconds": 6.594735742000012,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     17.807933
+    ],
+    "L_turn2_hydrate": [
+     44.020928
+    ],
+    "L_turn2b_external": [
+     0.738652
+    ],
+    "L_retrieve": [
+     6659.571804
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 560,
+   "prompt_tokens": 832,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 845,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/response.js:862-895  (lib.response.cookie)\nres.cookie = function (name, value, options) {\n  var opts = merge({}, options);\n  var secret = this.req.secret;\n  var signed = opts.signed;\n\n  if (signed && !secret) {\n    throw new Error('cookieParser(\"secret\") required for signed cookies');\n  }\n\n  var val = typeof value === 'object'\n    ? 'j:' + JSON.stringify(value)\n    : String(value);\n\n  if (signed) {\n    val = 's:' + sign(val, secret);\n  }\n\n  if (opts.maxAge != null) {\n    var maxAge = opts.maxAge - 0\n\n    if (!isNaN(maxAge)) {\n      opts.expires = new Date(Date.now() + maxAge)\n      opts.maxAge = Math.floor(maxAge / 1000)\n    }\n  }\n\n  if (opts.path == null) {\n    opts.path = '/';\n  }\n\n  this.append('Set-Cookie', cookie.serialize(name, String(val), opts));\n\n  return this;\n};\n\n# Referenced module constants:\nvar merge = require('utils-merge');\nvar sign = require('cookie-signature').sign;\n\n# lib/response.js:744-756  (lib.response.append)\nres.append = function append(field, val) {\n  var prev = this.get(field);\n  var value = val;\n\n  if (prev) {\n    // concat the new and prev vals\n    value = Array.isArray(prev) ? prev.concat(val)\n      : Array.isArray(val) ? [prev].concat(val)\n        : [prev, val]\n  }\n\n  return this.set(field, value);\n};\n\n# lib/response.js:1155-1179  (lib.response.stringify)\nfunction stringify (value, replacer, spaces, escape) {\n  // v8 checks arguments.length for optimizing simple call\n  // https://bugs.chromium.org/p/v8/issues/detail?id=4730\n  var json = replacer || spaces\n    ? JSON.stringify(value, replacer, spaces)\n    : JSON.stringify(value);\n\n  if (escape && typeof json === 'string') {\n    json = json.replace(/[<>&]/g, function (c) {\n      switch (c.charCodeAt(0)) {\n        case 0x3c:\n          return '\\\\u003c'\n        case 0x3e:\n          return '\\\\u003e'\n        case 0x26:\n          return '\\\\u0026'\n        /* istanbul ignore next: unreachable default */\n        default:\n          return c\n      }\n    })\n  }\n\n  return json\n}\n\n## Task\n\nYou are investigating how Express serializes an outgoing cookie, starting from `res.cookie` in lib/response.js. Identify the real third-party npm package function it delegates the actual name=value;attributes string construction to, and that function's own real signature and thrown-exception behavior.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.cookie\", \"cookie.index.serialize\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

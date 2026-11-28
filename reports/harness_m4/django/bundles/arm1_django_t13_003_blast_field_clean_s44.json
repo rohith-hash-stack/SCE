@@ -1,0 +1,887 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t13_003_blast_field_clean",
+  "items": [
+   {
+    "source_id": "django/forms/fields.py:1030-1038",
+    "content": "# django/forms/fields.py:1030-1038  (django.forms.fields.ComboField.clean)\nclass ComboField(Field):\n    def clean(self, value):\n        \"\"\"\n        Validate the given value against all of self.fields, which is a\n        list of Field instances.\n        \"\"\"\n        super().clean(value)\n        for field in self.fields:\n            value = field.clean(value)\n        return value",
+    "token_count": 86,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.fields.ComboField.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": -3.844417095184326,
+     "bm25_rank": 8,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/__init__.py:770-779",
+    "content": "# django/db/models/fields/__init__.py:770-779  (django.db.models.fields.Field.clean)\nclass Field(RegisterLookupMixin):\n    def clean(self, value, model_instance):\n        \"\"\"\n        Convert the value's type and run validation. Validation errors\n        from to_python() and validate() are propagated. Return the correct\n        value if no error is raised.\n        \"\"\"\n        value = self.to_python(value)\n        self.validate(value, model_instance)\n        self.run_validators(value)\n        return value",
+    "token_count": 109,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.fields.Field.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 20,
+     "rerank_score": -3.8727457523345947,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/fields.py:192-200",
+    "content": "# django/forms/fields.py:192-200  (django.forms.fields.Field.clean)\nclass Field:\n    def clean(self, value):\n        \"\"\"\n        Validate the given value and return its \"cleaned\" value as an\n        appropriate Python object. Raise ValidationError for any errors.\n        \"\"\"\n        value = self.to_python(value)\n        self.validate(value)\n        self.run_validators(value)\n        return value",
+    "token_count": 86,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.fields.Field.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 1,
+     "rerank_score": -4.104449272155762,
+     "bm25_rank": 6,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/operations.py:16-500",
+    "content": "# django/db/backends/base/operations.py:16-500  (django.db.backends.base.operations.BaseDatabaseOperations)\nclass BaseDatabaseOperations:\n    \"\"\"\n    Encapsulate backend-specific differences, such as the way a backend\n    performs ordering or calculates the ID of a recently-inserted row.\n    \"\"\"\n\n    compiler_module = \"django.db.models.sql.compiler\"\n\n    # Integer field safe ranges by `internal_type` as documented\n    # in docs/ref/models/fields.txt.\n    integer_field_ranges = {\n        \"SmallIntegerField\": (-32768, 32767),\n        \"IntegerField\": (-2147483648, 2147483647),\n        \"BigIntegerField\": (-9223372036854775808, 9223372036854775807),\n        \"PositiveBigIntegerField\": (0, 9223372036854775807),\n        \"PositiveSmallIntegerField\": (0, 32767),\n        \"PositiveIntegerField\": (0, 2147483647),\n        \"SmallAutoField\": (-32768, 32767),\n        \"AutoField\": (-2147483648, 2147483647),\n        \"BigAutoField\": (-9223372036854775808, 9223372036854775807),\n    }\n    set_operators = {\n        \"union\": \"UNION\",\n        \"intersection\": \"INTERSECT\",\n        \"difference\": \"EXCEPT\",\n    }\n    # Mapping of Field.get_internal_type() (typically the model field's class\n    # name) to the data type to use for the Cast() function, if different from\n    # DatabaseWrapper.data_types.\n    cast_data_types = {}\n    # CharField data type if the max_length argument isn't provided.\n    cast_char_field_without_max_length = None\n\n    # Start and end points for window expressions.\n    PRECEDING = \"PRECEDING\"\n    FOLLOWING = \"FOLLOWING\"\n    UNBOUNDED_PRECEDING = \"UNBOUNDED \" + PRECEDING\n    UNBOUNDED_FOLLOWING = \"UNBOUNDED \" + FOLLOWING\n    CURRENT_ROW = \"CURRENT ROW\"\n\n    # Prefix for EXPLAIN queries, or None EXPLAIN isn't supported.\n    explain_prefix = None\n\n    def __init__(self, connection):\n        self.connection = connection\n        self._cache = None\n\n    def autoinc_sql(self, table, column):\n        \"\"\"\n        Return any SQL needed to support auto-incrementing primary keys, or\n        None if no SQL is necessary.\n\n        This SQL is executed when a table is created.\n        \"\"\"\n        return None\n\n    def bulk_batch_size(self, fields, objs):\n        \"\"\"\n        Return the maximum allowed batch size for the backend. The fields\n        are the fields going to be inserted in the batch, the objs contains\n        all the objects to be inserted.\n        \"\"\"\n        return len(objs)\n\n    def format_for_duration_arithmetic(self, sql):\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"format_for_duration_arithmetic() method.\"\n        )\n\n    def cache_key_culling_sql(self):\n        \"\"\"\n        Return an SQL query that retrieves the first cache key greater than the\n        n smallest.\n\n        This is used by the 'db' cache backend to determine where to start\n        culling.\n        \"\"\"\n        cache_key = self.quote_name(\"cache_key\")\n        return f\"SELECT {cache_key} FROM %s ORDER BY {cache_key} LIMIT 1 OFFSET %%s\"\n\n    def unification_cast_sql(self, output_field):\n        \"\"\"\n        Given a field instance, return the SQL that casts the result of a union\n        to that type. The resulting string should contain a '%s' placeholder\n        for the expression being cast.\n        \"\"\"\n        return \"%s\"\n\n    def date_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        extracts a value from the given date field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_extract_sql() \"\n            \"method\"\n        )\n\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        truncates the given date or datetime field field_name to a date object\n        with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_trunc_sql() \"\n            \"method.\"\n        )\n\n    def datetime_cast_date_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to date value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_date_sql() method.\"\n        )\n\n    def datetime_cast_time_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to time value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_time_sql() method\"\n        )\n\n    def datetime_extract_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that extracts a value from the given\n        datetime field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_extract_sql() \"\n            \"method\"\n        )\n\n    def datetime_trunc_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that truncates the given datetime field\n        field_name to a datetime object with only the given specificity.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_trunc_sql() \"\n            \"method\"\n        )\n\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\n        that truncates the given time or datetime field field_name to a time\n        object with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a time_trunc_sql() method\"\n        )\n\n    def time_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute', or 'second', return the SQL\n        that extracts a value from the given time field field_name.\n        \"\"\"\n        return self.date_extract_sql(lookup_type, sql, params)\n\n    def deferrable_sql(self):\n        \"\"\"\n        Return the SQL to make a constraint \"initially deferred\" during a\n        CREATE TABLE statement.\n        \"\"\"\n        return \"\"\n\n    def distinct_sql(self, fields, params):\n        \"\"\"\n        Return an SQL DISTINCT clause which removes duplicate rows from the\n        result set. If any fields are given, only check the given fields for\n        duplicates.\n        \"\"\"\n        if fields:\n            raise NotSupportedError(\n                \"DISTINCT ON fields is not supported by this database backend\"\n            )\n        else:\n            return [\"DISTINCT\"], []\n\n    def fetch_returned_insert_columns(self, cursor, returning_params):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT...RETURNING\n        statement into a table, return the newly created data.\n        \"\"\"\n        return cursor.fetchone()\n\n    def field_cast_sql(self, db_type, internal_type):\n        \"\"\"\n        Given a column type (e.g. 'BLOB', 'VARCHAR') and an internal type\n        (e.g. 'GenericIPAddressField'), return the SQL to cast it before using\n        it in a WHERE statement. The resulting string should contain a '%s'\n        placeholder for the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def force_no_ordering(self):\n        \"\"\"\n        Return a list used in the \"ORDER BY\" clause to force no ordering at\n        all. Return an empty list to include nothing in the ordering.\n        \"\"\"\n        return []\n\n    def for_update_sql(self, nowait=False, skip_locked=False, of=(), no_key=False):\n        \"\"\"\n        Return the FOR UPDATE SQL clause to lock rows for an update operation.\n        \"\"\"\n        return \"FOR%s UPDATE%s%s%s\" % (\n            \" NO KEY\" if no_key else \"\",\n            \" OF %s\" % \", \".join(of) if of else \"\",\n            \" NOWAIT\" if nowait else \"\",\n            \" SKIP LOCKED\" if skip_locked else \"\",\n        )\n\n    def _get_limit_offset_params(self, low_mark, high_mark):\n        offset = low_mark or 0\n        if high_mark is not None:\n            return (high_mark - offset), offset\n        elif offset:\n            return self.connection.ops.no_limit_value(), offset\n        return None, offset\n\n    def limit_offset_sql(self, low_mark, high_mark):\n        \"\"\"Return LIMIT/OFFSET SQL clause.\"\"\"\n        limit, offset = self._get_limit_offset_params(low_mark, high_mark)\n        return \" \".join(\n            sql\n            for sql in (\n                (\"LIMIT %d\" % limit) if limit else None,\n                (\"OFFSET %d\" % offset) if offset else None,\n            )\n            if sql\n        )\n\n    def last_executed_query(self, cursor, sql, params):\n        \"\"\"\n        Return a string of the query last executed by the given cursor, with\n        placeholders replaced with actual values.\n\n        `sql` is the raw query containing placeholders and `params` is the\n        sequence of parameters. These are used by default, but this method\n        exists for database backends to provide a better implementation\n        according to their own quoting schemes.\n        \"\"\"\n\n        # Convert params to contain string values.\n        def to_string(s):\n            return force_str(s, strings_only=True, errors=\"replace\")\n\n        if isinstance(params, (list, tuple)):\n            u_params = tuple(to_string(val) for val in params)\n        elif params is None:\n            u_params = ()\n        else:\n            u_params = {to_string(k): to_string(v) for k, v in params.items()}\n\n        return \"QUERY = %r - PARAMS = %r\" % (sql, u_params)\n\n    def last_insert_id(self, cursor, table_name, pk_name):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT statement into\n        a table that has an auto-incrementing ID, return the newly created ID.\n\n        `pk_name` is the name of the primary-key column.\n        \"\"\"\n        return cursor.lastrowid\n\n    def lookup_cast(self, lookup_type, internal_type=None):\n        \"\"\"\n        Return the string to use in a query when performing lookups\n        (\"contains\", \"like\", etc.). It should contain a '%s' placeholder for\n        the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def max_in_list_size(self):\n        \"\"\"\n        Return the maximum number of items that can be passed in a single 'IN'\n        list condition, or None if the backend does not impose a limit.\n        \"\"\"\n        return None\n\n    def max_name_length(self):\n        \"\"\"\n        Return the maximum length of table and column names, or None if there\n        is no limit.\n        \"\"\"\n        return None\n\n    def no_limit_value(self):\n        \"\"\"\n        Return the value to use for the LIMIT when we are wanting \"LIMIT\n        infinity\". Return None if the limit clause can be omitted in this case.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a no_limit_value() method\"\n        )\n\n    def pk_default_value(self):\n        \"\"\"\n        Return the value to use during an INSERT statement to specify that\n        the field should use its default value.\n        \"\"\"\n        return \"DEFAULT\"\n\n    def prepare_sql_script(self, sql):\n        \"\"\"\n        Take an SQL script that may contain multiple lines and return a list\n        of statements to feed to successive cursor.execute() calls.\n\n        Since few databases are able to process raw SQL scripts in a single\n        cursor.execute() call and PEP 249 doesn't talk about this use case,\n        the default implementation is conservative.\n        \"\"\"\n        return [\n            sqlparse.format(statement, strip_comments=True)\n            for statement in sqlparse.split(sql)\n            if statement\n        ]\n\n    def process_clob(self, value):\n        \"\"\"\n        Return the value of a CLOB column, for backends that return a locator\n        object that requires additional processing.\n        \"\"\"\n        return value\n\n    def return_insert_columns(self, fields):\n        \"\"\"\n        For backends that support returning columns as part of an insert query,\n        return the SQL and params to append to the INSERT query. The returned\n        fragment should contain a format string to hold the appropriate column.\n        \"\"\"\n        pass\n\n    def compiler(self, compiler_name):\n        \"\"\"\n        Return the SQLCompiler class corresponding to the given name,\n        in the namespace corresponding to the `compiler_module` attribute\n        on this backend.\n        \"\"\"\n        if self._cache is None:\n            self._cache = import_module(self.compiler_module)\n        return getattr(self._cache, compiler_name)\n\n    def quote_name(self, name):\n        \"\"\"\n        Return a quoted version of the given table, index, or column name. Do\n        not quote the given name if it's already been quoted.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a quote_name() method\"\n        )\n\n    def regex_lookup(self, lookup_type):\n        \"\"\"\n        Return the string to use in a query when performing regular expression\n        lookups (using \"regex\" or \"iregex\"). It should contain a '%s'\n        placeholder for the column being searched against.\n\n        If the feature is not supported (or part of it is not supported), raise\n        NotImplementedError.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a regex_lookup() method\"\n        )\n\n    def savepoint_create_sql(self, sid):\n        \"\"\"\n        Return the SQL for starting a new savepoint. Only required if the\n        \"uses_savepoints\" feature is True. The \"sid\" parameter is a string\n        for the savepoint id.\n        \"\"\"\n        return \"SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_commit_sql(self, sid):\n        \"\"\"\n        Return the SQL for committing the given savepoint.\n        \"\"\"\n        return \"RELEASE SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_rollback_sql(self, sid):\n        \"\"\"\n        Return the SQL for rolling back the given savepoint.\n        \"\"\"\n        return \"ROLLBACK TO SAVEPOINT %s\" % self.quote_name(sid)\n\n    def set_time_zone_sql(self):\n        \"\"\"\n        Return the SQL that will set the connection's time zone.\n\n        Return '' if the backend doesn't support time zones.\n        \"\"\"\n        return \"\"\n\n    def sql_flush(self, style, tables, *, reset_sequences=False, allow_cascade=False):\n        \"\"\"\n        Return a list of SQL statements required to remove all data from\n        the given database tables (without actually removing the tables\n        themselves).\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n\n        If `reset_sequences` is True, the list includes SQL statements required\n        to reset the sequences.\n\n        The `allow_cascade` argument determines whether truncation may cascade\n        to tables with foreign keys pointing the tables being truncated.\n        PostgreSQL requires a cascade even if these tables are empty.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations must provide an sql_flush() method\"\n        )\n\n    def execute_sql_flush(self, sql_list):\n        \"\"\"Execute a list of SQL statements to flush the database.\"\"\"\n        with transaction.atomic(\n            using=self.connection.alias,\n            savepoint=self.connection.features.can_rollback_ddl,\n        ):\n            with self.connection.cursor() as cursor:\n                for sql in sql_list:\n                    cursor.execute(sql)\n\n    def sequence_reset_by_name_sql(self, style, sequences):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences\n        passed in `sequences`.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []\n\n    def sequence_reset_sql(self, style, model_list):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences for\n        the given models.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []  # No sequence reset required by default.\n\n    def start_transaction_sql(self):\n        \"\"\"Return the SQL statement required to start a transaction.\"\"\"\n        return \"BEGIN;\"\n\n    def end_transaction_sql(self, success=True):\n        \"\"\"Return the SQL statement required to end a transaction.\"\"\"\n        if not success:\n            return \"ROLLBACK;\"\n        return \"COMMIT;\"\n\n    def tablespace_sql(self, tablespace, inline=False):\n        \"\"\"\n        Return the SQL that will be used in a query to define the tablespace.\n\n        Return '' if the backend doesn't support tablespaces.\n\n        If `inline` is True, append the SQL to a row; otherwise append it to\n        the entire CREATE TABLE or CREATE INDEX statement.\n        \"\"\"\n        return \"\"\n\n    def prep_for_like_query(self, x):\n        \"\"\"Prepare a value for use in a LIKE query.\"\"\"\n        return str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(\"%\", r\"\\%\").replace(\"_\", r\"\\_\")\n\n    # Same as prep_for_like_query(), but called for \"iexact\" matches, which\n    # need not necessarily be implemented using \"LIKE\" in the backend.\n    prep_for_iexact_query = prep_for_like_query",
+    "token_count": 3912,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.operations.BaseDatabaseOperations"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 42,
+     "rerank_score": -4.237974166870117,
+     "bm25_rank": 21,
+     "dense_rank": null,
+     "oversized_chunk": true,
+     "engine_token_count": 3912
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/field_tests/test_charfield.py:134-148",
+    "content": "# tests/forms_tests/field_tests/test_charfield.py:134-148  (tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_clean_non_string)\nclass CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):\n    def test_clean_non_string(self):\n        \"\"\"CharField.clean() calls str(value) before stripping it.\"\"\"\n\n        class StringWrapper:\n            def __init__(self, v):\n                self.v = v\n\n            def __str__(self):\n                return self.v\n\n        value = StringWrapper(\" \")\n        f1 = CharField(required=False, empty_value=None)\n        self.assertIsNone(f1.clean(value))\n        f2 = CharField(strip=False)\n        self.assertEqual(f2.clean(value), \" \")",
+    "token_count": 150,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_clean_non_string"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 29,
+     "rerank_score": -4.33297061920166,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 150
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:1213-1220",
+    "content": "# django/db/models/base.py:1213-1220  (django.db.models.base.Model.clean)\nclass Model(AltersData, metaclass=ModelBase):\n    def clean(self):\n        \"\"\"\n        Hook for doing any extra model-wide validation after clean() has been\n        called on every field by self.clean_fields. Any ValidationError raised\n        by this method will not be associated with a particular field; it will\n        have a special-case association with the field defined by NON_FIELD_ERRORS.\n        \"\"\"\n        pass",
+    "token_count": 109,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 5,
+     "rerank_score": -4.470038890838623,
+     "bm25_rank": 23,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/field_tests/test_charfield.py:21-29",
+    "content": "# tests/forms_tests/field_tests/test_charfield.py:21-29  (tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_charfield_2)\nclass CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):\n    def test_charfield_2(self):\n        f = CharField(required=False)\n        self.assertEqual(\"1\", f.clean(1))\n        self.assertEqual(\"hello\", f.clean(\"hello\"))\n        self.assertEqual(\"\", f.clean(None))\n        self.assertEqual(\"\", f.clean(\"\"))\n        self.assertEqual(\"[1, 2, 3]\", f.clean([1, 2, 3]))\n        self.assertIsNone(f.max_length)\n        self.assertIsNone(f.min_length)",
+    "token_count": 140,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_charfield_2"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 50,
+     "rerank_score": -4.555549621582031,
+     "bm25_rank": null,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/field_tests/test_charfield.py:9-19",
+    "content": "# tests/forms_tests/field_tests/test_charfield.py:9-19  (tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_charfield_1)\nclass CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):\n    def test_charfield_1(self):\n        f = CharField()\n        self.assertEqual(\"1\", f.clean(1))\n        self.assertEqual(\"hello\", f.clean(\"hello\"))\n        with self.assertRaisesMessage(ValidationError, \"'This field is required.'\"):\n            f.clean(None)\n        with self.assertRaisesMessage(ValidationError, \"'This field is required.'\"):\n            f.clean(\"\")\n        self.assertEqual(\"[1, 2, 3]\", f.clean([1, 2, 3]))\n        self.assertIsNone(f.max_length)\n        self.assertIsNone(f.min_length)",
+    "token_count": 161,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_charfield_1"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 38,
+     "rerank_score": -4.602324485778809,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 161
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/related.py:302-339#part2of2",
+    "content": "# django/db/models/fields/related.py:302-339#part2of2  (django.db.models.fields.related.RelatedField._check_clashes)\nclass RelatedField(FieldCacheMixin, Field):\n    def _check_clashes(self):\n        for clash_field in potential_clashes:\n            # i.e. \"app_label.Model.m2m\".\n            clash_name = \"%s.%s\" % (\n                clash_field.related_model._meta.label,\n                clash_field.field.name,\n            )\n            if not rel_is_hidden and clash_field.get_accessor_name() == rel_name:\n                errors.append(\n                    checks.Error(\n                        f\"Reverse accessor '{rel_opts.object_name}.{rel_name}' \"\n                        f\"for '{field_name}' clashes with reverse accessor for \"\n                        f\"'{clash_name}'.\",\n                        hint=(\n                            \"Add or change a related_name argument \"\n                            \"to the definition for '%s' or '%s'.\"\n                        )\n                        % (field_name, clash_name),\n                        obj=self,\n                        id=\"fields.E304\",\n                    )\n                )\n\n            if clash_field.get_accessor_name() == rel_query_name:\n                errors.append(\n                    checks.Error(\n                        \"Reverse query name for '%s' clashes with reverse query name \"\n                        \"for '%s'.\" % (field_name, clash_name),\n                        hint=(\n                            \"Add or change a related_name argument \"\n                            \"to the definition for '%s' or '%s'.\"\n                        )\n                        % (field_name, clash_name),\n                        obj=self,\n                        id=\"fields.E305\",\n                    )\n                )\n\n        return errors",
+    "token_count": 331,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.fields.related.RelatedField._check_clashes"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 34,
+     "rerank_score": -4.6695427894592285,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 331
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/fields.py:1017-1019",
+    "content": "# django/forms/fields.py:1017-1019  (django.forms.fields.ComboField)\nclass ComboField(Field):\n    \"\"\"\n    A Field whose clean() method calls multiple Field clean() methods.\n    \"\"\"",
+    "token_count": 48,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.fields.ComboField"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 15,
+     "rerank_score": -4.7081451416015625,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/fields.py:1086-1142",
+    "content": "# django/forms/fields.py:1086-1142  (django.forms.fields.MultiValueField.clean)\nclass MultiValueField(Field):\n    def clean(self, value):\n        \"\"\"\n        Validate every value in the given list. A value is validated against\n        the corresponding Field in self.fields.\n\n        For example, if this MultiValueField was instantiated with\n        fields=(DateField(), TimeField()), clean() would call\n        DateField.clean(value[0]) and TimeField.clean(value[1]).\n        \"\"\"\n        clean_data = []\n        errors = []\n        if self.disabled and not isinstance(value, list):\n            value = self.widget.decompress(value)\n        if not value or isinstance(value, (list, tuple)):\n            if not value or not [v for v in value if v not in self.empty_values]:\n                if self.required:\n                    raise ValidationError(\n                        self.error_messages[\"required\"], code=\"required\"\n                    )\n                else:\n                    return self.compress([])\n        else:\n            raise ValidationError(self.error_messages[\"invalid\"], code=\"invalid\")\n        for i, field in enumerate(self.fields):\n            try:\n                field_value = value[i]\n            except IndexError:\n                field_value = None\n            if field_value in self.empty_values:\n                if self.require_all_fields:\n                    # Raise a 'required' error if the MultiValueField is\n                    # required and any field is empty.\n                    if self.required:\n                        raise ValidationError(\n                            self.error_messages[\"required\"], code=\"required\"\n                        )\n                elif field.required:\n                    # Otherwise, add an 'incomplete' error to the list of\n                    # collected errors and skip field cleaning, if a required\n                    # field is empty.\n                    if field.error_messages[\"incomplete\"] not in errors:\n                        errors.append(field.error_messages[\"incomplete\"])\n                    continue\n            try:\n                clean_data.append(field.clean(field_value))\n            except ValidationError as e:\n                # Collect all validation errors in a single list, which we'll\n                # raise at the end of clean(), rather than raising a single\n                # exception for the first error we encounter. Skip duplicates.\n                errors.extend(m for m in e.error_list if m not in errors)\n        if errors:\n            raise ValidationError(errors)\n\n        out = self.compress(clean_data)\n        self.validate(out)\n        self.run_validators(out)\n        return out",
+    "token_count": 484,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.fields.MultiValueField.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 18,
+     "rerank_score": -4.7229323387146,
+     "bm25_rank": 5,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 484
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:437-451",
+    "content": "# django/forms/forms.py:437-451  (django.forms.forms.BaseForm._clean_fields)\nclass BaseForm(RenderableFormMixin):\n    def _clean_fields(self):\n        for name, bf in self._bound_items():\n            field = bf.field\n            value = bf.initial if field.disabled else bf.data\n            try:\n                if isinstance(field, FileField):\n                    value = field.clean(value, bf.initial)\n                else:\n                    value = field.clean(value)\n                self.cleaned_data[name] = value\n                if hasattr(self, \"clean_%s\" % name):\n                    value = getattr(self, \"clean_%s\" % name)()\n                    self.cleaned_data[name] = value\n            except ValidationError as e:\n                self.add_error(name, e)",
+    "token_count": 159,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm._clean_fields"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 6,
+     "rerank_score": -4.818785667419434,
+     "bm25_rank": 16,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 159
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:469-476",
+    "content": "# django/forms/forms.py:469-476  (django.forms.forms.BaseForm.clean)\nclass BaseForm(RenderableFormMixin):\n    def clean(self):\n        \"\"\"\n        Hook for doing any extra form-wide cleaning after Field.clean() has been\n        called on every field. Any ValidationError raised by this method will\n        not be associated with a particular field; it will have a special-case\n        association with the field named '__all__'.\n        \"\"\"\n        return self.cleaned_data",
+    "token_count": 100,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": -4.855438232421875,
+     "bm25_rank": 15,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 100
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:4349-4365",
+    "content": "# tests/forms_tests/tests/test_forms.py:4349-4365  (tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_in_clean)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_changing_cleaned_data_in_clean(self):\n        class UserForm(Form):\n            username = CharField(max_length=10)\n            password = CharField(widget=PasswordInput)\n\n            def clean(self):\n                data = self.cleaned_data\n\n                # Return a different dict. We have not changed self.cleaned_data.\n                return {\n                    \"username\": data[\"username\"].lower(),\n                    \"password\": \"this_is_not_a_secret\",\n                }\n\n        f = UserForm({\"username\": \"SirRobin\", \"password\": \"blue\"})\n        self.assertTrue(f.is_valid())\n        self.assertEqual(f.cleaned_data[\"username\"], \"sirrobin\")",
+    "token_count": 235,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_in_clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": -4.876723289489746,
+     "bm25_rank": 11,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 235
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:425-427",
+    "content": "# django/forms/models.py:425-427  (django.forms.models.BaseModelForm.clean)\nclass BaseModelForm(BaseForm, AltersData):\n    def clean(self):\n        self._validate_unique = True\n        return self.cleaned_data",
+    "token_count": 51,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.models.BaseModelForm.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": -4.942096710205078,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/fields.py:661-680",
+    "content": "# django/forms/fields.py:661-680  (django.forms.fields.FileField.clean)\nclass FileField(Field):\n    def clean(self, data, initial=None):\n        # If the widget got contradictory inputs, we raise a validation error\n        if data is FILE_INPUT_CONTRADICTION:\n            raise ValidationError(\n                self.error_messages[\"contradiction\"], code=\"contradiction\"\n            )\n        # False means the field value should be cleared; further validation is\n        # not needed.\n        if data is False:\n            if not self.required:\n                return False\n            # If the field is required, clearing is not possible (the widget\n            # shouldn't return False data in that case anyway). False is not\n            # in self.empty_value; if a False value makes it this far\n            # it should be validated from here on out as None (so it will be\n            # caught by the required check).\n            data = None\n        if not data and initial:\n            return initial\n        return super().clean(data)",
+    "token_count": 218,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.fields.FileField.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 35,
+     "rerank_score": -5.051513671875,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 218
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1500-1531#part2of4",
+    "content": "# tests/forms_tests/tests/test_forms.py:1500-1531#part2of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        class UserRegistration(Form):\n            username = CharField(max_length=10)\n            password1 = CharField(widget=PasswordInput)\n            password2 = CharField(widget=PasswordInput)\n\n            def clean(self):\n                # Test raising a ValidationError as NON_FIELD_ERRORS.\n                if (\n                    self.cleaned_data.get(\"password1\")\n                    and self.cleaned_data.get(\"password2\")\n                    and self.cleaned_data[\"password1\"] != self.cleaned_data[\"password2\"]\n                ):\n                    raise ValidationError(\"Please make sure your passwords match.\")\n\n                # Test raising ValidationError that targets multiple fields.\n                errors = {}\n                if self.cleaned_data.get(\"password1\") == \"FORBIDDEN_VALUE\":\n                    errors[\"password1\"] = \"Forbidden value.\"\n                if self.cleaned_data.get(\"password2\") == \"FORBIDDEN_VALUE\":\n                    errors[\"password2\"] = [\"Forbidden value.\"]\n                if errors:\n                    raise ValidationError(errors)\n\n                # Test Form.add_error()\n                if self.cleaned_data.get(\"password1\") == \"FORBIDDEN_VALUE2\":\n                    self.add_error(None, \"Non-field error 1.\")\n                    self.add_error(\"password1\", \"Forbidden value 2.\")\n                if self.cleaned_data.get(\"password2\") == \"FORBIDDEN_VALUE2\":\n                    self.add_error(\"password2\", \"Forbidden value 2.\")\n                    raise ValidationError(\"Non-field error 2.\")\n\n                return self.cleaned_data",
+    "token_count": 540,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 13,
+     "rerank_score": -5.131735801696777,
+     "bm25_rank": 2,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 540
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:462-492",
+    "content": "# django/forms/models.py:462-492  (django.forms.models.BaseModelForm._post_clean)\nclass BaseModelForm(BaseForm, AltersData):\n    def _post_clean(self):\n        opts = self._meta\n\n        exclude = self._get_validation_exclusions()\n\n        # Foreign Keys being used to represent inline relationships\n        # are excluded from basic field value validation. This is for two\n        # reasons: firstly, the value may not be supplied (#12507; the\n        # case of providing new values to the admin); secondly the\n        # object being referred to may not yet fully exist (#12749).\n        # However, these fields *must* be included in uniqueness checks,\n        # so this can't be part of _get_validation_exclusions().\n        for name, field in self.fields.items():\n            if isinstance(field, InlineForeignKeyField):\n                exclude.add(name)\n\n        try:\n            self.instance = construct_instance(\n                self, self.instance, opts.fields, opts.exclude\n            )\n        except ValidationError as e:\n            self._update_errors(e)\n\n        try:\n            self.instance.full_clean(exclude=exclude, validate_unique=False)\n        except ValidationError as e:\n            self._update_errors(e)\n\n        # Validate uniqueness if needed.\n        if self._validate_unique:\n            self.validate_unique()",
+    "token_count": 279,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.models.BaseModelForm._post_clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 8,
+     "rerank_score": -5.144929885864258,
+     "bm25_rank": 13,
+     "dense_rank": 72,
+     "oversized_chunk": false,
+     "engine_token_count": 279
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:1504-1527",
+    "content": "# django/db/models/base.py:1504-1527  (django.db.models.base.Model.clean_fields)\nclass Model(AltersData, metaclass=ModelBase):\n    def clean_fields(self, exclude=None):\n        \"\"\"\n        Clean all fields and raise a ValidationError containing a dict\n        of all validation errors if any occur.\n        \"\"\"\n        if exclude is None:\n            exclude = set()\n\n        errors = {}\n        for f in self._meta.fields:\n            if f.name in exclude:\n                continue\n            # Skip validation for empty fields with blank=True. The developer\n            # is responsible for making sure they have a valid value.\n            raw_value = getattr(self, f.attname)\n            if f.blank and raw_value in f.empty_values:\n                continue\n            try:\n                setattr(self, f.attname, f.clean(raw_value, self))\n            except ValidationError as e:\n                errors[f.name] = e.error_list\n\n        if errors:\n            raise ValidationError(errors)",
+    "token_count": 203,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model.clean_fields"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -5.185977458953857,
+     "bm25_rank": 29,
+     "dense_rank": 65,
+     "oversized_chunk": false,
+     "engine_token_count": 203
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1628-1629#part4of4",
+    "content": "# tests/forms_tests/tests/test_forms.py:1628-1629#part4of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        with self.assertRaisesMessage(ValueError, \"has no field named\"):\n            f.add_error(\"missing_field\", \"Some error.\")",
+    "token_count": 280,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 12,
+     "rerank_score": -5.301218509674072,
+     "bm25_rank": 1,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 280
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/fields/__init__.py:271-301",
+    "content": "# django/db/models/fields/__init__.py:271-301  (django.db.models.fields.Field._check_field_name)\nclass Field(RegisterLookupMixin):\n    def _check_field_name(self):\n        \"\"\"\n        Check if field name is valid, i.e. 1) does not end with an\n        underscore, 2) does not contain \"__\" and 3) is not \"pk\".\n        \"\"\"\n        if self.name.endswith(\"_\"):\n            return [\n                checks.Error(\n                    \"Field names must not end with an underscore.\",\n                    obj=self,\n                    id=\"fields.E001\",\n                )\n            ]\n        elif LOOKUP_SEP in self.name:\n            return [\n                checks.Error(\n                    'Field names must not contain \"%s\".' % LOOKUP_SEP,\n                    obj=self,\n                    id=\"fields.E002\",\n                )\n            ]\n        elif self.name == \"pk\":\n            return [\n                checks.Error(\n                    \"'pk' is a reserved word that cannot be used as a field name.\",\n                    obj=self,\n                    id=\"fields.E003\",\n                )\n            ]\n        else:\n            return []",
+    "token_count": 234,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.fields.Field._check_field_name"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 43,
+     "rerank_score": -5.413243293762207,
+     "bm25_rank": null,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 234
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:4336-4347",
+    "content": "# tests/forms_tests/tests/test_forms.py:4336-4347  (tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_nothing_returned)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_changing_cleaned_data_nothing_returned(self):\n        class UserForm(Form):\n            username = CharField(max_length=10)\n            password = CharField(widget=PasswordInput)\n\n            def clean(self):\n                self.cleaned_data[\"username\"] = self.cleaned_data[\"username\"].lower()\n                # don't return anything\n\n        f = UserForm({\"username\": \"SirRobin\", \"password\": \"blue\"})\n        self.assertTrue(f.is_valid())\n        self.assertEqual(f.cleaned_data[\"username\"], \"sirrobin\")",
+    "token_count": 214,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_nothing_returned"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 22,
+     "rerank_score": -5.431920051574707,
+     "bm25_rank": 70,
+     "dense_rank": 79,
+     "oversized_chunk": false,
+     "engine_token_count": 214
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1451-1499#part1of4",
+    "content": "# tests/forms_tests/tests/test_forms.py:1451-1499#part1of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        class UserRegistration(Form):\n            username = CharField(max_length=10)\n            password1 = CharField(widget=PasswordInput)\n            password2 = CharField(widget=PasswordInput)\n\n            def clean_password2(self):\n                if (\n                    self.cleaned_data.get(\"password1\")\n                    and self.cleaned_data.get(\"password2\")\n                    and self.cleaned_data[\"password1\"] != self.cleaned_data[\"password2\"]\n                ):\n                    raise ValidationError(\"Please make sure your passwords match.\")\n\n                return self.cleaned_data[\"password2\"]\n\n        f = UserRegistration(auto_id=False)\n        self.assertEqual(f.errors, {})\n        f = UserRegistration({}, auto_id=False)\n        self.assertEqual(f.errors[\"username\"], [\"This field is required.\"])\n        self.assertEqual(f.errors[\"password1\"], [\"This field is required.\"])\n        self.assertEqual(f.errors[\"password2\"], [\"This field is required.\"])\n        f = UserRegistration(\n            {\"username\": \"adrian\", \"password1\": \"foo\", \"password2\": \"bar\"},\n            auto_id=False,\n        )\n        self.assertEqual(\n            f.errors[\"password2\"], [\"Please make sure your passwords match.\"]\n        )\n        f = UserRegistration(\n            {\"username\": \"adrian\", \"password1\": \"foo\", \"password2\": \"foo\"},\n            auto_id=False,\n        )\n        self.assertEqual(f.errors, {})\n        self.assertEqual(f.cleaned_data[\"username\"], \"adrian\")\n        self.assertEqual(f.cleaned_data[\"password1\"], \"foo\")\n        self.assertEqual(f.cleaned_data[\"password2\"], \"foo\")\n\n        # Another way of doing multiple-field validation is by implementing the\n        # Form's clean() method. Usually ValidationError raised by that method\n        # will not be associated with a particular field and will have a\n        # special-case association with the field named '__all__'. It's\n        # possible to associate the errors to particular field with the\n        # Form.add_error() method or by passing a dictionary that maps each\n        # field to one or more errors.\n        #\n        # Note that in Form.clean(), you have access to self.cleaned_data, a\n        # dictionary of all the fields/values that have *not* raised a\n        # ValidationError. Also note Form.clean() is required to return a\n        # dictionary of all clean data.",
+    "token_count": 729,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 16,
+     "rerank_score": -5.5066304206848145,
+     "bm25_rank": 4,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 729
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:4319-4334",
+    "content": "# tests/forms_tests/tests/test_forms.py:4319-4334  (tests.forms_tests.tests.test_forms.FormsTestCase.test_accessing_clean)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_accessing_clean(self):\n        class UserForm(Form):\n            username = CharField(max_length=10)\n            password = CharField(widget=PasswordInput)\n\n            def clean(self):\n                data = self.cleaned_data\n\n                if not self.errors:\n                    data[\"username\"] = data[\"username\"].lower()\n\n                return data\n\n        f = UserForm({\"username\": \"SirRobin\", \"password\": \"blue\"})\n        self.assertTrue(f.is_valid())\n        self.assertEqual(f.cleaned_data[\"username\"], \"sirrobin\")",
+    "token_count": 208,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_accessing_clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": -5.53590202331543,
+     "bm25_rank": 68,
+     "dense_rank": 70,
+     "oversized_chunk": false,
+     "engine_token_count": 208
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:2423-2431",
+    "content": "# tests/model_forms/tests.py:2423-2431  (tests.model_forms.tests.FileAndImageFieldTests.test_clean_false)\nclass FileAndImageFieldTests(TestCase):\n    def test_clean_false(self):\n        \"\"\"\n        If the ``clean`` method on a non-required FileField receives False as\n        the data (meaning clear the field value), it returns False, regardless\n        of the value of ``initial``.\n        \"\"\"\n        f = forms.FileField(required=False)\n        self.assertIs(f.clean(False), False)\n        self.assertIs(f.clean(False, \"initial\"), False)",
+    "token_count": 122,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.model_forms.tests.FileAndImageFieldTests.test_clean_false"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 19,
+     "rerank_score": -5.593245029449463,
+     "bm25_rank": 59,
+     "dense_rank": 88,
+     "oversized_chunk": false,
+     "engine_token_count": 122
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1963-1967#part1of3",
+    "content": "# tests/forms_tests/tests/test_forms.py:1963-1967#part1of3  (tests.forms_tests.tests.test_forms.FormsTestCase.test_hidden_widget)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_hidden_widget(self):\n        # HiddenInput widgets are displayed differently in the as_table(), as_ul())\n        # and as_p() output of a Form -- their verbose names are not displayed, and a\n        # separate row is not displayed. They're displayed in the last row of the\n        # form, directly after that row's form element.\n        class Person(Form):\n            first_name = CharField()\n            last_name = CharField()\n            hidden_text = CharField(widget=HiddenInput)\n            birthday = DateField()",
+    "token_count": 213,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_hidden_widget"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 49,
+     "rerank_score": -5.747653484344482,
+     "bm25_rank": 25,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 213
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:1457-1502",
+    "content": "# django/db/models/base.py:1457-1502  (django.db.models.base.Model.full_clean)\nclass Model(AltersData, metaclass=ModelBase):\n    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):\n        \"\"\"\n        Call clean_fields(), clean(), validate_unique(), and\n        validate_constraints() on the model. Raise a ValidationError for any\n        errors that occur.\n        \"\"\"\n        errors = {}\n        if exclude is None:\n            exclude = set()\n        else:\n            exclude = set(exclude)\n\n        try:\n            self.clean_fields(exclude=exclude)\n        except ValidationError as e:\n            errors = e.update_error_dict(errors)\n\n        # Form.clean() is run even if other validation fails, so do the\n        # same with Model.clean() for consistency.\n        try:\n            self.clean()\n        except ValidationError as e:\n            errors = e.update_error_dict(errors)\n\n        # Run unique checks, but only for fields that passed validation.\n        if validate_unique:\n            for name in errors:\n                if name != NON_FIELD_ERRORS and name not in exclude:\n                    exclude.add(name)\n            try:\n                self.validate_unique(exclude=exclude)\n            except ValidationError as e:\n                errors = e.update_error_dict(errors)\n\n        # Run constraints checks, but only for fields that passed validation.\n        if validate_constraints:\n            for name in errors:\n                if name != NON_FIELD_ERRORS and name not in exclude:\n                    exclude.add(name)\n            try:\n                self.validate_constraints(exclude=exclude)\n            except ValidationError as e:\n                errors = e.update_error_dict(errors)\n\n        if errors:\n            raise ValidationError(errors)",
+    "token_count": 341,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model.full_clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": -5.757080554962158,
+     "bm25_rank": 7,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 341
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/fields.py:1042-1062",
+    "content": "# django/forms/fields.py:1042-1062  (django.forms.fields.MultiValueField)\nclass MultiValueField(Field):\n    \"\"\"\n    Aggregate the logic of multiple Fields.\n\n    Its clean() method takes a \"decompressed\" list of values, which are then\n    cleaned into a single value according to self.fields. Each value in\n    this list is cleaned by the corresponding field -- the first value is\n    cleaned by the first field, the second value is cleaned by the second\n    field, etc. Once all fields are cleaned, the list of clean values is\n    \"compressed\" into a single value.\n\n    Subclasses should not have to implement clean(). Instead, they must\n    implement compress(), which takes a list of valid values and returns a\n    \"compressed\" version of those values -- a single value.\n\n    You'll probably want to use this with MultiWidget.\n    \"\"\"\n\n    default_error_messages = {\n        \"invalid\": _(\"Enter a list of values.\"),\n        \"incomplete\": _(\"Enter a complete value.\"),\n    }",
+    "token_count": 220,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.fields.MultiValueField"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 14,
+     "rerank_score": -5.871953010559082,
+     "bm25_rank": 3,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 220
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/validators.py:388-389",
+    "content": "# django/core/validators.py:388-389  (django.core.validators.BaseValidator.clean)\nclass BaseValidator:\n    def clean(self, x):\n        return x",
+    "token_count": 37,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.validators.BaseValidator.clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 11,
+     "rerank_score": -5.921214580535889,
+     "bm25_rank": null,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 37
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_input_formats.py:330-354",
+    "content": "# tests/forms_tests/tests/test_input_formats.py:330-354  (tests.forms_tests.tests.test_input_formats.LocalizedDateTests.test_dateField)\nclass LocalizedDateTests(SimpleTestCase):\n    def test_dateField(self):\n        \"DateFields can parse dates in the default format\"\n        f = forms.DateField()\n        # Parse a date in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"21/12/2010\")\n\n        # ISO formats are accepted, even if not specified in formats.py\n        self.assertEqual(f.clean(\"2010-12-21\"), date(2010, 12, 21))\n\n        # Parse a date in a valid format, get a parsed result\n        result = f.clean(\"21.12.2010\")\n        self.assertEqual(result, date(2010, 12, 21))\n\n        # The parsed result does a round trip\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"21.12.2010\")\n\n        # Parse a date in a valid, but non-default format, get a parsed result\n        result = f.clean(\"21.12.10\")\n        self.assertEqual(result, date(2010, 12, 21))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"21.12.2010\")",
+    "token_count": 333,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_input_formats.LocalizedDateTests.test_dateField"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 41,
+     "rerank_score": -5.9382476806640625,
+     "bm25_rank": 20,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 333
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:2890-2900",
+    "content": "# tests/forms_tests/tests/test_forms.py:2890-2900  (tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_bound_field)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_datetime_clean_disabled_callable_initial_bound_field(self):\n        \"\"\"\n        The cleaned value for a form with a disabled DateTimeField and callable\n        initial matches the bound field's cached initial value.\n        \"\"\"\n        form = self.get_datetime_form_with_callable_initial(disabled=True)\n        self.assertEqual(form.errors, {})\n        cleaned = form.cleaned_data[\"dt\"]\n        self.assertEqual(cleaned, datetime.datetime(2006, 10, 25, 14, 30, 46))\n        bf = form[\"dt\"]\n        self.assertEqual(cleaned, bf.initial)",
+    "token_count": 225,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_bound_field"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 28,
+     "rerank_score": -5.967844486236572,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 225
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:2775-2786",
+    "content": "# tests/forms_tests/tests/test_forms.py:2775-2786  (tests.forms_tests.tests.test_forms.FormsTestCase.test_boundfield_value_disabled_callable_initial)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_boundfield_value_disabled_callable_initial(self):\n        class PersonForm(Form):\n            name = CharField(initial=lambda: \"John Doe\", disabled=True)\n\n        # Without form data.\n        form = PersonForm()\n        self.assertEqual(form[\"name\"].value(), \"John Doe\")\n\n        # With form data. As the field is disabled, the value should not be\n        # affected by the form data.\n        form = PersonForm({})\n        self.assertEqual(form[\"name\"].value(), \"John Doe\")",
+    "token_count": 204,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_boundfield_value_disabled_callable_initial"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 44,
+     "rerank_score": -5.9882965087890625,
+     "bm25_rank": 22,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 204
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/testcases.py:969-1020",
+    "content": "# django/test/testcases.py:969-1020  (django.test.testcases.SimpleTestCase.assertFieldOutput)\nclass SimpleTestCase(unittest.TestCase):\n    # The class we'll use for the test client self.client.\n    # Can be overridden in derived classes.\n    def assertFieldOutput(\n        self,\n        fieldclass,\n        valid,\n        invalid,\n        field_args=None,\n        field_kwargs=None,\n        empty_value=\"\",\n    ):\n        \"\"\"\n        Assert that a form field behaves correctly with various inputs.\n\n        Args:\n            fieldclass: the class of the field to be tested.\n            valid: a dictionary mapping valid inputs to their expected\n                    cleaned values.\n            invalid: a dictionary mapping invalid inputs to one or more\n                    raised error messages.\n            field_args: the args passed to instantiate the field\n            field_kwargs: the kwargs passed to instantiate the field\n            empty_value: the expected clean output for inputs in empty_values\n        \"\"\"\n        if field_args is None:\n            field_args = []\n        if field_kwargs is None:\n            field_kwargs = {}\n        required = fieldclass(*field_args, **field_kwargs)\n        optional = fieldclass(*field_args, **{**field_kwargs, \"required\": False})\n        # test valid inputs\n        for input, output in valid.items():\n            self.assertEqual(required.clean(input), output)\n            self.assertEqual(optional.clean(input), output)\n        # test invalid inputs\n        for input, errors in invalid.items():\n            with self.assertRaises(ValidationError) as context_manager:\n                required.clean(input)\n            self.assertEqual(context_manager.exception.messages, errors)\n\n            with self.assertRaises(ValidationError) as context_manager:\n                optional.clean(input)\n            self.assertEqual(context_manager.exception.messages, errors)\n        # test required inputs\n        error_required = [required.error_messages[\"required\"]]\n        for e in required.empty_values:\n            with self.assertRaises(ValidationError) as context_manager:\n                required.clean(e)\n            self.assertEqual(context_manager.exception.messages, error_required)\n            self.assertEqual(optional.clean(e), empty_value)\n        # test that max_length and min_length are always accepted\n        if issubclass(fieldclass, CharField):\n            field_kwargs.update({\"min_length\": 2, \"max_length\": 20})\n            self.assertIsInstance(fieldclass(*field_args, **field_kwargs), fieldclass)",
+    "token_count": 473,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.testcases.SimpleTestCase.assertFieldOutput"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 30,
+     "rerank_score": -6.018132209777832,
+     "bm25_rank": 14,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 473
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_formsets.py:960-984",
+    "content": "# tests/forms_tests/tests/test_formsets.py:960-984  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_clean_hook)\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_clean_hook(self):\n        \"\"\"\n        FormSets have a clean() hook for doing extra validation that isn't tied\n        to any form. It follows the same pattern as the clean() hook on Forms.\n        \"\"\"\n        # Start out with a some duplicate data.\n        data = {\n            \"drinks-TOTAL_FORMS\": \"2\",  # the number of forms rendered\n            \"drinks-INITIAL_FORMS\": \"0\",  # the number of forms with initial data\n            \"drinks-MIN_NUM_FORMS\": \"0\",  # min number of forms\n            \"drinks-MAX_NUM_FORMS\": \"0\",  # max number of forms\n            \"drinks-0-name\": \"Gin and Tonic\",\n            \"drinks-1-name\": \"Gin and Tonic\",\n        }\n        formset = FavoriteDrinksFormSet(data, prefix=\"drinks\")\n        self.assertFalse(formset.is_valid())\n        # Any errors raised by formset.clean() are available via the\n        # formset.non_form_errors() method.\n        for error in formset.non_form_errors():\n            self.assertEqual(str(error), \"You may only specify a drink once.\")\n        # The valid case still works.\n        data[\"drinks-1-name\"] = \"Bloody Mary\"\n        formset = FavoriteDrinksFormSet(data, prefix=\"drinks\")\n        self.assertTrue(formset.is_valid())\n        self.assertEqual(formset.non_form_errors(), [])",
+    "token_count": 349,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_clean_hook"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 10,
+     "rerank_score": -6.091730117797852,
+     "bm25_rank": 37,
+     "dense_rank": 56,
+     "oversized_chunk": false,
+     "engine_token_count": 349
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:3158-3176",
+    "content": "# tests/model_forms/tests.py:3158-3176  (tests.model_forms.tests.CustomCleanTests.test_model_form_clean_applies_to_model)\nclass CustomCleanTests(TestCase):\n    def test_model_form_clean_applies_to_model(self):\n        \"\"\"\n        Regression test for #12960. Make sure the cleaned_data returned from\n        ModelForm.clean() is applied to the model instance.\n        \"\"\"\n\n        class CategoryForm(forms.ModelForm):\n            class Meta:\n                model = Category\n                fields = \"__all__\"\n\n            def clean(self):\n                self.cleaned_data[\"name\"] = self.cleaned_data[\"name\"].upper()\n                return self.cleaned_data\n\n        data = {\"name\": \"Test\", \"slug\": \"test\", \"url\": \"/test\"}\n        form = CategoryForm(data)\n        category = form.save()\n        self.assertEqual(category.name, \"TEST\")",
+    "token_count": 180,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.model_forms.tests.CustomCleanTests.test_model_form_clean_applies_to_model"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 31,
+     "rerank_score": -6.294604778289795,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 180
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:420-435",
+    "content": "# django/forms/forms.py:420-435  (django.forms.forms.BaseForm.full_clean)\nclass BaseForm(RenderableFormMixin):\n    def full_clean(self):\n        \"\"\"\n        Clean all of self.data and populate self._errors and self.cleaned_data.\n        \"\"\"\n        self._errors = ErrorDict()\n        if not self.is_bound:  # Stop further processing.\n            return\n        self.cleaned_data = {}\n        # If the form is permitted to be empty, and none of the form data has\n        # changed from the initial data, short circuit any validation.\n        if self.empty_permitted and not self.has_changed():\n            return\n\n        self._clean_fields()\n        self._clean_form()\n        self._post_clean()",
+    "token_count": 152,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.full_clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 40,
+     "rerank_score": -6.475892543792725,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/invalid_models_tests/test_ordinary_fields.py:404-422",
+    "content": "# tests/invalid_models_tests/test_ordinary_fields.py:404-422  (tests.invalid_models_tests.test_ordinary_fields.CharFieldTests.test_bad_validators)\nclass CharFieldTests(TestCase):\n    def test_bad_validators(self):\n        class Model(models.Model):\n            field = models.CharField(max_length=10, validators=[True])\n\n        field = Model._meta.get_field(\"field\")\n        self.assertEqual(\n            field.check(),\n            [\n                Error(\n                    \"All 'validators' must be callable.\",\n                    hint=(\n                        \"validators[0] (True) isn't a function or instance of a \"\n                        \"validator class.\"\n                    ),\n                    obj=field,\n                    id=\"fields.E008\",\n                ),\n            ],\n        )",
+    "token_count": 153,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.invalid_models_tests.test_ordinary_fields.CharFieldTests.test_bad_validators"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 47,
+     "rerank_score": -6.586694717407227,
+     "bm25_rank": null,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 153
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/debug.py:237-289",
+    "content": "# django/views/debug.py:237-289  (django.views.debug.SafeExceptionReporterFilter.get_traceback_frame_variables)\nclass SafeExceptionReporterFilter:\n    def get_traceback_frame_variables(self, request, tb_frame):\n        \"\"\"\n        Replace the values of variables marked as sensitive with\n        stars (*********).\n        \"\"\"\n        # Loop through the frame's callers to see if the sensitive_variables\n        # decorator was used.\n        current_frame = tb_frame.f_back\n        sensitive_variables = None\n        while current_frame is not None:\n            if (\n                current_frame.f_code.co_name == \"sensitive_variables_wrapper\"\n                and \"sensitive_variables_wrapper\" in current_frame.f_locals\n            ):\n                # The sensitive_variables decorator was used, so we take note\n                # of the sensitive variables' names.\n                wrapper = current_frame.f_locals[\"sensitive_variables_wrapper\"]\n                sensitive_variables = getattr(wrapper, \"sensitive_variables\", None)\n                break\n            current_frame = current_frame.f_back\n\n        cleansed = {}\n        if self.is_active(request) and sensitive_variables:\n            if sensitive_variables == \"__ALL__\":\n                # Cleanse all variables\n                for name in tb_frame.f_locals:\n                    cleansed[name] = self.cleansed_substitute\n            else:\n                # Cleanse specified variables\n                for name, value in tb_frame.f_locals.items():\n                    if name in sensitive_variables:\n                        value = self.cleansed_substitute\n                    else:\n                        value = self.cleanse_special_types(request, value)\n                    cleansed[name] = value\n        else:\n            # Potentially cleanse the request and any MultiValueDicts if they\n            # are one of the frame variables.\n            for name, value in tb_frame.f_locals.items():\n                cleansed[name] = self.cleanse_special_types(request, value)\n\n        if (\n            tb_frame.f_code.co_name == \"sensitive_variables_wrapper\"\n            and \"sensitive_variables_wrapper\" in tb_frame.f_locals\n        ):\n            # For good measure, obfuscate the decorated function's arguments in\n            # the sensitive_variables decorator's frame, in case the variables\n            # associated with those arguments were meant to be obfuscated from\n            # the decorated function's frame.\n            cleansed[\"func_args\"] = self.cleansed_substitute\n            cleansed[\"func_kwargs\"] = self.cleansed_substitute\n\n        return cleansed.items()",
+    "token_count": 499,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.debug.SafeExceptionReporterFilter.get_traceback_frame_variables"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 26,
+     "rerank_score": -6.656852722167969,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 499
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_input_formats.py:19-44",
+    "content": "# tests/forms_tests/tests/test_input_formats.py:19-44  (tests.forms_tests.tests.test_input_formats.LocalizedTimeTests.test_timeField)\nclass LocalizedTimeTests(SimpleTestCase):\n    def test_timeField(self):\n        \"TimeFields can parse dates in the default format\"\n        f = forms.TimeField()\n        # Parse a time in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"1:30:05 PM\")\n\n        # Parse a time in a valid format, get a parsed result\n        result = f.clean(\"13:30:05\")\n        self.assertEqual(result, time(13, 30, 5))\n\n        # The parsed result does a round trip\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"13:30:05\")\n\n        # Parse a time in a valid, but non-default format, get a parsed result\n        result = f.clean(\"13:30\")\n        self.assertEqual(result, time(13, 30, 0))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"13:30:00\")\n\n        # ISO formats are accepted, even if not specified in formats.py\n        result = f.clean(\"13:30:05.000155\")\n        self.assertEqual(result, time(13, 30, 5, 155))",
+    "token_count": 327,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_input_formats.LocalizedTimeTests.test_timeField"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 39,
+     "rerank_score": -6.70173978805542,
+     "bm25_rank": 19,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 327
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:462-467",
+    "content": "# django/forms/forms.py:462-467  (django.forms.forms.BaseForm._post_clean)\nclass BaseForm(RenderableFormMixin):\n    def _post_clean(self):\n        \"\"\"\n        An internal hook for performing additional cleaning after form cleaning\n        is complete. Used for model validation in model forms.\n        \"\"\"\n        pass",
+    "token_count": 69,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm._post_clean"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 27,
+     "rerank_score": -6.825385570526123,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/exceptions.py:130-130",
+    "content": "# django/core/exceptions.py:130-130  (django.core.exceptions)\nNON_FIELD_ERRORS = \"__all__\"",
+    "token_count": 28,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 23,
+     "rerank_score": -9.698955535888672,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 28
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12991,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are assessing the blast radius of changing what `Field.clean`\nreturns (e.g. wrapping the cleaned value in a result object instead\nof returning it directly) in django/forms/fields.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.clean(...)`'s return value - callers that only\ncall `.clean(...)` for validation side effects without binding the\nresult do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "tests/model_forms/tests.py:3136-3156",
+    "django/forms/formsets.py:464-471",
+    "django/template/defaulttags.py:1163-1228",
+    "tests/model_formsets/models.py:32-34",
+    "django/forms/models.py:380-423",
+    "tests/admin_views/models.py:352-354",
+    "django/templatetags/i18n.py:358-453",
+    "django/template/context_processors.py:17-33",
+    "tests/admin_inlines/models.py:208-209"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1083.124908
+    ],
+    "L_embed_query": [
+     190.871652
+    ],
+    "L_dense": [
+     56.016894
+    ],
+    "L_rrf": [
+     0.195982
+    ],
+    "L_rerank": [
+     26356.405105
+    ],
+    "L_retrieve": [
+     27754.492439
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12991,
+   "prompt_tokens": 13236,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13249,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/forms/fields.py:1030-1038  (django.forms.fields.ComboField.clean)\nclass ComboField(Field):\n    def clean(self, value):\n        \"\"\"\n        Validate the given value against all of self.fields, which is a\n        list of Field instances.\n        \"\"\"\n        super().clean(value)\n        for field in self.fields:\n            value = field.clean(value)\n        return value\n\n# django/db/models/fields/__init__.py:770-779  (django.db.models.fields.Field.clean)\nclass Field(RegisterLookupMixin):\n    def clean(self, value, model_instance):\n        \"\"\"\n        Convert the value's type and run validation. Validation errors\n        from to_python() and validate() are propagated. Return the correct\n        value if no error is raised.\n        \"\"\"\n        value = self.to_python(value)\n        self.validate(value, model_instance)\n        self.run_validators(value)\n        return value\n\n# django/forms/fields.py:192-200  (django.forms.fields.Field.clean)\nclass Field:\n    def clean(self, value):\n        \"\"\"\n        Validate the given value and return its \"cleaned\" value as an\n        appropriate Python object. Raise ValidationError for any errors.\n        \"\"\"\n        value = self.to_python(value)\n        self.validate(value)\n        self.run_validators(value)\n        return value\n\n# django/db/backends/base/operations.py:16-500  (django.db.backends.base.operations.BaseDatabaseOperations)\nclass BaseDatabaseOperations:\n    \"\"\"\n    Encapsulate backend-specific differences, such as the way a backend\n    performs ordering or calculates the ID of a recently-inserted row.\n    \"\"\"\n\n    compiler_module = \"django.db.models.sql.compiler\"\n\n    # Integer field safe ranges by `internal_type` as documented\n    # in docs/ref/models/fields.txt.\n    integer_field_ranges = {\n        \"SmallIntegerField\": (-32768, 32767),\n        \"IntegerField\": (-2147483648, 2147483647),\n        \"BigIntegerField\": (-9223372036854775808, 9223372036854775807),\n        \"PositiveBigIntegerField\": (0, 9223372036854775807),\n        \"PositiveSmallIntegerField\": (0, 32767),\n        \"PositiveIntegerField\": (0, 2147483647),\n        \"SmallAutoField\": (-32768, 32767),\n        \"AutoField\": (-2147483648, 2147483647),\n        \"BigAutoField\": (-9223372036854775808, 9223372036854775807),\n    }\n    set_operators = {\n        \"union\": \"UNION\",\n        \"intersection\": \"INTERSECT\",\n        \"difference\": \"EXCEPT\",\n    }\n    # Mapping of Field.get_internal_type() (typically the model field's class\n    # name) to the data type to use for the Cast() function, if different from\n    # DatabaseWrapper.data_types.\n    cast_data_types = {}\n    # CharField data type if the max_length argument isn't provided.\n    cast_char_field_without_max_length = None\n\n    # Start and end points for window expressions.\n    PRECEDING = \"PRECEDING\"\n    FOLLOWING = \"FOLLOWING\"\n    UNBOUNDED_PRECEDING = \"UNBOUNDED \" + PRECEDING\n    UNBOUNDED_FOLLOWING = \"UNBOUNDED \" + FOLLOWING\n    CURRENT_ROW = \"CURRENT ROW\"\n\n    # Prefix for EXPLAIN queries, or None EXPLAIN isn't supported.\n    explain_prefix = None\n\n    def __init__(self, connection):\n        self.connection = connection\n        self._cache = None\n\n    def autoinc_sql(self, table, column):\n        \"\"\"\n        Return any SQL needed to support auto-incrementing primary keys, or\n        None if no SQL is necessary.\n\n        This SQL is executed when a table is created.\n        \"\"\"\n        return None\n\n    def bulk_batch_size(self, fields, objs):\n        \"\"\"\n        Return the maximum allowed batch size for the backend. The fields\n        are the fields going to be inserted in the batch, the objs contains\n        all the objects to be inserted.\n        \"\"\"\n        return len(objs)\n\n    def format_for_duration_arithmetic(self, sql):\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"format_for_duration_arithmetic() method.\"\n        )\n\n    def cache_key_culling_sql(self):\n        \"\"\"\n        Return an SQL query that retrieves the first cache key greater than the\n        n smallest.\n\n        This is used by the 'db' cache backend to determine where to start\n        culling.\n        \"\"\"\n        cache_key = self.quote_name(\"cache_key\")\n        return f\"SELECT {cache_key} FROM %s ORDER BY {cache_key} LIMIT 1 OFFSET %%s\"\n\n    def unification_cast_sql(self, output_field):\n        \"\"\"\n        Given a field instance, return the SQL that casts the result of a union\n        to that type. The resulting string should contain a '%s' placeholder\n        for the expression being cast.\n        \"\"\"\n        return \"%s\"\n\n    def date_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        extracts a value from the given date field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_extract_sql() \"\n            \"method\"\n        )\n\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        truncates the given date or datetime field field_name to a date object\n        with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_trunc_sql() \"\n            \"method.\"\n        )\n\n    def datetime_cast_date_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to date value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_date_sql() method.\"\n        )\n\n    def datetime_cast_time_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to time value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_time_sql() method\"\n        )\n\n    def datetime_extract_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that extracts a value from the given\n        datetime field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_extract_sql() \"\n            \"method\"\n        )\n\n    def datetime_trunc_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that truncates the given datetime field\n        field_name to a datetime object with only the given specificity.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_trunc_sql() \"\n            \"method\"\n        )\n\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\n        that truncates the given time or datetime field field_name to a time\n        object with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a time_trunc_sql() method\"\n        )\n\n    def time_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute', or 'second', return the SQL\n        that extracts a value from the given time field field_name.\n        \"\"\"\n        return self.date_extract_sql(lookup_type, sql, params)\n\n    def deferrable_sql(self):\n        \"\"\"\n        Return the SQL to make a constraint \"initially deferred\" during a\n        CREATE TABLE statement.\n        \"\"\"\n        return \"\"\n\n    def distinct_sql(self, fields, params):\n        \"\"\"\n        Return an SQL DISTINCT clause which removes duplicate rows from the\n        result set. If any fields are given, only check the given fields for\n        duplicates.\n        \"\"\"\n        if fields:\n            raise NotSupportedError(\n                \"DISTINCT ON fields is not supported by this database backend\"\n            )\n        else:\n            return [\"DISTINCT\"], []\n\n    def fetch_returned_insert_columns(self, cursor, returning_params):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT...RETURNING\n        statement into a table, return the newly created data.\n        \"\"\"\n        return cursor.fetchone()\n\n    def field_cast_sql(self, db_type, internal_type):\n        \"\"\"\n        Given a column type (e.g. 'BLOB', 'VARCHAR') and an internal type\n        (e.g. 'GenericIPAddressField'), return the SQL to cast it before using\n        it in a WHERE statement. The resulting string should contain a '%s'\n        placeholder for the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def force_no_ordering(self):\n        \"\"\"\n        Return a list used in the \"ORDER BY\" clause to force no ordering at\n        all. Return an empty list to include nothing in the ordering.\n        \"\"\"\n        return []\n\n    def for_update_sql(self, nowait=False, skip_locked=False, of=(), no_key=False):\n        \"\"\"\n        Return the FOR UPDATE SQL clause to lock rows for an update operation.\n        \"\"\"\n        return \"FOR%s UPDATE%s%s%s\" % (\n            \" NO KEY\" if no_key else \"\",\n            \" OF %s\" % \", \".join(of) if of else \"\",\n            \" NOWAIT\" if nowait else \"\",\n            \" SKIP LOCKED\" if skip_locked else \"\",\n        )\n\n    def _get_limit_offset_params(self, low_mark, high_mark):\n        offset = low_mark or 0\n        if high_mark is not None:\n            return (high_mark - offset), offset\n        elif offset:\n            return self.connection.ops.no_limit_value(), offset\n        return None, offset\n\n    def limit_offset_sql(self, low_mark, high_mark):\n        \"\"\"Return LIMIT/OFFSET SQL clause.\"\"\"\n        limit, offset = self._get_limit_offset_params(low_mark, high_mark)\n        return \" \".join(\n            sql\n            for sql in (\n                (\"LIMIT %d\" % limit) if limit else None,\n                (\"OFFSET %d\" % offset) if offset else None,\n            )\n            if sql\n        )\n\n    def last_executed_query(self, cursor, sql, params):\n        \"\"\"\n        Return a string of the query last executed by the given cursor, with\n        placeholders replaced with actual values.\n\n        `sql` is the raw query containing placeholders and `params` is the\n        sequence of parameters. These are used by default, but this method\n        exists for database backends to provide a better implementation\n        according to their own quoting schemes.\n        \"\"\"\n\n        # Convert params to contain string values.\n        def to_string(s):\n            return force_str(s, strings_only=True, errors=\"replace\")\n\n        if isinstance(params, (list, tuple)):\n            u_params = tuple(to_string(val) for val in params)\n        elif params is None:\n            u_params = ()\n        else:\n            u_params = {to_string(k): to_string(v) for k, v in params.items()}\n\n        return \"QUERY = %r - PARAMS = %r\" % (sql, u_params)\n\n    def last_insert_id(self, cursor, table_name, pk_name):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT statement into\n        a table that has an auto-incrementing ID, return the newly created ID.\n\n        `pk_name` is the name of the primary-key column.\n        \"\"\"\n        return cursor.lastrowid\n\n    def lookup_cast(self, lookup_type, internal_type=None):\n        \"\"\"\n        Return the string to use in a query when performing lookups\n        (\"contains\", \"like\", etc.). It should contain a '%s' placeholder for\n        the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def max_in_list_size(self):\n        \"\"\"\n        Return the maximum number of items that can be passed in a single 'IN'\n        list condition, or None if the backend does not impose a limit.\n        \"\"\"\n        return None\n\n    def max_name_length(self):\n        \"\"\"\n        Return the maximum length of table and column names, or None if there\n        is no limit.\n        \"\"\"\n        return None\n\n    def no_limit_value(self):\n        \"\"\"\n        Return the value to use for the LIMIT when we are wanting \"LIMIT\n        infinity\". Return None if the limit clause can be omitted in this case.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a no_limit_value() method\"\n        )\n\n    def pk_default_value(self):\n        \"\"\"\n        Return the value to use during an INSERT statement to specify that\n        the field should use its default value.\n        \"\"\"\n        return \"DEFAULT\"\n\n    def prepare_sql_script(self, sql):\n        \"\"\"\n        Take an SQL script that may contain multiple lines and return a list\n        of statements to feed to successive cursor.execute() calls.\n\n        Since few databases are able to process raw SQL scripts in a single\n        cursor.execute() call and PEP 249 doesn't talk about this use case,\n        the default implementation is conservative.\n        \"\"\"\n        return [\n            sqlparse.format(statement, strip_comments=True)\n            for statement in sqlparse.split(sql)\n            if statement\n        ]\n\n    def process_clob(self, value):\n        \"\"\"\n        Return the value of a CLOB column, for backends that return a locator\n        object that requires additional processing.\n        \"\"\"\n        return value\n\n    def return_insert_columns(self, fields):\n        \"\"\"\n        For backends that support returning columns as part of an insert query,\n        return the SQL and params to append to the INSERT query. The returned\n        fragment should contain a format string to hold the appropriate column.\n        \"\"\"\n        pass\n\n    def compiler(self, compiler_name):\n        \"\"\"\n        Return the SQLCompiler class corresponding to the given name,\n        in the namespace corresponding to the `compiler_module` attribute\n        on this backend.\n        \"\"\"\n        if self._cache is None:\n            self._cache = import_module(self.compiler_module)\n        return getattr(self._cache, compiler_name)\n\n    def quote_name(self, name):\n        \"\"\"\n        Return a quoted version of the given table, index, or column name. Do\n        not quote the given name if it's already been quoted.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a quote_name() method\"\n        )\n\n    def regex_lookup(self, lookup_type):\n        \"\"\"\n        Return the string to use in a query when performing regular expression\n        lookups (using \"regex\" or \"iregex\"). It should contain a '%s'\n        placeholder for the column being searched against.\n\n        If the feature is not supported (or part of it is not supported), raise\n        NotImplementedError.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a regex_lookup() method\"\n        )\n\n    def savepoint_create_sql(self, sid):\n        \"\"\"\n        Return the SQL for starting a new savepoint. Only required if the\n        \"uses_savepoints\" feature is True. The \"sid\" parameter is a string\n        for the savepoint id.\n        \"\"\"\n        return \"SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_commit_sql(self, sid):\n        \"\"\"\n        Return the SQL for committing the given savepoint.\n        \"\"\"\n        return \"RELEASE SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_rollback_sql(self, sid):\n        \"\"\"\n        Return the SQL for rolling back the given savepoint.\n        \"\"\"\n        return \"ROLLBACK TO SAVEPOINT %s\" % self.quote_name(sid)\n\n    def set_time_zone_sql(self):\n        \"\"\"\n        Return the SQL that will set the connection's time zone.\n\n        Return '' if the backend doesn't support time zones.\n        \"\"\"\n        return \"\"\n\n    def sql_flush(self, style, tables, *, reset_sequences=False, allow_cascade=False):\n        \"\"\"\n        Return a list of SQL statements required to remove all data from\n        the given database tables (without actually removing the tables\n        themselves).\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n\n        If `reset_sequences` is True, the list includes SQL statements required\n        to reset the sequences.\n\n        The `allow_cascade` argument determines whether truncation may cascade\n        to tables with foreign keys pointing the tables being truncated.\n        PostgreSQL requires a cascade even if these tables are empty.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations must provide an sql_flush() method\"\n        )\n\n    def execute_sql_flush(self, sql_list):\n        \"\"\"Execute a list of SQL statements to flush the database.\"\"\"\n        with transaction.atomic(\n            using=self.connection.alias,\n            savepoint=self.connection.features.can_rollback_ddl,\n        ):\n            with self.connection.cursor() as cursor:\n                for sql in sql_list:\n                    cursor.execute(sql)\n\n    def sequence_reset_by_name_sql(self, style, sequences):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences\n        passed in `sequences`.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []\n\n    def sequence_reset_sql(self, style, model_list):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences for\n        the given models.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []  # No sequence reset required by default.\n\n    def start_transaction_sql(self):\n        \"\"\"Return the SQL statement required to start a transaction.\"\"\"\n        return \"BEGIN;\"\n\n    def end_transaction_sql(self, success=True):\n        \"\"\"Return the SQL statement required to end a transaction.\"\"\"\n        if not success:\n            return \"ROLLBACK;\"\n        return \"COMMIT;\"\n\n    def tablespace_sql(self, tablespace, inline=False):\n        \"\"\"\n        Return the SQL that will be used in a query to define the tablespace.\n\n        Return '' if the backend doesn't support tablespaces.\n\n        If `inline` is True, append the SQL to a row; otherwise append it to\n        the entire CREATE TABLE or CREATE INDEX statement.\n        \"\"\"\n        return \"\"\n\n    def prep_for_like_query(self, x):\n        \"\"\"Prepare a value for use in a LIKE query.\"\"\"\n        return str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(\"%\", r\"\\%\").replace(\"_\", r\"\\_\")\n\n    # Same as prep_for_like_query(), but called for \"iexact\" matches, which\n    # need not necessarily be implemented using \"LIKE\" in the backend.\n    prep_for_iexact_query = prep_for_like_query\n\n# tests/forms_tests/field_tests/test_charfield.py:134-148  (tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_clean_non_string)\nclass CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):\n    def test_clean_non_string(self):\n        \"\"\"CharField.clean() calls str(value) before stripping it.\"\"\"\n\n        class StringWrapper:\n            def __init__(self, v):\n                self.v = v\n\n            def __str__(self):\n                return self.v\n\n        value = StringWrapper(\" \")\n        f1 = CharField(required=False, empty_value=None)\n        self.assertIsNone(f1.clean(value))\n        f2 = CharField(strip=False)\n        self.assertEqual(f2.clean(value), \" \")\n\n# django/db/models/base.py:1213-1220  (django.db.models.base.Model.clean)\nclass Model(AltersData, metaclass=ModelBase):\n    def clean(self):\n        \"\"\"\n        Hook for doing any extra model-wide validation after clean() has been\n        called on every field by self.clean_fields. Any ValidationError raised\n        by this method will not be associated with a particular field; it will\n        have a special-case association with the field defined by NON_FIELD_ERRORS.\n        \"\"\"\n        pass\n\n# tests/forms_tests/field_tests/test_charfield.py:21-29  (tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_charfield_2)\nclass CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):\n    def test_charfield_2(self):\n        f = CharField(required=False)\n        self.assertEqual(\"1\", f.clean(1))\n        self.assertEqual(\"hello\", f.clean(\"hello\"))\n        self.assertEqual(\"\", f.clean(None))\n        self.assertEqual(\"\", f.clean(\"\"))\n        self.assertEqual(\"[1, 2, 3]\", f.clean([1, 2, 3]))\n        self.assertIsNone(f.max_length)\n        self.assertIsNone(f.min_length)\n\n# tests/forms_tests/field_tests/test_charfield.py:9-19  (tests.forms_tests.field_tests.test_charfield.CharFieldTest.test_charfield_1)\nclass CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):\n    def test_charfield_1(self):\n        f = CharField()\n        self.assertEqual(\"1\", f.clean(1))\n        self.assertEqual(\"hello\", f.clean(\"hello\"))\n        with self.assertRaisesMessage(ValidationError, \"'This field is required.'\"):\n            f.clean(None)\n        with self.assertRaisesMessage(ValidationError, \"'This field is required.'\"):\n            f.clean(\"\")\n        self.assertEqual(\"[1, 2, 3]\", f.clean([1, 2, 3]))\n        self.assertIsNone(f.max_length)\n        self.assertIsNone(f.min_length)\n\n# django/db/models/fields/related.py:302-339#part2of2  (django.db.models.fields.related.RelatedField._check_clashes)\nclass RelatedField(FieldCacheMixin, Field):\n    def _check_clashes(self):\n        for clash_field in potential_clashes:\n            # i.e. \"app_label.Model.m2m\".\n            clash_name = \"%s.%s\" % (\n                clash_field.related_model._meta.label,\n                clash_field.field.name,\n            )\n            if not rel_is_hidden and clash_field.get_accessor_name() == rel_name:\n                errors.append(\n                    checks.Error(\n                        f\"Reverse accessor '{rel_opts.object_name}.{rel_name}' \"\n                        f\"for '{field_name}' clashes with reverse accessor for \"\n                        f\"'{clash_name}'.\",\n                        hint=(\n                            \"Add or change a related_name argument \"\n                            \"to the definition for '%s' or '%s'.\"\n                        )\n                        % (field_name, clash_name),\n                        obj=self,\n                        id=\"fields.E304\",\n                    )\n                )\n\n            if clash_field.get_accessor_name() == rel_query_name:\n                errors.append(\n                    checks.Error(\n                        \"Reverse query name for '%s' clashes with reverse query name \"\n                        \"for '%s'.\" % (field_name, clash_name),\n                        hint=(\n                            \"Add or change a related_name argument \"\n                            \"to the definition for '%s' or '%s'.\"\n                        )\n                        % (field_name, clash_name),\n                        obj=self,\n                        id=\"fields.E305\",\n                    )\n                )\n\n        return errors\n\n# django/forms/fields.py:1017-1019  (django.forms.fields.ComboField)\nclass ComboField(Field):\n    \"\"\"\n    A Field whose clean() method calls multiple Field clean() methods.\n    \"\"\"\n\n# django/forms/fields.py:1086-1142  (django.forms.fields.MultiValueField.clean)\nclass MultiValueField(Field):\n    def clean(self, value):\n        \"\"\"\n        Validate every value in the given list. A value is validated against\n        the corresponding Field in self.fields.\n\n        For example, if this MultiValueField was instantiated with\n        fields=(DateField(), TimeField()), clean() would call\n        DateField.clean(value[0]) and TimeField.clean(value[1]).\n        \"\"\"\n        clean_data = []\n        errors = []\n        if self.disabled and not isinstance(value, list):\n            value = self.widget.decompress(value)\n        if not value or isinstance(value, (list, tuple)):\n            if not value or not [v for v in value if v not in self.empty_values]:\n                if self.required:\n                    raise ValidationError(\n                        self.error_messages[\"required\"], code=\"required\"\n                    )\n                else:\n                    return self.compress([])\n        else:\n            raise ValidationError(self.error_messages[\"invalid\"], code=\"invalid\")\n        for i, field in enumerate(self.fields):\n            try:\n                field_value = value[i]\n            except IndexError:\n                field_value = None\n            if field_value in self.empty_values:\n                if self.require_all_fields:\n                    # Raise a 'required' error if the MultiValueField is\n                    # required and any field is empty.\n                    if self.required:\n                        raise ValidationError(\n                            self.error_messages[\"required\"], code=\"required\"\n                        )\n                elif field.required:\n                    # Otherwise, add an 'incomplete' error to the list of\n                    # collected errors and skip field cleaning, if a required\n                    # field is empty.\n                    if field.error_messages[\"incomplete\"] not in errors:\n                        errors.append(field.error_messages[\"incomplete\"])\n                    continue\n            try:\n                clean_data.append(field.clean(field_value))\n            except ValidationError as e:\n                # Collect all validation errors in a single list, which we'll\n                # raise at the end of clean(), rather than raising a single\n                # exception for the first error we encounter. Skip duplicates.\n                errors.extend(m for m in e.error_list if m not in errors)\n        if errors:\n            raise ValidationError(errors)\n\n        out = self.compress(clean_data)\n        self.validate(out)\n        self.run_validators(out)\n        return out\n\n# django/forms/forms.py:437-451  (django.forms.forms.BaseForm._clean_fields)\nclass BaseForm(RenderableFormMixin):\n    def _clean_fields(self):\n        for name, bf in self._bound_items():\n            field = bf.field\n            value = bf.initial if field.disabled else bf.data\n            try:\n                if isinstance(field, FileField):\n                    value = field.clean(value, bf.initial)\n                else:\n                    value = field.clean(value)\n                self.cleaned_data[name] = value\n                if hasattr(self, \"clean_%s\" % name):\n                    value = getattr(self, \"clean_%s\" % name)()\n                    self.cleaned_data[name] = value\n            except ValidationError as e:\n                self.add_error(name, e)\n\n# django/forms/forms.py:469-476  (django.forms.forms.BaseForm.clean)\nclass BaseForm(RenderableFormMixin):\n    def clean(self):\n        \"\"\"\n        Hook for doing any extra form-wide cleaning after Field.clean() has been\n        called on every field. Any ValidationError raised by this method will\n        not be associated with a particular field; it will have a special-case\n        association with the field named '__all__'.\n        \"\"\"\n        return self.cleaned_data\n\n# tests/forms_tests/tests/test_forms.py:4349-4365  (tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_in_clean)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_changing_cleaned_data_in_clean(self):\n        class UserForm(Form):\n            username = CharField(max_length=10)\n            password = CharField(widget=PasswordInput)\n\n            def clean(self):\n                data = self.cleaned_data\n\n                # Return a different dict. We have not changed self.cleaned_data.\n                return {\n                    \"username\": data[\"username\"].lower(),\n                    \"password\": \"this_is_not_a_secret\",\n                }\n\n        f = UserForm({\"username\": \"SirRobin\", \"password\": \"blue\"})\n        self.assertTrue(f.is_valid())\n        self.assertEqual(f.cleaned_data[\"username\"], \"sirrobin\")\n\n# django/forms/models.py:425-427  (django.forms.models.BaseModelForm.clean)\nclass BaseModelForm(BaseForm, AltersData):\n    def clean(self):\n        self._validate_unique = True\n        return self.cleaned_data\n\n# django/forms/fields.py:661-680  (django.forms.fields.FileField.clean)\nclass FileField(Field):\n    def clean(self, data, initial=None):\n        # If the widget got contradictory inputs, we raise a validation error\n        if data is FILE_INPUT_CONTRADICTION:\n            raise ValidationError(\n                self.error_messages[\"contradiction\"], code=\"contradiction\"\n            )\n        # False means the field value should be cleared; further validation is\n        # not needed.\n        if data is False:\n            if not self.required:\n                return False\n            # If the field is required, clearing is not possible (the widget\n            # shouldn't return False data in that case anyway). False is not\n            # in self.empty_value; if a False value makes it this far\n            # it should be validated from here on out as None (so it will be\n            # caught by the required check).\n            data = None\n        if not data and initial:\n            return initial\n        return super().clean(data)\n\n# tests/forms_tests/tests/test_forms.py:1500-1531#part2of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        class UserRegistration(Form):\n            username = CharField(max_length=10)\n            password1 = CharField(widget=PasswordInput)\n            password2 = CharField(widget=PasswordInput)\n\n            def clean(self):\n                # Test raising a ValidationError as NON_FIELD_ERRORS.\n                if (\n                    self.cleaned_data.get(\"password1\")\n                    and self.cleaned_data.get(\"password2\")\n                    and self.cleaned_data[\"password1\"] != self.cleaned_data[\"password2\"]\n                ):\n                    raise ValidationError(\"Please make sure your passwords match.\")\n\n                # Test raising ValidationError that targets multiple fields.\n                errors = {}\n                if self.cleaned_data.get(\"password1\") == \"FORBIDDEN_VALUE\":\n                    errors[\"password1\"] = \"Forbidden value.\"\n                if self.cleaned_data.get(\"password2\") == \"FORBIDDEN_VALUE\":\n                    errors[\"password2\"] = [\"Forbidden value.\"]\n                if errors:\n                    raise ValidationError(errors)\n\n                # Test Form.add_error()\n                if self.cleaned_data.get(\"password1\") == \"FORBIDDEN_VALUE2\":\n                    self.add_error(None, \"Non-field error 1.\")\n                    self.add_error(\"password1\", \"Forbidden value 2.\")\n                if self.cleaned_data.get(\"password2\") == \"FORBIDDEN_VALUE2\":\n                    self.add_error(\"password2\", \"Forbidden value 2.\")\n                    raise ValidationError(\"Non-field error 2.\")\n\n                return self.cleaned_data\n\n# django/forms/models.py:462-492  (django.forms.models.BaseModelForm._post_clean)\nclass BaseModelForm(BaseForm, AltersData):\n    def _post_clean(self):\n        opts = self._meta\n\n        exclude = self._get_validation_exclusions()\n\n        # Foreign Keys being used to represent inline relationships\n        # are excluded from basic field value validation. This is for two\n        # reasons: firstly, the value may not be supplied (#12507; the\n        # case of providing new values to the admin); secondly the\n        # object being referred to may not yet fully exist (#12749).\n        # However, these fields *must* be included in uniqueness checks,\n        # so this can't be part of _get_validation_exclusions().\n        for name, field in self.fields.items():\n            if isinstance(field, InlineForeignKeyField):\n                exclude.add(name)\n\n        try:\n            self.instance = construct_instance(\n                self, self.instance, opts.fields, opts.exclude\n            )\n        except ValidationError as e:\n            self._update_errors(e)\n\n        try:\n            self.instance.full_clean(exclude=exclude, validate_unique=False)\n        except ValidationError as e:\n            self._update_errors(e)\n\n        # Validate uniqueness if needed.\n        if self._validate_unique:\n            self.validate_unique()\n\n# django/db/models/base.py:1504-1527  (django.db.models.base.Model.clean_fields)\nclass Model(AltersData, metaclass=ModelBase):\n    def clean_fields(self, exclude=None):\n        \"\"\"\n        Clean all fields and raise a ValidationError containing a dict\n        of all validation errors if any occur.\n        \"\"\"\n        if exclude is None:\n            exclude = set()\n\n        errors = {}\n        for f in self._meta.fields:\n            if f.name in exclude:\n                continue\n            # Skip validation for empty fields with blank=True. The developer\n            # is responsible for making sure they have a valid value.\n            raw_value = getattr(self, f.attname)\n            if f.blank and raw_value in f.empty_values:\n                continue\n            try:\n                setattr(self, f.attname, f.clean(raw_value, self))\n            except ValidationError as e:\n                errors[f.name] = e.error_list\n\n        if errors:\n            raise ValidationError(errors)\n\n# tests/forms_tests/tests/test_forms.py:1628-1629#part4of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        with self.assertRaisesMessage(ValueError, \"has no field named\"):\n            f.add_error(\"missing_field\", \"Some error.\")\n\n# django/db/models/fields/__init__.py:271-301  (django.db.models.fields.Field._check_field_name)\nclass Field(RegisterLookupMixin):\n    def _check_field_name(self):\n        \"\"\"\n        Check if field name is valid, i.e. 1) does not end with an\n        underscore, 2) does not contain \"__\" and 3) is not \"pk\".\n        \"\"\"\n        if self.name.endswith(\"_\"):\n            return [\n                checks.Error(\n                    \"Field names must not end with an underscore.\",\n                    obj=self,\n                    id=\"fields.E001\",\n                )\n            ]\n        elif LOOKUP_SEP in self.name:\n            return [\n                checks.Error(\n                    'Field names must not contain \"%s\".' % LOOKUP_SEP,\n                    obj=self,\n                    id=\"fields.E002\",\n                )\n            ]\n        elif self.name == \"pk\":\n            return [\n                checks.Error(\n                    \"'pk' is a reserved word that cannot be used as a field name.\",\n                    obj=self,\n                    id=\"fields.E003\",\n                )\n            ]\n        else:\n            return []\n\n# tests/forms_tests/tests/test_forms.py:4336-4347  (tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_nothing_returned)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_changing_cleaned_data_nothing_returned(self):\n        class UserForm(Form):\n            username = CharField(max_length=10)\n            password = CharField(widget=PasswordInput)\n\n            def clean(self):\n                self.cleaned_data[\"username\"] = self.cleaned_data[\"username\"].lower()\n                # don't return anything\n\n        f = UserForm({\"username\": \"SirRobin\", \"password\": \"blue\"})\n        self.assertTrue(f.is_valid())\n        self.assertEqual(f.cleaned_data[\"username\"], \"sirrobin\")\n\n# tests/forms_tests/tests/test_forms.py:1451-1499#part1of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        class UserRegistration(Form):\n            username = CharField(max_length=10)\n            password1 = CharField(widget=PasswordInput)\n            password2 = CharField(widget=PasswordInput)\n\n            def clean_password2(self):\n                if (\n                    self.cleaned_data.get(\"password1\")\n                    and self.cleaned_data.get(\"password2\")\n                    and self.cleaned_data[\"password1\"] != self.cleaned_data[\"password2\"]\n                ):\n                    raise ValidationError(\"Please make sure your passwords match.\")\n\n                return self.cleaned_data[\"password2\"]\n\n        f = UserRegistration(auto_id=False)\n        self.assertEqual(f.errors, {})\n        f = UserRegistration({}, auto_id=False)\n        self.assertEqual(f.errors[\"username\"], [\"This field is required.\"])\n        self.assertEqual(f.errors[\"password1\"], [\"This field is required.\"])\n        self.assertEqual(f.errors[\"password2\"], [\"This field is required.\"])\n        f = UserRegistration(\n            {\"username\": \"adrian\", \"password1\": \"foo\", \"password2\": \"bar\"},\n            auto_id=False,\n        )\n        self.assertEqual(\n            f.errors[\"password2\"], [\"Please make sure your passwords match.\"]\n        )\n        f = UserRegistration(\n            {\"username\": \"adrian\", \"password1\": \"foo\", \"password2\": \"foo\"},\n            auto_id=False,\n        )\n        self.assertEqual(f.errors, {})\n        self.assertEqual(f.cleaned_data[\"username\"], \"adrian\")\n        self.assertEqual(f.cleaned_data[\"password1\"], \"foo\")\n        self.assertEqual(f.cleaned_data[\"password2\"], \"foo\")\n\n        # Another way of doing multiple-field validation is by implementing the\n        # Form's clean() method. Usually ValidationError raised by that method\n        # will not be associated with a particular field and will have a\n        # special-case association with the field named '__all__'. It's\n        # possible to associate the errors to particular field with the\n        # Form.add_error() method or by passing a dictionary that maps each\n        # field to one or more errors.\n        #\n        # Note that in Form.clean(), you have access to self.cleaned_data, a\n        # dictionary of all the fields/values that have *not* raised a\n        # ValidationError. Also note Form.clean() is required to return a\n        # dictionary of all clean data.\n\n# tests/forms_tests/tests/test_forms.py:4319-4334  (tests.forms_tests.tests.test_forms.FormsTestCase.test_accessing_clean)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_accessing_clean(self):\n        class UserForm(Form):\n            username = CharField(max_length=10)\n            password = CharField(widget=PasswordInput)\n\n            def clean(self):\n                data = self.cleaned_data\n\n                if not self.errors:\n                    data[\"username\"] = data[\"username\"].lower()\n\n                return data\n\n        f = UserForm({\"username\": \"SirRobin\", \"password\": \"blue\"})\n        self.assertTrue(f.is_valid())\n        self.assertEqual(f.cleaned_data[\"username\"], \"sirrobin\")\n\n# tests/model_forms/tests.py:2423-2431  (tests.model_forms.tests.FileAndImageFieldTests.test_clean_false)\nclass FileAndImageFieldTests(TestCase):\n    def test_clean_false(self):\n        \"\"\"\n        If the ``clean`` method on a non-required FileField receives False as\n        the data (meaning clear the field value), it returns False, regardless\n        of the value of ``initial``.\n        \"\"\"\n        f = forms.FileField(required=False)\n        self.assertIs(f.clean(False), False)\n        self.assertIs(f.clean(False, \"initial\"), False)\n\n# tests/forms_tests/tests/test_forms.py:1963-1967#part1of3  (tests.forms_tests.tests.test_forms.FormsTestCase.test_hidden_widget)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_hidden_widget(self):\n        # HiddenInput widgets are displayed differently in the as_table(), as_ul())\n        # and as_p() output of a Form -- their verbose names are not displayed, and a\n        # separate row is not displayed. They're displayed in the last row of the\n        # form, directly after that row's form element.\n        class Person(Form):\n            first_name = CharField()\n            last_name = CharField()\n            hidden_text = CharField(widget=HiddenInput)\n            birthday = DateField()\n\n# django/db/models/base.py:1457-1502  (django.db.models.base.Model.full_clean)\nclass Model(AltersData, metaclass=ModelBase):\n    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):\n        \"\"\"\n        Call clean_fields(), clean(), validate_unique(), and\n        validate_constraints() on the model. Raise a ValidationError for any\n        errors that occur.\n        \"\"\"\n        errors = {}\n        if exclude is None:\n            exclude = set()\n        else:\n            exclude = set(exclude)\n\n        try:\n            self.clean_fields(exclude=exclude)\n        except ValidationError as e:\n            errors = e.update_error_dict(errors)\n\n        # Form.clean() is run even if other validation fails, so do the\n        # same with Model.clean() for consistency.\n        try:\n            self.clean()\n        except ValidationError as e:\n            errors = e.update_error_dict(errors)\n\n        # Run unique checks, but only for fields that passed validation.\n        if validate_unique:\n            for name in errors:\n                if name != NON_FIELD_ERRORS and name not in exclude:\n                    exclude.add(name)\n            try:\n                self.validate_unique(exclude=exclude)\n            except ValidationError as e:\n                errors = e.update_error_dict(errors)\n\n        # Run constraints checks, but only for fields that passed validation.\n        if validate_constraints:\n            for name in errors:\n                if name != NON_FIELD_ERRORS and name not in exclude:\n                    exclude.add(name)\n            try:\n                self.validate_constraints(exclude=exclude)\n            except ValidationError as e:\n                errors = e.update_error_dict(errors)\n\n        if errors:\n            raise ValidationError(errors)\n\n# django/forms/fields.py:1042-1062  (django.forms.fields.MultiValueField)\nclass MultiValueField(Field):\n    \"\"\"\n    Aggregate the logic of multiple Fields.\n\n    Its clean() method takes a \"decompressed\" list of values, which are then\n    cleaned into a single value according to self.fields. Each value in\n    this list is cleaned by the corresponding field -- the first value is\n    cleaned by the first field, the second value is cleaned by the second\n    field, etc. Once all fields are cleaned, the list of clean values is\n    \"compressed\" into a single value.\n\n    Subclasses should not have to implement clean(). Instead, they must\n    implement compress(), which takes a list of valid values and returns a\n    \"compressed\" version of those values -- a single value.\n\n    You'll probably want to use this with MultiWidget.\n    \"\"\"\n\n    default_error_messages = {\n        \"invalid\": _(\"Enter a list of values.\"),\n        \"incomplete\": _(\"Enter a complete value.\"),\n    }\n\n# django/core/validators.py:388-389  (django.core.validators.BaseValidator.clean)\nclass BaseValidator:\n    def clean(self, x):\n        return x\n\n# tests/forms_tests/tests/test_input_formats.py:330-354  (tests.forms_tests.tests.test_input_formats.LocalizedDateTests.test_dateField)\nclass LocalizedDateTests(SimpleTestCase):\n    def test_dateField(self):\n        \"DateFields can parse dates in the default format\"\n        f = forms.DateField()\n        # Parse a date in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"21/12/2010\")\n\n        # ISO formats are accepted, even if not specified in formats.py\n        self.assertEqual(f.clean(\"2010-12-21\"), date(2010, 12, 21))\n\n        # Parse a date in a valid format, get a parsed result\n        result = f.clean(\"21.12.2010\")\n        self.assertEqual(result, date(2010, 12, 21))\n\n        # The parsed result does a round trip\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"21.12.2010\")\n\n        # Parse a date in a valid, but non-default format, get a parsed result\n        result = f.clean(\"21.12.10\")\n        self.assertEqual(result, date(2010, 12, 21))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"21.12.2010\")\n\n# tests/forms_tests/tests/test_forms.py:2890-2900  (tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_bound_field)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_datetime_clean_disabled_callable_initial_bound_field(self):\n        \"\"\"\n        The cleaned value for a form with a disabled DateTimeField and callable\n        initial matches the bound field's cached initial value.\n        \"\"\"\n        form = self.get_datetime_form_with_callable_initial(disabled=True)\n        self.assertEqual(form.errors, {})\n        cleaned = form.cleaned_data[\"dt\"]\n        self.assertEqual(cleaned, datetime.datetime(2006, 10, 25, 14, 30, 46))\n        bf = form[\"dt\"]\n        self.assertEqual(cleaned, bf.initial)\n\n# tests/forms_tests/tests/test_forms.py:2775-2786  (tests.forms_tests.tests.test_forms.FormsTestCase.test_boundfield_value_disabled_callable_initial)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_boundfield_value_disabled_callable_initial(self):\n        class PersonForm(Form):\n            name = CharField(initial=lambda: \"John Doe\", disabled=True)\n\n        # Without form data.\n        form = PersonForm()\n        self.assertEqual(form[\"name\"].value(), \"John Doe\")\n\n        # With form data. As the field is disabled, the value should not be\n        # affected by the form data.\n        form = PersonForm({})\n        self.assertEqual(form[\"name\"].value(), \"John Doe\")\n\n# django/test/testcases.py:969-1020  (django.test.testcases.SimpleTestCase.assertFieldOutput)\nclass SimpleTestCase(unittest.TestCase):\n    # The class we'll use for the test client self.client.\n    # Can be overridden in derived classes.\n    def assertFieldOutput(\n        self,\n        fieldclass,\n        valid,\n        invalid,\n        field_args=None,\n        field_kwargs=None,\n        empty_value=\"\",\n    ):\n        \"\"\"\n        Assert that a form field behaves correctly with various inputs.\n\n        Args:\n            fieldclass: the class of the field to be tested.\n            valid: a dictionary mapping valid inputs to their expected\n                    cleaned values.\n            invalid: a dictionary mapping invalid inputs to one or more\n                    raised error messages.\n            field_args: the args passed to instantiate the field\n            field_kwargs: the kwargs passed to instantiate the field\n            empty_value: the expected clean output for inputs in empty_values\n        \"\"\"\n        if field_args is None:\n            field_args = []\n        if field_kwargs is None:\n            field_kwargs = {}\n        required = fieldclass(*field_args, **field_kwargs)\n        optional = fieldclass(*field_args, **{**field_kwargs, \"required\": False})\n        # test valid inputs\n        for input, output in valid.items():\n            self.assertEqual(required.clean(input), output)\n            self.assertEqual(optional.clean(input), output)\n        # test invalid inputs\n        for input, errors in invalid.items():\n            with self.assertRaises(ValidationError) as context_manager:\n                required.clean(input)\n            self.assertEqual(context_manager.exception.messages, errors)\n\n            with self.assertRaises(ValidationError) as context_manager:\n                optional.clean(input)\n            self.assertEqual(context_manager.exception.messages, errors)\n        # test required inputs\n        error_required = [required.error_messages[\"required\"]]\n        for e in required.empty_values:\n            with self.assertRaises(ValidationError) as context_manager:\n                required.clean(e)\n            self.assertEqual(context_manager.exception.messages, error_required)\n            self.assertEqual(optional.clean(e), empty_value)\n        # test that max_length and min_length are always accepted\n        if issubclass(fieldclass, CharField):\n            field_kwargs.update({\"min_length\": 2, \"max_length\": 20})\n            self.assertIsInstance(fieldclass(*field_args, **field_kwargs), fieldclass)\n\n# tests/forms_tests/tests/test_formsets.py:960-984  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_clean_hook)\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_clean_hook(self):\n        \"\"\"\n        FormSets have a clean() hook for doing extra validation that isn't tied\n        to any form. It follows the same pattern as the clean() hook on Forms.\n        \"\"\"\n        # Start out with a some duplicate data.\n        data = {\n            \"drinks-TOTAL_FORMS\": \"2\",  # the number of forms rendered\n            \"drinks-INITIAL_FORMS\": \"0\",  # the number of forms with initial data\n            \"drinks-MIN_NUM_FORMS\": \"0\",  # min number of forms\n            \"drinks-MAX_NUM_FORMS\": \"0\",  # max number of forms\n            \"drinks-0-name\": \"Gin and Tonic\",\n            \"drinks-1-name\": \"Gin and Tonic\",\n        }\n        formset = FavoriteDrinksFormSet(data, prefix=\"drinks\")\n        self.assertFalse(formset.is_valid())\n        # Any errors raised by formset.clean() are available via the\n        # formset.non_form_errors() method.\n        for error in formset.non_form_errors():\n            self.assertEqual(str(error), \"You may only specify a drink once.\")\n        # The valid case still works.\n        data[\"drinks-1-name\"] = \"Bloody Mary\"\n        formset = FavoriteDrinksFormSet(data, prefix=\"drinks\")\n        self.assertTrue(formset.is_valid())\n        self.assertEqual(formset.non_form_errors(), [])\n\n# tests/model_forms/tests.py:3158-3176  (tests.model_forms.tests.CustomCleanTests.test_model_form_clean_applies_to_model)\nclass CustomCleanTests(TestCase):\n    def test_model_form_clean_applies_to_model(self):\n        \"\"\"\n        Regression test for #12960. Make sure the cleaned_data returned from\n        ModelForm.clean() is applied to the model instance.\n        \"\"\"\n\n        class CategoryForm(forms.ModelForm):\n            class Meta:\n                model = Category\n                fields = \"__all__\"\n\n            def clean(self):\n                self.cleaned_data[\"name\"] = self.cleaned_data[\"name\"].upper()\n                return self.cleaned_data\n\n        data = {\"name\": \"Test\", \"slug\": \"test\", \"url\": \"/test\"}\n        form = CategoryForm(data)\n        category = form.save()\n        self.assertEqual(category.name, \"TEST\")\n\n# django/forms/forms.py:420-435  (django.forms.forms.BaseForm.full_clean)\nclass BaseForm(RenderableFormMixin):\n    def full_clean(self):\n        \"\"\"\n        Clean all of self.data and populate self._errors and self.cleaned_data.\n        \"\"\"\n        self._errors = ErrorDict()\n        if not self.is_bound:  # Stop further processing.\n            return\n        self.cleaned_data = {}\n        # If the form is permitted to be empty, and none of the form data has\n        # changed from the initial data, short circuit any validation.\n        if self.empty_permitted and not self.has_changed():\n            return\n\n        self._clean_fields()\n        self._clean_form()\n        self._post_clean()\n\n# tests/invalid_models_tests/test_ordinary_fields.py:404-422  (tests.invalid_models_tests.test_ordinary_fields.CharFieldTests.test_bad_validators)\nclass CharFieldTests(TestCase):\n    def test_bad_validators(self):\n        class Model(models.Model):\n            field = models.CharField(max_length=10, validators=[True])\n\n        field = Model._meta.get_field(\"field\")\n        self.assertEqual(\n            field.check(),\n            [\n                Error(\n                    \"All 'validators' must be callable.\",\n                    hint=(\n                        \"validators[0] (True) isn't a function or instance of a \"\n                        \"validator class.\"\n                    ),\n                    obj=field,\n                    id=\"fields.E008\",\n                ),\n            ],\n        )\n\n# django/views/debug.py:237-289  (django.views.debug.SafeExceptionReporterFilter.get_traceback_frame_variables)\nclass SafeExceptionReporterFilter:\n    def get_traceback_frame_variables(self, request, tb_frame):\n        \"\"\"\n        Replace the values of variables marked as sensitive with\n        stars (*********).\n        \"\"\"\n        # Loop through the frame's callers to see if the sensitive_variables\n        # decorator was used.\n        current_frame = tb_frame.f_back\n        sensitive_variables = None\n        while current_frame is not None:\n            if (\n                current_frame.f_code.co_name == \"sensitive_variables_wrapper\"\n                and \"sensitive_variables_wrapper\" in current_frame.f_locals\n            ):\n                # The sensitive_variables decorator was used, so we take note\n                # of the sensitive variables' names.\n                wrapper = current_frame.f_locals[\"sensitive_variables_wrapper\"]\n                sensitive_variables = getattr(wrapper, \"sensitive_variables\", None)\n                break\n            current_frame = current_frame.f_back\n\n        cleansed = {}\n        if self.is_active(request) and sensitive_variables:\n            if sensitive_variables == \"__ALL__\":\n                # Cleanse all variables\n                for name in tb_frame.f_locals:\n                    cleansed[name] = self.cleansed_substitute\n            else:\n                # Cleanse specified variables\n                for name, value in tb_frame.f_locals.items():\n                    if name in sensitive_variables:\n                        value = self.cleansed_substitute\n                    else:\n                        value = self.cleanse_special_types(request, value)\n                    cleansed[name] = value\n        else:\n            # Potentially cleanse the request and any MultiValueDicts if they\n            # are one of the frame variables.\n            for name, value in tb_frame.f_locals.items():\n                cleansed[name] = self.cleanse_special_types(request, value)\n\n        if (\n            tb_frame.f_code.co_name == \"sensitive_variables_wrapper\"\n            and \"sensitive_variables_wrapper\" in tb_frame.f_locals\n        ):\n            # For good measure, obfuscate the decorated function's arguments in\n            # the sensitive_variables decorator's frame, in case the variables\n            # associated with those arguments were meant to be obfuscated from\n            # the decorated function's frame.\n            cleansed[\"func_args\"] = self.cleansed_substitute\n            cleansed[\"func_kwargs\"] = self.cleansed_substitute\n\n        return cleansed.items()\n\n# tests/forms_tests/tests/test_input_formats.py:19-44  (tests.forms_tests.tests.test_input_formats.LocalizedTimeTests.test_timeField)\nclass LocalizedTimeTests(SimpleTestCase):\n    def test_timeField(self):\n        \"TimeFields can parse dates in the default format\"\n        f = forms.TimeField()\n        # Parse a time in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"1:30:05 PM\")\n\n        # Parse a time in a valid format, get a parsed result\n        result = f.clean(\"13:30:05\")\n        self.assertEqual(result, time(13, 30, 5))\n\n        # The parsed result does a round trip\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"13:30:05\")\n\n        # Parse a time in a valid, but non-default format, get a parsed result\n        result = f.clean(\"13:30\")\n        self.assertEqual(result, time(13, 30, 0))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"13:30:00\")\n\n        # ISO formats are accepted, even if not specified in formats.py\n        result = f.clean(\"13:30:05.000155\")\n        self.assertEqual(result, time(13, 30, 5, 155))\n\n# django/forms/forms.py:462-467  (django.forms.forms.BaseForm._post_clean)\nclass BaseForm(RenderableFormMixin):\n    def _post_clean(self):\n        \"\"\"\n        An internal hook for performing additional cleaning after form cleaning\n        is complete. Used for model validation in model forms.\n        \"\"\"\n        pass\n\n# django/core/exceptions.py:130-130  (django.core.exceptions)\nNON_FIELD_ERRORS = \"__all__\"\n\n## Task\n\nYou are assessing the blast radius of changing what `Field.clean`\nreturns (e.g. wrapping the cleaned value in a result object instead\nof returning it directly) in django/forms/fields.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.clean(...)`'s return value - callers that only\ncall `.clean(...)` for validation side effects without binding the\nresult do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

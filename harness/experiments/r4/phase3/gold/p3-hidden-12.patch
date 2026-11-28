@@ -1,0 +1,208 @@
+diff --git a/aiohttp/__init__.py b/aiohttp/__init__.py
+index 64bc3ced..f259c9ff 100644
+--- a/aiohttp/__init__.py
++++ b/aiohttp/__init__.py
+@@ -14,7 +14,7 @@ from .client import (
+     ClientError,
+     ClientHttpProxyError,
+     ClientOSError,
+-    ClientPayloadError,
++    ClientPayloadErrorImpl,
+     ClientProxyConnectionError,
+     ClientRequest,
+     ClientResponse,
+@@ -127,7 +127,7 @@ __all__: tuple[str, ...] = (
+     "ClientError",
+     "ClientHttpProxyError",
+     "ClientOSError",
+-    "ClientPayloadError",
++    "ClientPayloadErrorImpl",
+     "ClientProxyConnectionError",
+     "ClientResponse",
+     "ClientRequest",
+diff --git a/aiohttp/client.py b/aiohttp/client.py
+index 4852b5b7..28832717 100644
+--- a/aiohttp/client.py
++++ b/aiohttp/client.py
+@@ -48,7 +48,7 @@ from .client_exceptions import (
+     ClientError,
+     ClientHttpProxyError,
+     ClientOSError,
+-    ClientPayloadError,
++    ClientPayloadErrorImpl,
+     ClientProxyConnectionError,
+     ClientResponseError,
+     ClientSSLError,
+@@ -124,7 +124,7 @@ __all__ = (
+     "ClientError",
+     "ClientHttpProxyError",
+     "ClientOSError",
+-    "ClientPayloadError",
++    "ClientPayloadErrorImpl",
+     "ClientProxyConnectionError",
+     "ClientResponseError",
+     "ClientSSLError",
+@@ -805,7 +805,7 @@ class ClientSession:
+                             # fail fast instead of silently sending an empty body.
+                             if req._body.consumed:
+                                 resp.close()
+-                                raise ClientPayloadError(
++                                raise ClientPayloadErrorImpl(
+                                     "Cannot follow redirect with a consumed request "
+                                     "body. Use bytes, a seekable file-like object, "
+                                     "or set allow_redirects=False."
+diff --git a/aiohttp/client_exceptions.py b/aiohttp/client_exceptions.py
+index 054613da..ae17bdd9 100644
+--- a/aiohttp/client_exceptions.py
++++ b/aiohttp/client_exceptions.py
+@@ -40,7 +40,7 @@ __all__ = (
+     "ClientHttpProxyError",
+     "WSServerHandshakeError",
+     "ContentTypeError",
+-    "ClientPayloadError",
++    "ClientPayloadErrorImpl",
+     "InvalidURL",
+     "InvalidUrlClientError",
+     "RedirectClientError",
+@@ -249,7 +249,7 @@ class ServerFingerprintMismatch(ServerConnectionError):
+         return f"<{self.__class__.__name__} expected={self.expected!r} got={self.got!r} host={self.host!r} port={self.port!r}>"
+ 
+ 
+-class ClientPayloadError(ClientError):
++class ClientPayloadErrorImpl(ClientError):
+     """Response payload error."""
+ 
+ 
+diff --git a/aiohttp/client_proto.py b/aiohttp/client_proto.py
+index fe604275..8e30685b 100644
+--- a/aiohttp/client_proto.py
++++ b/aiohttp/client_proto.py
+@@ -7,7 +7,7 @@ from .base_protocol import BaseProtocol
+ from .client_exceptions import (
+     ClientConnectionError,
+     ClientOSError,
+-    ClientPayloadError,
++    ClientPayloadErrorImpl,
+     ServerDisconnectedError,
+     SocketTimeoutError,
+ )
+@@ -159,7 +159,7 @@ class ResponseHandler(BaseProtocol, DataQueue[tuple[RawResponseMessage, StreamRe
+                         )
+                     set_exception(
+                         self._payload,
+-                        ClientPayloadError(client_payload_exc_msg),
++                        ClientPayloadErrorImpl(client_payload_exc_msg),
+                         underlying_exc,
+                     )
+ 
+@@ -249,7 +249,7 @@ class ResponseHandler(BaseProtocol, DataQueue[tuple[RawResponseMessage, StreamRe
+             self._loop,
+             read_bufsize,
+             timer=timer,
+-            payload_exception=ClientPayloadError,
++            payload_exception=ClientPayloadErrorImpl,
+             response_with_body=not skip_payload,
+             read_until_eof=read_until_eof,
+             auto_decompress=auto_decompress,
+diff --git a/tests/test_client_functional.py b/tests/test_client_functional.py
+index 4be1fb29..1b406ec1 100644
+--- a/tests/test_client_functional.py
++++ b/tests/test_client_functional.py
+@@ -2395,7 +2395,7 @@ async def test_bad_payload_compression(aiohttp_client: AiohttpClient) -> None:
+     async with client.get("/") as resp:
+         assert resp.status == 200
+ 
+-        with pytest.raises(aiohttp.ClientPayloadError):
++        with pytest.raises(aiohttp.ClientPayloadErrorImpl):
+             await resp.read()
+ 
+ 
+@@ -2513,7 +2513,7 @@ async def test_bad_payload_chunked_encoding(aiohttp_client: AiohttpClient) -> No
+     async with client.get("/") as resp:
+         assert resp.status == 200
+ 
+-        with pytest.raises(aiohttp.ClientPayloadError):
++        with pytest.raises(aiohttp.ClientPayloadErrorImpl):
+             await resp.read()
+ 
+ 
+@@ -2609,7 +2609,7 @@ async def test_bad_payload_content_length(aiohttp_client: AiohttpClient) -> None
+     async with client.get("/") as resp:
+         assert 200 == resp.status
+ 
+-        with pytest.raises(aiohttp.ClientPayloadError):
++        with pytest.raises(aiohttp.ClientPayloadErrorImpl):
+             await resp.read()
+ 
+ 
+@@ -2965,7 +2965,7 @@ async def test_broken_connection_2(aiohttp_client: AiohttpClient) -> None:
+     client = await aiohttp_client(app)
+ 
+     async with client.get("/") as resp:
+-        with pytest.raises(aiohttp.ClientPayloadError):
++        with pytest.raises(aiohttp.ClientPayloadErrorImpl):
+             await resp.read()
+ 
+ 
+@@ -4771,7 +4771,7 @@ async def test_network_error_connection_closed(
+     client = await aiohttp_client(app)
+ 
+     # POST request that will fail due to network error
+-    with pytest.raises(aiohttp.ClientPayloadError):
++    with pytest.raises(aiohttp.ClientPayloadErrorImpl):
+         resp = await client.post("/", data=b"request body")
+         async with resp:
+             await resp.read()  # This should fail
+@@ -4811,7 +4811,7 @@ async def test_client_side_network_error_connection_closed(
+     client = await aiohttp_client(app)
+ 
+     # POST request that will fail due to client-side network error
+-    with pytest.raises(aiohttp.ClientPayloadError):
++    with pytest.raises(aiohttp.ClientPayloadErrorImpl):
+         resp = await client.post("/", data=b"request body")
+         async with resp:
+             # Simulate client-side network error by closing the transport
+@@ -4966,7 +4966,7 @@ async def test_async_iterable_payload_redirect(aiohttp_client: AiohttpClient) ->
+     payload = AsyncIterablePayload(async_gen())
+ 
+     with pytest.raises(
+-        aiohttp.ClientPayloadError,
++        aiohttp.ClientPayloadErrorImpl,
+         match="Cannot follow redirect with a consumed request body",
+     ):
+         await client.post("/redirect", data=payload)
+@@ -5002,7 +5002,7 @@ async def test_async_iterable_payload_redirect_non_post_301_302(
+     payload = AsyncIterablePayload(async_gen())
+ 
+     with pytest.raises(
+-        aiohttp.ClientPayloadError,
++        aiohttp.ClientPayloadErrorImpl,
+         match="Cannot follow redirect with a consumed request body",
+     ):
+         await client.put("/redirect", data=payload)
+diff --git a/tests/test_phase3_rename_ClientPayloadError.py b/tests/test_phase3_rename_ClientPayloadError.py
+new file mode 100644
+index 00000000..e9cff8e2
+--- /dev/null
++++ b/tests/test_phase3_rename_ClientPayloadError.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_ClientPayloadErrorImpl():
++    owner = importlib.import_module('aiohttp.client_exceptions')
++    assert hasattr(owner, 'ClientPayloadErrorImpl')
++    assert not hasattr(owner, 'ClientPayloadError')
+diff --git a/tests/test_web_sendfile_functional.py b/tests/test_web_sendfile_functional.py
+index 2e68385b..2a36bb9a 100644
+--- a/tests/test_web_sendfile_functional.py
++++ b/tests/test_web_sendfile_functional.py
+@@ -1119,7 +1119,7 @@ async def test_static_file_huge_cancel(
+     while True:
+         try:
+             data += await resp.content.read(1024)
+-        except aiohttp.ClientPayloadError:
++        except aiohttp.ClientPayloadErrorImpl:
+             break
+     assert len(data) < 1024 * 1024 * 20
+ 

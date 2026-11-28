@@ -23,8 +23,16 @@ from benchmarks.run_two_pass_benchmark import (
 )
 from pathlib import Path
 
+import pytest
+
 from prism.engine import PrismEngine
 
+#: The express corpus needs its npm dependencies installed (`node_modules/etag`): the external-import pass
+#: reads the real `etag` package. A corpus cloned but never `npm install`ed cannot run these tests.
+_NEEDS_ETAG = pytest.mark.skipif(
+    not (Path(__file__).resolve().parent.parent / ".benchmarks" / "corpora" / "express" / "node_modules"
+         / "etag").is_dir(),
+    reason="the express corpus has no node_modules/etag (run npm install in .benchmarks/corpora/express)")
 EXPRESS_TASKS_DIR = Path(__file__).resolve().parent.parent / "benchmarks" / "ground_truth" / "tasks" / "express"
 
 
@@ -97,6 +105,7 @@ def test_request_all_external_candidates_empty_manifest_returns_empty():
 # `_external_manifest_for_task` / `_hydrate_external` - real, against
 # the real Express corpus.
 # --------------------------------------------------------------------- #
+@_NEEDS_ETAG
 def test_external_manifest_for_task_resolves_the_real_etag_dependency():
     engine = _express_engine()
     task = _load_task("express_t02_007_etag_external_dependency")
@@ -112,6 +121,7 @@ def test_external_manifest_for_task_is_empty_with_no_root_imports():
     assert candidates == set()
 
 
+@_NEEDS_ETAG
 def test_hydrate_external_appends_the_real_node_to_the_package():
     engine = _express_engine()
     task = _load_task("express_t02_007_etag_external_dependency")
@@ -136,6 +146,7 @@ def test_hydrate_external_reports_a_hallucinated_request_as_skipped():
 # --------------------------------------------------------------------- #
 # End-to-end: `run_two_pass_cell` in `--dry-run` mode (client=None).
 # --------------------------------------------------------------------- #
+@_NEEDS_ETAG
 def test_dry_run_cell_resolves_the_real_external_dependency():
     engine = _express_engine()
     task = _load_task("express_t02_007_etag_external_dependency")
@@ -155,6 +166,7 @@ def test_dry_run_cell_for_a_non_category_5_task_has_zero_external_fields():
     assert result.external_skipped_hallucinated == []
 
 
+@_NEEDS_ETAG
 def test_dry_run_cli_end_to_end_against_task_7(tmp_path):
     """The exact real command the user ran to verify this branch -
     `python -m benchmarks.run_two_pass_benchmark --repo express --tasks

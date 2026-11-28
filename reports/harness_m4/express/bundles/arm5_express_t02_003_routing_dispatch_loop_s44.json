@@ -1,0 +1,277 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_003_routing_dispatch_loop",
+  "items": [
+   {
+    "source_id": "lib/router/index.js:177-291",
+    "content": "# lib/router/index.js:177-291  (lib.router.next)\n  function next(err) {\n    var layerError = err === 'route'\n      ? null\n      : err;\n\n    // remove added slash\n    if (slashAdded) {\n      req.url = req.url.slice(1)\n      slashAdded = false;\n    }\n\n    // restore altered req.url\n    if (removed.length !== 0) {\n      req.baseUrl = parentUrl;\n      req.url = protohost + removed + req.url.slice(protohost.length)\n      removed = '';\n    }\n\n    // signal to exit router\n    if (layerError === 'router') {\n      setImmediate(done, null)\n      return\n    }\n\n    // no more matching layers\n    if (idx >= stack.length) {\n      setImmediate(done, layerError);\n      return;\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    // get pathname of request\n    var path = getPathname(req);\n\n    if (path == null) {\n      return done(layerError);\n    }\n\n    // find next matching layer\n    var layer;\n    var match;\n    var route;\n\n    while (match !== true && idx < stack.length) {\n      layer = stack[idx++];\n      match = matchLayer(layer, path);\n      route = layer.route;\n\n      if (typeof match !== 'boolean') {\n        // hold on to layerError\n        layerError = layerError || match;\n      }\n\n      if (match !== true) {\n        continue;\n      }\n\n      if (!route) {\n        // process non-route handlers normally\n        continue;\n      }\n\n      if (layerError) {\n        // routes do not match with a pending error\n        match = false;\n        continue;\n      }\n\n      var method = req.method;\n      var has_method = route._handles_method(method);\n\n      // build up automatic options response\n      if (!has_method && method === 'OPTIONS') {\n        appendMethods(options, route._options());\n      }\n\n      // don't even bother matching route\n      if (!has_method && method !== 'HEAD') {\n        match = false;\n      }\n    }\n\n    // no match\n    if (match !== true) {\n      return done(layerError);\n    }\n\n    // store route for dispatch on change\n    if (route) {\n      req.route = route;\n    }\n\n    // Capture one-time layer values\n    req.params = self.mergeParams\n      ? mergeParams(layer.params, parentParams)\n      : layer.params;\n    var layerPath = layer.path;\n\n    // this should be done for the layer\n    self.process_params(layer, paramcalled, req, res, function (err) {\n      if (err) {\n        next(layerError || err)\n      } else if (route) {\n        layer.handle_request(req, res, next)\n      } else {\n        trim_prefix(layer, layerError, layerPath, path)\n      }\n\n      sync = 0\n    });\n  }",
+    "token_count": 628,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.next"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 607,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:537-543",
+    "content": "# lib/router/index.js:537-543  (lib.router.getPathname)\nfunction getPathname(req) {\n  try {\n    return parseUrl(req).pathname;\n  } catch (err) {\n    return undefined;\n  }\n}\n\n# Referenced module constants:\nvar parseUrl = require('parseurl');",
+    "token_count": 66,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.getPathname"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 40,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:583-589",
+    "content": "# lib/router/index.js:583-589  (lib.router.matchLayer)\nfunction matchLayer(layer, path) {\n  try {\n    return layer.match(path);\n  } catch (err) {\n    return err;\n  }\n}",
+    "token_count": 51,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.matchLayer"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 31,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:110-156",
+    "content": "# lib/router/layer.js:110-156  (lib.router.layer.match)\nLayer.prototype.match = function match(path) {\n  var match\n\n  if (path != null) {\n    // fast path non-ending match for / (any path matches)\n    if (this.regexp.fast_slash) {\n      this.params = {}\n      this.path = ''\n      return true\n    }\n\n    // fast path for * (everything matched in a param)\n    if (this.regexp.fast_star) {\n      this.params = {'0': decode_param(path)}\n      this.path = path\n      return true\n    }\n\n    // match the path\n    match = this.regexp.exec(path)\n  }\n\n  if (!match) {\n    this.params = undefined;\n    this.path = undefined;\n    return false;\n  }\n\n  // store values\n  this.params = {};\n  this.path = match[0]\n\n  var keys = this.keys;\n  var params = this.params;\n\n  for (var i = 1; i < match.length; i++) {\n    var key = keys[i - 1];\n    var prop = key.name;\n    var val = decode_param(match[i])\n\n    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {\n      params[prop] = val;\n    }\n  }\n\n  return true;\n};\n\n# Referenced module constants:\nvar hasOwnProperty = Object.prototype.hasOwnProperty;",
+    "token_count": 291,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.match"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 264,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:338-422",
+    "content": "# lib/router/index.js:338-422  (lib.router.process_params)\nproto.process_params = function process_params(layer, called, req, res, done) {\n  var params = this.params;\n\n  // captured parameters from the layer, keys and values\n  var keys = layer.keys;\n\n  // fast track\n  if (!keys || keys.length === 0) {\n    return done();\n  }\n\n  var i = 0;\n  var name;\n  var paramIndex = 0;\n  var key;\n  var paramVal;\n  var paramCallbacks;\n  var paramCalled;\n\n  // process params in order\n  // param callbacks can be async\n  function param(err) {\n    if (err) {\n      return done(err);\n    }\n\n    if (i >= keys.length ) {\n      return done();\n    }\n\n    paramIndex = 0;\n    key = keys[i++];\n    name = key.name;\n    paramVal = req.params[name];\n    paramCallbacks = params[name];\n    paramCalled = called[name];\n\n    if (paramVal === undefined || !paramCallbacks) {\n      return param();\n    }\n\n    // param previously called with same value or error occurred\n    if (paramCalled && (paramCalled.match === paramVal\n      || (paramCalled.error && paramCalled.error !== 'route'))) {\n      // restore value\n      req.params[name] = paramCalled.value;\n\n      // next param\n      return param(paramCalled.error);\n    }\n\n    called[name] = paramCalled = {\n      error: null,\n      match: paramVal,\n      value: paramVal\n    };\n\n    paramCallback();\n  }\n\n  // single param callbacks\n  function paramCallback(err) {\n    var fn = paramCallbacks[paramIndex++];\n\n    // store updated value\n    paramCalled.value = req.params[key.name];\n\n    if (err) {\n      // store error\n      paramCalled.error = err;\n      param(err);\n      return;\n    }\n\n    if (!fn) return param();\n\n    try {\n      fn(req, res, paramCallback, paramVal, key.name);\n    } catch (e) {\n      paramCallback(e);\n    }\n  }\n\n  param();\n};",
+    "token_count": 450,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.process_params"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 430,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:97-129",
+    "content": "# lib/router/index.js:97-129  (lib.router.param)\nproto.param = function param(name, fn) {\n  // param logic\n  if (typeof name === 'function') {\n    deprecate('router.param(fn): Refactor to use path params');\n    this._params.push(name);\n    return;\n  }\n\n  // apply param functions\n  var params = this._params;\n  var len = params.length;\n  var ret;\n\n  if (name[0] === ':') {\n    deprecate('router.param(' + JSON.stringify(name) + ', fn): Use router.param(' + JSON.stringify(name.slice(1)) + ', fn) instead')\n    name = name.slice(1)\n  }\n\n  for (var i = 0; i < len; ++i) {\n    if (ret = params[i](name, fn)) {\n      fn = ret;\n    }\n  }\n\n  // ensure we end up with a\n  // middleware function\n  if ('function' !== typeof fn) {\n    throw new Error('invalid param() call for ' + name + ', got ' + fn);\n  }\n\n  (this.params[name] = this.params[name] || []).push(fn);\n  return this;\n};\n\n# Referenced module constants:\nvar deprecate = require('depd')('express');",
+    "token_count": 277,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.param"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 253,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:62-75",
+    "content": "# lib/router/layer.js:62-75  (lib.router.layer.handle_error)\nLayer.prototype.handle_error = function handle_error(error, req, res, next) {\n  var fn = this.handle;\n\n  if (fn.length !== 4) {\n    // not a standard error handler\n    return next(error);\n  }\n\n  try {\n    fn(error, req, res, next);\n  } catch (err) {\n    next(err);\n  }\n};",
+    "token_count": 96,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.handle_error"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 76,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:527-534",
+    "content": "# lib/router/index.js:527-534  (lib.router.appendMethods)\nfunction appendMethods(list, addition) {\n  for (var i = 0; i < addition.length; i++) {\n    var method = addition[i];\n    if (list.indexOf(method) === -1) {\n      list.push(method);\n    }\n  }\n}",
+    "token_count": 74,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.appendMethods"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 54,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:592-628",
+    "content": "# lib/router/index.js:592-628  (lib.router.mergeParams)\nfunction mergeParams(params, parent) {\n  if (typeof parent !== 'object' || !parent) {\n    return params;\n  }\n\n  // make copy of parent for base\n  var obj = mixin({}, parent);\n\n  // simple non-numeric merging\n  if (!(0 in params) || !(0 in parent)) {\n    return mixin(obj, params);\n  }\n\n  var i = 0;\n  var o = 0;\n\n  // determine numeric gaps\n  while (i in params) {\n    i++;\n  }\n\n  while (o in parent) {\n    o++;\n  }\n\n  // offset numeric indices in params before merge\n  for (i--; i >= 0; i--) {\n    params[i + o] = params[i];\n\n    // create holes for the merge when necessary\n    if (i < o) {\n      delete params[i];\n    }\n  }\n\n  return mixin(obj, params);\n}\n\n# Referenced module constants:\nvar mixin = require('utils-merge');",
+    "token_count": 225,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.mergeParams"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 199,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:58-73",
+    "content": "# lib/router/route.js:58-73  (lib.router.route._handles_method)\nRoute.prototype._handles_method = function _handles_method(method) {\n  if (this.methods._all) {\n    return true;\n  }\n\n  // normalize name\n  var name = typeof method === 'string'\n    ? method.toLowerCase()\n    : method\n\n  if (name === 'head' && !this.methods['head']) {\n    name = 'get';\n  }\n\n  return Boolean(this.methods[name]);\n};",
+    "token_count": 105,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.route._handles_method"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 84,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:80-94",
+    "content": "# lib/router/route.js:80-94  (lib.router.route._options)\nRoute.prototype._options = function _options() {\n  var methods = Object.keys(this.methods);\n\n  // append automatic head\n  if (this.methods.get && !this.methods.head) {\n    methods.push('head');\n  }\n\n  for (var i = 0; i < methods.length; i++) {\n    // make upper case\n    methods[i] = methods[i].toUpperCase();\n  }\n\n  return methods;\n};",
+    "token_count": 106,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.route._options"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 86,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:293-330",
+    "content": "# lib/router/index.js:293-330  (lib.router.trim_prefix)\n  function trim_prefix(layer, layerError, layerPath, path) {\n    if (layerPath.length !== 0) {\n      // Validate path is a prefix match\n      if (layerPath !== path.slice(0, layerPath.length)) {\n        next(layerError)\n        return\n      }\n\n      // Validate path breaks on a path separator\n      var c = path[layerPath.length]\n      if (c && c !== '/' && c !== '.') return next(layerError)\n\n      // Trim off the part of the url that matches the route\n      // middleware (.use stuff) needs to have the path stripped\n      debug('trim prefix (%s) from url %s', layerPath, req.url);\n      removed = layerPath;\n      req.url = protohost + req.url.slice(protohost.length + removed.length)\n\n      // Ensure leading slash\n      if (!protohost && req.url[0] !== '/') {\n        req.url = '/' + req.url;\n        slashAdded = true;\n      }\n\n      // Setup base URL (no trailing slash)\n      req.baseUrl = parentUrl + (removed[removed.length - 1] === '/'\n        ? removed.substring(0, removed.length - 1)\n        : removed);\n    }\n\n    debug('%s %s : %s', layer.name, layerPath, req.originalUrl);\n\n    if (layerError) {\n      layer.handle_error(layerError, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n  }\n\n# Referenced module constants:\nvar debug = require('debug')('express:router');",
+    "token_count": 347,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.trim_prefix"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 321,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2716,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating Express's router dispatch loop in lib/router/index.js. Starting from the router's internal `next` dispatch function, trace the exact causal pipeline it runs through while searching for a matching layer for an incoming request: how the request path is derived, how each stacked layer is tested for a match, and what runs once a matching layer is found.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.next\", \"lib.router.getPathname\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.router.next",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 17,
+   "manifest_candidates_unfiltered": 17,
+   "requested_symbols": [
+    "lib.router.next",
+    "lib.router.getPathname",
+    "lib.router.matchLayer",
+    "lib.router.layer.match",
+    "lib.router.process_params",
+    "lib.router.param",
+    "lib.router.layer.handle_error"
+   ],
+   "turn1_requested_count": 7,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The Express router's dispatch loop starts with the `next` function, which derives the request path using `getPathname`. It then iterates over stacked layers, testing each for a match using `matchLayer` and `layer.match`. Once a matching layer is found, it processes the parameters with `process_params` and potentially handles errors with `layer.handle_error`.\",\n  \"requested_symbols\": [\n    \"lib.router.next\",\n    \"lib.router.getPathname\",\n    \"lib.router.matchLayer\",\n    \"lib.router.layer.match\",\n    \"lib.router.process_params\",\n    \"lib.router.param\",\n    \"lib.router.layer.handle_error\"\n  ]\n}\n```",
+     "prompt_tokens": 937,
+     "completion_tokens": 143,
+     "latency_seconds": 10.619704046999686,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     18.096333
+    ],
+    "L_turn2_hydrate": [
+     72.013886
+    ],
+    "L_retrieve": [
+     10718.619962
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2716,
+   "prompt_tokens": 2998,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3011,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/router/index.js:177-291  (lib.router.next)\n  function next(err) {\n    var layerError = err === 'route'\n      ? null\n      : err;\n\n    // remove added slash\n    if (slashAdded) {\n      req.url = req.url.slice(1)\n      slashAdded = false;\n    }\n\n    // restore altered req.url\n    if (removed.length !== 0) {\n      req.baseUrl = parentUrl;\n      req.url = protohost + removed + req.url.slice(protohost.length)\n      removed = '';\n    }\n\n    // signal to exit router\n    if (layerError === 'router') {\n      setImmediate(done, null)\n      return\n    }\n\n    // no more matching layers\n    if (idx >= stack.length) {\n      setImmediate(done, layerError);\n      return;\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    // get pathname of request\n    var path = getPathname(req);\n\n    if (path == null) {\n      return done(layerError);\n    }\n\n    // find next matching layer\n    var layer;\n    var match;\n    var route;\n\n    while (match !== true && idx < stack.length) {\n      layer = stack[idx++];\n      match = matchLayer(layer, path);\n      route = layer.route;\n\n      if (typeof match !== 'boolean') {\n        // hold on to layerError\n        layerError = layerError || match;\n      }\n\n      if (match !== true) {\n        continue;\n      }\n\n      if (!route) {\n        // process non-route handlers normally\n        continue;\n      }\n\n      if (layerError) {\n        // routes do not match with a pending error\n        match = false;\n        continue;\n      }\n\n      var method = req.method;\n      var has_method = route._handles_method(method);\n\n      // build up automatic options response\n      if (!has_method && method === 'OPTIONS') {\n        appendMethods(options, route._options());\n      }\n\n      // don't even bother matching route\n      if (!has_method && method !== 'HEAD') {\n        match = false;\n      }\n    }\n\n    // no match\n    if (match !== true) {\n      return done(layerError);\n    }\n\n    // store route for dispatch on change\n    if (route) {\n      req.route = route;\n    }\n\n    // Capture one-time layer values\n    req.params = self.mergeParams\n      ? mergeParams(layer.params, parentParams)\n      : layer.params;\n    var layerPath = layer.path;\n\n    // this should be done for the layer\n    self.process_params(layer, paramcalled, req, res, function (err) {\n      if (err) {\n        next(layerError || err)\n      } else if (route) {\n        layer.handle_request(req, res, next)\n      } else {\n        trim_prefix(layer, layerError, layerPath, path)\n      }\n\n      sync = 0\n    });\n  }\n\n# lib/router/index.js:537-543  (lib.router.getPathname)\nfunction getPathname(req) {\n  try {\n    return parseUrl(req).pathname;\n  } catch (err) {\n    return undefined;\n  }\n}\n\n# Referenced module constants:\nvar parseUrl = require('parseurl');\n\n# lib/router/index.js:583-589  (lib.router.matchLayer)\nfunction matchLayer(layer, path) {\n  try {\n    return layer.match(path);\n  } catch (err) {\n    return err;\n  }\n}\n\n# lib/router/layer.js:110-156  (lib.router.layer.match)\nLayer.prototype.match = function match(path) {\n  var match\n\n  if (path != null) {\n    // fast path non-ending match for / (any path matches)\n    if (this.regexp.fast_slash) {\n      this.params = {}\n      this.path = ''\n      return true\n    }\n\n    // fast path for * (everything matched in a param)\n    if (this.regexp.fast_star) {\n      this.params = {'0': decode_param(path)}\n      this.path = path\n      return true\n    }\n\n    // match the path\n    match = this.regexp.exec(path)\n  }\n\n  if (!match) {\n    this.params = undefined;\n    this.path = undefined;\n    return false;\n  }\n\n  // store values\n  this.params = {};\n  this.path = match[0]\n\n  var keys = this.keys;\n  var params = this.params;\n\n  for (var i = 1; i < match.length; i++) {\n    var key = keys[i - 1];\n    var prop = key.name;\n    var val = decode_param(match[i])\n\n    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {\n      params[prop] = val;\n    }\n  }\n\n  return true;\n};\n\n# Referenced module constants:\nvar hasOwnProperty = Object.prototype.hasOwnProperty;\n\n# lib/router/index.js:338-422  (lib.router.process_params)\nproto.process_params = function process_params(layer, called, req, res, done) {\n  var params = this.params;\n\n  // captured parameters from the layer, keys and values\n  var keys = layer.keys;\n\n  // fast track\n  if (!keys || keys.length === 0) {\n    return done();\n  }\n\n  var i = 0;\n  var name;\n  var paramIndex = 0;\n  var key;\n  var paramVal;\n  var paramCallbacks;\n  var paramCalled;\n\n  // process params in order\n  // param callbacks can be async\n  function param(err) {\n    if (err) {\n      return done(err);\n    }\n\n    if (i >= keys.length ) {\n      return done();\n    }\n\n    paramIndex = 0;\n    key = keys[i++];\n    name = key.name;\n    paramVal = req.params[name];\n    paramCallbacks = params[name];\n    paramCalled = called[name];\n\n    if (paramVal === undefined || !paramCallbacks) {\n      return param();\n    }\n\n    // param previously called with same value or error occurred\n    if (paramCalled && (paramCalled.match === paramVal\n      || (paramCalled.error && paramCalled.error !== 'route'))) {\n      // restore value\n      req.params[name] = paramCalled.value;\n\n      // next param\n      return param(paramCalled.error);\n    }\n\n    called[name] = paramCalled = {\n      error: null,\n      match: paramVal,\n      value: paramVal\n    };\n\n    paramCallback();\n  }\n\n  // single param callbacks\n  function paramCallback(err) {\n    var fn = paramCallbacks[paramIndex++];\n\n    // store updated value\n    paramCalled.value = req.params[key.name];\n\n    if (err) {\n      // store error\n      paramCalled.error = err;\n      param(err);\n      return;\n    }\n\n    if (!fn) return param();\n\n    try {\n      fn(req, res, paramCallback, paramVal, key.name);\n    } catch (e) {\n      paramCallback(e);\n    }\n  }\n\n  param();\n};\n\n# lib/router/index.js:97-129  (lib.router.param)\nproto.param = function param(name, fn) {\n  // param logic\n  if (typeof name === 'function') {\n    deprecate('router.param(fn): Refactor to use path params');\n    this._params.push(name);\n    return;\n  }\n\n  // apply param functions\n  var params = this._params;\n  var len = params.length;\n  var ret;\n\n  if (name[0] === ':') {\n    deprecate('router.param(' + JSON.stringify(name) + ', fn): Use router.param(' + JSON.stringify(name.slice(1)) + ', fn) instead')\n    name = name.slice(1)\n  }\n\n  for (var i = 0; i < len; ++i) {\n    if (ret = params[i](name, fn)) {\n      fn = ret;\n    }\n  }\n\n  // ensure we end up with a\n  // middleware function\n  if ('function' !== typeof fn) {\n    throw new Error('invalid param() call for ' + name + ', got ' + fn);\n  }\n\n  (this.params[name] = this.params[name] || []).push(fn);\n  return this;\n};\n\n# Referenced module constants:\nvar deprecate = require('depd')('express');\n\n# lib/router/layer.js:62-75  (lib.router.layer.handle_error)\nLayer.prototype.handle_error = function handle_error(error, req, res, next) {\n  var fn = this.handle;\n\n  if (fn.length !== 4) {\n    // not a standard error handler\n    return next(error);\n  }\n\n  try {\n    fn(error, req, res, next);\n  } catch (err) {\n    next(err);\n  }\n};\n\n# lib/router/index.js:527-534  (lib.router.appendMethods)\nfunction appendMethods(list, addition) {\n  for (var i = 0; i < addition.length; i++) {\n    var method = addition[i];\n    if (list.indexOf(method) === -1) {\n      list.push(method);\n    }\n  }\n}\n\n# lib/router/index.js:592-628  (lib.router.mergeParams)\nfunction mergeParams(params, parent) {\n  if (typeof parent !== 'object' || !parent) {\n    return params;\n  }\n\n  // make copy of parent for base\n  var obj = mixin({}, parent);\n\n  // simple non-numeric merging\n  if (!(0 in params) || !(0 in parent)) {\n    return mixin(obj, params);\n  }\n\n  var i = 0;\n  var o = 0;\n\n  // determine numeric gaps\n  while (i in params) {\n    i++;\n  }\n\n  while (o in parent) {\n    o++;\n  }\n\n  // offset numeric indices in params before merge\n  for (i--; i >= 0; i--) {\n    params[i + o] = params[i];\n\n    // create holes for the merge when necessary\n    if (i < o) {\n      delete params[i];\n    }\n  }\n\n  return mixin(obj, params);\n}\n\n# Referenced module constants:\nvar mixin = require('utils-merge');\n\n# lib/router/route.js:58-73  (lib.router.route._handles_method)\nRoute.prototype._handles_method = function _handles_method(method) {\n  if (this.methods._all) {\n    return true;\n  }\n\n  // normalize name\n  var name = typeof method === 'string'\n    ? method.toLowerCase()\n    : method\n\n  if (name === 'head' && !this.methods['head']) {\n    name = 'get';\n  }\n\n  return Boolean(this.methods[name]);\n};\n\n# lib/router/route.js:80-94  (lib.router.route._options)\nRoute.prototype._options = function _options() {\n  var methods = Object.keys(this.methods);\n\n  // append automatic head\n  if (this.methods.get && !this.methods.head) {\n    methods.push('head');\n  }\n\n  for (var i = 0; i < methods.length; i++) {\n    // make upper case\n    methods[i] = methods[i].toUpperCase();\n  }\n\n  return methods;\n};\n\n# lib/router/index.js:293-330  (lib.router.trim_prefix)\n  function trim_prefix(layer, layerError, layerPath, path) {\n    if (layerPath.length !== 0) {\n      // Validate path is a prefix match\n      if (layerPath !== path.slice(0, layerPath.length)) {\n        next(layerError)\n        return\n      }\n\n      // Validate path breaks on a path separator\n      var c = path[layerPath.length]\n      if (c && c !== '/' && c !== '.') return next(layerError)\n\n      // Trim off the part of the url that matches the route\n      // middleware (.use stuff) needs to have the path stripped\n      debug('trim prefix (%s) from url %s', layerPath, req.url);\n      removed = layerPath;\n      req.url = protohost + req.url.slice(protohost.length + removed.length)\n\n      // Ensure leading slash\n      if (!protohost && req.url[0] !== '/') {\n        req.url = '/' + req.url;\n        slashAdded = true;\n      }\n\n      // Setup base URL (no trailing slash)\n      req.baseUrl = parentUrl + (removed[removed.length - 1] === '/'\n        ? removed.substring(0, removed.length - 1)\n        : removed);\n    }\n\n    debug('%s %s : %s', layer.name, layerPath, req.originalUrl);\n\n    if (layerError) {\n      layer.handle_error(layerError, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n  }\n\n# Referenced module constants:\nvar debug = require('debug')('express:router');\n\n## Task\n\nYou are investigating Express's router dispatch loop in lib/router/index.js. Starting from the router's internal `next` dispatch function, trace the exact causal pipeline it runs through while searching for a matching layer for an incoming request: how the request path is derived, how each stacked layer is tested for a match, and what runs once a matching layer is found.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.next\", \"lib.router.getPathname\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

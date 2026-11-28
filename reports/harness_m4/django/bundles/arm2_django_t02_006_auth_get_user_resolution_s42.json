@@ -1,0 +1,1199 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_006_auth_get_user_resolution",
+  "items": [
+   {
+    "source_id": "django/contrib/auth/middleware.py:9-12",
+    "content": "# django/contrib/auth/middleware.py:9-12  (django.contrib.auth.middleware.get_user)\ndef get_user(request):\n    if not hasattr(request, \"_cached_user\"):\n        request._cached_user = auth.get_user(request)\n    return request._cached_user",
+    "token_count": 54,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.middleware.get_user"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:1-6",
+    "content": "# django/contrib/auth/middleware.py:1-6  (django.contrib.auth.middleware)\nfrom django.contrib import auth\nfrom django.contrib.auth import load_backend\nfrom django.contrib.auth.backends import RemoteUserBackend\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.utils.deprecation import MiddlewareMixin\nfrom django.utils.functional import SimpleLazyObject",
+    "token_count": 71,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:16-25",
+    "content": "# django/contrib/auth/middleware.py:16-25  (django.contrib.auth.middleware.AuthenticationMiddleware.process_request)\nclass AuthenticationMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        if not hasattr(request, \"session\"):\n            raise ImproperlyConfigured(\n                \"The Django authentication middleware requires session \"\n                \"middleware to be installed. Edit your MIDDLEWARE setting to \"\n                \"insert \"\n                \"'django.contrib.sessions.middleware.SessionMiddleware' before \"\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n            )\n        request.user = SimpleLazyObject(lambda: get_user(request))",
+    "token_count": 121,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.middleware.AuthenticationMiddleware.process_request"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 121
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:29-46",
+    "content": "# django/contrib/auth/middleware.py:29-46  (django.contrib.auth.middleware.RemoteUserMiddleware)\nclass RemoteUserMiddleware(MiddlewareMixin):\n    \"\"\"\n    Middleware for utilizing web-server-provided authentication.\n\n    If request.user is not authenticated, then this middleware attempts to\n    authenticate the username passed in the ``REMOTE_USER`` request header.\n    If authentication is successful, the user is automatically logged in to\n    persist the user in the session.\n\n    The header used is configurable and defaults to ``REMOTE_USER``.  Subclass\n    this class and change the ``header`` attribute if you need to use a\n    different header.\n    \"\"\"\n\n    # Name of request header to grab username from.  This will be the key as\n    # used in the request.META dictionary, i.e. the normalization of headers to\n    # all uppercase and the addition of \"HTTP_\" prefix apply.\n    header = \"REMOTE_USER\"\n    force_logout_if_no_header = True",
+    "token_count": 202,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.middleware.RemoteUserMiddleware"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 202
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:48-85",
+    "content": "# django/contrib/auth/middleware.py:48-85  (django.contrib.auth.middleware.RemoteUserMiddleware.process_request)\nclass RemoteUserMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        # AuthenticationMiddleware is required so that request.user exists.\n        if not hasattr(request, \"user\"):\n            raise ImproperlyConfigured(\n                \"The Django remote user auth middleware requires the\"\n                \" authentication middleware to be installed.  Edit your\"\n                \" MIDDLEWARE setting to insert\"\n                \" 'django.contrib.auth.middleware.AuthenticationMiddleware'\"\n                \" before the RemoteUserMiddleware class.\"\n            )\n        try:\n            username = request.META[self.header]\n        except KeyError:\n            # If specified header doesn't exist then remove any existing\n            # authenticated remote-user, or return (leaving request.user set to\n            # AnonymousUser by the AuthenticationMiddleware).\n            if self.force_logout_if_no_header and request.user.is_authenticated:\n                self._remove_invalid_user(request)\n            return\n        # If the user is already authenticated and that user is the user we are\n        # getting passed in the headers, then the correct user is already\n        # persisted in the session and we don't need to continue.\n        if request.user.is_authenticated:\n            if request.user.get_username() == self.clean_username(username, request):\n                return\n            else:\n                # An authenticated user is associated with the request, but\n                # it does not match the authorized user in the header.\n                self._remove_invalid_user(request)\n\n        # We are seeing this user for the first time in this session, attempt\n        # to authenticate the user.\n        user = auth.authenticate(request, remote_user=username)\n        if user:\n            # User is valid.  Set request.user and persist user in the session\n            # by logging the user in.\n            request.user = user\n            auth.login(request, user)",
+    "token_count": 388,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.middleware.RemoteUserMiddleware.process_request"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 388
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:87-98",
+    "content": "# django/contrib/auth/middleware.py:87-98  (django.contrib.auth.middleware.RemoteUserMiddleware.clean_username)\nclass RemoteUserMiddleware(MiddlewareMixin):\n    def clean_username(self, username, request):\n        \"\"\"\n        Allow the backend to clean the username, if the backend defines a\n        clean_username method.\n        \"\"\"\n        backend_str = request.session[auth.BACKEND_SESSION_KEY]\n        backend = auth.load_backend(backend_str)\n        try:\n            username = backend.clean_username(username)\n        except AttributeError:  # Backend has no clean_username method.\n            pass\n        return username",
+    "token_count": 121,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.middleware.RemoteUserMiddleware.clean_username"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 121
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:100-114",
+    "content": "# django/contrib/auth/middleware.py:100-114  (django.contrib.auth.middleware.RemoteUserMiddleware._remove_invalid_user)\nclass RemoteUserMiddleware(MiddlewareMixin):\n    def _remove_invalid_user(self, request):\n        \"\"\"\n        Remove the current authenticated user in the request which is invalid\n        but only if the user is authenticated via the RemoteUserBackend.\n        \"\"\"\n        try:\n            stored_backend = load_backend(\n                request.session.get(auth.BACKEND_SESSION_KEY, \"\")\n            )\n        except ImportError:\n            # backend failed to load\n            auth.logout(request)\n        else:\n            if isinstance(stored_backend, RemoteUserBackend):\n                auth.logout(request)",
+    "token_count": 137,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.middleware.RemoteUserMiddleware._remove_invalid_user"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 137
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/middleware.py:118-128",
+    "content": "# django/contrib/auth/middleware.py:118-128  (django.contrib.auth.middleware.PersistentRemoteUserMiddleware)\nclass PersistentRemoteUserMiddleware(RemoteUserMiddleware):\n    \"\"\"\n    Middleware for web-server provided authentication on logon pages.\n\n    Like RemoteUserMiddleware but keeps the user authenticated even if\n    the header (``REMOTE_USER``) is not found in the request. Useful\n    for setups when the external authentication via ``REMOTE_USER``\n    is only expected to happen on some \"logon\" URL and the rest of\n    the application wants to use Django's authentication mechanism.\n    \"\"\"\n\n    force_logout_if_no_header = False",
+    "token_count": 134,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.middleware.PersistentRemoteUserMiddleware"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:173-185",
+    "content": "# django/contrib/auth/backends.py:173-185  (django.contrib.auth.backends.RemoteUserBackend)\nclass RemoteUserBackend(ModelBackend):\n    \"\"\"\n    This backend is to be used in conjunction with the ``RemoteUserMiddleware``\n    found in the middleware module of this package, and is used when the server\n    is handling authentication outside of Django.\n\n    By default, the ``authenticate`` method creates ``User`` objects for\n    usernames that don't already exist in the database.  Subclasses can disable\n    this behavior by setting the ``create_unknown_user`` attribute to\n    ``False``.\n    \"\"\"\n\n    # Create a User object if not already in the database?\n    create_unknown_user = True",
+    "token_count": 149,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.RemoteUserBackend"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 149
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:680-706",
+    "content": "# tests/auth_tests/test_auth_backends.py:680-706  (tests.auth_tests.test_auth_backends.ChangedBackendSettingsTest.test_changed_backend_settings)\nclass ChangedBackendSettingsTest(TestCase):\n    @override_settings(AUTHENTICATION_BACKENDS=[backend])\n    def test_changed_backend_settings(self):\n        \"\"\"\n        Removing a backend configured in AUTHENTICATION_BACKENDS makes already\n        logged-in users disconnect.\n        \"\"\"\n        # Get a session for the test user\n        self.assertTrue(\n            self.client.login(\n                username=self.TEST_USERNAME,\n                password=self.TEST_PASSWORD,\n            )\n        )\n        # Prepare a request object\n        request = HttpRequest()\n        request.session = self.client.session\n        # Remove NewModelBackend\n        with self.settings(\n            AUTHENTICATION_BACKENDS=[\"django.contrib.auth.backends.ModelBackend\"]\n        ):\n            # Get the user from the request\n            user = get_user(request)\n\n            # Assert that the user retrieval is successful and the user is\n            # anonymous as the backend is not longer available.\n            self.assertIsNotNone(user)\n            self.assertTrue(user.is_anonymous)",
+    "token_count": 223,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.ChangedBackendSettingsTest.test_changed_backend_settings"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 223
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:182-223",
+    "content": "# django/contrib/auth/__init__.py:182-223  (django.contrib.auth.get_user)\ndef get_user(request):\n    \"\"\"\n    Return the user model instance associated with the given request session.\n    If no user is retrieved, return an instance of `AnonymousUser`.\n    \"\"\"\n    from .models import AnonymousUser\n\n    user = None\n    try:\n        user_id = _get_user_session_key(request)\n        backend_path = request.session[BACKEND_SESSION_KEY]\n    except KeyError:\n        pass\n    else:\n        if backend_path in settings.AUTHENTICATION_BACKENDS:\n            backend = load_backend(backend_path)\n            user = backend.get_user(user_id)\n            # Verify the session\n            if hasattr(user, \"get_session_auth_hash\"):\n                session_hash = request.session.get(HASH_SESSION_KEY)\n                if not session_hash:\n                    session_hash_verified = False\n                else:\n                    session_auth_hash = user.get_session_auth_hash()\n                    session_hash_verified = constant_time_compare(\n                        session_hash, session_auth_hash\n                    )\n                if not session_hash_verified:\n                    # If the current secret does not verify the session, try\n                    # with the fallback secrets and stop when a matching one is\n                    # found.\n                    if session_hash and any(\n                        constant_time_compare(session_hash, fallback_auth_hash)\n                        for fallback_auth_hash in user.get_session_auth_fallback_hash()\n                    ):\n                        request.session.cycle_key()\n                        request.session[HASH_SESSION_KEY] = session_auth_hash\n                    else:\n                        request.session.flush()\n                        user = None\n\n    return user or AnonymousUser()",
+    "token_count": 327,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.get_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "function",
+     "engine_token_count": 327
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:16-17",
+    "content": "# django/contrib/auth/backends.py:16-17  (django.contrib.auth.backends.BaseBackend.get_user)\nclass BaseBackend:\n    def get_user(self, user_id):\n        return None",
+    "token_count": 41,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.BaseBackend.get_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "method",
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:338-354",
+    "content": "# tests/auth_tests/test_auth_backends.py:338-354  (tests.auth_tests.test_auth_backends.ExtensionUserModelBackendTest)\n@override_settings(AUTH_USER_MODEL=\"auth_tests.ExtensionUser\")\nclass ExtensionUserModelBackendTest(BaseModelBackendTest, TestCase):\n    \"\"\"\n    Tests for the ModelBackend using the custom ExtensionUser model.\n\n    This isn't a perfect test, because both the User and ExtensionUser are\n    synchronized to the database, which wouldn't ordinary happen in\n    production. As a result, it doesn't catch errors caused by the non-\n    existence of the User table.\n\n    The specific problem is queries on .filter(groups__user) et al, which\n    makes an implicit assumption that the user model is called 'User'. In\n    production, the auth.User table won't exist, so the requested join\n    won't exist either; in testing, the auth.User *does* exist, and\n    so does the join. However, the join table won't contain any useful\n    data; for testing, we check that the data we expect actually does exist.\n    \"\"\"\n\n    UserModel = ExtensionUser",
+    "token_count": 237,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.ExtensionUserModelBackendTest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 237
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:94-144",
+    "content": "# django/contrib/auth/__init__.py:94-144  (django.contrib.auth.login)\ndef login(request, user, backend=None):\n    \"\"\"\n    Persist a user id and a backend in the request. This way a user doesn't\n    have to reauthenticate on every request. Note that data set during\n    the anonymous session is retained when the user logs in.\n    \"\"\"\n    session_auth_hash = \"\"\n    if user is None:\n        user = request.user\n    if hasattr(user, \"get_session_auth_hash\"):\n        session_auth_hash = user.get_session_auth_hash()\n\n    if SESSION_KEY in request.session:\n        if _get_user_session_key(request) != user.pk or (\n            session_auth_hash\n            and not constant_time_compare(\n                request.session.get(HASH_SESSION_KEY, \"\"), session_auth_hash\n            )\n        ):\n            # To avoid reusing another user's session, create a new, empty\n            # session if the existing session corresponds to a different\n            # authenticated user.\n            request.session.flush()\n    else:\n        request.session.cycle_key()\n\n    try:\n        backend = backend or user.backend\n    except AttributeError:\n        backends = _get_backends(return_tuples=True)\n        if len(backends) == 1:\n            _, backend = backends[0]\n        else:\n            raise ValueError(\n                \"You have multiple authentication backends configured and \"\n                \"therefore must provide the `backend` argument or set the \"\n                \"`backend` attribute on the user.\"\n            )\n    else:\n        if not isinstance(backend, str):\n            raise TypeError(\n                \"backend must be a dotted import path string (got %r).\" % backend\n            )\n\n    request.session[SESSION_KEY] = user._meta.pk.value_to_string(user)\n    request.session[BACKEND_SESSION_KEY] = backend\n    request.session[HASH_SESSION_KEY] = session_auth_hash\n    if hasattr(request, \"user\"):\n        request.user = user\n    rotate_token(request)\n    user_logged_in.send(sender=user.__class__, request=request, user=user)",
+    "token_count": 425,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.login"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "function",
+     "engine_token_count": 425
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:159-164",
+    "content": "# django/contrib/auth/backends.py:159-164  (django.contrib.auth.backends.ModelBackend.get_user)\nclass ModelBackend(BaseBackend):\n    def get_user(self, user_id):\n        try:\n            user = UserModel._default_manager.get(pk=user_id)\n        except UserModel.DoesNotExist:\n            return None\n        return user if self.user_can_authenticate(user) else None",
+    "token_count": 79,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.get_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:770-782",
+    "content": "# django/test/client.py:770-782  (django.test.client.ClientMixin.force_login)\nclass ClientMixin:\n    def force_login(self, user, backend=None):\n        def get_backend():\n            from django.contrib.auth import load_backend\n\n            for backend_path in settings.AUTHENTICATION_BACKENDS:\n                backend = load_backend(backend_path)\n                if hasattr(backend, \"get_user\"):\n                    return backend_path\n\n        if backend is None:\n            backend = get_backend()\n        user.backend = backend\n        self._login(user, backend)",
+    "token_count": 113,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.ClientMixin.force_login"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "method",
+     "engine_token_count": 113
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client_regress/auth_backends.py:15-19",
+    "content": "# tests/test_client_regress/auth_backends.py:15-19  (tests.test_client_regress.auth_backends.CustomUserBackend.get_user)\nclass CustomUserBackend(ModelBackend):\n    def get_user(self, user_id):\n        try:\n            return CustomUser.custom_objects.get(pk=user_id)\n        except CustomUser.DoesNotExist:\n            return None",
+    "token_count": 71,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client_regress.auth_backends.CustomUserBackend.get_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:63-91",
+    "content": "# django/contrib/auth/__init__.py:63-91  (django.contrib.auth.authenticate)\n@sensitive_variables(\"credentials\")\ndef authenticate(request=None, **credentials):\n    \"\"\"\n    If the given credentials are valid, return a User object.\n    \"\"\"\n    for backend, backend_path in _get_backends(return_tuples=True):\n        backend_signature = inspect.signature(backend.authenticate)\n        try:\n            backend_signature.bind(request, **credentials)\n        except TypeError:\n            # This backend doesn't accept these credentials as arguments. Try\n            # the next one.\n            continue\n        try:\n            user = backend.authenticate(request, **credentials)\n        except PermissionDenied:\n            # This backend says to stop in our tracks - this user should not be\n            # allowed in at all.\n            break\n        if user is None:\n            continue\n        # Annotate the user object with the path of the backend.\n        user.backend = backend_path\n        return user\n\n    # The credentials supplied are invalid to all backends, fire signal\n    user_login_failed.send(\n        sender=__name__, credentials=_clean_credentials(credentials), request=request\n    )",
+    "token_count": 234,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.authenticate"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "function",
+     "engine_token_count": 234
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/forms.py:279-280",
+    "content": "# django/contrib/auth/forms.py:279-280  (django.contrib.auth.forms.AuthenticationForm.get_user)\nclass AuthenticationForm(forms.Form):\n    def get_user(self):\n        return self.user_cache",
+    "token_count": 43,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.forms.AuthenticationForm.get_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "method",
+     "engine_token_count": 43
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/tests.py:776-787",
+    "content": "# tests/test_client/tests.py:776-787  (tests.test_client.tests.ClientTest.test_force_login_with_backend_missing_get_user)\nclass ClientTest(TestCase):\n    @override_settings(\n        AUTHENTICATION_BACKENDS=[\n            \"test_client.auth_backends.BackendWithoutGetUserMethod\",\n            \"django.contrib.auth.backends.ModelBackend\",\n        ]\n    )\n    def test_force_login_with_backend_missing_get_user(self):\n        \"\"\"\n        force_login() skips auth backends without a get_user() method.\n        \"\"\"\n        self.client.force_login(self.u1)\n        self.assertEqual(self.u1.backend, \"django.contrib.auth.backends.ModelBackend\")",
+    "token_count": 130,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client.tests.ClientTest.test_force_login_with_backend_missing_get_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "method",
+     "engine_token_count": 130
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:809-821",
+    "content": "# django/test/client.py:809-821  (django.test.client.ClientMixin.logout)\nclass ClientMixin:\n    def logout(self):\n        \"\"\"Log out the user by removing the cookies and session object.\"\"\"\n        from django.contrib.auth import get_user, logout\n\n        request = HttpRequest()\n        if self.session:\n            request.session = self.session\n            request.user = get_user(request)\n        else:\n            engine = import_module(settings.SESSION_ENGINE)\n            request.session = engine.SessionStore()\n        logout(request)\n        self.cookies = SimpleCookie()",
+    "token_count": 113,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.ClientMixin.logout"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 113
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/password_validation.py:160-171",
+    "content": "# django/contrib/auth/password_validation.py:160-171  (django.contrib.auth.password_validation.UserAttributeSimilarityValidator)\nclass UserAttributeSimilarityValidator:\n    \"\"\"\n    Validate that the password is sufficiently different from the user's\n    attributes.\n\n    If no specific attributes are provided, look at a sensible list of\n    defaults. Attributes that don't exist are ignored. Comparison is made to\n    not only the full attribute value, but also its components, so that, for\n    example, a password is validated against either part of an email address,\n    as well as the full address.\n    \"\"\"\n\n    DEFAULT_USER_ATTRIBUTES = (\"username\", \"first_name\", \"last_name\", \"email\")",
+    "token_count": 147,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 147
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:373-381",
+    "content": "# tests/auth_tests/test_auth_backends.py:373-381  (tests.auth_tests.test_auth_backends.CustomPermissionsUserModelBackendTest)\n@override_settings(AUTH_USER_MODEL=\"auth_tests.CustomPermissionsUser\")\nclass CustomPermissionsUserModelBackendTest(BaseModelBackendTest, TestCase):\n    \"\"\"\n    Tests for the ModelBackend using the CustomPermissionsUser model.\n\n    As with the ExtensionUser test, this isn't a perfect test, because both\n    the User and CustomPermissionsUser are synchronized to the database,\n    which wouldn't ordinary happen in production.\n    \"\"\"\n\n    UserModel = CustomPermissionsUser",
+    "token_count": 124,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.CustomPermissionsUserModelBackendTest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 124
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:929-934",
+    "content": "# tests/auth_tests/test_auth_backends.py:929-934  (tests.auth_tests.test_auth_backends.AllowAllUsersModelBackendTest.test_get_user)\nclass AllowAllUsersModelBackendTest(TestCase):\n    def test_get_user(self):\n        self.client.force_login(self.user)\n        request = HttpRequest()\n        request.session = self.client.session\n        user = get_user(request)\n        self.assertEqual(user, self.user)",
+    "token_count": 88,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.AllowAllUsersModelBackendTest.test_get_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "method",
+     "engine_token_count": 88
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_remote_user.py:21-28",
+    "content": "# tests/auth_tests/test_remote_user.py:21-28  (tests.auth_tests.test_remote_user.RemoteUserTest)\n@override_settings(ROOT_URLCONF=\"auth_tests.urls\")\nclass RemoteUserTest(TestCase):\n    middleware = \"django.contrib.auth.middleware.RemoteUserMiddleware\"\n    backend = \"django.contrib.auth.backends.RemoteUserBackend\"\n    header = \"REMOTE_USER\"\n    email_header = \"REMOTE_EMAIL\"\n\n    # Usernames to be passed in REMOTE_USER for the test_known_user test case.\n    known_user = \"knownuser\"\n    known_user2 = \"knownuser2\"",
+    "token_count": 119,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_remote_user.RemoteUserTest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:165-179",
+    "content": "# django/contrib/auth/__init__.py:165-179  (django.contrib.auth.get_user_model)\ndef get_user_model():\n    \"\"\"\n    Return the User model that is active in this project.\n    \"\"\"\n    try:\n        return django_apps.get_model(settings.AUTH_USER_MODEL, require_ready=False)\n    except ValueError:\n        raise ImproperlyConfigured(\n            \"AUTH_USER_MODEL must be of the form 'app_label.model_name'\"\n        )\n    except LookupError:\n        raise ImproperlyConfigured(\n            \"AUTH_USER_MODEL refers to model '%s' that has not been installed\"\n            % settings.AUTH_USER_MODEL\n        )",
+    "token_count": 134,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.get_user_model"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "function",
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/checks.py:55-173",
+    "content": "# django/contrib/admin/checks.py:55-173  (django.contrib.admin.checks.check_dependencies)\ndef check_dependencies(**kwargs):\n    \"\"\"\n    Check that the admin's dependencies are correctly installed.\n    \"\"\"\n    from django.contrib.admin.sites import all_sites\n\n    if not apps.is_installed(\"django.contrib.admin\"):\n        return []\n    errors = []\n    app_dependencies = (\n        (\"django.contrib.contenttypes\", 401),\n        (\"django.contrib.auth\", 405),\n        (\"django.contrib.messages\", 406),\n    )\n    for app_name, error_code in app_dependencies:\n        if not apps.is_installed(app_name):\n            errors.append(\n                checks.Error(\n                    \"'%s' must be in INSTALLED_APPS in order to use the admin \"\n                    \"application.\" % app_name,\n                    id=\"admin.E%d\" % error_code,\n                )\n            )\n    for engine in engines.all():\n        if isinstance(engine, DjangoTemplates):\n            django_templates_instance = engine.engine\n            break\n    else:\n        django_templates_instance = None\n    if not django_templates_instance:\n        errors.append(\n            checks.Error(\n                \"A 'django.template.backends.django.DjangoTemplates' instance \"\n                \"must be configured in TEMPLATES in order to use the admin \"\n                \"application.\",\n                id=\"admin.E403\",\n            )\n        )\n    else:\n        if (\n            \"django.contrib.auth.context_processors.auth\"\n            not in django_templates_instance.context_processors\n            and _contains_subclass(\n                \"django.contrib.auth.backends.ModelBackend\",\n                settings.AUTHENTICATION_BACKENDS,\n            )\n        ):\n            errors.append(\n                checks.Error(\n                    \"'django.contrib.auth.context_processors.auth' must be \"\n                    \"enabled in DjangoTemplates (TEMPLATES) if using the default \"\n                    \"auth backend in order to use the admin application.\",\n                    id=\"admin.E402\",\n                )\n            )\n        if (\n            \"django.contrib.messages.context_processors.messages\"\n            not in django_templates_instance.context_processors\n        ):\n            errors.append(\n                checks.Error(\n                    \"'django.contrib.messages.context_processors.messages' must \"\n                    \"be enabled in DjangoTemplates (TEMPLATES) in order to use \"\n                    \"the admin application.\",\n                    id=\"admin.E404\",\n                )\n            )\n        sidebar_enabled = any(site.enable_nav_sidebar for site in all_sites)\n        if (\n            sidebar_enabled\n            and \"django.template.context_processors.request\"\n            not in django_templates_instance.context_processors\n        ):\n            errors.append(\n                checks.Warning(\n                    \"'django.template.context_processors.request' must be enabled \"\n                    \"in DjangoTemplates (TEMPLATES) in order to use the admin \"\n                    \"navigation sidebar.\",\n                    id=\"admin.W411\",\n                )\n            )\n\n    if not _contains_subclass(\n        \"django.contrib.auth.middleware.AuthenticationMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                id=\"admin.E408\",\n            )\n        )\n    if not _contains_subclass(\n        \"django.contrib.messages.middleware.MessageMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.messages.middleware.MessageMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                id=\"admin.E409\",\n            )\n        )\n    if not _contains_subclass(\n        \"django.contrib.sessions.middleware.SessionMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.sessions.middleware.SessionMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                hint=(\n                    \"Insert \"\n                    \"'django.contrib.sessions.middleware.SessionMiddleware' \"\n                    \"before \"\n                    \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n                ),\n                id=\"admin.E410\",\n            )\n        )\n    return errors",
+    "token_count": 817,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.checks.check_dependencies"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "function",
+     "engine_token_count": 817
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admindocs/middleware.py:14-33",
+    "content": "# django/contrib/admindocs/middleware.py:14-33  (django.contrib.admindocs.middleware.XViewMiddleware.process_view)\nclass XViewMiddleware(MiddlewareMixin):\n    def process_view(self, request, view_func, view_args, view_kwargs):\n        \"\"\"\n        If the request method is HEAD and either the IP is internal or the\n        user is a logged-in staff member, return a response with an x-view\n        header indicating the view function. This is used to lookup the view\n        function for an arbitrary page.\n        \"\"\"\n        if not hasattr(request, \"user\"):\n            raise ImproperlyConfigured(\n                \"The XView middleware requires authentication middleware to \"\n                \"be installed. Edit your MIDDLEWARE setting to insert \"\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n            )\n        if request.method == \"HEAD\" and (\n            request.META.get(\"REMOTE_ADDR\") in settings.INTERNAL_IPS\n            or (request.user.is_active and request.user.is_staff)\n        ):\n            response = HttpResponse()\n            response.headers[\"X-View\"] = get_view_name(view_func)\n            return response",
+    "token_count": 231,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admindocs.middleware.XViewMiddleware.process_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 231
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/context_processors.py:49-67",
+    "content": "# django/contrib/auth/context_processors.py:49-67  (django.contrib.auth.context_processors.auth)\ndef auth(request):\n    \"\"\"\n    Return context variables required by apps that use Django's authentication\n    system.\n\n    If there is no 'user' attribute in the request, use AnonymousUser (from\n    django.contrib.auth).\n    \"\"\"\n    if hasattr(request, \"user\"):\n        user = request.user\n    else:\n        from django.contrib.auth.models import AnonymousUser\n\n        user = AnonymousUser()\n\n    return {\n        \"user\": user,\n        \"perms\": PermWrapper(user),\n    }",
+    "token_count": 123,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.context_processors.auth"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "function",
+     "engine_token_count": 123
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/checks.py:11-104",
+    "content": "# django/contrib/auth/checks.py:11-104  (django.contrib.auth.checks.check_user_model)\ndef check_user_model(app_configs=None, **kwargs):\n    if app_configs is None:\n        cls = apps.get_model(settings.AUTH_USER_MODEL)\n    else:\n        app_label, model_name = settings.AUTH_USER_MODEL.split(\".\")\n        for app_config in app_configs:\n            if app_config.label == app_label:\n                cls = app_config.get_model(model_name)\n                break\n        else:\n            # Checks might be run against a set of app configs that don't\n            # include the specified user model. In this case we simply don't\n            # perform the checks defined below.\n            return []\n\n    errors = []\n\n    # Check that REQUIRED_FIELDS is a list\n    if not isinstance(cls.REQUIRED_FIELDS, (list, tuple)):\n        errors.append(\n            checks.Error(\n                \"'REQUIRED_FIELDS' must be a list or tuple.\",\n                obj=cls,\n                id=\"auth.E001\",\n            )\n        )\n\n    # Check that the USERNAME FIELD isn't included in REQUIRED_FIELDS.\n    if cls.USERNAME_FIELD in cls.REQUIRED_FIELDS:\n        errors.append(\n            checks.Error(\n                \"The field named as the 'USERNAME_FIELD' \"\n                \"for a custom user model must not be included in 'REQUIRED_FIELDS'.\",\n                hint=(\n                    \"The 'USERNAME_FIELD' is currently set to '%s', you \"\n                    \"should remove '%s' from the 'REQUIRED_FIELDS'.\"\n                    % (cls.USERNAME_FIELD, cls.USERNAME_FIELD)\n                ),\n                obj=cls,\n                id=\"auth.E002\",\n            )\n        )\n\n    # Check that the username field is unique\n    if not cls._meta.get_field(cls.USERNAME_FIELD).unique and not any(\n        constraint.fields == (cls.USERNAME_FIELD,)\n        for constraint in cls._meta.total_unique_constraints\n    ):\n        if settings.AUTHENTICATION_BACKENDS == [\n            \"django.contrib.auth.backends.ModelBackend\"\n        ]:\n            errors.append(\n                checks.Error(\n                    \"'%s.%s' must be unique because it is named as the \"\n                    \"'USERNAME_FIELD'.\" % (cls._meta.object_name, cls.USERNAME_FIELD),\n                    obj=cls,\n                    id=\"auth.E003\",\n                )\n            )\n        else:\n            errors.append(\n                checks.Warning(\n                    \"'%s.%s' is named as the 'USERNAME_FIELD', but it is not unique.\"\n                    % (cls._meta.object_name, cls.USERNAME_FIELD),\n                    hint=(\n                        \"Ensure that your authentication backend(s) can handle \"\n                        \"non-unique usernames.\"\n                    ),\n                    obj=cls,\n                    id=\"auth.W004\",\n                )\n            )\n\n    if isinstance(cls().is_anonymous, MethodType):\n        errors.append(\n            checks.Critical(\n                \"%s.is_anonymous must be an attribute or property rather than \"\n                \"a method. Ignoring this is a security issue as anonymous \"\n                \"users will be treated as authenticated!\" % cls,\n                obj=cls,\n                id=\"auth.C009\",\n            )\n        )\n    if isinstance(cls().is_authenticated, MethodType):\n        errors.append(\n            checks.Critical(\n                \"%s.is_authenticated must be an attribute or property rather \"\n                \"than a method. Ignoring this is a security issue as anonymous \"\n                \"users will be treated as authenticated!\" % cls,\n                obj=cls,\n                id=\"auth.C010\",\n            )\n        )\n    return errors",
+    "token_count": 728,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.checks.check_user_model"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "function",
+     "engine_token_count": 728
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:107-110",
+    "content": "# django/contrib/auth/views.py:107-110  (django.contrib.auth.views.LoginView.form_valid)\nclass LoginView(RedirectURLMixin, FormView):\n    def form_valid(self, form):\n        \"\"\"Security check complete. Log the user in.\"\"\"\n        auth_login(self.request, form.get_user())\n        return HttpResponseRedirect(self.get_success_url())",
+    "token_count": 75,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.LoginView.form_valid"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "method",
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:187-227",
+    "content": "# django/contrib/auth/backends.py:187-227  (django.contrib.auth.backends.RemoteUserBackend.authenticate)\nclass RemoteUserBackend(ModelBackend):\n    def authenticate(self, request, remote_user):\n        \"\"\"\n        The username passed as ``remote_user`` is considered trusted. Return\n        the ``User`` object with the given username. Create a new ``User``\n        object if ``create_unknown_user`` is ``True``.\n\n        Return None if ``create_unknown_user`` is ``False`` and a ``User``\n        object with the given username is not found in the database.\n        \"\"\"\n        if not remote_user:\n            return\n        created = False\n        user = None\n        username = self.clean_username(remote_user)\n\n        # Note that this could be accomplished in one try-except clause, but\n        # instead we use get_or_create when creating unknown users since it has\n        # built-in safeguards for multiple threads.\n        if self.create_unknown_user:\n            user, created = UserModel._default_manager.get_or_create(\n                **{UserModel.USERNAME_FIELD: username}\n            )\n        else:\n            try:\n                user = UserModel._default_manager.get_by_natural_key(username)\n            except UserModel.DoesNotExist:\n                pass\n\n        # RemovedInDjango50Warning: When the deprecation ends, replace with:\n        #   user = self.configure_user(request, user, created=created)\n        if func_supports_parameter(self.configure_user, \"created\"):\n            user = self.configure_user(request, user, created=created)\n        else:\n            warnings.warn(\n                f\"`created=True` must be added to the signature of \"\n                f\"{self.__class__.__qualname__}.configure_user().\",\n                category=RemovedInDjango50Warning,\n            )\n            if created:\n                user = self.configure_user(request, user)\n        return user if self.user_can_authenticate(user) else None",
+    "token_count": 393,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.RemoteUserBackend.authenticate"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "full",
+     "bm25_rank": 24,
+     "chunk_kind": "method",
+     "engine_token_count": 393
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:298-311",
+    "content": "# django/contrib/auth/models.py:298-311  (django.contrib.auth.models.PermissionsMixin.has_perm)\nclass PermissionsMixin(models.Model):\n    def has_perm(self, perm, obj=None):\n        \"\"\"\n        Return True if the user has the specified permission. Query all\n        available auth backends, but return immediately if any backend returns\n        True. Thus, a user who has permission from a single auth backend is\n        assumed to have permission in general. If an object is provided, check\n        permissions for that object.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        # Otherwise we need to check the backends.\n        return _user_has_perm(self, perm, obj)",
+    "token_count": 161,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin.has_perm"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "full",
+     "bm25_rank": 25,
+     "chunk_kind": "method",
+     "engine_token_count": 161
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/user_commands/models.py:1-14",
+    "content": "# tests/user_commands/models.py:1-14  (tests.user_commands.models)\n\"\"\"\nUser-registered management commands\n\nThe ``manage.py`` utility provides a number of useful commands for managing a\nDjango project. If you want to add a utility command of your own, you can.\n\nThe user-defined command ``dance`` is defined in the management/commands\nsubdirectory of this test application. It is a simple command that responds\nwith a printed message when invoked.\n\nFor more details on how to define your own ``manage.py`` commands, look at the\n``django.core.management.commands`` directory. This directory contains the\ndefinitions for the base Django ``manage.py`` commands.\n\"\"\"",
+    "token_count": 141,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "full",
+     "bm25_rank": 26,
+     "chunk_kind": "module_block",
+     "engine_token_count": 141
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:233-244",
+    "content": "# django/contrib/auth/__init__.py:233-244  (django.contrib.auth.update_session_auth_hash)\ndef update_session_auth_hash(request, user):\n    \"\"\"\n    Updating a user's password logs out all sessions for the user.\n\n    Take the current request and the updated user object from which the new\n    session hash will be derived and update the session hash appropriately to\n    prevent a password change from logging out the session from which the\n    password was changed.\n    \"\"\"\n    request.session.cycle_key()\n    if hasattr(user, \"get_session_auth_hash\") and request.user == user:\n        request.session[HASH_SESSION_KEY] = user.get_session_auth_hash()",
+    "token_count": 140,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.update_session_auth_hash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "full",
+     "bm25_rank": 27,
+     "chunk_kind": "function",
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/models/custom_permissions.py:1-9",
+    "content": "# tests/auth_tests/models/custom_permissions.py:1-9  (tests.auth_tests.models.custom_permissions)\n\"\"\"\nThe CustomPermissionsUser users email as the identifier, but uses the normal\nDjango permissions model. This allows us to check that the PermissionsMixin\nincludes everything that is needed to interact with the ModelBackend.\n\"\"\"\nfrom django.contrib.auth.models import AbstractBaseUser, PermissionsMixin\nfrom django.db import models\n\nfrom .custom_user import CustomUserManager, RemoveGroupsAndPermissions",
+    "token_count": 97,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "full",
+     "bm25_rank": 28,
+     "chunk_kind": "module_block",
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/forms.py:262-277",
+    "content": "# django/contrib/auth/forms.py:262-277  (django.contrib.auth.forms.AuthenticationForm.confirm_login_allowed)\nclass AuthenticationForm(forms.Form):\n    def confirm_login_allowed(self, user):\n        \"\"\"\n        Controls whether the given User may log in. This is a policy setting,\n        independent of end-user authentication. This default behavior is to\n        allow login by active users, and reject login by inactive users.\n\n        If the given user cannot log in, this method should raise a\n        ``ValidationError``.\n\n        If the given user may log in, this method should return None.\n        \"\"\"\n        if not user.is_active:\n            raise ValidationError(\n                self.error_messages[\"inactive\"],\n                code=\"inactive\",\n            )",
+    "token_count": 149,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.forms.AuthenticationForm.confirm_login_allowed"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "full",
+     "bm25_rank": 29,
+     "chunk_kind": "method",
+     "engine_token_count": 149
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/tests.py:1-43",
+    "content": "# tests/test_client/tests.py:1-43  (tests.test_client.tests)\n\"\"\"\nTesting using the Test Client\n\nThe test client is a class that can act like a simple\nbrowser for testing purposes.\n\nIt allows the user to compose GET and POST requests, and\nobtain the response that the server gave to those requests.\nThe server Response objects are annotated with the details\nof the contexts and templates that were rendered during the\nprocess of serving the request.\n\n``Client`` objects are stateful - they will retain cookie (and\nthus session) details for the lifetime of the ``Client`` instance.\n\nThis is not intended as a replacement for Twill, Selenium, or\nother browser automation frameworks - it is here to allow\ntesting against the contexts and templates produced by a view,\nrather than the HTML rendered to the end-user.\n\n\"\"\"\nimport copy\nimport itertools\nimport tempfile\nfrom unittest import mock\n\nfrom django.contrib.auth.models import User\nfrom django.core import mail\nfrom django.http import HttpResponse, HttpResponseNotAllowed\nfrom django.test import (\n    AsyncRequestFactory,\n    Client,\n    RequestFactory,\n    SimpleTestCase,\n    TestCase,\n    modify_settings,\n    override_settings,\n)\nfrom django.urls import reverse_lazy\nfrom django.utils.decorators import async_only_middleware\nfrom django.views.generic import RedirectView\n\nfrom .views import TwoArgException, get_view, post_view, trace_view",
+    "token_count": 283,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "full",
+     "bm25_rank": 30,
+     "chunk_kind": "module_block",
+     "engine_token_count": 283
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:1-35",
+    "content": "# tests/auth_tests/test_auth_backends.py:1-35  (tests.auth_tests.test_auth_backends)\nimport sys\nfrom datetime import date\nfrom unittest import mock\n\nfrom django.contrib.auth import (\n    BACKEND_SESSION_KEY,\n    SESSION_KEY,\n    _clean_credentials,\n    authenticate,\n    get_user,\n    signals,\n)\nfrom django.contrib.auth.backends import BaseBackend, ModelBackend\nfrom django.contrib.auth.hashers import MD5PasswordHasher\nfrom django.contrib.auth.models import AnonymousUser, Group, Permission, User\nfrom django.contrib.contenttypes.models import ContentType\nfrom django.core.exceptions import ImproperlyConfigured, PermissionDenied\nfrom django.http import HttpRequest\nfrom django.test import (\n    RequestFactory,\n    SimpleTestCase,\n    TestCase,\n    modify_settings,\n    override_settings,\n)\nfrom django.views.debug import technical_500_response\nfrom django.views.decorators.debug import sensitive_variables\n\nfrom .models import (\n    CustomPermissionsUser,\n    CustomUser,\n    CustomUserWithoutIsActiveField,\n    ExtensionUser,\n    UUIDUser,\n)",
+    "token_count": 214,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "full",
+     "bm25_rank": 31,
+     "chunk_kind": "module_block",
+     "engine_token_count": 214
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_auth_backends.py:87-94",
+    "content": "# tests/auth_tests/test_auth_backends.py:87-94  (tests.auth_tests.test_auth_backends.BaseModelBackendTest)\nclass BaseModelBackendTest:\n    \"\"\"\n    A base class for tests that need to validate the ModelBackend\n    with different User models. Subclasses should define a class\n    level UserModel attribute, and a create_users() method to\n    construct two users for test purposes.\n    \"\"\"\n\n    backend = \"django.contrib.auth.backends.ModelBackend\"",
+    "token_count": 97,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_auth_backends.BaseModelBackendTest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "full",
+     "bm25_rank": 32,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:91-96",
+    "content": "# django/contrib/auth/backends.py:91-96  (django.contrib.auth.backends.ModelBackend.get_user_permissions)\nclass ModelBackend(BaseBackend):\n    def get_user_permissions(self, user_obj, obj=None):\n        \"\"\"\n        Return a set of permission strings the user `user_obj` has from their\n        `user_permissions`.\n        \"\"\"\n        return self._get_permissions(user_obj, obj, \"user\")",
+    "token_count": 85,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.get_user_permissions"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "full",
+     "bm25_rank": 33,
+     "chunk_kind": "method",
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:98-103",
+    "content": "# django/contrib/auth/backends.py:98-103  (django.contrib.auth.backends.ModelBackend.get_group_permissions)\nclass ModelBackend(BaseBackend):\n    def get_group_permissions(self, user_obj, obj=None):\n        \"\"\"\n        Return a set of permission strings the user `user_obj` has from the\n        groups they belong.\n        \"\"\"\n        return self._get_permissions(user_obj, obj, \"group\")",
+    "token_count": 86,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.get_group_permissions"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "full",
+     "bm25_rank": 34,
+     "chunk_kind": "method",
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/tests.py:676-697",
+    "content": "# tests/test_client/tests.py:676-697  (tests.test_client.tests.ClientTest.test_view_with_inactive_force_login)\nclass ClientTest(TestCase):\n    @override_settings(\n        AUTHENTICATION_BACKENDS=[\n            \"django.contrib.auth.backends.ModelBackend\",\n            \"django.contrib.auth.backends.AllowAllUsersModelBackend\",\n        ]\n    )\n    def test_view_with_inactive_force_login(self):\n        \"Request a page that is protected with @login, but use an inactive login\"\n\n        # Get the page without logging in. Should result in 302.\n        response = self.client.get(\"/login_protected_view/\")\n        self.assertRedirects(response, \"/accounts/login/?next=/login_protected_view/\")\n\n        # Log in\n        self.client.force_login(\n            self.u2, backend=\"django.contrib.auth.backends.AllowAllUsersModelBackend\"\n        )\n\n        # Request a page that requires a login\n        response = self.client.get(\"/login_protected_view/\")\n        self.assertEqual(response.status_code, 200)\n        self.assertEqual(response.context[\"user\"].username, \"inactive\")",
+    "token_count": 223,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client.tests.ClientTest.test_view_with_inactive_force_login"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "full",
+     "bm25_rank": 35,
+     "chunk_kind": "method",
+     "engine_token_count": 223
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:238-244",
+    "content": "# django/contrib/auth/backends.py:238-244  (django.contrib.auth.backends.RemoteUserBackend.configure_user)\nclass RemoteUserBackend(ModelBackend):\n    def configure_user(self, request, user, created=True):\n        \"\"\"\n        Configure a user and return the updated user.\n\n        By default, return the user unmodified.\n        \"\"\"\n        return user",
+    "token_count": 75,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.RemoteUserBackend.configure_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "full",
+     "bm25_rank": 36,
+     "chunk_kind": "method",
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:243-274",
+    "content": "# django/contrib/auth/models.py:243-274  (django.contrib.auth.models.PermissionsMixin)\nclass PermissionsMixin(models.Model):\n    \"\"\"\n    Add the fields and methods necessary to support the Group and Permission\n    models using the ModelBackend.\n    \"\"\"\n\n    is_superuser = models.BooleanField(\n        _(\"superuser status\"),\n        default=False,\n        help_text=_(\n            \"Designates that this user has all permissions without \"\n            \"explicitly assigning them.\"\n        ),\n    )\n    groups = models.ManyToManyField(\n        Group,\n        verbose_name=_(\"groups\"),\n        blank=True,\n        help_text=_(\n            \"The groups this user belongs to. A user will get all permissions \"\n            \"granted to each of their groups.\"\n        ),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n    user_permissions = models.ManyToManyField(\n        Permission,\n        verbose_name=_(\"user permissions\"),\n        blank=True,\n        help_text=_(\"Specific permissions for this user.\"),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )",
+    "token_count": 216,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "full",
+     "bm25_rank": 37,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 216
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:311-324",
+    "content": "# django/contrib/auth/views.py:311-324  (django.contrib.auth.views.PasswordResetConfirmView.get_user)\nclass PasswordResetConfirmView(PasswordContextMixin, FormView):\n    def get_user(self, uidb64):\n        try:\n            # urlsafe_base64_decode() decodes to bytestring\n            uid = urlsafe_base64_decode(uidb64).decode()\n            user = UserModel._default_manager.get(pk=uid)\n        except (\n            TypeError,\n            ValueError,\n            OverflowError,\n            UserModel.DoesNotExist,\n            ValidationError,\n        ):\n            user = None\n        return user",
+    "token_count": 129,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.PasswordResetConfirmView.get_user"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "full",
+     "bm25_rank": 38,
+     "chunk_kind": "method",
+     "engine_token_count": 129
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_remote_user.py:236-245",
+    "content": "# tests/auth_tests/test_remote_user.py:236-245  (tests.auth_tests.test_remote_user.RemoteUserCustomTest)\nclass RemoteUserCustomTest(RemoteUserTest):\n    \"\"\"\n    Tests a custom RemoteUserBackend subclass that overrides the clean_username\n    and configure_user methods.\n    \"\"\"\n\n    backend = \"auth_tests.test_remote_user.CustomRemoteUserBackend\"\n    # REMOTE_USER strings with email addresses for the custom backend to\n    # clean.\n    known_user = \"knownuser@example.com\"\n    known_user2 = \"knownuser2@example.com\"",
+    "token_count": 119,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_remote_user.RemoteUserCustomTest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "full",
+     "bm25_rank": 39,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:40-53",
+    "content": "# django/contrib/auth/backends.py:40-53  (django.contrib.auth.backends.ModelBackend.authenticate)\nclass ModelBackend(BaseBackend):\n    def authenticate(self, request, username=None, password=None, **kwargs):\n        if username is None:\n            username = kwargs.get(UserModel.USERNAME_FIELD)\n        if username is None or password is None:\n            return\n        try:\n            user = UserModel._default_manager.get_by_natural_key(username)\n        except UserModel.DoesNotExist:\n            # Run the default password hasher once to reduce the timing\n            # difference between an existing and a nonexistent user (#20760).\n            UserModel().set_password(password)\n        else:\n            if user.check_password(password) and self.user_can_authenticate(user):\n                return user",
+    "token_count": 156,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.ModelBackend.authenticate"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "full",
+     "bm25_rank": 40,
+     "chunk_kind": "method",
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/cache.py:1-55",
+    "content": "# django/middleware/cache.py:1-55  (django.middleware.cache)\n\"\"\"\nCache middleware. If enabled, each Django-powered page will be cached based on\nURL. The canonical way to enable cache middleware is to set\n``UpdateCacheMiddleware`` as your first piece of middleware, and\n``FetchFromCacheMiddleware`` as the last::\n\n    MIDDLEWARE = [\n        'django.middleware.cache.UpdateCacheMiddleware',\n        ...\n        'django.middleware.cache.FetchFromCacheMiddleware'\n    ]\n\nThis is counter-intuitive, but correct: ``UpdateCacheMiddleware`` needs to run\nlast during the response phase, which processes middleware bottom-up;\n``FetchFromCacheMiddleware`` needs to run last during the request phase, which\nprocesses middleware top-down.\n\nThe single-class ``CacheMiddleware`` can be used for some simple sites.\nHowever, if any other piece of middleware needs to affect the cache key, you'll\nneed to use the two-part ``UpdateCacheMiddleware`` and\n``FetchFromCacheMiddleware``. This'll most often happen when you're using\nDjango's ``LocaleMiddleware``.\n\nMore details about how the caching works:\n\n* Only GET or HEAD-requests with status code 200 are cached.\n\n* The number of seconds each page is stored for is set by the \"max-age\" section\n  of the response's \"Cache-Control\" header, falling back to the\n  CACHE_MIDDLEWARE_SECONDS setting if the section was not found.\n\n* This middleware expects that a HEAD request is answered with the same response\n  headers exactly like the corresponding GET request.\n\n* When a hit occurs, a shallow copy of the original response object is returned\n  from process_request.\n\n* Pages will be cached based on the contents of the request headers listed in\n  the response's \"Vary\" header.\n\n* This middleware also sets ETag, Last-Modified, Expires and Cache-Control\n  headers on the response object.\n\n\"\"\"\n\nfrom django.conf import settings\nfrom django.core.cache import DEFAULT_CACHE_ALIAS, caches\nfrom django.utils.cache import (\n    get_cache_key,\n    get_max_age,\n    has_vary_header,\n    learn_cache_key,\n    patch_response_headers,\n)\nfrom django.utils.deprecation import MiddlewareMixin",
+    "token_count": 453,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "full",
+     "bm25_rank": 41,
+     "chunk_kind": "module_block",
+     "engine_token_count": 453
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:277-309",
+    "content": "# django/contrib/auth/views.py:277-309  (django.contrib.auth.views.PasswordResetConfirmView.dispatch)\nclass PasswordResetConfirmView(PasswordContextMixin, FormView):\n    @method_decorator(sensitive_post_parameters())\n    @method_decorator(never_cache)\n    def dispatch(self, *args, **kwargs):\n        if \"uidb64\" not in kwargs or \"token\" not in kwargs:\n            raise ImproperlyConfigured(\n                \"The URL path must contain 'uidb64' and 'token' parameters.\"\n            )\n\n        self.validlink = False\n        self.user = self.get_user(kwargs[\"uidb64\"])\n\n        if self.user is not None:\n            token = kwargs[\"token\"]\n            if token == self.reset_url_token:\n                session_token = self.request.session.get(INTERNAL_RESET_SESSION_TOKEN)\n                if self.token_generator.check_token(self.user, session_token):\n                    # If the token is valid, display the password reset form.\n                    self.validlink = True\n                    return super().dispatch(*args, **kwargs)\n            else:\n                if self.token_generator.check_token(self.user, token):\n                    # Store the token in the session and redirect to the\n                    # password reset form at a URL without the token. That\n                    # avoids the possibility of leaking the token in the\n                    # HTTP Referer header.\n                    self.request.session[INTERNAL_RESET_SESSION_TOKEN] = token\n                    redirect_url = self.request.path.replace(\n                        token, self.reset_url_token\n                    )\n                    return HttpResponseRedirect(redirect_url)\n\n        # Display the \"Password reset unsuccessful\" page.\n        return self.render_to_response(self.get_context_data())",
+    "token_count": 342,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.PasswordResetConfirmView.dispatch"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "full",
+     "bm25_rank": 42,
+     "chunk_kind": "method",
+     "engine_token_count": 342
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:229-236",
+    "content": "# django/contrib/auth/backends.py:229-236  (django.contrib.auth.backends.RemoteUserBackend.clean_username)\nclass RemoteUserBackend(ModelBackend):\n    def clean_username(self, username):\n        \"\"\"\n        Perform any cleaning on the \"username\" prior to using it to get or\n        create the user object.  Return the cleaned username.\n\n        By default, return the username unchanged.\n        \"\"\"\n        return username",
+    "token_count": 88,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.RemoteUserBackend.clean_username"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "full",
+     "bm25_rank": 43,
+     "chunk_kind": "method",
+     "engine_token_count": 88
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:279-285",
+    "content": "# django/contrib/auth/models.py:279-285  (django.contrib.auth.models.PermissionsMixin.get_user_permissions)\nclass PermissionsMixin(models.Model):\n    def get_user_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has directly.\n        Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"user\")",
+    "token_count": 97,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin.get_user_permissions"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "full",
+     "bm25_rank": 44,
+     "chunk_kind": "method",
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/decorators.py:10-40",
+    "content": "# django/contrib/auth/decorators.py:10-40  (django.contrib.auth.decorators.user_passes_test)\ndef user_passes_test(\n    test_func, login_url=None, redirect_field_name=REDIRECT_FIELD_NAME\n):\n    \"\"\"\n    Decorator for views that checks that the user passes the given test,\n    redirecting to the log-in page if necessary. The test should be a callable\n    that takes the user object and returns True if the user passes.\n    \"\"\"\n\n    def decorator(view_func):\n        @wraps(view_func)\n        def _wrapper_view(request, *args, **kwargs):\n            if test_func(request.user):\n                return view_func(request, *args, **kwargs)\n            path = request.build_absolute_uri()\n            resolved_login_url = resolve_url(login_url or settings.LOGIN_URL)\n            # If the login url is the same scheme and net location then just\n            # use the path as the \"next\" url.\n            login_scheme, login_netloc = urlparse(resolved_login_url)[:2]\n            current_scheme, current_netloc = urlparse(path)[:2]\n            if (not login_scheme or login_scheme == current_scheme) and (\n                not login_netloc or login_netloc == current_netloc\n            ):\n                path = request.get_full_path()\n            from django.contrib.auth.views import redirect_to_login\n\n            return redirect_to_login(path, resolved_login_url, redirect_field_name)\n\n        return _wrapper_view\n\n    return decorator",
+    "token_count": 299,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.decorators.user_passes_test"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "full",
+     "bm25_rank": 45,
+     "chunk_kind": "function",
+     "engine_token_count": 299
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/base.py:184-268",
+    "content": "# django/core/management/base.py:184-268  (django.core.management.base.BaseCommand)\nclass BaseCommand:\n    \"\"\"\n    The base class from which all management commands ultimately\n    derive.\n\n    Use this class if you want access to all of the mechanisms which\n    parse the command-line arguments and work out what code to call in\n    response; if you don't need to change any of that behavior,\n    consider using one of the subclasses defined in this file.\n\n    If you are interested in overriding/customizing various aspects of\n    the command-parsing and -execution behavior, the normal flow works\n    as follows:\n\n    1. ``django-admin`` or ``manage.py`` loads the command class\n       and calls its ``run_from_argv()`` method.\n\n    2. The ``run_from_argv()`` method calls ``create_parser()`` to get\n       an ``ArgumentParser`` for the arguments, parses them, performs\n       any environment changes requested by options like\n       ``pythonpath``, and then calls the ``execute()`` method,\n       passing the parsed arguments.\n\n    3. The ``execute()`` method attempts to carry out the command by\n       calling the ``handle()`` method with the parsed arguments; any\n       output produced by ``handle()`` will be printed to standard\n       output and, if the command is intended to produce a block of\n       SQL statements, will be wrapped in ``BEGIN`` and ``COMMIT``.\n\n    4. If ``handle()`` or ``execute()`` raised any exception (e.g.\n       ``CommandError``), ``run_from_argv()`` will  instead print an error\n       message to ``stderr``.\n\n    Thus, the ``handle()`` method is typically the starting point for\n    subclasses; many built-in commands and command types either place\n    all of their logic in ``handle()``, or perform some additional\n    parsing work in ``handle()`` and then delegate from it to more\n    specialized methods as needed.\n\n    Several attributes affect behavior at various steps along the way:\n\n    ``help``\n        A short description of the command, which will be printed in\n        help messages.\n\n    ``output_transaction``\n        A boolean indicating whether the command outputs SQL\n        statements; if ``True``, the output will automatically be\n        wrapped with ``BEGIN;`` and ``COMMIT;``. Default value is\n        ``False``.\n\n    ``requires_migrations_checks``\n        A boolean; if ``True``, the command prints a warning if the set of\n        migrations on disk don't match the migrations in the database.\n\n    ``requires_system_checks``\n        A list or tuple of tags, e.g. [Tags.staticfiles, Tags.models]. System\n        checks registered in the chosen tags will be checked for errors prior\n        to executing the command. The value '__all__' can be used to specify\n        that all system checks should be performed. Default value is '__all__'.\n\n        To validate an individual application's models\n        rather than all applications' models, call\n        ``self.check(app_configs)`` from ``handle()``, where ``app_configs``\n        is the list of application's configuration provided by the\n        app registry.\n\n    ``stealth_options``\n        A tuple of any options the command uses which aren't defined by the\n        argument parser.\n    \"\"\"\n\n    # Metadata about this command.\n    help = \"\"\n\n    # Configuration shortcuts that alter various logic.\n    _called_from_command_line = False\n    output_transaction = False  # Whether to wrap the output in a \"BEGIN; COMMIT;\"\n    requires_migrations_checks = False\n    requires_system_checks = \"__all__\"\n    # Arguments, common to all commands, which aren't defined by the argument\n    # parser.\n    base_stealth_options = (\"stderr\", \"stdout\")\n    # Command-specific options not defined by the argument parser.\n    stealth_options = ()\n    suppressed_base_arguments = set()",
+    "token_count": 822,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.management.base.BaseCommand"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "full",
+     "bm25_rank": 46,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 822
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/migrations/migration.py:10-53",
+    "content": "# django/db/migrations/migration.py:10-53  (django.db.migrations.migration.Migration)\nclass Migration:\n    \"\"\"\n    The base class for all migrations.\n\n    Migration files will import this from django.db.migrations.Migration\n    and subclass it as a class called Migration. It will have one or more\n    of the following attributes:\n\n     - operations: A list of Operation instances, probably from\n       django.db.migrations.operations\n     - dependencies: A list of tuples of (app_path, migration_name)\n     - run_before: A list of tuples of (app_path, migration_name)\n     - replaces: A list of migration_names\n\n    Note that all migrations come out of migrations and into the Loader or\n    Graph as instances, having been initialized with their app label and name.\n    \"\"\"\n\n    # Operations to apply during this migration, in order.\n    operations = []\n\n    # Other migrations that should be run before this migration.\n    # Should be a list of (app, migration_name).\n    dependencies = []\n\n    # Other migrations that should be run after this one (i.e. have\n    # this migration added to their dependencies). Useful to make third-party\n    # apps' migrations run after your AUTH_USER replacement, for example.\n    run_before = []\n\n    # Migration names in this app that this migration replaces. If this is\n    # non-empty, this migration will only be applied if all these migrations\n    # are not applied.\n    replaces = []\n\n    # Is this an initial migration? Initial migrations are skipped on\n    # --fake-initial if the table or fields already exist. If None, check if\n    # the migration has any dependencies to determine if there are dependencies\n    # to tell if db introspection needs to be done. If True, always perform\n    # introspection. If False, never perform introspection.\n    initial = None\n\n    # Whether to wrap the whole migration in a transaction. Only has an effect\n    # on database backends which support transactional DDL.\n    atomic = True",
+    "token_count": 427,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.migrations.migration.Migration"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "full",
+     "bm25_rank": 47,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 427
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_checks.py:66-100",
+    "content": "# tests/auth_tests/test_checks.py:66-100  (tests.auth_tests.test_checks.UserModelChecksTests.test_username_non_unique)\nclass UserModelChecksTests(SimpleTestCase):\n    @override_settings(AUTH_USER_MODEL=\"auth_tests.CustomUserNonUniqueUsername\")\n    def test_username_non_unique(self):\n        \"\"\"\n        A non-unique USERNAME_FIELD raises an error only if the default\n        authentication backend is used. Otherwise, a warning is raised.\n        \"\"\"\n        errors = checks.run_checks()\n        self.assertEqual(\n            errors,\n            [\n                checks.Error(\n                    \"'CustomUserNonUniqueUsername.username' must be \"\n                    \"unique because it is named as the 'USERNAME_FIELD'.\",\n                    obj=CustomUserNonUniqueUsername,\n                    id=\"auth.E003\",\n                ),\n            ],\n        )\n        with self.settings(AUTHENTICATION_BACKENDS=[\"my.custom.backend\"]):\n            errors = checks.run_checks()\n            self.assertEqual(\n                errors,\n                [\n                    checks.Warning(\n                        \"'CustomUserNonUniqueUsername.username' is named as \"\n                        \"the 'USERNAME_FIELD', but it is not unique.\",\n                        hint=(\n                            \"Ensure that your authentication backend(s) can handle \"\n                            \"non-unique usernames.\"\n                        ),\n                        obj=CustomUserNonUniqueUsername,\n                        id=\"auth.W004\",\n                    ),\n                ],\n            )",
+    "token_count": 274,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_checks.UserModelChecksTests.test_username_non_unique"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "full",
+     "bm25_rank": 48,
+     "chunk_kind": "method",
+     "engine_token_count": 274
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_remote_user.py:56-83",
+    "content": "# tests/auth_tests/test_remote_user.py:56-83  (tests.auth_tests.test_remote_user.RemoteUserTest.test_csrf_validation_passes_after_process_request_login)\nclass RemoteUserTest(TestCase):\n    def test_csrf_validation_passes_after_process_request_login(self):\n        \"\"\"\n        CSRF check must access the CSRF token from the session or cookie,\n        rather than the request, as rotate_token() may have been called by an\n        authentication middleware during the process_request() phase.\n        \"\"\"\n        csrf_client = Client(enforce_csrf_checks=True)\n        csrf_secret = _get_new_csrf_string()\n        csrf_token = _mask_cipher_secret(csrf_secret)\n        csrf_token_form = _mask_cipher_secret(csrf_secret)\n        headers = {self.header: \"fakeuser\"}\n        data = {\"csrfmiddlewaretoken\": csrf_token_form}\n\n        # Verify that CSRF is configured for the view\n        csrf_client.cookies.load({settings.CSRF_COOKIE_NAME: csrf_token})\n        response = csrf_client.post(\"/remote_user/\", **headers)\n        self.assertEqual(response.status_code, 403)\n        self.assertIn(b\"CSRF verification failed.\", response.content)\n\n        # This request will call django.contrib.auth.login() which will call\n        # django.middleware.csrf.rotate_token() thus changing the value of\n        # request.META['CSRF_COOKIE'] from the user submitted value set by\n        # CsrfViewMiddleware.process_request() to the new csrftoken value set\n        # by rotate_token(). Csrf validation should still pass when the view is\n        # later processed by CsrfViewMiddleware.process_view()\n        csrf_client.cookies.load({settings.CSRF_COOKIE_NAME: csrf_token})\n        response = csrf_client.post(\"/remote_user/\", data, **headers)\n        self.assertEqual(response.status_code, 200)",
+    "token_count": 374,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_remote_user.RemoteUserTest.test_csrf_validation_passes_after_process_request_login"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "full",
+     "bm25_rank": 49,
+     "chunk_kind": "method",
+     "engine_token_count": 374
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_remote_user.py:158-172",
+    "content": "# tests/auth_tests/test_remote_user.py:158-172  (tests.auth_tests.test_remote_user.RemoteUserTest.test_user_switch_forces_new_login)\nclass RemoteUserTest(TestCase):\n    def test_user_switch_forces_new_login(self):\n        \"\"\"\n        If the username in the header changes between requests\n        that the original user is logged out\n        \"\"\"\n        User.objects.create(username=\"knownuser\")\n        # Known user authenticates\n        response = self.client.get(\"/remote_user/\", **{self.header: self.known_user})\n        self.assertEqual(response.context[\"user\"].username, \"knownuser\")\n        # During the session, the REMOTE_USER changes to a different user.\n        response = self.client.get(\"/remote_user/\", **{self.header: \"newnewuser\"})\n        # The current user is not the prior remote_user.\n        # In backends that create a new user, username is \"newnewuser\"\n        # In backends that do not create new users, it is '' (anonymous user)\n        self.assertNotEqual(response.context[\"user\"].username, \"knownuser\")",
+    "token_count": 226,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_remote_user.RemoteUserTest.test_user_switch_forces_new_login"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "full",
+     "bm25_rank": 50,
+     "chunk_kind": "method",
+     "engine_token_count": 226
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12165,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging how Django resolves `request.user` in\ndjango/contrib/auth. Starting from `middleware.get_user`, trace the\nreal causal pipeline that determines which authentication backend\nwill be asked to resolve the user, in the order each stage is\nactually reached, up to and including the call that loads that\nbackend. Do not trace into the backend's own `get_user` call itself -\nwhich concrete backend class this becomes is resolved dynamically at\nruntime, not statically in this pipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.middleware.get_user\", \"django.contrib.auth.get_user\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/contrib/auth/middleware.py",
+   "cutoff": 0,
+   "n_components": 58,
+   "n_full": 58,
+   "n_stub": 0,
+   "n_dropped": 0,
+   "packed_tokens": 12165,
+   "latency_ms": {
+    "L_priority_sort": [
+     1282.208876
+    ],
+    "L_binary_search_tokenize": [
+     48.659584
+    ],
+    "L_retrieve": [
+     1331.166031
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12165,
+   "prompt_tokens": 12507,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 12520,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/auth/middleware.py:9-12  (django.contrib.auth.middleware.get_user)\ndef get_user(request):\n    if not hasattr(request, \"_cached_user\"):\n        request._cached_user = auth.get_user(request)\n    return request._cached_user\n\n# django/contrib/auth/middleware.py:1-6  (django.contrib.auth.middleware)\nfrom django.contrib import auth\nfrom django.contrib.auth import load_backend\nfrom django.contrib.auth.backends import RemoteUserBackend\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.utils.deprecation import MiddlewareMixin\nfrom django.utils.functional import SimpleLazyObject\n\n# django/contrib/auth/middleware.py:16-25  (django.contrib.auth.middleware.AuthenticationMiddleware.process_request)\nclass AuthenticationMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        if not hasattr(request, \"session\"):\n            raise ImproperlyConfigured(\n                \"The Django authentication middleware requires session \"\n                \"middleware to be installed. Edit your MIDDLEWARE setting to \"\n                \"insert \"\n                \"'django.contrib.sessions.middleware.SessionMiddleware' before \"\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n            )\n        request.user = SimpleLazyObject(lambda: get_user(request))\n\n# django/contrib/auth/middleware.py:29-46  (django.contrib.auth.middleware.RemoteUserMiddleware)\nclass RemoteUserMiddleware(MiddlewareMixin):\n    \"\"\"\n    Middleware for utilizing web-server-provided authentication.\n\n    If request.user is not authenticated, then this middleware attempts to\n    authenticate the username passed in the ``REMOTE_USER`` request header.\n    If authentication is successful, the user is automatically logged in to\n    persist the user in the session.\n\n    The header used is configurable and defaults to ``REMOTE_USER``.  Subclass\n    this class and change the ``header`` attribute if you need to use a\n    different header.\n    \"\"\"\n\n    # Name of request header to grab username from.  This will be the key as\n    # used in the request.META dictionary, i.e. the normalization of headers to\n    # all uppercase and the addition of \"HTTP_\" prefix apply.\n    header = \"REMOTE_USER\"\n    force_logout_if_no_header = True\n\n# django/contrib/auth/middleware.py:48-85  (django.contrib.auth.middleware.RemoteUserMiddleware.process_request)\nclass RemoteUserMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        # AuthenticationMiddleware is required so that request.user exists.\n        if not hasattr(request, \"user\"):\n            raise ImproperlyConfigured(\n                \"The Django remote user auth middleware requires the\"\n                \" authentication middleware to be installed.  Edit your\"\n                \" MIDDLEWARE setting to insert\"\n                \" 'django.contrib.auth.middleware.AuthenticationMiddleware'\"\n                \" before the RemoteUserMiddleware class.\"\n            )\n        try:\n            username = request.META[self.header]\n        except KeyError:\n            # If specified header doesn't exist then remove any existing\n            # authenticated remote-user, or return (leaving request.user set to\n            # AnonymousUser by the AuthenticationMiddleware).\n            if self.force_logout_if_no_header and request.user.is_authenticated:\n                self._remove_invalid_user(request)\n            return\n        # If the user is already authenticated and that user is the user we are\n        # getting passed in the headers, then the correct user is already\n        # persisted in the session and we don't need to continue.\n        if request.user.is_authenticated:\n            if request.user.get_username() == self.clean_username(username, request):\n                return\n            else:\n                # An authenticated user is associated with the request, but\n                # it does not match the authorized user in the header.\n                self._remove_invalid_user(request)\n\n        # We are seeing this user for the first time in this session, attempt\n        # to authenticate the user.\n        user = auth.authenticate(request, remote_user=username)\n        if user:\n            # User is valid.  Set request.user and persist user in the session\n            # by logging the user in.\n            request.user = user\n            auth.login(request, user)\n\n# django/contrib/auth/middleware.py:87-98  (django.contrib.auth.middleware.RemoteUserMiddleware.clean_username)\nclass RemoteUserMiddleware(MiddlewareMixin):\n    def clean_username(self, username, request):\n        \"\"\"\n        Allow the backend to clean the username, if the backend defines a\n        clean_username method.\n        \"\"\"\n        backend_str = request.session[auth.BACKEND_SESSION_KEY]\n        backend = auth.load_backend(backend_str)\n        try:\n            username = backend.clean_username(username)\n        except AttributeError:  # Backend has no clean_username method.\n            pass\n        return username\n\n# django/contrib/auth/middleware.py:100-114  (django.contrib.auth.middleware.RemoteUserMiddleware._remove_invalid_user)\nclass RemoteUserMiddleware(MiddlewareMixin):\n    def _remove_invalid_user(self, request):\n        \"\"\"\n        Remove the current authenticated user in the request which is invalid\n        but only if the user is authenticated via the RemoteUserBackend.\n        \"\"\"\n        try:\n            stored_backend = load_backend(\n                request.session.get(auth.BACKEND_SESSION_KEY, \"\")\n            )\n        except ImportError:\n            # backend failed to load\n            auth.logout(request)\n        else:\n            if isinstance(stored_backend, RemoteUserBackend):\n                auth.logout(request)\n\n# django/contrib/auth/middleware.py:118-128  (django.contrib.auth.middleware.PersistentRemoteUserMiddleware)\nclass PersistentRemoteUserMiddleware(RemoteUserMiddleware):\n    \"\"\"\n    Middleware for web-server provided authentication on logon pages.\n\n    Like RemoteUserMiddleware but keeps the user authenticated even if\n    the header (``REMOTE_USER``) is not found in the request. Useful\n    for setups when the external authentication via ``REMOTE_USER``\n    is only expected to happen on some \"logon\" URL and the rest of\n    the application wants to use Django's authentication mechanism.\n    \"\"\"\n\n    force_logout_if_no_header = False\n\n# django/contrib/auth/backends.py:173-185  (django.contrib.auth.backends.RemoteUserBackend)\nclass RemoteUserBackend(ModelBackend):\n    \"\"\"\n    This backend is to be used in conjunction with the ``RemoteUserMiddleware``\n    found in the middleware module of this package, and is used when the server\n    is handling authentication outside of Django.\n\n    By default, the ``authenticate`` method creates ``User`` objects for\n    usernames that don't already exist in the database.  Subclasses can disable\n    this behavior by setting the ``create_unknown_user`` attribute to\n    ``False``.\n    \"\"\"\n\n    # Create a User object if not already in the database?\n    create_unknown_user = True\n\n# tests/auth_tests/test_auth_backends.py:680-706  (tests.auth_tests.test_auth_backends.ChangedBackendSettingsTest.test_changed_backend_settings)\nclass ChangedBackendSettingsTest(TestCase):\n    @override_settings(AUTHENTICATION_BACKENDS=[backend])\n    def test_changed_backend_settings(self):\n        \"\"\"\n        Removing a backend configured in AUTHENTICATION_BACKENDS makes already\n        logged-in users disconnect.\n        \"\"\"\n        # Get a session for the test user\n        self.assertTrue(\n            self.client.login(\n                username=self.TEST_USERNAME,\n                password=self.TEST_PASSWORD,\n            )\n        )\n        # Prepare a request object\n        request = HttpRequest()\n        request.session = self.client.session\n        # Remove NewModelBackend\n        with self.settings(\n            AUTHENTICATION_BACKENDS=[\"django.contrib.auth.backends.ModelBackend\"]\n        ):\n            # Get the user from the request\n            user = get_user(request)\n\n            # Assert that the user retrieval is successful and the user is\n            # anonymous as the backend is not longer available.\n            self.assertIsNotNone(user)\n            self.assertTrue(user.is_anonymous)\n\n# django/contrib/auth/__init__.py:182-223  (django.contrib.auth.get_user)\ndef get_user(request):\n    \"\"\"\n    Return the user model instance associated with the given request session.\n    If no user is retrieved, return an instance of `AnonymousUser`.\n    \"\"\"\n    from .models import AnonymousUser\n\n    user = None\n    try:\n        user_id = _get_user_session_key(request)\n        backend_path = request.session[BACKEND_SESSION_KEY]\n    except KeyError:\n        pass\n    else:\n        if backend_path in settings.AUTHENTICATION_BACKENDS:\n            backend = load_backend(backend_path)\n            user = backend.get_user(user_id)\n            # Verify the session\n            if hasattr(user, \"get_session_auth_hash\"):\n                session_hash = request.session.get(HASH_SESSION_KEY)\n                if not session_hash:\n                    session_hash_verified = False\n                else:\n                    session_auth_hash = user.get_session_auth_hash()\n                    session_hash_verified = constant_time_compare(\n                        session_hash, session_auth_hash\n                    )\n                if not session_hash_verified:\n                    # If the current secret does not verify the session, try\n                    # with the fallback secrets and stop when a matching one is\n                    # found.\n                    if session_hash and any(\n                        constant_time_compare(session_hash, fallback_auth_hash)\n                        for fallback_auth_hash in user.get_session_auth_fallback_hash()\n                    ):\n                        request.session.cycle_key()\n                        request.session[HASH_SESSION_KEY] = session_auth_hash\n                    else:\n                        request.session.flush()\n                        user = None\n\n    return user or AnonymousUser()\n\n# django/contrib/auth/backends.py:16-17  (django.contrib.auth.backends.BaseBackend.get_user)\nclass BaseBackend:\n    def get_user(self, user_id):\n        return None\n\n# tests/auth_tests/test_auth_backends.py:338-354  (tests.auth_tests.test_auth_backends.ExtensionUserModelBackendTest)\n@override_settings(AUTH_USER_MODEL=\"auth_tests.ExtensionUser\")\nclass ExtensionUserModelBackendTest(BaseModelBackendTest, TestCase):\n    \"\"\"\n    Tests for the ModelBackend using the custom ExtensionUser model.\n\n    This isn't a perfect test, because both the User and ExtensionUser are\n    synchronized to the database, which wouldn't ordinary happen in\n    production. As a result, it doesn't catch errors caused by the non-\n    existence of the User table.\n\n    The specific problem is queries on .filter(groups__user) et al, which\n    makes an implicit assumption that the user model is called 'User'. In\n    production, the auth.User table won't exist, so the requested join\n    won't exist either; in testing, the auth.User *does* exist, and\n    so does the join. However, the join table won't contain any useful\n    data; for testing, we check that the data we expect actually does exist.\n    \"\"\"\n\n    UserModel = ExtensionUser\n\n# django/contrib/auth/__init__.py:94-144  (django.contrib.auth.login)\ndef login(request, user, backend=None):\n    \"\"\"\n    Persist a user id and a backend in the request. This way a user doesn't\n    have to reauthenticate on every request. Note that data set during\n    the anonymous session is retained when the user logs in.\n    \"\"\"\n    session_auth_hash = \"\"\n    if user is None:\n        user = request.user\n    if hasattr(user, \"get_session_auth_hash\"):\n        session_auth_hash = user.get_session_auth_hash()\n\n    if SESSION_KEY in request.session:\n        if _get_user_session_key(request) != user.pk or (\n            session_auth_hash\n            and not constant_time_compare(\n                request.session.get(HASH_SESSION_KEY, \"\"), session_auth_hash\n            )\n        ):\n            # To avoid reusing another user's session, create a new, empty\n            # session if the existing session corresponds to a different\n            # authenticated user.\n            request.session.flush()\n    else:\n        request.session.cycle_key()\n\n    try:\n        backend = backend or user.backend\n    except AttributeError:\n        backends = _get_backends(return_tuples=True)\n        if len(backends) == 1:\n            _, backend = backends[0]\n        else:\n            raise ValueError(\n                \"You have multiple authentication backends configured and \"\n                \"therefore must provide the `backend` argument or set the \"\n                \"`backend` attribute on the user.\"\n            )\n    else:\n        if not isinstance(backend, str):\n            raise TypeError(\n                \"backend must be a dotted import path string (got %r).\" % backend\n            )\n\n    request.session[SESSION_KEY] = user._meta.pk.value_to_string(user)\n    request.session[BACKEND_SESSION_KEY] = backend\n    request.session[HASH_SESSION_KEY] = session_auth_hash\n    if hasattr(request, \"user\"):\n        request.user = user\n    rotate_token(request)\n    user_logged_in.send(sender=user.__class__, request=request, user=user)\n\n# django/contrib/auth/backends.py:159-164  (django.contrib.auth.backends.ModelBackend.get_user)\nclass ModelBackend(BaseBackend):\n    def get_user(self, user_id):\n        try:\n            user = UserModel._default_manager.get(pk=user_id)\n        except UserModel.DoesNotExist:\n            return None\n        return user if self.user_can_authenticate(user) else None\n\n# django/test/client.py:770-782  (django.test.client.ClientMixin.force_login)\nclass ClientMixin:\n    def force_login(self, user, backend=None):\n        def get_backend():\n            from django.contrib.auth import load_backend\n\n            for backend_path in settings.AUTHENTICATION_BACKENDS:\n                backend = load_backend(backend_path)\n                if hasattr(backend, \"get_user\"):\n                    return backend_path\n\n        if backend is None:\n            backend = get_backend()\n        user.backend = backend\n        self._login(user, backend)\n\n# tests/test_client_regress/auth_backends.py:15-19  (tests.test_client_regress.auth_backends.CustomUserBackend.get_user)\nclass CustomUserBackend(ModelBackend):\n    def get_user(self, user_id):\n        try:\n            return CustomUser.custom_objects.get(pk=user_id)\n        except CustomUser.DoesNotExist:\n            return None\n\n# django/contrib/auth/__init__.py:63-91  (django.contrib.auth.authenticate)\n@sensitive_variables(\"credentials\")\ndef authenticate(request=None, **credentials):\n    \"\"\"\n    If the given credentials are valid, return a User object.\n    \"\"\"\n    for backend, backend_path in _get_backends(return_tuples=True):\n        backend_signature = inspect.signature(backend.authenticate)\n        try:\n            backend_signature.bind(request, **credentials)\n        except TypeError:\n            # This backend doesn't accept these credentials as arguments. Try\n            # the next one.\n            continue\n        try:\n            user = backend.authenticate(request, **credentials)\n        except PermissionDenied:\n            # This backend says to stop in our tracks - this user should not be\n            # allowed in at all.\n            break\n        if user is None:\n            continue\n        # Annotate the user object with the path of the backend.\n        user.backend = backend_path\n        return user\n\n    # The credentials supplied are invalid to all backends, fire signal\n    user_login_failed.send(\n        sender=__name__, credentials=_clean_credentials(credentials), request=request\n    )\n\n# django/contrib/auth/forms.py:279-280  (django.contrib.auth.forms.AuthenticationForm.get_user)\nclass AuthenticationForm(forms.Form):\n    def get_user(self):\n        return self.user_cache\n\n# tests/test_client/tests.py:776-787  (tests.test_client.tests.ClientTest.test_force_login_with_backend_missing_get_user)\nclass ClientTest(TestCase):\n    @override_settings(\n        AUTHENTICATION_BACKENDS=[\n            \"test_client.auth_backends.BackendWithoutGetUserMethod\",\n            \"django.contrib.auth.backends.ModelBackend\",\n        ]\n    )\n    def test_force_login_with_backend_missing_get_user(self):\n        \"\"\"\n        force_login() skips auth backends without a get_user() method.\n        \"\"\"\n        self.client.force_login(self.u1)\n        self.assertEqual(self.u1.backend, \"django.contrib.auth.backends.ModelBackend\")\n\n# django/test/client.py:809-821  (django.test.client.ClientMixin.logout)\nclass ClientMixin:\n    def logout(self):\n        \"\"\"Log out the user by removing the cookies and session object.\"\"\"\n        from django.contrib.auth import get_user, logout\n\n        request = HttpRequest()\n        if self.session:\n            request.session = self.session\n            request.user = get_user(request)\n        else:\n            engine = import_module(settings.SESSION_ENGINE)\n            request.session = engine.SessionStore()\n        logout(request)\n        self.cookies = SimpleCookie()\n\n# django/contrib/auth/password_validation.py:160-171  (django.contrib.auth.password_validation.UserAttributeSimilarityValidator)\nclass UserAttributeSimilarityValidator:\n    \"\"\"\n    Validate that the password is sufficiently different from the user's\n    attributes.\n\n    If no specific attributes are provided, look at a sensible list of\n    defaults. Attributes that don't exist are ignored. Comparison is made to\n    not only the full attribute value, but also its components, so that, for\n    example, a password is validated against either part of an email address,\n    as well as the full address.\n    \"\"\"\n\n    DEFAULT_USER_ATTRIBUTES = (\"username\", \"first_name\", \"last_name\", \"email\")\n\n# tests/auth_tests/test_auth_backends.py:373-381  (tests.auth_tests.test_auth_backends.CustomPermissionsUserModelBackendTest)\n@override_settings(AUTH_USER_MODEL=\"auth_tests.CustomPermissionsUser\")\nclass CustomPermissionsUserModelBackendTest(BaseModelBackendTest, TestCase):\n    \"\"\"\n    Tests for the ModelBackend using the CustomPermissionsUser model.\n\n    As with the ExtensionUser test, this isn't a perfect test, because both\n    the User and CustomPermissionsUser are synchronized to the database,\n    which wouldn't ordinary happen in production.\n    \"\"\"\n\n    UserModel = CustomPermissionsUser\n\n# tests/auth_tests/test_auth_backends.py:929-934  (tests.auth_tests.test_auth_backends.AllowAllUsersModelBackendTest.test_get_user)\nclass AllowAllUsersModelBackendTest(TestCase):\n    def test_get_user(self):\n        self.client.force_login(self.user)\n        request = HttpRequest()\n        request.session = self.client.session\n        user = get_user(request)\n        self.assertEqual(user, self.user)\n\n# tests/auth_tests/test_remote_user.py:21-28  (tests.auth_tests.test_remote_user.RemoteUserTest)\n@override_settings(ROOT_URLCONF=\"auth_tests.urls\")\nclass RemoteUserTest(TestCase):\n    middleware = \"django.contrib.auth.middleware.RemoteUserMiddleware\"\n    backend = \"django.contrib.auth.backends.RemoteUserBackend\"\n    header = \"REMOTE_USER\"\n    email_header = \"REMOTE_EMAIL\"\n\n    # Usernames to be passed in REMOTE_USER for the test_known_user test case.\n    known_user = \"knownuser\"\n    known_user2 = \"knownuser2\"\n\n# django/contrib/auth/__init__.py:165-179  (django.contrib.auth.get_user_model)\ndef get_user_model():\n    \"\"\"\n    Return the User model that is active in this project.\n    \"\"\"\n    try:\n        return django_apps.get_model(settings.AUTH_USER_MODEL, require_ready=False)\n    except ValueError:\n        raise ImproperlyConfigured(\n            \"AUTH_USER_MODEL must be of the form 'app_label.model_name'\"\n        )\n    except LookupError:\n        raise ImproperlyConfigured(\n            \"AUTH_USER_MODEL refers to model '%s' that has not been installed\"\n            % settings.AUTH_USER_MODEL\n        )\n\n# django/contrib/admin/checks.py:55-173  (django.contrib.admin.checks.check_dependencies)\ndef check_dependencies(**kwargs):\n    \"\"\"\n    Check that the admin's dependencies are correctly installed.\n    \"\"\"\n    from django.contrib.admin.sites import all_sites\n\n    if not apps.is_installed(\"django.contrib.admin\"):\n        return []\n    errors = []\n    app_dependencies = (\n        (\"django.contrib.contenttypes\", 401),\n        (\"django.contrib.auth\", 405),\n        (\"django.contrib.messages\", 406),\n    )\n    for app_name, error_code in app_dependencies:\n        if not apps.is_installed(app_name):\n            errors.append(\n                checks.Error(\n                    \"'%s' must be in INSTALLED_APPS in order to use the admin \"\n                    \"application.\" % app_name,\n                    id=\"admin.E%d\" % error_code,\n                )\n            )\n    for engine in engines.all():\n        if isinstance(engine, DjangoTemplates):\n            django_templates_instance = engine.engine\n            break\n    else:\n        django_templates_instance = None\n    if not django_templates_instance:\n        errors.append(\n            checks.Error(\n                \"A 'django.template.backends.django.DjangoTemplates' instance \"\n                \"must be configured in TEMPLATES in order to use the admin \"\n                \"application.\",\n                id=\"admin.E403\",\n            )\n        )\n    else:\n        if (\n            \"django.contrib.auth.context_processors.auth\"\n            not in django_templates_instance.context_processors\n            and _contains_subclass(\n                \"django.contrib.auth.backends.ModelBackend\",\n                settings.AUTHENTICATION_BACKENDS,\n            )\n        ):\n            errors.append(\n                checks.Error(\n                    \"'django.contrib.auth.context_processors.auth' must be \"\n                    \"enabled in DjangoTemplates (TEMPLATES) if using the default \"\n                    \"auth backend in order to use the admin application.\",\n                    id=\"admin.E402\",\n                )\n            )\n        if (\n            \"django.contrib.messages.context_processors.messages\"\n            not in django_templates_instance.context_processors\n        ):\n            errors.append(\n                checks.Error(\n                    \"'django.contrib.messages.context_processors.messages' must \"\n                    \"be enabled in DjangoTemplates (TEMPLATES) in order to use \"\n                    \"the admin application.\",\n                    id=\"admin.E404\",\n                )\n            )\n        sidebar_enabled = any(site.enable_nav_sidebar for site in all_sites)\n        if (\n            sidebar_enabled\n            and \"django.template.context_processors.request\"\n            not in django_templates_instance.context_processors\n        ):\n            errors.append(\n                checks.Warning(\n                    \"'django.template.context_processors.request' must be enabled \"\n                    \"in DjangoTemplates (TEMPLATES) in order to use the admin \"\n                    \"navigation sidebar.\",\n                    id=\"admin.W411\",\n                )\n            )\n\n    if not _contains_subclass(\n        \"django.contrib.auth.middleware.AuthenticationMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                id=\"admin.E408\",\n            )\n        )\n    if not _contains_subclass(\n        \"django.contrib.messages.middleware.MessageMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.messages.middleware.MessageMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                id=\"admin.E409\",\n            )\n        )\n    if not _contains_subclass(\n        \"django.contrib.sessions.middleware.SessionMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.sessions.middleware.SessionMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                hint=(\n                    \"Insert \"\n                    \"'django.contrib.sessions.middleware.SessionMiddleware' \"\n                    \"before \"\n                    \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n                ),\n                id=\"admin.E410\",\n            )\n        )\n    return errors\n\n# django/contrib/admindocs/middleware.py:14-33  (django.contrib.admindocs.middleware.XViewMiddleware.process_view)\nclass XViewMiddleware(MiddlewareMixin):\n    def process_view(self, request, view_func, view_args, view_kwargs):\n        \"\"\"\n        If the request method is HEAD and either the IP is internal or the\n        user is a logged-in staff member, return a response with an x-view\n        header indicating the view function. This is used to lookup the view\n        function for an arbitrary page.\n        \"\"\"\n        if not hasattr(request, \"user\"):\n            raise ImproperlyConfigured(\n                \"The XView middleware requires authentication middleware to \"\n                \"be installed. Edit your MIDDLEWARE setting to insert \"\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n            )\n        if request.method == \"HEAD\" and (\n            request.META.get(\"REMOTE_ADDR\") in settings.INTERNAL_IPS\n            or (request.user.is_active and request.user.is_staff)\n        ):\n            response = HttpResponse()\n            response.headers[\"X-View\"] = get_view_name(view_func)\n            return response\n\n# django/contrib/auth/context_processors.py:49-67  (django.contrib.auth.context_processors.auth)\ndef auth(request):\n    \"\"\"\n    Return context variables required by apps that use Django's authentication\n    system.\n\n    If there is no 'user' attribute in the request, use AnonymousUser (from\n    django.contrib.auth).\n    \"\"\"\n    if hasattr(request, \"user\"):\n        user = request.user\n    else:\n        from django.contrib.auth.models import AnonymousUser\n\n        user = AnonymousUser()\n\n    return {\n        \"user\": user,\n        \"perms\": PermWrapper(user),\n    }\n\n# django/contrib/auth/checks.py:11-104  (django.contrib.auth.checks.check_user_model)\ndef check_user_model(app_configs=None, **kwargs):\n    if app_configs is None:\n        cls = apps.get_model(settings.AUTH_USER_MODEL)\n    else:\n        app_label, model_name = settings.AUTH_USER_MODEL.split(\".\")\n        for app_config in app_configs:\n            if app_config.label == app_label:\n                cls = app_config.get_model(model_name)\n                break\n        else:\n            # Checks might be run against a set of app configs that don't\n            # include the specified user model. In this case we simply don't\n            # perform the checks defined below.\n            return []\n\n    errors = []\n\n    # Check that REQUIRED_FIELDS is a list\n    if not isinstance(cls.REQUIRED_FIELDS, (list, tuple)):\n        errors.append(\n            checks.Error(\n                \"'REQUIRED_FIELDS' must be a list or tuple.\",\n                obj=cls,\n                id=\"auth.E001\",\n            )\n        )\n\n    # Check that the USERNAME FIELD isn't included in REQUIRED_FIELDS.\n    if cls.USERNAME_FIELD in cls.REQUIRED_FIELDS:\n        errors.append(\n            checks.Error(\n                \"The field named as the 'USERNAME_FIELD' \"\n                \"for a custom user model must not be included in 'REQUIRED_FIELDS'.\",\n                hint=(\n                    \"The 'USERNAME_FIELD' is currently set to '%s', you \"\n                    \"should remove '%s' from the 'REQUIRED_FIELDS'.\"\n                    % (cls.USERNAME_FIELD, cls.USERNAME_FIELD)\n                ),\n                obj=cls,\n                id=\"auth.E002\",\n            )\n        )\n\n    # Check that the username field is unique\n    if not cls._meta.get_field(cls.USERNAME_FIELD).unique and not any(\n        constraint.fields == (cls.USERNAME_FIELD,)\n        for constraint in cls._meta.total_unique_constraints\n    ):\n        if settings.AUTHENTICATION_BACKENDS == [\n            \"django.contrib.auth.backends.ModelBackend\"\n        ]:\n            errors.append(\n                checks.Error(\n                    \"'%s.%s' must be unique because it is named as the \"\n                    \"'USERNAME_FIELD'.\" % (cls._meta.object_name, cls.USERNAME_FIELD),\n                    obj=cls,\n                    id=\"auth.E003\",\n                )\n            )\n        else:\n            errors.append(\n                checks.Warning(\n                    \"'%s.%s' is named as the 'USERNAME_FIELD', but it is not unique.\"\n                    % (cls._meta.object_name, cls.USERNAME_FIELD),\n                    hint=(\n                        \"Ensure that your authentication backend(s) can handle \"\n                        \"non-unique usernames.\"\n                    ),\n                    obj=cls,\n                    id=\"auth.W004\",\n                )\n            )\n\n    if isinstance(cls().is_anonymous, MethodType):\n        errors.append(\n            checks.Critical(\n                \"%s.is_anonymous must be an attribute or property rather than \"\n                \"a method. Ignoring this is a security issue as anonymous \"\n                \"users will be treated as authenticated!\" % cls,\n                obj=cls,\n                id=\"auth.C009\",\n            )\n        )\n    if isinstance(cls().is_authenticated, MethodType):\n        errors.append(\n            checks.Critical(\n                \"%s.is_authenticated must be an attribute or property rather \"\n                \"than a method. Ignoring this is a security issue as anonymous \"\n                \"users will be treated as authenticated!\" % cls,\n                obj=cls,\n                id=\"auth.C010\",\n            )\n        )\n    return errors\n\n# django/contrib/auth/views.py:107-110  (django.contrib.auth.views.LoginView.form_valid)\nclass LoginView(RedirectURLMixin, FormView):\n    def form_valid(self, form):\n        \"\"\"Security check complete. Log the user in.\"\"\"\n        auth_login(self.request, form.get_user())\n        return HttpResponseRedirect(self.get_success_url())\n\n# django/contrib/auth/backends.py:187-227  (django.contrib.auth.backends.RemoteUserBackend.authenticate)\nclass RemoteUserBackend(ModelBackend):\n    def authenticate(self, request, remote_user):\n        \"\"\"\n        The username passed as ``remote_user`` is considered trusted. Return\n        the ``User`` object with the given username. Create a new ``User``\n        object if ``create_unknown_user`` is ``True``.\n\n        Return None if ``create_unknown_user`` is ``False`` and a ``User``\n        object with the given username is not found in the database.\n        \"\"\"\n        if not remote_user:\n            return\n        created = False\n        user = None\n        username = self.clean_username(remote_user)\n\n        # Note that this could be accomplished in one try-except clause, but\n        # instead we use get_or_create when creating unknown users since it has\n        # built-in safeguards for multiple threads.\n        if self.create_unknown_user:\n            user, created = UserModel._default_manager.get_or_create(\n                **{UserModel.USERNAME_FIELD: username}\n            )\n        else:\n            try:\n                user = UserModel._default_manager.get_by_natural_key(username)\n            except UserModel.DoesNotExist:\n                pass\n\n        # RemovedInDjango50Warning: When the deprecation ends, replace with:\n        #   user = self.configure_user(request, user, created=created)\n        if func_supports_parameter(self.configure_user, \"created\"):\n            user = self.configure_user(request, user, created=created)\n        else:\n            warnings.warn(\n                f\"`created=True` must be added to the signature of \"\n                f\"{self.__class__.__qualname__}.configure_user().\",\n                category=RemovedInDjango50Warning,\n            )\n            if created:\n                user = self.configure_user(request, user)\n        return user if self.user_can_authenticate(user) else None\n\n# django/contrib/auth/models.py:298-311  (django.contrib.auth.models.PermissionsMixin.has_perm)\nclass PermissionsMixin(models.Model):\n    def has_perm(self, perm, obj=None):\n        \"\"\"\n        Return True if the user has the specified permission. Query all\n        available auth backends, but return immediately if any backend returns\n        True. Thus, a user who has permission from a single auth backend is\n        assumed to have permission in general. If an object is provided, check\n        permissions for that object.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        # Otherwise we need to check the backends.\n        return _user_has_perm(self, perm, obj)\n\n# tests/user_commands/models.py:1-14  (tests.user_commands.models)\n\"\"\"\nUser-registered management commands\n\nThe ``manage.py`` utility provides a number of useful commands for managing a\nDjango project. If you want to add a utility command of your own, you can.\n\nThe user-defined command ``dance`` is defined in the management/commands\nsubdirectory of this test application. It is a simple command that responds\nwith a printed message when invoked.\n\nFor more details on how to define your own ``manage.py`` commands, look at the\n``django.core.management.commands`` directory. This directory contains the\ndefinitions for the base Django ``manage.py`` commands.\n\"\"\"\n\n# django/contrib/auth/__init__.py:233-244  (django.contrib.auth.update_session_auth_hash)\ndef update_session_auth_hash(request, user):\n    \"\"\"\n    Updating a user's password logs out all sessions for the user.\n\n    Take the current request and the updated user object from which the new\n    session hash will be derived and update the session hash appropriately to\n    prevent a password change from logging out the session from which the\n    password was changed.\n    \"\"\"\n    request.session.cycle_key()\n    if hasattr(user, \"get_session_auth_hash\") and request.user == user:\n        request.session[HASH_SESSION_KEY] = user.get_session_auth_hash()\n\n# tests/auth_tests/models/custom_permissions.py:1-9  (tests.auth_tests.models.custom_permissions)\n\"\"\"\nThe CustomPermissionsUser users email as the identifier, but uses the normal\nDjango permissions model. This allows us to check that the PermissionsMixin\nincludes everything that is needed to interact with the ModelBackend.\n\"\"\"\nfrom django.contrib.auth.models import AbstractBaseUser, PermissionsMixin\nfrom django.db import models\n\nfrom .custom_user import CustomUserManager, RemoveGroupsAndPermissions\n\n# django/contrib/auth/forms.py:262-277  (django.contrib.auth.forms.AuthenticationForm.confirm_login_allowed)\nclass AuthenticationForm(forms.Form):\n    def confirm_login_allowed(self, user):\n        \"\"\"\n        Controls whether the given User may log in. This is a policy setting,\n        independent of end-user authentication. This default behavior is to\n        allow login by active users, and reject login by inactive users.\n\n        If the given user cannot log in, this method should raise a\n        ``ValidationError``.\n\n        If the given user may log in, this method should return None.\n        \"\"\"\n        if not user.is_active:\n            raise ValidationError(\n                self.error_messages[\"inactive\"],\n                code=\"inactive\",\n            )\n\n# tests/test_client/tests.py:1-43  (tests.test_client.tests)\n\"\"\"\nTesting using the Test Client\n\nThe test client is a class that can act like a simple\nbrowser for testing purposes.\n\nIt allows the user to compose GET and POST requests, and\nobtain the response that the server gave to those requests.\nThe server Response objects are annotated with the details\nof the contexts and templates that were rendered during the\nprocess of serving the request.\n\n``Client`` objects are stateful - they will retain cookie (and\nthus session) details for the lifetime of the ``Client`` instance.\n\nThis is not intended as a replacement for Twill, Selenium, or\nother browser automation frameworks - it is here to allow\ntesting against the contexts and templates produced by a view,\nrather than the HTML rendered to the end-user.\n\n\"\"\"\nimport copy\nimport itertools\nimport tempfile\nfrom unittest import mock\n\nfrom django.contrib.auth.models import User\nfrom django.core import mail\nfrom django.http import HttpResponse, HttpResponseNotAllowed\nfrom django.test import (\n    AsyncRequestFactory,\n    Client,\n    RequestFactory,\n    SimpleTestCase,\n    TestCase,\n    modify_settings,\n    override_settings,\n)\nfrom django.urls import reverse_lazy\nfrom django.utils.decorators import async_only_middleware\nfrom django.views.generic import RedirectView\n\nfrom .views import TwoArgException, get_view, post_view, trace_view\n\n# tests/auth_tests/test_auth_backends.py:1-35  (tests.auth_tests.test_auth_backends)\nimport sys\nfrom datetime import date\nfrom unittest import mock\n\nfrom django.contrib.auth import (\n    BACKEND_SESSION_KEY,\n    SESSION_KEY,\n    _clean_credentials,\n    authenticate,\n    get_user,\n    signals,\n)\nfrom django.contrib.auth.backends import BaseBackend, ModelBackend\nfrom django.contrib.auth.hashers import MD5PasswordHasher\nfrom django.contrib.auth.models import AnonymousUser, Group, Permission, User\nfrom django.contrib.contenttypes.models import ContentType\nfrom django.core.exceptions import ImproperlyConfigured, PermissionDenied\nfrom django.http import HttpRequest\nfrom django.test import (\n    RequestFactory,\n    SimpleTestCase,\n    TestCase,\n    modify_settings,\n    override_settings,\n)\nfrom django.views.debug import technical_500_response\nfrom django.views.decorators.debug import sensitive_variables\n\nfrom .models import (\n    CustomPermissionsUser,\n    CustomUser,\n    CustomUserWithoutIsActiveField,\n    ExtensionUser,\n    UUIDUser,\n)\n\n# tests/auth_tests/test_auth_backends.py:87-94  (tests.auth_tests.test_auth_backends.BaseModelBackendTest)\nclass BaseModelBackendTest:\n    \"\"\"\n    A base class for tests that need to validate the ModelBackend\n    with different User models. Subclasses should define a class\n    level UserModel attribute, and a create_users() method to\n    construct two users for test purposes.\n    \"\"\"\n\n    backend = \"django.contrib.auth.backends.ModelBackend\"\n\n# django/contrib/auth/backends.py:91-96  (django.contrib.auth.backends.ModelBackend.get_user_permissions)\nclass ModelBackend(BaseBackend):\n    def get_user_permissions(self, user_obj, obj=None):\n        \"\"\"\n        Return a set of permission strings the user `user_obj` has from their\n        `user_permissions`.\n        \"\"\"\n        return self._get_permissions(user_obj, obj, \"user\")\n\n# django/contrib/auth/backends.py:98-103  (django.contrib.auth.backends.ModelBackend.get_group_permissions)\nclass ModelBackend(BaseBackend):\n    def get_group_permissions(self, user_obj, obj=None):\n        \"\"\"\n        Return a set of permission strings the user `user_obj` has from the\n        groups they belong.\n        \"\"\"\n        return self._get_permissions(user_obj, obj, \"group\")\n\n# tests/test_client/tests.py:676-697  (tests.test_client.tests.ClientTest.test_view_with_inactive_force_login)\nclass ClientTest(TestCase):\n    @override_settings(\n        AUTHENTICATION_BACKENDS=[\n            \"django.contrib.auth.backends.ModelBackend\",\n            \"django.contrib.auth.backends.AllowAllUsersModelBackend\",\n        ]\n    )\n    def test_view_with_inactive_force_login(self):\n        \"Request a page that is protected with @login, but use an inactive login\"\n\n        # Get the page without logging in. Should result in 302.\n        response = self.client.get(\"/login_protected_view/\")\n        self.assertRedirects(response, \"/accounts/login/?next=/login_protected_view/\")\n\n        # Log in\n        self.client.force_login(\n            self.u2, backend=\"django.contrib.auth.backends.AllowAllUsersModelBackend\"\n        )\n\n        # Request a page that requires a login\n        response = self.client.get(\"/login_protected_view/\")\n        self.assertEqual(response.status_code, 200)\n        self.assertEqual(response.context[\"user\"].username, \"inactive\")\n\n# django/contrib/auth/backends.py:238-244  (django.contrib.auth.backends.RemoteUserBackend.configure_user)\nclass RemoteUserBackend(ModelBackend):\n    def configure_user(self, request, user, created=True):\n        \"\"\"\n        Configure a user and return the updated user.\n\n        By default, return the user unmodified.\n        \"\"\"\n        return user\n\n# django/contrib/auth/models.py:243-274  (django.contrib.auth.models.PermissionsMixin)\nclass PermissionsMixin(models.Model):\n    \"\"\"\n    Add the fields and methods necessary to support the Group and Permission\n    models using the ModelBackend.\n    \"\"\"\n\n    is_superuser = models.BooleanField(\n        _(\"superuser status\"),\n        default=False,\n        help_text=_(\n            \"Designates that this user has all permissions without \"\n            \"explicitly assigning them.\"\n        ),\n    )\n    groups = models.ManyToManyField(\n        Group,\n        verbose_name=_(\"groups\"),\n        blank=True,\n        help_text=_(\n            \"The groups this user belongs to. A user will get all permissions \"\n            \"granted to each of their groups.\"\n        ),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n    user_permissions = models.ManyToManyField(\n        Permission,\n        verbose_name=_(\"user permissions\"),\n        blank=True,\n        help_text=_(\"Specific permissions for this user.\"),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n\n# django/contrib/auth/views.py:311-324  (django.contrib.auth.views.PasswordResetConfirmView.get_user)\nclass PasswordResetConfirmView(PasswordContextMixin, FormView):\n    def get_user(self, uidb64):\n        try:\n            # urlsafe_base64_decode() decodes to bytestring\n            uid = urlsafe_base64_decode(uidb64).decode()\n            user = UserModel._default_manager.get(pk=uid)\n        except (\n            TypeError,\n            ValueError,\n            OverflowError,\n            UserModel.DoesNotExist,\n            ValidationError,\n        ):\n            user = None\n        return user\n\n# tests/auth_tests/test_remote_user.py:236-245  (tests.auth_tests.test_remote_user.RemoteUserCustomTest)\nclass RemoteUserCustomTest(RemoteUserTest):\n    \"\"\"\n    Tests a custom RemoteUserBackend subclass that overrides the clean_username\n    and configure_user methods.\n    \"\"\"\n\n    backend = \"auth_tests.test_remote_user.CustomRemoteUserBackend\"\n    # REMOTE_USER strings with email addresses for the custom backend to\n    # clean.\n    known_user = \"knownuser@example.com\"\n    known_user2 = \"knownuser2@example.com\"\n\n# django/contrib/auth/backends.py:40-53  (django.contrib.auth.backends.ModelBackend.authenticate)\nclass ModelBackend(BaseBackend):\n    def authenticate(self, request, username=None, password=None, **kwargs):\n        if username is None:\n            username = kwargs.get(UserModel.USERNAME_FIELD)\n        if username is None or password is None:\n            return\n        try:\n            user = UserModel._default_manager.get_by_natural_key(username)\n        except UserModel.DoesNotExist:\n            # Run the default password hasher once to reduce the timing\n            # difference between an existing and a nonexistent user (#20760).\n            UserModel().set_password(password)\n        else:\n            if user.check_password(password) and self.user_can_authenticate(user):\n                return user\n\n# django/middleware/cache.py:1-55  (django.middleware.cache)\n\"\"\"\nCache middleware. If enabled, each Django-powered page will be cached based on\nURL. The canonical way to enable cache middleware is to set\n``UpdateCacheMiddleware`` as your first piece of middleware, and\n``FetchFromCacheMiddleware`` as the last::\n\n    MIDDLEWARE = [\n        'django.middleware.cache.UpdateCacheMiddleware',\n        ...\n        'django.middleware.cache.FetchFromCacheMiddleware'\n    ]\n\nThis is counter-intuitive, but correct: ``UpdateCacheMiddleware`` needs to run\nlast during the response phase, which processes middleware bottom-up;\n``FetchFromCacheMiddleware`` needs to run last during the request phase, which\nprocesses middleware top-down.\n\nThe single-class ``CacheMiddleware`` can be used for some simple sites.\nHowever, if any other piece of middleware needs to affect the cache key, you'll\nneed to use the two-part ``UpdateCacheMiddleware`` and\n``FetchFromCacheMiddleware``. This'll most often happen when you're using\nDjango's ``LocaleMiddleware``.\n\nMore details about how the caching works:\n\n* Only GET or HEAD-requests with status code 200 are cached.\n\n* The number of seconds each page is stored for is set by the \"max-age\" section\n  of the response's \"Cache-Control\" header, falling back to the\n  CACHE_MIDDLEWARE_SECONDS setting if the section was not found.\n\n* This middleware expects that a HEAD request is answered with the same response\n  headers exactly like the corresponding GET request.\n\n* When a hit occurs, a shallow copy of the original response object is returned\n  from process_request.\n\n* Pages will be cached based on the contents of the request headers listed in\n  the response's \"Vary\" header.\n\n* This middleware also sets ETag, Last-Modified, Expires and Cache-Control\n  headers on the response object.\n\n\"\"\"\n\nfrom django.conf import settings\nfrom django.core.cache import DEFAULT_CACHE_ALIAS, caches\nfrom django.utils.cache import (\n    get_cache_key,\n    get_max_age,\n    has_vary_header,\n    learn_cache_key,\n    patch_response_headers,\n)\nfrom django.utils.deprecation import MiddlewareMixin\n\n# django/contrib/auth/views.py:277-309  (django.contrib.auth.views.PasswordResetConfirmView.dispatch)\nclass PasswordResetConfirmView(PasswordContextMixin, FormView):\n    @method_decorator(sensitive_post_parameters())\n    @method_decorator(never_cache)\n    def dispatch(self, *args, **kwargs):\n        if \"uidb64\" not in kwargs or \"token\" not in kwargs:\n            raise ImproperlyConfigured(\n                \"The URL path must contain 'uidb64' and 'token' parameters.\"\n            )\n\n        self.validlink = False\n        self.user = self.get_user(kwargs[\"uidb64\"])\n\n        if self.user is not None:\n            token = kwargs[\"token\"]\n            if token == self.reset_url_token:\n                session_token = self.request.session.get(INTERNAL_RESET_SESSION_TOKEN)\n                if self.token_generator.check_token(self.user, session_token):\n                    # If the token is valid, display the password reset form.\n                    self.validlink = True\n                    return super().dispatch(*args, **kwargs)\n            else:\n                if self.token_generator.check_token(self.user, token):\n                    # Store the token in the session and redirect to the\n                    # password reset form at a URL without the token. That\n                    # avoids the possibility of leaking the token in the\n                    # HTTP Referer header.\n                    self.request.session[INTERNAL_RESET_SESSION_TOKEN] = token\n                    redirect_url = self.request.path.replace(\n                        token, self.reset_url_token\n                    )\n                    return HttpResponseRedirect(redirect_url)\n\n        # Display the \"Password reset unsuccessful\" page.\n        return self.render_to_response(self.get_context_data())\n\n# django/contrib/auth/backends.py:229-236  (django.contrib.auth.backends.RemoteUserBackend.clean_username)\nclass RemoteUserBackend(ModelBackend):\n    def clean_username(self, username):\n        \"\"\"\n        Perform any cleaning on the \"username\" prior to using it to get or\n        create the user object.  Return the cleaned username.\n\n        By default, return the username unchanged.\n        \"\"\"\n        return username\n\n# django/contrib/auth/models.py:279-285  (django.contrib.auth.models.PermissionsMixin.get_user_permissions)\nclass PermissionsMixin(models.Model):\n    def get_user_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has directly.\n        Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"user\")\n\n# django/contrib/auth/decorators.py:10-40  (django.contrib.auth.decorators.user_passes_test)\ndef user_passes_test(\n    test_func, login_url=None, redirect_field_name=REDIRECT_FIELD_NAME\n):\n    \"\"\"\n    Decorator for views that checks that the user passes the given test,\n    redirecting to the log-in page if necessary. The test should be a callable\n    that takes the user object and returns True if the user passes.\n    \"\"\"\n\n    def decorator(view_func):\n        @wraps(view_func)\n        def _wrapper_view(request, *args, **kwargs):\n            if test_func(request.user):\n                return view_func(request, *args, **kwargs)\n            path = request.build_absolute_uri()\n            resolved_login_url = resolve_url(login_url or settings.LOGIN_URL)\n            # If the login url is the same scheme and net location then just\n            # use the path as the \"next\" url.\n            login_scheme, login_netloc = urlparse(resolved_login_url)[:2]\n            current_scheme, current_netloc = urlparse(path)[:2]\n            if (not login_scheme or login_scheme == current_scheme) and (\n                not login_netloc or login_netloc == current_netloc\n            ):\n                path = request.get_full_path()\n            from django.contrib.auth.views import redirect_to_login\n\n            return redirect_to_login(path, resolved_login_url, redirect_field_name)\n\n        return _wrapper_view\n\n    return decorator\n\n# django/core/management/base.py:184-268  (django.core.management.base.BaseCommand)\nclass BaseCommand:\n    \"\"\"\n    The base class from which all management commands ultimately\n    derive.\n\n    Use this class if you want access to all of the mechanisms which\n    parse the command-line arguments and work out what code to call in\n    response; if you don't need to change any of that behavior,\n    consider using one of the subclasses defined in this file.\n\n    If you are interested in overriding/customizing various aspects of\n    the command-parsing and -execution behavior, the normal flow works\n    as follows:\n\n    1. ``django-admin`` or ``manage.py`` loads the command class\n       and calls its ``run_from_argv()`` method.\n\n    2. The ``run_from_argv()`` method calls ``create_parser()`` to get\n       an ``ArgumentParser`` for the arguments, parses them, performs\n       any environment changes requested by options like\n       ``pythonpath``, and then calls the ``execute()`` method,\n       passing the parsed arguments.\n\n    3. The ``execute()`` method attempts to carry out the command by\n       calling the ``handle()`` method with the parsed arguments; any\n       output produced by ``handle()`` will be printed to standard\n       output and, if the command is intended to produce a block of\n       SQL statements, will be wrapped in ``BEGIN`` and ``COMMIT``.\n\n    4. If ``handle()`` or ``execute()`` raised any exception (e.g.\n       ``CommandError``), ``run_from_argv()`` will  instead print an error\n       message to ``stderr``.\n\n    Thus, the ``handle()`` method is typically the starting point for\n    subclasses; many built-in commands and command types either place\n    all of their logic in ``handle()``, or perform some additional\n    parsing work in ``handle()`` and then delegate from it to more\n    specialized methods as needed.\n\n    Several attributes affect behavior at various steps along the way:\n\n    ``help``\n        A short description of the command, which will be printed in\n        help messages.\n\n    ``output_transaction``\n        A boolean indicating whether the command outputs SQL\n        statements; if ``True``, the output will automatically be\n        wrapped with ``BEGIN;`` and ``COMMIT;``. Default value is\n        ``False``.\n\n    ``requires_migrations_checks``\n        A boolean; if ``True``, the command prints a warning if the set of\n        migrations on disk don't match the migrations in the database.\n\n    ``requires_system_checks``\n        A list or tuple of tags, e.g. [Tags.staticfiles, Tags.models]. System\n        checks registered in the chosen tags will be checked for errors prior\n        to executing the command. The value '__all__' can be used to specify\n        that all system checks should be performed. Default value is '__all__'.\n\n        To validate an individual application's models\n        rather than all applications' models, call\n        ``self.check(app_configs)`` from ``handle()``, where ``app_configs``\n        is the list of application's configuration provided by the\n        app registry.\n\n    ``stealth_options``\n        A tuple of any options the command uses which aren't defined by the\n        argument parser.\n    \"\"\"\n\n    # Metadata about this command.\n    help = \"\"\n\n    # Configuration shortcuts that alter various logic.\n    _called_from_command_line = False\n    output_transaction = False  # Whether to wrap the output in a \"BEGIN; COMMIT;\"\n    requires_migrations_checks = False\n    requires_system_checks = \"__all__\"\n    # Arguments, common to all commands, which aren't defined by the argument\n    # parser.\n    base_stealth_options = (\"stderr\", \"stdout\")\n    # Command-specific options not defined by the argument parser.\n    stealth_options = ()\n    suppressed_base_arguments = set()\n\n# django/db/migrations/migration.py:10-53  (django.db.migrations.migration.Migration)\nclass Migration:\n    \"\"\"\n    The base class for all migrations.\n\n    Migration files will import this from django.db.migrations.Migration\n    and subclass it as a class called Migration. It will have one or more\n    of the following attributes:\n\n     - operations: A list of Operation instances, probably from\n       django.db.migrations.operations\n     - dependencies: A list of tuples of (app_path, migration_name)\n     - run_before: A list of tuples of (app_path, migration_name)\n     - replaces: A list of migration_names\n\n    Note that all migrations come out of migrations and into the Loader or\n    Graph as instances, having been initialized with their app label and name.\n    \"\"\"\n\n    # Operations to apply during this migration, in order.\n    operations = []\n\n    # Other migrations that should be run before this migration.\n    # Should be a list of (app, migration_name).\n    dependencies = []\n\n    # Other migrations that should be run after this one (i.e. have\n    # this migration added to their dependencies). Useful to make third-party\n    # apps' migrations run after your AUTH_USER replacement, for example.\n    run_before = []\n\n    # Migration names in this app that this migration replaces. If this is\n    # non-empty, this migration will only be applied if all these migrations\n    # are not applied.\n    replaces = []\n\n    # Is this an initial migration? Initial migrations are skipped on\n    # --fake-initial if the table or fields already exist. If None, check if\n    # the migration has any dependencies to determine if there are dependencies\n    # to tell if db introspection needs to be done. If True, always perform\n    # introspection. If False, never perform introspection.\n    initial = None\n\n    # Whether to wrap the whole migration in a transaction. Only has an effect\n    # on database backends which support transactional DDL.\n    atomic = True\n\n# tests/auth_tests/test_checks.py:66-100  (tests.auth_tests.test_checks.UserModelChecksTests.test_username_non_unique)\nclass UserModelChecksTests(SimpleTestCase):\n    @override_settings(AUTH_USER_MODEL=\"auth_tests.CustomUserNonUniqueUsername\")\n    def test_username_non_unique(self):\n        \"\"\"\n        A non-unique USERNAME_FIELD raises an error only if the default\n        authentication backend is used. Otherwise, a warning is raised.\n        \"\"\"\n        errors = checks.run_checks()\n        self.assertEqual(\n            errors,\n            [\n                checks.Error(\n                    \"'CustomUserNonUniqueUsername.username' must be \"\n                    \"unique because it is named as the 'USERNAME_FIELD'.\",\n                    obj=CustomUserNonUniqueUsername,\n                    id=\"auth.E003\",\n                ),\n            ],\n        )\n        with self.settings(AUTHENTICATION_BACKENDS=[\"my.custom.backend\"]):\n            errors = checks.run_checks()\n            self.assertEqual(\n                errors,\n                [\n                    checks.Warning(\n                        \"'CustomUserNonUniqueUsername.username' is named as \"\n                        \"the 'USERNAME_FIELD', but it is not unique.\",\n                        hint=(\n                            \"Ensure that your authentication backend(s) can handle \"\n                            \"non-unique usernames.\"\n                        ),\n                        obj=CustomUserNonUniqueUsername,\n                        id=\"auth.W004\",\n                    ),\n                ],\n            )\n\n# tests/auth_tests/test_remote_user.py:56-83  (tests.auth_tests.test_remote_user.RemoteUserTest.test_csrf_validation_passes_after_process_request_login)\nclass RemoteUserTest(TestCase):\n    def test_csrf_validation_passes_after_process_request_login(self):\n        \"\"\"\n        CSRF check must access the CSRF token from the session or cookie,\n        rather than the request, as rotate_token() may have been called by an\n        authentication middleware during the process_request() phase.\n        \"\"\"\n        csrf_client = Client(enforce_csrf_checks=True)\n        csrf_secret = _get_new_csrf_string()\n        csrf_token = _mask_cipher_secret(csrf_secret)\n        csrf_token_form = _mask_cipher_secret(csrf_secret)\n        headers = {self.header: \"fakeuser\"}\n        data = {\"csrfmiddlewaretoken\": csrf_token_form}\n\n        # Verify that CSRF is configured for the view\n        csrf_client.cookies.load({settings.CSRF_COOKIE_NAME: csrf_token})\n        response = csrf_client.post(\"/remote_user/\", **headers)\n        self.assertEqual(response.status_code, 403)\n        self.assertIn(b\"CSRF verification failed.\", response.content)\n\n        # This request will call django.contrib.auth.login() which will call\n        # django.middleware.csrf.rotate_token() thus changing the value of\n        # request.META['CSRF_COOKIE'] from the user submitted value set by\n        # CsrfViewMiddleware.process_request() to the new csrftoken value set\n        # by rotate_token(). Csrf validation should still pass when the view is\n        # later processed by CsrfViewMiddleware.process_view()\n        csrf_client.cookies.load({settings.CSRF_COOKIE_NAME: csrf_token})\n        response = csrf_client.post(\"/remote_user/\", data, **headers)\n        self.assertEqual(response.status_code, 200)\n\n# tests/auth_tests/test_remote_user.py:158-172  (tests.auth_tests.test_remote_user.RemoteUserTest.test_user_switch_forces_new_login)\nclass RemoteUserTest(TestCase):\n    def test_user_switch_forces_new_login(self):\n        \"\"\"\n        If the username in the header changes between requests\n        that the original user is logged out\n        \"\"\"\n        User.objects.create(username=\"knownuser\")\n        # Known user authenticates\n        response = self.client.get(\"/remote_user/\", **{self.header: self.known_user})\n        self.assertEqual(response.context[\"user\"].username, \"knownuser\")\n        # During the session, the REMOTE_USER changes to a different user.\n        response = self.client.get(\"/remote_user/\", **{self.header: \"newnewuser\"})\n        # The current user is not the prior remote_user.\n        # In backends that create a new user, username is \"newnewuser\"\n        # In backends that do not create new users, it is '' (anonymous user)\n        self.assertNotEqual(response.context[\"user\"].username, \"knownuser\")\n\n## Task\n\nYou are debugging how Django resolves `request.user` in\ndjango/contrib/auth. Starting from `middleware.get_user`, trace the\nreal causal pipeline that determines which authentication backend\nwill be asked to resolve the user, in the order each stage is\nactually reached, up to and including the call that loads that\nbackend. Do not trace into the backend's own `get_user` call itself -\nwhich concrete backend class this becomes is resolved dynamically at\nruntime, not statically in this pipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.middleware.get_user\", \"django.contrib.auth.get_user\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

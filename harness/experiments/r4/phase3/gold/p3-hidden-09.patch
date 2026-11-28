@@ -1,0 +1,232 @@
+diff --git a/pydantic_ai_slim/pydantic_ai/_a2a.py b/pydantic_ai_slim/pydantic_ai/_a2a.py
+index b6c197180..570ae6360 100644
+--- a/pydantic_ai_slim/pydantic_ai/_a2a.py
++++ b/pydantic_ai_slim/pydantic_ai/_a2a.py
+@@ -27,7 +27,7 @@ from pydantic_ai.messages import (
+     VideoUrl,
+ )
+ 
+-from .agent import AbstractAgent, AgentDepsT, OutputDataT
++from .agent import AbstractAgentImpl, AgentDepsT, OutputDataT
+ 
+ # AgentWorker output type needs to be invariant for use in both parameter and return positions
+ WorkerOutputT = TypeVar('WorkerOutputT')
+@@ -60,7 +60,7 @@ except ImportError as _import_error:
+ 
+ @asynccontextmanager
+ async def worker_lifespan(
+-    app: FastA2A, worker: Worker, agent: AbstractAgent[AgentDepsT, OutputDataT]
++    app: FastA2A, worker: Worker, agent: AbstractAgentImpl[AgentDepsT, OutputDataT]
+ ) -> AsyncIterator[None]:
+     """Custom lifespan that runs the worker during application startup.
+ 
+@@ -72,7 +72,7 @@ async def worker_lifespan(
+ 
+ 
+ def agent_to_a2a(
+-    agent: AbstractAgent[AgentDepsT, OutputDataT],
++    agent: AbstractAgentImpl[AgentDepsT, OutputDataT],
+     *,
+     storage: Storage | None = None,
+     broker: Broker | None = None,
+@@ -118,7 +118,7 @@ def agent_to_a2a(
+ class AgentWorker(Worker[list[ModelMessage]], Generic[WorkerOutputT, AgentDepsT]):
+     """A worker that uses an agent to execute tasks."""
+ 
+-    agent: AbstractAgent[AgentDepsT, WorkerOutputT]
++    agent: AbstractAgentImpl[AgentDepsT, WorkerOutputT]
+ 
+     async def run_task(self, params: TaskSendParams) -> None:
+         task = await self.storage.load_task(params['id'])
+diff --git a/pydantic_ai_slim/pydantic_ai/_cli.py b/pydantic_ai_slim/pydantic_ai/_cli.py
+index d8c4cd587..506850d6e 100644
+--- a/pydantic_ai_slim/pydantic_ai/_cli.py
++++ b/pydantic_ai_slim/pydantic_ai/_cli.py
+@@ -16,7 +16,7 @@ from typing_inspection.introspection import get_literal_values
+ 
+ from . import __version__
+ from ._run_context import AgentDepsT
+-from .agent import AbstractAgent, Agent
++from .agent import AbstractAgentImpl, Agent
+ from .exceptions import UserError
+ from .messages import ModelMessage, TextPart
+ from .models import KnownModelName, infer_model
+@@ -222,7 +222,7 @@ Special prompts:
+ 
+ async def run_chat(
+     stream: bool,
+-    agent: AbstractAgent[AgentDepsT, OutputDataT],
++    agent: AbstractAgentImpl[AgentDepsT, OutputDataT],
+     console: Console,
+     code_theme: str,
+     prog_name: str,
+@@ -266,7 +266,7 @@ async def run_chat(
+ 
+ 
+ async def ask_agent(
+-    agent: AbstractAgent[AgentDepsT, OutputDataT],
++    agent: AbstractAgentImpl[AgentDepsT, OutputDataT],
+     prompt: str,
+     stream: bool,
+     console: Console,
+diff --git a/pydantic_ai_slim/pydantic_ai/ag_ui.py b/pydantic_ai_slim/pydantic_ai/ag_ui.py
+index b76802941..b439eadf6 100644
+--- a/pydantic_ai_slim/pydantic_ai/ag_ui.py
++++ b/pydantic_ai_slim/pydantic_ai/ag_ui.py
+@@ -24,7 +24,7 @@ from typing import (
+ from pydantic import BaseModel, ValidationError
+ 
+ from ._agent_graph import CallToolsNode, ModelRequestNode
+-from .agent import AbstractAgent, AgentRun
++from .agent import AbstractAgentImpl, AgentRun
+ from .exceptions import UserError
+ from .messages import (
+     FunctionToolResultEvent,
+@@ -121,7 +121,7 @@ class AGUIApp(Generic[AgentDepsT, OutputDataT], Starlette):
+ 
+     def __init__(
+         self,
+-        agent: AbstractAgent[AgentDepsT, OutputDataT],
++        agent: AbstractAgentImpl[AgentDepsT, OutputDataT],
+         *,
+         # Agent.iter parameters.
+         output_type: OutputSpec[Any] | None = None,
+@@ -210,7 +210,7 @@ class AGUIApp(Generic[AgentDepsT, OutputDataT], Starlette):
+ 
+ 
+ async def handle_ag_ui_request(
+-    agent: AbstractAgent[AgentDepsT, Any],
++    agent: AbstractAgentImpl[AgentDepsT, Any],
+     request: Request,
+     *,
+     output_type: OutputSpec[Any] | None = None,
+@@ -270,7 +270,7 @@ async def handle_ag_ui_request(
+ 
+ 
+ async def run_ag_ui(
+-    agent: AbstractAgent[AgentDepsT, Any],
++    agent: AbstractAgentImpl[AgentDepsT, Any],
+     run_input: RunAgentInput,
+     accept: str = SSE_CONTENT_TYPE,
+     *,
+diff --git a/pydantic_ai_slim/pydantic_ai/agent/__init__.py b/pydantic_ai_slim/pydantic_ai/agent/__init__.py
+index 2650ac155..aebe9eca9 100644
+--- a/pydantic_ai_slim/pydantic_ai/agent/__init__.py
++++ b/pydantic_ai_slim/pydantic_ai/agent/__init__.py
+@@ -69,7 +69,7 @@ from ..toolsets._dynamic import (
+ from ..toolsets.combined import CombinedToolset
+ from ..toolsets.function import FunctionToolset
+ from ..toolsets.prepared import PreparedToolset
+-from .abstract import AbstractAgent, EventStreamHandler, RunOutputDataT
++from .abstract import AbstractAgentImpl, EventStreamHandler, RunOutputDataT
+ from .wrapper import WrapperAgent
+ 
+ if TYPE_CHECKING:
+@@ -86,7 +86,7 @@ __all__ = (
+     'UserPromptNode',
+     'InstrumentationSettings',
+     'WrapperAgent',
+-    'AbstractAgent',
++    'AbstractAgentImpl',
+     'EventStreamHandler',
+ )
+ 
+@@ -97,7 +97,7 @@ NoneType = type(None)
+ 
+ 
+ @dataclasses.dataclass(init=False)
+-class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
++class Agent(AbstractAgentImpl[AgentDepsT, OutputDataT]):
+     """Class for defining "agents" - a way to have a specific type of "conversation" with an LLM.
+ 
+     Agents are generic in the dependency type they take [`AgentDepsT`][pydantic_ai.tools.AgentDepsT]
+diff --git a/pydantic_ai_slim/pydantic_ai/agent/abstract.py b/pydantic_ai_slim/pydantic_ai/agent/abstract.py
+index fe8455565..937f92078 100644
+--- a/pydantic_ai_slim/pydantic_ai/agent/abstract.py
++++ b/pydantic_ai_slim/pydantic_ai/agent/abstract.py
+@@ -59,7 +59,7 @@ EventStreamHandler: TypeAlias = Callable[
+ """A function that receives agent [`RunContext`][pydantic_ai.tools.RunContext] and an async iterable of events from the model's streaming response and the agent's execution of tools."""
+ 
+ 
+-class AbstractAgent(Generic[AgentDepsT, OutputDataT], ABC):
++class AbstractAgentImpl(Generic[AgentDepsT, OutputDataT], ABC):
+     """Abstract superclass for [`Agent`][pydantic_ai.agent.Agent], [`WrapperAgent`][pydantic_ai.agent.WrapperAgent], and your own custom agent implementations."""
+ 
+     @property
+@@ -755,7 +755,7 @@ class AbstractAgent(Generic[AgentDepsT, OutputDataT], ABC):
+         return isinstance(node, End)
+ 
+     @abstractmethod
+-    async def __aenter__(self) -> AbstractAgent[AgentDepsT, OutputDataT]:
++    async def __aenter__(self) -> AbstractAgentImpl[AgentDepsT, OutputDataT]:
+         raise NotImplementedError
+ 
+     @abstractmethod
+diff --git a/pydantic_ai_slim/pydantic_ai/agent/wrapper.py b/pydantic_ai_slim/pydantic_ai/agent/wrapper.py
+index e53ead8ce..5dce60c39 100644
+--- a/pydantic_ai_slim/pydantic_ai/agent/wrapper.py
++++ b/pydantic_ai_slim/pydantic_ai/agent/wrapper.py
+@@ -20,16 +20,16 @@ from ..tools import (
+     ToolFuncEither,
+ )
+ from ..toolsets import AbstractToolset
+-from .abstract import AbstractAgent, EventStreamHandler, RunOutputDataT
++from .abstract import AbstractAgentImpl, EventStreamHandler, RunOutputDataT
+ 
+ 
+-class WrapperAgent(AbstractAgent[AgentDepsT, OutputDataT]):
++class WrapperAgent(AbstractAgentImpl[AgentDepsT, OutputDataT]):
+     """Agent which wraps another agent.
+ 
+     Does nothing on its own, used as a base class.
+     """
+ 
+-    def __init__(self, wrapped: AbstractAgent[AgentDepsT, OutputDataT]):
++    def __init__(self, wrapped: AbstractAgentImpl[AgentDepsT, OutputDataT]):
+         self.wrapped = wrapped
+ 
+     @property
+@@ -60,7 +60,7 @@ class WrapperAgent(AbstractAgent[AgentDepsT, OutputDataT]):
+     def toolsets(self) -> Sequence[AbstractToolset[AgentDepsT]]:
+         return self.wrapped.toolsets
+ 
+-    async def __aenter__(self) -> AbstractAgent[AgentDepsT, OutputDataT]:
++    async def __aenter__(self) -> AbstractAgentImpl[AgentDepsT, OutputDataT]:
+         return await self.wrapped.__aenter__()
+ 
+     async def __aexit__(self, *args: Any) -> bool | None:
+diff --git a/pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_agent.py b/pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_agent.py
+index 7ce51c948..dc7178b9d 100644
+--- a/pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_agent.py
++++ b/pydantic_ai_slim/pydantic_ai/durable_exec/temporal/_agent.py
+@@ -22,7 +22,7 @@ from pydantic_ai import (
+     usage as _usage,
+ )
+ from pydantic_ai._run_context import AgentDepsT
+-from pydantic_ai.agent import AbstractAgent, AgentRun, AgentRunResult, EventStreamHandler, RunOutputDataT, WrapperAgent
++from pydantic_ai.agent import AbstractAgentImpl, AgentRun, AgentRunResult, EventStreamHandler, RunOutputDataT, WrapperAgent
+ from pydantic_ai.exceptions import UserError
+ from pydantic_ai.models import Model
+ from pydantic_ai.output import OutputDataT, OutputSpec
+@@ -51,7 +51,7 @@ class _EventStreamHandlerParams:
+ class TemporalAgent(WrapperAgent[AgentDepsT, OutputDataT]):
+     def __init__(
+         self,
+-        wrapped: AbstractAgent[AgentDepsT, OutputDataT],
++        wrapped: AbstractAgentImpl[AgentDepsT, OutputDataT],
+         *,
+         name: str | None = None,
+         event_stream_handler: EventStreamHandler[AgentDepsT] | None = None,
+diff --git a/tests/models/test_phase3_rename_AbstractAgent.py b/tests/models/test_phase3_rename_AbstractAgent.py
+new file mode 100644
+index 000000000..0f0ad440b
+--- /dev/null
++++ b/tests/models/test_phase3_rename_AbstractAgent.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_AbstractAgentImpl():
++    owner = importlib.import_module('pydantic_ai.agent.abstract')
++    assert hasattr(owner, 'AbstractAgentImpl')
++    assert not hasattr(owner, 'AbstractAgent')

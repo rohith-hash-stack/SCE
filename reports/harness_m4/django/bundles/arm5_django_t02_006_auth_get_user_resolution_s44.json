@@ -1,0 +1,227 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t02_006_auth_get_user_resolution",
+  "items": [
+   {
+    "source_id": "django/contrib/auth/middleware.py:9-12",
+    "content": "# django/contrib/auth/middleware.py:9-12  (django.contrib.auth.middleware.get_user)\ndef get_user(request):\n    if not hasattr(request, \"_cached_user\"):\n        request._cached_user = auth.get_user(request)\n    return request._cached_user",
+    "token_count": 54,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.middleware.get_user"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 32,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:182-223",
+    "content": "# django/contrib/auth/__init__.py:182-223  (django.contrib.auth.get_user)\ndef get_user(request):\n    \"\"\"\n    Return the user model instance associated with the given request session.\n    If no user is retrieved, return an instance of `AnonymousUser`.\n    \"\"\"\n    from .models import AnonymousUser\n\n    user = None\n    try:\n        user_id = _get_user_session_key(request)\n        backend_path = request.session[BACKEND_SESSION_KEY]\n    except KeyError:\n        pass\n    else:\n        if backend_path in settings.AUTHENTICATION_BACKENDS:\n            backend = load_backend(backend_path)\n            user = backend.get_user(user_id)\n            # Verify the session\n            if hasattr(user, \"get_session_auth_hash\"):\n                session_hash = request.session.get(HASH_SESSION_KEY)\n                if not session_hash:\n                    session_hash_verified = False\n                else:\n                    session_auth_hash = user.get_session_auth_hash()\n                    session_hash_verified = constant_time_compare(\n                        session_hash, session_auth_hash\n                    )\n                if not session_hash_verified:\n                    # If the current secret does not verify the session, try\n                    # with the fallback secrets and stop when a matching one is\n                    # found.\n                    if session_hash and any(\n                        constant_time_compare(session_hash, fallback_auth_hash)\n                        for fallback_auth_hash in user.get_session_auth_fallback_hash()\n                    ):\n                        request.session.cycle_key()\n                        request.session[HASH_SESSION_KEY] = session_auth_hash\n                    else:\n                        request.session.flush()\n                        user = None\n\n    return user or AnonymousUser()\n\n# Referenced module constants:\nBACKEND_SESSION_KEY = \"_auth_user_backend\"\nHASH_SESSION_KEY = \"_auth_user_hash\"",
+    "token_count": 352,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.get_user"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 321,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:57-60",
+    "content": "# django/contrib/auth/__init__.py:57-60  (django.contrib.auth._get_user_session_key)\ndef _get_user_session_key(request):\n    # This value in the session is always serialized to a string, so we need\n    # to convert it back to Python whenever we access it.\n    return get_user_model()._meta.pk.to_python(request.session[SESSION_KEY])\n\n# Referenced module constants:\nSESSION_KEY = \"_auth_user_id\"",
+    "token_count": 95,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth._get_user_session_key"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 63,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/base_user.py:57-167",
+    "content": "# django/contrib/auth/base_user.py:57-167  (django.contrib.auth.base_user.AbstractBaseUser)\nclass AbstractBaseUser(models.Model):\n    password = models.CharField(_(\"password\"), max_length=128)\n    last_login = models.DateTimeField(_(\"last login\"), blank=True, null=True)\n\n    is_active = True\n\n    REQUIRED_FIELDS = []\n\n    # Stores the raw password if set_password() is called so that it can\n    # be passed to password_changed() after the model is saved.\n    _password = None\n\n    class Meta:\n        abstract = True\n\n    def __str__(self):\n        return self.get_username()\n\n    def save(self, *args, **kwargs):\n        super().save(*args, **kwargs)\n        if self._password is not None:\n            password_validation.password_changed(self._password, self)\n            self._password = None\n\n    def get_username(self):\n        \"\"\"Return the username for this User.\"\"\"\n        return getattr(self, self.USERNAME_FIELD)\n\n    def clean(self):\n        setattr(self, self.USERNAME_FIELD, self.normalize_username(self.get_username()))\n\n    def natural_key(self):\n        return (self.get_username(),)\n\n    @property\n    def is_anonymous(self):\n        \"\"\"\n        Always return False. This is a way of comparing User objects to\n        anonymous users.\n        \"\"\"\n        return False\n\n    @property\n    def is_authenticated(self):\n        \"\"\"\n        Always return True. This is a way to tell if the user has been\n        authenticated in templates.\n        \"\"\"\n        return True\n\n    def set_password(self, raw_password):\n        self.password = make_password(raw_password)\n        self._password = raw_password\n\n    def check_password(self, raw_password):\n        \"\"\"\n        Return a boolean of whether the raw_password was correct. Handles\n        hashing formats behind the scenes.\n        \"\"\"\n\n        def setter(raw_password):\n            self.set_password(raw_password)\n            # Password hash upgrades shouldn't be considered password changes.\n            self._password = None\n            self.save(update_fields=[\"password\"])\n\n        return check_password(raw_password, self.password, setter)\n\n    def set_unusable_password(self):\n        # Set a value that will never be a valid hash\n        self.password = make_password(None)\n\n    def has_usable_password(self):\n        \"\"\"\n        Return False if set_unusable_password() has been called for this user.\n        \"\"\"\n        return is_password_usable(self.password)\n\n    def get_session_auth_hash(self):\n        \"\"\"\n        Return an HMAC of the password field.\n        \"\"\"\n        return self._get_session_auth_hash()\n\n    def get_session_auth_fallback_hash(self):\n        for fallback_secret in settings.SECRET_KEY_FALLBACKS:\n            yield self._get_session_auth_hash(secret=fallback_secret)\n\n    def _get_session_auth_hash(self, secret=None):\n        key_salt = \"django.contrib.auth.models.AbstractBaseUser.get_session_auth_hash\"\n        return salted_hmac(\n            key_salt,\n            self.password,\n            secret=secret,\n            algorithm=\"sha256\",\n        ).hexdigest()\n\n    @classmethod\n    def get_email_field_name(cls):\n        try:\n            return cls.EMAIL_FIELD\n        except AttributeError:\n            return \"email\"\n\n    @classmethod\n    def normalize_username(cls, username):\n        return (\n            unicodedata.normalize(\"NFKC\", username)\n            if isinstance(username, str)\n            else username\n        )",
+    "token_count": 696,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.base_user.AbstractBaseUser"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 666,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/base_user.py:141-143",
+    "content": "# django/contrib/auth/base_user.py:141-143  (django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_fallback_hash)\n    def get_session_auth_fallback_hash(self):\n        for fallback_secret in settings.SECRET_KEY_FALLBACKS:\n            yield self._get_session_auth_hash(secret=fallback_secret)",
+    "token_count": 70,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_fallback_hash"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 37,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/base_user.py:135-139",
+    "content": "# django/contrib/auth/base_user.py:135-139  (django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_hash)\n    def get_session_auth_hash(self):\n        \"\"\"\n        Return an HMAC of the password field.\n        \"\"\"\n        return self._get_session_auth_hash()",
+    "token_count": 61,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_hash"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 30,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:165-179",
+    "content": "# django/contrib/auth/__init__.py:165-179  (django.contrib.auth.get_user_model)\ndef get_user_model():\n    \"\"\"\n    Return the User model that is active in this project.\n    \"\"\"\n    try:\n        return django_apps.get_model(settings.AUTH_USER_MODEL, require_ready=False)\n    except ValueError:\n        raise ImproperlyConfigured(\n            \"AUTH_USER_MODEL must be of the form 'app_label.model_name'\"\n        )\n    except LookupError:\n        raise ImproperlyConfigured(\n            \"AUTH_USER_MODEL refers to model '%s' that has not been installed\"\n            % settings.AUTH_USER_MODEL\n        )",
+    "token_count": 134,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.get_user_model"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 108,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:20-21",
+    "content": "# django/contrib/auth/__init__.py:20-21  (django.contrib.auth.load_backend)\ndef load_backend(path):\n    return import_string(path)()",
+    "token_count": 35,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.load_backend"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 12,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/module_loading.py:19-35",
+    "content": "# django/utils/module_loading.py:19-35  (django.utils.module_loading.import_string)\ndef import_string(dotted_path):\n    \"\"\"\n    Import a dotted module path and return the attribute/class designated by the\n    last name in the path. Raise ImportError if the import failed.\n    \"\"\"\n    try:\n        module_path, class_name = dotted_path.rsplit(\".\", 1)\n    except ValueError as err:\n        raise ImportError(\"%s doesn't look like a module path\" % dotted_path) from err\n\n    try:\n        return cached_import(module_path, class_name)\n    except AttributeError as err:\n        raise ImportError(\n            'Module \"%s\" does not define a \"%s\" attribute/class'\n            % (module_path, class_name)\n        ) from err",
+    "token_count": 157,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.module_loading.import_string"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 136,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1654,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are debugging how Django resolves `request.user` in\ndjango/contrib/auth. Starting from `middleware.get_user`, trace the\nreal causal pipeline that determines which authentication backend\nwill be asked to resolve the user, in the order each stage is\nactually reached, up to and including the call that loads that\nbackend. Do not trace into the backend's own `get_user` call itself -\nwhich concrete backend class this becomes is resolved dynamically at\nruntime, not statically in this pipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.middleware.get_user\", \"django.contrib.auth.get_user\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "django.contrib.auth.middleware.get_user",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 14,
+   "manifest_candidates_unfiltered": 14,
+   "requested_symbols": [
+    "django.contrib.auth.middleware.get_user",
+    "django.contrib.auth.get_user",
+    "django.contrib.auth._get_user_session_key",
+    "django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_fallback_hash",
+    "django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_hash",
+    "django.contrib.auth.get_user_model",
+    "django.contrib.auth.load_backend",
+    "django.utils.module_loading.import_string"
+   ],
+   "turn1_requested_count": 8,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The pipeline starts with the middleware's get_user function, which calls the global get_user function. The global get_user function determines the user by checking the session key and comparing session hashes. It loads the authentication backend dynamically using the load_backend function.\",\n  \"requested_symbols\": [\n    \"django.contrib.auth.middleware.get_user\",\n    \"django.contrib.auth.get_user\",\n    \"django.contrib.auth._get_user_session_key\",\n    \"django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_fallback_hash\",\n    \"django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_hash\",\n    \"django.contrib.auth.get_user_model\",\n    \"django.contrib.auth.load_backend\",\n    \"django.utils.module_loading.import_string\"\n  ]\n}\n```",
+     "prompt_tokens": 972,
+     "completion_tokens": 156,
+     "latency_seconds": 11.675292439998884,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     194.808097
+    ],
+    "L_turn2_hydrate": [
+     606.943447
+    ],
+    "L_retrieve": [
+     12482.704126
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1654,
+   "prompt_tokens": 1973,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1986,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/auth/middleware.py:9-12  (django.contrib.auth.middleware.get_user)\ndef get_user(request):\n    if not hasattr(request, \"_cached_user\"):\n        request._cached_user = auth.get_user(request)\n    return request._cached_user\n\n# django/contrib/auth/__init__.py:182-223  (django.contrib.auth.get_user)\ndef get_user(request):\n    \"\"\"\n    Return the user model instance associated with the given request session.\n    If no user is retrieved, return an instance of `AnonymousUser`.\n    \"\"\"\n    from .models import AnonymousUser\n\n    user = None\n    try:\n        user_id = _get_user_session_key(request)\n        backend_path = request.session[BACKEND_SESSION_KEY]\n    except KeyError:\n        pass\n    else:\n        if backend_path in settings.AUTHENTICATION_BACKENDS:\n            backend = load_backend(backend_path)\n            user = backend.get_user(user_id)\n            # Verify the session\n            if hasattr(user, \"get_session_auth_hash\"):\n                session_hash = request.session.get(HASH_SESSION_KEY)\n                if not session_hash:\n                    session_hash_verified = False\n                else:\n                    session_auth_hash = user.get_session_auth_hash()\n                    session_hash_verified = constant_time_compare(\n                        session_hash, session_auth_hash\n                    )\n                if not session_hash_verified:\n                    # If the current secret does not verify the session, try\n                    # with the fallback secrets and stop when a matching one is\n                    # found.\n                    if session_hash and any(\n                        constant_time_compare(session_hash, fallback_auth_hash)\n                        for fallback_auth_hash in user.get_session_auth_fallback_hash()\n                    ):\n                        request.session.cycle_key()\n                        request.session[HASH_SESSION_KEY] = session_auth_hash\n                    else:\n                        request.session.flush()\n                        user = None\n\n    return user or AnonymousUser()\n\n# Referenced module constants:\nBACKEND_SESSION_KEY = \"_auth_user_backend\"\nHASH_SESSION_KEY = \"_auth_user_hash\"\n\n# django/contrib/auth/__init__.py:57-60  (django.contrib.auth._get_user_session_key)\ndef _get_user_session_key(request):\n    # This value in the session is always serialized to a string, so we need\n    # to convert it back to Python whenever we access it.\n    return get_user_model()._meta.pk.to_python(request.session[SESSION_KEY])\n\n# Referenced module constants:\nSESSION_KEY = \"_auth_user_id\"\n\n# django/contrib/auth/base_user.py:57-167  (django.contrib.auth.base_user.AbstractBaseUser)\nclass AbstractBaseUser(models.Model):\n    password = models.CharField(_(\"password\"), max_length=128)\n    last_login = models.DateTimeField(_(\"last login\"), blank=True, null=True)\n\n    is_active = True\n\n    REQUIRED_FIELDS = []\n\n    # Stores the raw password if set_password() is called so that it can\n    # be passed to password_changed() after the model is saved.\n    _password = None\n\n    class Meta:\n        abstract = True\n\n    def __str__(self):\n        return self.get_username()\n\n    def save(self, *args, **kwargs):\n        super().save(*args, **kwargs)\n        if self._password is not None:\n            password_validation.password_changed(self._password, self)\n            self._password = None\n\n    def get_username(self):\n        \"\"\"Return the username for this User.\"\"\"\n        return getattr(self, self.USERNAME_FIELD)\n\n    def clean(self):\n        setattr(self, self.USERNAME_FIELD, self.normalize_username(self.get_username()))\n\n    def natural_key(self):\n        return (self.get_username(),)\n\n    @property\n    def is_anonymous(self):\n        \"\"\"\n        Always return False. This is a way of comparing User objects to\n        anonymous users.\n        \"\"\"\n        return False\n\n    @property\n    def is_authenticated(self):\n        \"\"\"\n        Always return True. This is a way to tell if the user has been\n        authenticated in templates.\n        \"\"\"\n        return True\n\n    def set_password(self, raw_password):\n        self.password = make_password(raw_password)\n        self._password = raw_password\n\n    def check_password(self, raw_password):\n        \"\"\"\n        Return a boolean of whether the raw_password was correct. Handles\n        hashing formats behind the scenes.\n        \"\"\"\n\n        def setter(raw_password):\n            self.set_password(raw_password)\n            # Password hash upgrades shouldn't be considered password changes.\n            self._password = None\n            self.save(update_fields=[\"password\"])\n\n        return check_password(raw_password, self.password, setter)\n\n    def set_unusable_password(self):\n        # Set a value that will never be a valid hash\n        self.password = make_password(None)\n\n    def has_usable_password(self):\n        \"\"\"\n        Return False if set_unusable_password() has been called for this user.\n        \"\"\"\n        return is_password_usable(self.password)\n\n    def get_session_auth_hash(self):\n        \"\"\"\n        Return an HMAC of the password field.\n        \"\"\"\n        return self._get_session_auth_hash()\n\n    def get_session_auth_fallback_hash(self):\n        for fallback_secret in settings.SECRET_KEY_FALLBACKS:\n            yield self._get_session_auth_hash(secret=fallback_secret)\n\n    def _get_session_auth_hash(self, secret=None):\n        key_salt = \"django.contrib.auth.models.AbstractBaseUser.get_session_auth_hash\"\n        return salted_hmac(\n            key_salt,\n            self.password,\n            secret=secret,\n            algorithm=\"sha256\",\n        ).hexdigest()\n\n    @classmethod\n    def get_email_field_name(cls):\n        try:\n            return cls.EMAIL_FIELD\n        except AttributeError:\n            return \"email\"\n\n    @classmethod\n    def normalize_username(cls, username):\n        return (\n            unicodedata.normalize(\"NFKC\", username)\n            if isinstance(username, str)\n            else username\n        )\n\n# django/contrib/auth/base_user.py:141-143  (django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_fallback_hash)\n    def get_session_auth_fallback_hash(self):\n        for fallback_secret in settings.SECRET_KEY_FALLBACKS:\n            yield self._get_session_auth_hash(secret=fallback_secret)\n\n# django/contrib/auth/base_user.py:135-139  (django.contrib.auth.base_user.AbstractBaseUser.get_session_auth_hash)\n    def get_session_auth_hash(self):\n        \"\"\"\n        Return an HMAC of the password field.\n        \"\"\"\n        return self._get_session_auth_hash()\n\n# django/contrib/auth/__init__.py:165-179  (django.contrib.auth.get_user_model)\ndef get_user_model():\n    \"\"\"\n    Return the User model that is active in this project.\n    \"\"\"\n    try:\n        return django_apps.get_model(settings.AUTH_USER_MODEL, require_ready=False)\n    except ValueError:\n        raise ImproperlyConfigured(\n            \"AUTH_USER_MODEL must be of the form 'app_label.model_name'\"\n        )\n    except LookupError:\n        raise ImproperlyConfigured(\n            \"AUTH_USER_MODEL refers to model '%s' that has not been installed\"\n            % settings.AUTH_USER_MODEL\n        )\n\n# django/contrib/auth/__init__.py:20-21  (django.contrib.auth.load_backend)\ndef load_backend(path):\n    return import_string(path)()\n\n# django/utils/module_loading.py:19-35  (django.utils.module_loading.import_string)\ndef import_string(dotted_path):\n    \"\"\"\n    Import a dotted module path and return the attribute/class designated by the\n    last name in the path. Raise ImportError if the import failed.\n    \"\"\"\n    try:\n        module_path, class_name = dotted_path.rsplit(\".\", 1)\n    except ValueError as err:\n        raise ImportError(\"%s doesn't look like a module path\" % dotted_path) from err\n\n    try:\n        return cached_import(module_path, class_name)\n    except AttributeError as err:\n        raise ImportError(\n            'Module \"%s\" does not define a \"%s\" attribute/class'\n            % (module_path, class_name)\n        ) from err\n\n## Task\n\nYou are debugging how Django resolves `request.user` in\ndjango/contrib/auth. Starting from `middleware.get_user`, trace the\nreal causal pipeline that determines which authentication backend\nwill be asked to resolve the user, in the order each stage is\nactually reached, up to and including the call that loads that\nbackend. Do not trace into the backend's own `get_user` call itself -\nwhich concrete backend class this becomes is resolved dynamically at\nruntime, not statically in this pipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.middleware.get_user\", \"django.contrib.auth.get_user\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

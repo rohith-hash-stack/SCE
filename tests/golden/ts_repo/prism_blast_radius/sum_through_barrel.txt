@@ -1,0 +1,74 @@
+Blast radius of `src.math.sum`: 2 transitive callers, nearest first:
+- hop 1: `src.math.mean` (src/math.ts:7)
+- hop 1: `src.report.report` (src/report.ts:6)
+
+<prism_context budget_consumed="1012" budget_total="4000" schema_version="3" task_type="blast">
+  <metadata>
+    <engine commit="*" name="prism-causal_two_pass" version="0.2.0"/>
+    <seed file="src/math.ts" line="2" symbol="src.math.sum"/>
+    <budget exact="true" tokenizer="tiktoken:cl100k_base_offline" tokens="4000"/>
+    <language files="2" primary="typescript" tier="2"/>
+    <options>
+      <option key="engine" value="prism-causal_two_pass"/>
+      <option key="max_hops" value="6.0"/>
+    </options>
+  </metadata>
+  <manifest considered_nodes="1" packed_nodes="3" reachable_nodes="1">
+    <compression count="3" level="L0_full"/>
+    <distance_metric dist_max="6.0" lambda_data_flow="0.25" lambda_guard="0.15" name="causal_dijkstra"/>
+  </manifest>
+  <coverage covered_features="3" omitted_features="0" total_features="3">
+    <feature count="3" id="SINK_PURE_COMPUTE" present="true"/>
+    <feature count="2" id="FORM_LINEAR" present="true"/>
+    <feature count="3" id="OUTPUT_QUERY" present="true"/>
+  </coverage>
+  <warnings>
+    <warning code="LANGUAGE_TIER_2" severity="low">
+      <message>typescript is Tier 2 (structural/lexical linking only)</message>
+    </warning>
+  </warnings>
+  <nodes>
+    <node compression="L0_full" cost="27" distance="0.0" end_line="4" file="src/math.ts" id="src.math.sum" language="typescript" line="2" role="seed" symbol_kind="function" symbol_name="sum">
+      <signature>
+        <param name="xs" optional="false" type="number[]"/>
+        <returns kind="Query" type="number"/>
+        <docstring><![CDATA[Sum of numbers.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="NONE" substance="PURE_COMPUTE"/>
+      <body><![CDATA[export function sum(xs: number[]): number {
+  return xs.reduce((a, b) => a + b, 0);
+}]]></body>
+    </node>
+    <node compression="L0_full" cost="39" distance="0.8333" end_line="12" file="src/math.ts" id="src.math.mean" language="typescript" line="7" role="caller" symbol_kind="function" symbol_name="mean">
+      <signature>
+        <param name="xs" optional="false" type="number[]"/>
+        <returns kind="Query" type="number"/>
+        <docstring><![CDATA[Mean of numbers; throws on an empty list.]]></docstring>
+      </signature>
+      <features form="GUARD_EARLY_EXIT" output="QUERY" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[export function mean(xs: number[]): number {
+  if (xs.length === 0) {
+    throw new RangeError("empty");
+  }
+  return sum(xs) / xs.length;
+}]]></body>
+    </node>
+    <node compression="L0_full" cost="29" distance="0.8333" end_line="8" file="src/report.ts" id="src.report.report" language="typescript" line="6" role="caller" symbol_kind="function" symbol_name="report">
+      <signature>
+        <param name="name" optional="false" type="string"/>
+        <param name="xs" optional="false" type="number[]"/>
+        <returns kind="Query" type="string"/>
+        <docstring><![CDATA[A one-line report: a namespace call, a default import, a barrel import.]]></docstring>
+      </signature>
+      <features form="LINEAR" output="QUERY" role="ENTRYPOINT,PUBLIC_API" substance="PURE_COMPUTE"/>
+      <body><![CDATA[export function report(name: string, xs: number[]): string {
+  return `${greet(text.clean(name))}: ${sum(xs)}`;
+}]]></body>
+    </node>
+  </nodes>
+  <edges>
+    <edge back_edge="true" data_flow="false" from="src.math.mean" guard="false" to="src.math.sum" type="CALLS" weight="1.0"/>
+    <edge back_edge="true" data_flow="false" from="src.report.report" guard="false" to="src.math.sum" type="CALLS" weight="1.0"/>
+  </edges>
+  <trailer edge_count="2" node_count="3" sha256="2312410511097e05fd2195dcea0a6d317e1d9e3409252519c3434ab402fc0566" token_count="1012"/>
+</prism_context>

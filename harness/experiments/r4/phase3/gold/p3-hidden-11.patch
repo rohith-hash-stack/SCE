@@ -1,0 +1,204 @@
+diff --git a/aiohttp/web.py b/aiohttp/web.py
+index ae2f098c..2d825f86 100644
+--- a/aiohttp/web.py
++++ b/aiohttp/web.py
+@@ -91,7 +91,7 @@ from .web_response import (
+ from .web_routedef import (
+     AbstractRouteDef,
+     RouteDef,
+-    RouteTableDef,
++    RouteTableDefImpl,
+     StaticDef,
+     delete,
+     get,
+@@ -220,7 +220,7 @@ __all__ = (
+     # web_routedef
+     "AbstractRouteDef",
+     "RouteDef",
+-    "RouteTableDef",
++    "RouteTableDefImpl",
+     "StaticDef",
+     "delete",
+     "get",
+diff --git a/aiohttp/web_routedef.py b/aiohttp/web_routedef.py
+index c396774f..ab464fd8 100644
+--- a/aiohttp/web_routedef.py
++++ b/aiohttp/web_routedef.py
+@@ -19,7 +19,7 @@ __all__ = (
+     "AbstractRouteDef",
+     "RouteDef",
+     "StaticDef",
+-    "RouteTableDef",
++    "RouteTableDefImpl",
+     "head",
+     "options",
+     "get",
+@@ -139,7 +139,7 @@ def static(prefix: str, path: PathLike, **kwargs: Any) -> StaticDef:
+ _Deco = Callable[[_HandlerType], _HandlerType]
+ 
+ 
+-class RouteTableDef(Sequence[AbstractRouteDef]):
++class RouteTableDefImpl(Sequence[AbstractRouteDef]):
+     """Route definition table"""
+ 
+     def __init__(self) -> None:
+diff --git a/examples/web_srv_route_deco.py b/examples/web_srv_route_deco.py
+index 46240d1e..e0a6b18c 100644
+--- a/examples/web_srv_route_deco.py
++++ b/examples/web_srv_route_deco.py
+@@ -5,7 +5,7 @@ import textwrap
+ 
+ from aiohttp import web
+ 
+-routes = web.RouteTableDef()
++routes = web.RouteTableDefImpl()
+ 
+ 
+ @routes.get("/")
+diff --git a/tests/test_phase3_rename_RouteTableDef.py b/tests/test_phase3_rename_RouteTableDef.py
+new file mode 100644
+index 00000000..dadf59c1
+--- /dev/null
++++ b/tests/test_phase3_rename_RouteTableDef.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_RouteTableDefImpl():
++    owner = importlib.import_module('aiohttp.web_routedef')
++    assert hasattr(owner, 'RouteTableDefImpl')
++    assert not hasattr(owner, 'RouteTableDef')
+diff --git a/tests/test_route_def.py b/tests/test_route_def.py
+index 923b3f65..e74ac53b 100644
+--- a/tests/test_route_def.py
++++ b/tests/test_route_def.py
+@@ -134,7 +134,7 @@ def test_static(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_head_deco(router: UrlDispatcher) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.head("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -150,7 +150,7 @@ def test_head_deco(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_get_deco(router: UrlDispatcher) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.get("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -170,7 +170,7 @@ def test_get_deco(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_post_deco(router: UrlDispatcher) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.post("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -186,7 +186,7 @@ def test_post_deco(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_put_deco(router: UrlDispatcher) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.put("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -202,7 +202,7 @@ def test_put_deco(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_patch_deco(router: UrlDispatcher) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.patch("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -218,7 +218,7 @@ def test_patch_deco(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_delete_deco(router: UrlDispatcher) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.delete("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -234,7 +234,7 @@ def test_delete_deco(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_options_deco(router: UrlDispatcher) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.options("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -250,7 +250,7 @@ def test_options_deco(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_route_deco(router: UrlDispatcher) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.route("OTHER", "/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -266,7 +266,7 @@ def test_route_deco(router: UrlDispatcher) -> None:
+ 
+ 
+ def test_routedef_sequence_protocol() -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.delete("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -281,7 +281,7 @@ def test_routedef_sequence_protocol() -> None:
+ 
+ 
+ def test_repr_route_def() -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.get("/path")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -292,7 +292,7 @@ def test_repr_route_def() -> None:
+ 
+ 
+ def test_repr_route_def_with_extra_info() -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.get("/path", extra="info")
+     async def handler(request: web.Request) -> NoReturn:
+@@ -303,7 +303,7 @@ def test_repr_route_def_with_extra_info() -> None:
+ 
+ 
+ def test_repr_static_def() -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     routes.static("/prefix", "/path", name="name")
+ 
+@@ -312,7 +312,7 @@ def test_repr_static_def() -> None:
+ 
+ 
+ def test_repr_route_table_def() -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.get("/path")
+     async def handler(request: web.Request) -> NoReturn:
+diff --git a/tests/test_web_urldispatcher.py b/tests/test_web_urldispatcher.py
+index d9938c36..4b741af9 100644
+--- a/tests/test_web_urldispatcher.py
++++ b/tests/test_web_urldispatcher.py
+@@ -763,7 +763,7 @@ async def test_add_view(aiohttp_client: AiohttpClient) -> None:
+ 
+ 
+ async def test_decorate_view(aiohttp_client: AiohttpClient) -> None:
+-    routes = web.RouteTableDef()
++    routes = web.RouteTableDefImpl()
+ 
+     @routes.view("/a")
+     class MyView(web.View):

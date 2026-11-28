@@ -1,0 +1,138 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t02_005_router_caller_dispatch",
+  "items": [
+   {
+    "source_id": "core/router.ts:251-253",
+    "content": "# core/router.ts:251-253  (core.router.createRouterInner.createCaller)\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },",
+    "token_count": 53,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.createRouterInner.createCaller"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 31,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:299-342",
+    "content": "# core/router.ts:299-342  (core.router.createCallerFactory)\nexport function createCallerFactory<TConfig extends AnyRootConfig>() {\n  return function createCallerInner<\n    TRouter extends Router<AnyRouterDef<TConfig>>,\n  >(router: TRouter): RouterCaller<TRouter['_def']> {\n    const def = router._def;\n\n    return function createCaller(ctx) {\n      const proxy = createRecursiveProxy(({ path, args }) => {\n        // interop mode\n        if (\n          path.length === 1 &&\n          procedureTypes.includes(path[0] as ProcedureType)\n        ) {\n          return callProcedure({\n            procedures: def.procedures,\n            path: args[0] as string,\n            rawInput: args[1],\n            ctx,\n            type: path[0] as ProcedureType,\n          });\n        }\n\n        const fullPath = path.join('.');\n        const procedure = def.procedures[fullPath] as AnyProcedure;\n\n        let type: ProcedureType = 'query';\n        if (procedure._def.mutation) {\n          type = 'mutation';\n        } else if (procedure._def.subscription) {\n          type = 'subscription';\n        }\n\n        return procedure({\n          path: fullPath,\n          rawInput: args[0],\n          ctx,\n          type,\n        });\n      });\n\n      return proxy as ReturnType<RouterCaller<any>>;\n    };\n  };\n}",
+    "token_count": 285,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.createCallerFactory"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 265,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:282-297",
+    "content": "# core/router.ts:282-297  (core.router.callProcedure)\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}",
+    "token_count": 124,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.callProcedure"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 105,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:26-52",
+    "content": "# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}",
+    "token_count": 244,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "error.TRPCError.TRPCError"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 218,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 706,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how tRPC dispatches a server-side call made through `router.createCaller(ctx)`, starting from `createCaller` on the router object built by `createRouterFactory` in core/router.ts. Trace the real causal pipeline it runs through, including how a mismatched procedure type is turned into a real error.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.router.createRouterInner.createCaller\", \"core.router.createCallerFactory\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "core.router.createRouterInner.createCaller",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 4,
+   "manifest_candidates_unfiltered": 4,
+   "requested_symbols": [
+    "core.router.createRouterInner.createCaller",
+    "core.router.createCallerFactory",
+    "core.router.callProcedure",
+    "error.TRPCError.TRPCError"
+   ],
+   "turn1_requested_count": 4,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The pipeline starts with `core.router.createRouterInner.createCaller`, which calls `core.router.createCallerFactory`. This factory function then calls `core.router.callProcedure`, which can potentially throw an `error.TRPCError.TRPCError` if there's a mismatched procedure type.\",\n  \"requested_symbols\": [\n    \"core.router.createRouterInner.createCaller\",\n    \"core.router.createCallerFactory\",\n    \"core.router.callProcedure\",\n    \"error.TRPCError.TRPCError\"\n  ]\n}\n```",
+     "prompt_tokens": 524,
+     "completion_tokens": 112,
+     "latency_seconds": 8.304757746000178,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     4.813355
+    ],
+    "L_turn2_hydrate": [
+     19.102501
+    ],
+    "L_retrieve": [
+     8331.93517
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 706,
+   "prompt_tokens": 987,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1000,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/router.ts:251-253  (core.router.createRouterInner.createCaller)\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n\n# core/router.ts:299-342  (core.router.createCallerFactory)\nexport function createCallerFactory<TConfig extends AnyRootConfig>() {\n  return function createCallerInner<\n    TRouter extends Router<AnyRouterDef<TConfig>>,\n  >(router: TRouter): RouterCaller<TRouter['_def']> {\n    const def = router._def;\n\n    return function createCaller(ctx) {\n      const proxy = createRecursiveProxy(({ path, args }) => {\n        // interop mode\n        if (\n          path.length === 1 &&\n          procedureTypes.includes(path[0] as ProcedureType)\n        ) {\n          return callProcedure({\n            procedures: def.procedures,\n            path: args[0] as string,\n            rawInput: args[1],\n            ctx,\n            type: path[0] as ProcedureType,\n          });\n        }\n\n        const fullPath = path.join('.');\n        const procedure = def.procedures[fullPath] as AnyProcedure;\n\n        let type: ProcedureType = 'query';\n        if (procedure._def.mutation) {\n          type = 'mutation';\n        } else if (procedure._def.subscription) {\n          type = 'subscription';\n        }\n\n        return procedure({\n          path: fullPath,\n          rawInput: args[0],\n          ctx,\n          type,\n        });\n      });\n\n      return proxy as ReturnType<RouterCaller<any>>;\n    };\n  };\n}\n\n# core/router.ts:282-297  (core.router.callProcedure)\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}\n\n# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}\n\n## Task\n\nYou are investigating how tRPC dispatches a server-side call made through `router.createCaller(ctx)`, starting from `createCaller` on the router object built by `createRouterFactory` in core/router.ts. Trace the real causal pipeline it runs through, including how a mismatched procedure type is turned into a real error.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.router.createRouterInner.createCaller\", \"core.router.createCallerFactory\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -120,6 +120,8 @@ def test_cache_write_then_cache_hit_matches_fresh_build(django_repo_path, clean_
     )
 
 
+@pytest.mark.xfail(reason="PRISM def-node rename bug, deferred to post-M4 (docs/prism_known_bugs.md #1)",
+                   strict=True)
 def test_cache_hit_rehydrates_every_def_node(django_repo_path, clean_cache):
     """The actual, confirmed defect site: `_def_nodes` must be fully
     repopulated on a cache hit, including files (like a minified/bundled

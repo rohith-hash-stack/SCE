@@ -29,8 +29,9 @@ from tree_sitter import Node
 from prism.graph.concrete_builder import TRAVERSABLE_RELATIONS, ConcreteGraphBuilder
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
+from prism.slicer.distance import RELATION_TENTATIVE_CALL_WEIGHT, RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT
 from prism.semantics._ast_utils import conditional_nodes, top_level_statements, try_nodes
-from prism.traversal._cache_keys import _LRUCache, graph_cache_key
+from prism.traversal._cache_keys import _LRUCache, graph_cache_key_for
 from prism.traversal._data_flow_common import _node_key, _resolve_call_sites
 from prism.traversal.data_flow_go import compute_go_data_flow_edges
 from prism.traversal.data_flow_py import compute_python_data_flow_edges
@@ -41,7 +42,7 @@ from prism.traversal.data_flow_ts import compute_ts_data_flow_edges
 #: seed/budget-independent (pure functions of `builder` alone, same as
 #: `continuous_dijkstra.build_causal_graph`) and, per the cache-key
 #: matrix, share that function's exact key shape ("Same as
-#: build_causal_graph"). `prism.traversal._cache_keys.graph_cache_key`
+#: build_causal_graph"). `prism.traversal._cache_keys.graph_cache_key_for`
 #: is imported directly (not `continuous_dijkstra`'s own re-export) -
 #: `continuous_dijkstra.py` imports *this* module (`compute_causal_
 #: edges`, `edge_cost`), so importing back from it here would be
@@ -81,6 +82,23 @@ MAX_CAUSAL_WEIGHT = max(BASE_RELATION_WEIGHT.values()) * (1.0 + LAMBDA_DATA_FLOW
 PREDICATE_GATE_CONFIDENCE = 1.0
 EXCEPTION_GATE_CONFIDENCE = 0.9
 EARLY_RETURN_GATE_CONFIDENCE = 0.9
+
+
+#: A call edge Pass 2 linked only as a best-effort guess (`kind=
+#: "TENTATIVE_CALL"` - unique-name/family/receiver-name/attribute-index/
+#: return-inference/virtual-dispatch resolution - or a runtime fuzzy-
+#: anchored `"TENTATIVE_DYNAMIC_CALL"`) is discounted by the same
+#: multipliers `prism.slicer.distance` already prices those kinds at, so
+#: inferred evidence never outranks confidently-resolved structure.
+TENTATIVE_KIND_WEIGHT: dict[str, float] = {
+    "TENTATIVE_CALL": RELATION_TENTATIVE_CALL_WEIGHT,
+    "TENTATIVE_DYNAMIC_CALL": RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT,
+}
+
+
+def tentative_factor(edge_data: dict) -> float:
+    """1.0 for a confidently-resolved edge, else its tentative discount."""
+    return TENTATIVE_KIND_WEIGHT.get(edge_data.get("kind"), 1.0)
 
 
 def causal_edge_weight(relation: str, data_flow_indicator: float, guard_indicator: float) -> float:
@@ -211,7 +229,7 @@ def compute_guard_indicator_edges(builder: ConcreteGraphBuilder) -> dict[tuple[s
     internal call) and across retrieves on the same or a different
     engine instance.
     """
-    key = graph_cache_key(builder.repo_root).digest()
+    key = graph_cache_key_for(builder).digest()
     cached = _GUARD_INDICATOR_EDGES_CACHE.get(key)
     if cached is not None:
         return cached
@@ -240,7 +258,7 @@ def compute_all_data_flow_edges(builder: ConcreteGraphBuilder) -> dict[tuple[str
     is the other half of "Same as build_causal_graph" in the cache-key
     matrix).
     """
-    key = graph_cache_key(builder.repo_root).digest()
+    key = graph_cache_key_for(builder).digest()
     cached = _DATA_FLOW_EDGES_CACHE.get(key)
     if cached is not None:
         return cached
@@ -319,7 +337,7 @@ def compute_causal_edges(
     so a cold call here still only pays the real cost once even though
     it fans out into two more cached functions.
     """
-    key = graph_cache_key(builder.repo_root).digest()
+    key = graph_cache_key_for(builder).digest()
     cached = _CAUSAL_EDGES_CACHE.get(key)
     if cached is not None:
         return cached
@@ -350,7 +368,19 @@ def compute_causal_edges(
             continue
         i_dataflow = data_flow.get((u, v), 0.0)
         i_guard = guards.get((u, v), 0.0)
-        weights[(u, v)] = causal_edge_weight(relation, i_dataflow, i_guard)
+        weights[(u, v)] = causal_edge_weight(relation, i_dataflow, i_guard) * tentative_factor(data)
+
+    graph = builder.graph
+
+    def _confidently_co_called(u: str, v: str) -> bool:
+        # A synthetic pair is derived from call sites in a function that
+        # calls both `u` and `v` - an inference stacked on those call
+        # resolutions. It is only derived when at least one common caller
+        # links both confidently, never from best-effort guesses alone.
+        common = set(graph.predecessors(u)) & set(graph.predecessors(v))
+        return not common or any(
+            tentative_factor(graph.edges[f, u]) == 1.0 and tentative_factor(graph.edges[f, v]) == 1.0 for f in common
+        )
 
     synthetic_edges: set[tuple[str, str]] = set()
     all_indicator_pairs = set(data_flow) | set(guards)
@@ -370,6 +400,8 @@ def compute_causal_edges(
             continue
         i_dataflow = data_flow.get((u, v), 0.0)
         i_guard = guards.get((u, v), 0.0)
+        if not _confidently_co_called(u, v):
+            continue
         weights[(u, v)] = causal_edge_weight(SYNTHETIC_EDGE_BASE_RELATION, i_dataflow, i_guard)
         synthetic_edges.add((u, v))
 

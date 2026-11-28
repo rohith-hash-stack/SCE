@@ -1,0 +1,205 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t02_003_form_clean_validation",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"django/forms/forms.py\", \"pattern\": \"def full_clean\"})\n420:    def full_clean(self):",
+    "token_count": 35,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def full_clean",
+      "path": "django/forms/forms.py"
+     },
+     "engine_token_count": 35
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 450, \"path\": \"django/forms/forms.py\", \"start_line\": 410})\n410:             self._errors[field].extend(error_list)\n411:             if field in self.cleaned_data:\n412:                 del self.cleaned_data[field]\n413: \n414:     def has_error(self, field, code=None):\n415:         return field in self.errors and (\n416:             code is None\n417:             or any(error.code == code for error in self.errors.as_data()[field])\n418:         )\n419: \n420:     def full_clean(self):\n421:         \"\"\"\n422:         Clean all of self.data and populate self._errors and self.cleaned_data.\n423:         \"\"\"\n424:         self._errors = ErrorDict()\n425:         if not self.is_bound:  # Stop further processing.\n426:             return\n427:         self.cleaned_data = {}\n428:         # If the form is permitted to be empty, and none of the form data has\n429:         # changed from the initial data, short circuit any validation.\n430:         if self.empty_permitted and not self.has_changed():\n431:             return\n432: \n433:         self._clean_fields()\n434:         self._clean_form()\n435:         self._post_clean()\n436: \n437:     def _clean_fields(self):\n438:         for name, bf in self._bound_items():\n439:             field = bf.field\n440:             value = bf.initial if field.disabled else bf.data\n441:             try:\n442:                 if isinstance(field, FileField):\n443:                     value = field.clean(value, bf.initial)\n444:                 else:\n445:                     value = field.clean(value)\n446:                 self.cleaned_data[name] = value\n447:                 if hasattr(self, \"clean_%s\" % name):\n448:                     value = getattr(self, \"clean_%s\" % name)()\n449:                     self.cleaned_data[name] = value\n450:             except ValidationError as e:\n[lines 410-450 of 540]",
+    "token_count": 527,
+    "rank": 2,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.forms.forms.BaseForm",
+     "django.forms.forms.BaseForm.add_error",
+     "django.forms.forms.BaseForm.has_error",
+     "django.forms.forms.BaseForm.full_clean",
+     "django.forms.forms.BaseForm._clean_fields"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "django/forms/forms.py",
+      "start_line": 410,
+      "end_line": 450
+     },
+     "engine_token_count": 527
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 562,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are debugging Django form validation order in\ndjango/forms/forms.py. Starting from `BaseForm.full_clean`, trace the\ndirect method calls made by full_clean, in order, that populate\n`self.cleaned_data` and `self._errors`. Exclude no-op hooks and hooks\nthat are only overridden by subclasses.\n\nFirst give a short (2-4 sentence) explanation of the pipeline,\nnoting where per-field `clean_<fieldname>` hooks fit in even though\nthey aren't a fixed BaseForm symbol.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified BaseForm symbol names in that\ncausal order - only symbols actually present in the provided context\npackage may appear, e.g.:\n\n```json\n[\"django.forms.forms.BaseForm.full_clean\", \"django.forms.forms.BaseForm._clean_fields\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 2,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To understand the Django form validation pipeline, we need to trace the method calls made by `BaseForm.full_clean`. This method is responsible for populating `self.cleaned_data` and `self._errors`. The pipeline involves several steps, including cleaning fields, validating fields, and cleaning the form itself. Per-field `clean_<fieldname>` hooks are called during the field cleaning process.\n\nLet's start by finding the `full_clean` method in `django/forms/forms.py`.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def full_clean\", \"path\": \"django/forms/forms.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def full_clean",
+        "path": "django/forms/forms.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def full_clean",
+        "path": "django/forms/forms.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 126,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "Great, we found the `full_clean` method in `django/forms/forms.py`. Now, let's read the lines around this method to understand the sequence of calls made by `full_clean`.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/forms/forms.py\", \"start_line\": 410, \"end_line\": 450}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/forms/forms.py",
+        "start_line": 410,
+        "end_line": 450
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/forms/forms.py",
+        "start_line": 410,
+        "end_line": 450
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 80,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "From the code, we can see the sequence of method calls made by `BaseForm.full_clean`:\n\n1. `BaseForm.full_clean`\n2. `BaseForm._clean_fields`\n3. `BaseForm._clean_form`\n4. `BaseForm._post_clean`\n\nThe per-field `clean_<fieldname>` hooks are called during the `_clean_fields` method.\n\nLet's emit the final answer.\n\n<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The Django form validation pipeline starts with BaseForm.full_clean, which calls _clean_fields, _clean_form, and _post_clean. Per-field clean_<fieldname> hooks are called during _clean_fields.\\\", \\\"symbols\\\": [\\\"django.forms.forms.BaseForm.full_clean\\\", \\\"django.forms.forms.BaseForm._clean_fields\\\", \\\"django.forms.forms.BaseForm._clean_form\\\", \\\"django.forms.forms.BaseForm._post_clean\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The Django form validation pipeline starts with BaseForm.full_clean, which calls _clean_fields, _clean_form, and _post_clean. Per-field clean_<fieldname> hooks are called during _clean_fields.\", \"symbols\": [\"django.forms.forms.BaseForm.full_clean\", \"django.forms.forms.BaseForm._clean_fields\", \"django.forms.forms.BaseForm._clean_form\", \"django.forms.forms.BaseForm._post_clean\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 198,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     9291.268514,
+     5055.846925,
+     13326.58586
+    ],
+    "L_tool_exec": [
+     3.654234,
+     0.448233
+    ],
+    "L_retrieve": [
+     27712.056279
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1550,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The Django form validation pipeline starts with BaseForm.full_clean, which calls _clean_fields, _clean_form, and _post_clean. Per-field clean_<fieldname> hooks are called during _clean_fields.\", \"symbols\": [\"django.forms.forms.BaseForm.full_clean\", \"django.forms.forms.BaseForm._clean_fields\", \"django.forms.forms.BaseForm._clean_form\", \"django.forms.forms.BaseForm._post_clean\"]}\n```",
+    "generation_tokens": 198,
+    "latency_seconds": 13.326440574999651,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1583,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 562,
+   "prompt_tokens": 1550,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1583,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

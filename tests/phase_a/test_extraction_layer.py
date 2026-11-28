@@ -155,7 +155,7 @@ def test_is_test_file_rejects_false_positives():
 
 def test_is_test_file_identifies_valid_test_patterns():
     assert is_test_file("app/tests.py")
-    assert is_test_file("app/test.py")
+    assert is_test_file("app/test.py")                  # unreadable here: the name rule (tests/test_test_file_rule.py)
     assert is_test_file("tests/handlers/test_base.py")
     assert is_test_file("django/contrib/auth/tests/test_models.py")
     assert is_test_file("pkg/client_test.go")

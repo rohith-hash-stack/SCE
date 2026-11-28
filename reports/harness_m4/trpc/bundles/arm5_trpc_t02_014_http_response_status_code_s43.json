@@ -1,0 +1,120 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t02_014_http_response_status_code",
+  "items": [
+   {
+    "source_id": "http/resolveHTTPResponse.ts:74-130",
+    "content": "# http/resolveHTTPResponse.ts:74-130  (http.resolveHTTPResponse.initResponse)\nfunction initResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(initOpts: {\n  ctx: inferRouterContext<TRouter> | undefined;\n  paths: string[] | undefined;\n  type: ProcedureType | 'unknown';\n  responseMeta?: HTTPBaseHandlerOptions<TRouter, TRequest>['responseMeta'];\n  untransformedJSON?:\n    | TRPCResponse<unknown, inferRouterError<TRouter>>\n    | TRPCResponse<unknown, inferRouterError<TRouter>>[]\n    | undefined;\n  errors?: TRPCError[];\n}): HTTPResponse {\n  const {\n    ctx,\n    paths,\n    type,\n    responseMeta,\n    untransformedJSON,\n    errors = [],\n  } = initOpts;\n\n  let status = untransformedJSON ? getHTTPStatusCode(untransformedJSON) : 200;\n  const headers: HTTPHeaders = {\n    'Content-Type': 'application/json',\n  };\n\n  const eagerGeneration = !untransformedJSON;\n  const data = eagerGeneration\n    ? []\n    : Array.isArray(untransformedJSON)\n    ? untransformedJSON\n    : [untransformedJSON];\n\n  const meta =\n    responseMeta?.({\n      ctx,\n      paths,\n      type,\n      data,\n      errors,\n      eagerGeneration,\n    }) ?? {};\n\n  for (const [key, value] of Object.entries(meta.headers ?? {})) {\n    headers[key] = value;\n  }\n  if (meta.status) {\n    status = meta.status;\n  }\n\n  return {\n    status,\n    headers,\n  };\n}",
+    "token_count": 353,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.initResponse"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 328,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:35-58",
+    "content": "# http/getHTTPStatusCode.ts:35-58  (http.getHTTPStatusCode.getHTTPStatusCode)\nexport function getHTTPStatusCode(json: TRPCResponse | TRPCResponse[]) {\n  const arr = Array.isArray(json) ? json : [json];\n  const httpStatuses = new Set(\n    arr.map((res) => {\n      if ('error' in res) {\n        const data = res.error.data;\n        if (typeof data.httpStatus === 'number') {\n          return data.httpStatus;\n        }\n        const code = TRPC_ERROR_CODES_BY_NUMBER[res.error.code];\n        return getStatusCodeFromKey(code);\n      }\n      return 200;\n    }),\n  );\n\n  if (httpStatuses.size !== 1) {\n    return 207;\n  }\n\n  const httpStatus = httpStatuses.values().next().value;\n\n  return httpStatus;\n}",
+    "token_count": 182,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.getHTTPStatusCode.getHTTPStatusCode"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 156,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:31-33",
+    "content": "# http/getHTTPStatusCode.ts:31-33  (http.getHTTPStatusCode.getStatusCodeFromKey)\nfunction getStatusCodeFromKey(code: keyof typeof TRPC_ERROR_CODES_BY_KEY) {\n  return JSONRPC2_TO_HTTP_CODE[code] ?? 500;\n}\n\n# Referenced module constants:\nJSONRPC2_TO_HTTP_CODE = {...}  # 15 entries",
+    "token_count": 77,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.getHTTPStatusCode.getStatusCodeFromKey"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 46,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 612,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how tRPC derives the real HTTP status code for a response, starting from `initResponse` in http/resolveHTTPResponse.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"http.resolveHTTPResponse.initResponse\", \"http.getHTTPStatusCode.getHTTPStatusCode\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "anchor": "http.resolveHTTPResponse.initResponse",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 5,
+   "manifest_candidates_unfiltered": 5,
+   "requested_symbols": [
+    "http.resolveHTTPResponse.initResponse",
+    "http.getHTTPStatusCode.getHTTPStatusCode",
+    "http.getHTTPStatusCode.getStatusCodeFromKey"
+   ],
+   "turn1_requested_count": 3,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The pipeline starts with `initResponse` which calls `getHTTPStatusCode` to derive the HTTP status code from the response. `getHTTPStatusCode` in turn calls `getStatusCodeFromKey` to map the status code key to its actual value.\",\n  \"requested_symbols\": [\n    \"http.resolveHTTPResponse.initResponse\",\n    \"http.getHTTPStatusCode.getHTTPStatusCode\",\n    \"http.getHTTPStatusCode.getStatusCodeFromKey\"\n  ]\n}\n```",
+     "prompt_tokens": 664,
+     "completion_tokens": 99,
+     "latency_seconds": 7.629742284998429,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     8.40954
+    ],
+    "L_turn2_hydrate": [
+     22.748747
+    ],
+    "L_retrieve": [
+     7663.090056
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 612,
+   "prompt_tokens": 868,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 881,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# http/resolveHTTPResponse.ts:74-130  (http.resolveHTTPResponse.initResponse)\nfunction initResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(initOpts: {\n  ctx: inferRouterContext<TRouter> | undefined;\n  paths: string[] | undefined;\n  type: ProcedureType | 'unknown';\n  responseMeta?: HTTPBaseHandlerOptions<TRouter, TRequest>['responseMeta'];\n  untransformedJSON?:\n    | TRPCResponse<unknown, inferRouterError<TRouter>>\n    | TRPCResponse<unknown, inferRouterError<TRouter>>[]\n    | undefined;\n  errors?: TRPCError[];\n}): HTTPResponse {\n  const {\n    ctx,\n    paths,\n    type,\n    responseMeta,\n    untransformedJSON,\n    errors = [],\n  } = initOpts;\n\n  let status = untransformedJSON ? getHTTPStatusCode(untransformedJSON) : 200;\n  const headers: HTTPHeaders = {\n    'Content-Type': 'application/json',\n  };\n\n  const eagerGeneration = !untransformedJSON;\n  const data = eagerGeneration\n    ? []\n    : Array.isArray(untransformedJSON)\n    ? untransformedJSON\n    : [untransformedJSON];\n\n  const meta =\n    responseMeta?.({\n      ctx,\n      paths,\n      type,\n      data,\n      errors,\n      eagerGeneration,\n    }) ?? {};\n\n  for (const [key, value] of Object.entries(meta.headers ?? {})) {\n    headers[key] = value;\n  }\n  if (meta.status) {\n    status = meta.status;\n  }\n\n  return {\n    status,\n    headers,\n  };\n}\n\n# http/getHTTPStatusCode.ts:35-58  (http.getHTTPStatusCode.getHTTPStatusCode)\nexport function getHTTPStatusCode(json: TRPCResponse | TRPCResponse[]) {\n  const arr = Array.isArray(json) ? json : [json];\n  const httpStatuses = new Set(\n    arr.map((res) => {\n      if ('error' in res) {\n        const data = res.error.data;\n        if (typeof data.httpStatus === 'number') {\n          return data.httpStatus;\n        }\n        const code = TRPC_ERROR_CODES_BY_NUMBER[res.error.code];\n        return getStatusCodeFromKey(code);\n      }\n      return 200;\n    }),\n  );\n\n  if (httpStatuses.size !== 1) {\n    return 207;\n  }\n\n  const httpStatus = httpStatuses.values().next().value;\n\n  return httpStatus;\n}\n\n# http/getHTTPStatusCode.ts:31-33  (http.getHTTPStatusCode.getStatusCodeFromKey)\nfunction getStatusCodeFromKey(code: keyof typeof TRPC_ERROR_CODES_BY_KEY) {\n  return JSONRPC2_TO_HTTP_CODE[code] ?? 500;\n}\n\n# Referenced module constants:\nJSONRPC2_TO_HTTP_CODE = {...}  # 15 entries\n\n## Task\n\nYou are investigating how tRPC derives the real HTTP status code for a response, starting from `initResponse` in http/resolveHTTPResponse.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"http.resolveHTTPResponse.initResponse\", \"http.getHTTPStatusCode.getHTTPStatusCode\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

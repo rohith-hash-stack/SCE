@@ -1,0 +1,208 @@
+diff --git a/pydantic_ai_slim/pydantic_ai/_agent_graph.py b/pydantic_ai_slim/pydantic_ai/_agent_graph.py
+index b1c1adc77..7a685ae03 100644
+--- a/pydantic_ai_slim/pydantic_ai/_agent_graph.py
++++ b/pydantic_ai_slim/pydantic_ai/_agent_graph.py
+@@ -254,7 +254,7 @@ class UserPromptNode(AgentNode[DepsT, NodeRunEndT]):
+     def _update_tool_call_results_from_model_request(
+         self, tool_call_results: dict[str, DeferredToolResult], message: _messages.ModelRequest
+     ) -> dict[str, DeferredToolResult]:
+-        last_tool_return: _messages.ToolReturn | None = None
++        last_tool_return: _messages.ToolReturnImpl | None = None
+         user_content: list[str | _messages.UserContent] = []
+         for part in message.parts:
+             if isinstance(part, _messages.ToolReturnPart):
+@@ -263,7 +263,7 @@ class UserPromptNode(AgentNode[DepsT, NodeRunEndT]):
+                         f'Tool call {part.tool_call_id!r} was already executed and its result cannot be overridden.'
+                     )
+ 
+-                last_tool_return = _messages.ToolReturn(return_value=part.content, metadata=part.metadata)
++                last_tool_return = _messages.ToolReturnImpl(return_value=part.content, metadata=part.metadata)
+                 tool_call_results[part.tool_call_id] = last_tool_return
+             elif isinstance(part, _messages.RetryPromptPart):
+                 if part.tool_call_id in tool_call_results:
+@@ -900,7 +900,7 @@ async def _call_tool(
+     except ToolRetryError as e:
+         return e.tool_retry, None
+ 
+-    if isinstance(tool_result, _messages.ToolReturn):
++    if isinstance(tool_result, _messages.ToolReturnImpl):
+         tool_return = tool_result
+     else:
+         result_is_list = isinstance(tool_result, list)
+@@ -909,7 +909,7 @@ async def _call_tool(
+         return_values: list[Any] = []
+         user_contents: list[str | _messages.UserContent] = []
+         for content in contents:
+-            if isinstance(content, _messages.ToolReturn):
++            if isinstance(content, _messages.ToolReturnImpl):
+                 raise exceptions.UserError(
+                     f'The return value of tool {tool_call.tool_name!r} contains invalid nested `ToolReturn` objects. '
+                     f'`ToolReturn` should be used directly.'
+@@ -922,7 +922,7 @@ async def _call_tool(
+             else:
+                 return_values.append(content)
+ 
+-        tool_return = _messages.ToolReturn(
++        tool_return = _messages.ToolReturnImpl(
+             return_value=return_values[0] if len(return_values) == 1 and not result_is_list else return_values,
+             content=user_contents,
+         )
+diff --git a/pydantic_ai_slim/pydantic_ai/agent/__init__.py b/pydantic_ai_slim/pydantic_ai/agent/__init__.py
+index 2650ac155..ab928ea16 100644
+--- a/pydantic_ai_slim/pydantic_ai/agent/__init__.py
++++ b/pydantic_ai_slim/pydantic_ai/agent/__init__.py
+@@ -634,7 +634,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
+                 call_result_types = _utils.get_union_args(DeferredToolCallResult)
+                 for tool_call_id, result in calls.items():
+                     if not isinstance(result, call_result_types):
+-                        result = _messages.ToolReturn(result)
++                        result = _messages.ToolReturnImpl(result)
+                     tool_call_results[tool_call_id] = result
+ 
+         graph_deps = _agent_graph.GraphAgentDeps[AgentDepsT, RunOutputDataT](
+diff --git a/pydantic_ai_slim/pydantic_ai/messages.py b/pydantic_ai_slim/pydantic_ai/messages.py
+index 1ca176f26..fd3039e14 100644
+--- a/pydantic_ai_slim/pydantic_ai/messages.py
++++ b/pydantic_ai_slim/pydantic_ai/messages.py
+@@ -525,7 +525,7 @@ UserContent: TypeAlias = str | MultiModalContent
+ 
+ 
+ @dataclass(repr=False)
+-class ToolReturn:
++class ToolReturnImpl:
+     """A structured return value for tools that need to provide both a return value and custom content to the model.
+ 
+     This class allows tools to return complex responses that include:
+diff --git a/pydantic_ai_slim/pydantic_ai/tools.py b/pydantic_ai_slim/pydantic_ai/tools.py
+index 0e11f8055..f10484607 100644
+--- a/pydantic_ai_slim/pydantic_ai/tools.py
++++ b/pydantic_ai_slim/pydantic_ai/tools.py
+@@ -12,7 +12,7 @@ from typing_extensions import ParamSpec, Self, TypeVar
+ from . import _function_schema, _utils
+ from ._run_context import AgentDepsT, RunContext
+ from .exceptions import ModelRetry
+-from .messages import RetryPromptPart, ToolCallPart, ToolReturn
++from .messages import RetryPromptPart, ToolCallPart, ToolReturnImpl
+ 
+ __all__ = (
+     'AgentDepsT',
+@@ -188,7 +188,7 @@ def _deferred_tool_call_result_discriminator(x: Any) -> str | None:
+ DeferredToolApprovalResult: TypeAlias = Annotated[ToolApproved | ToolDenied, Discriminator('kind')]
+ """Result for a tool call that required human-in-the-loop approval."""
+ DeferredToolCallResult: TypeAlias = Annotated[
+-    Annotated[ToolReturn, Tag('tool-return')]
++    Annotated[ToolReturnImpl, Tag('tool-return')]
+     | Annotated[ModelRetry, Tag('model-retry')]
+     | Annotated[RetryPromptPart, Tag('retry-prompt')],
+     Discriminator(_deferred_tool_call_result_discriminator),
+diff --git a/tests/test_agent.py b/tests/test_agent.py
+index faf019a22..59fc1dcdf 100644
+--- a/tests/test_agent.py
++++ b/tests/test_agent.py
+@@ -41,7 +41,7 @@ from pydantic_ai.messages import (
+     SystemPromptPart,
+     TextPart,
+     ToolCallPart,
+-    ToolReturn,
++    ToolReturnImpl,
+     ToolReturnPart,
+     UserPromptPart,
+     VideoUrl,
+@@ -3704,8 +3704,8 @@ def test_multimodal_tool_response():
+     agent = Agent(FunctionModel(llm))
+ 
+     @agent.tool_plain
+-    def analyze_data() -> ToolReturn:
+-        return ToolReturn(
++    def analyze_data() -> ToolReturnImpl:
++        return ToolReturnImpl(
+             return_value='Data analysis completed successfully',
+             content=[
+                 'Here are the analysis results:',
+@@ -3784,8 +3784,8 @@ def test_plain_tool_response():
+     agent = Agent(FunctionModel(llm))
+ 
+     @agent.tool_plain
+-    def analyze_data() -> ToolReturn:
+-        return ToolReturn(
++    def analyze_data() -> ToolReturnImpl:
++        return ToolReturnImpl(
+             return_value='Data analysis completed successfully',
+             metadata={'foo': 'bar'},
+         )
+@@ -3853,7 +3853,7 @@ def test_many_multimodal_tool_response():
+     @agent.tool_plain
+     def analyze_data() -> list[Any]:
+         return [
+-            ToolReturn(
++            ToolReturnImpl(
+                 return_value='Data analysis completed successfully',
+                 content=[
+                     'Here are the analysis results:',
+@@ -3888,8 +3888,8 @@ def test_multimodal_tool_response_nested():
+     agent = Agent(FunctionModel(llm))
+ 
+     @agent.tool_plain
+-    def analyze_data() -> ToolReturn:
+-        return ToolReturn(
++    def analyze_data() -> ToolReturnImpl:
++        return ToolReturnImpl(
+             return_value=ImageUrl('https://example.com/chart.jpg'),
+             content=[
+                 'Here are the analysis results:',
+diff --git a/tests/test_phase3_rename_ToolReturn.py b/tests/test_phase3_rename_ToolReturn.py
+new file mode 100644
+index 000000000..fa4696715
+--- /dev/null
++++ b/tests/test_phase3_rename_ToolReturn.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_ToolReturnImpl():
++    owner = importlib.import_module('pydantic_ai.messages')
++    assert hasattr(owner, 'ToolReturnImpl')
++    assert not hasattr(owner, 'ToolReturn')
+diff --git a/tests/test_tools.py b/tests/test_tools.py
+index eba764376..fd1b0684a 100644
+--- a/tests/test_tools.py
++++ b/tests/test_tools.py
+@@ -22,7 +22,7 @@ from pydantic_ai.messages import (
+     RetryPromptPart,
+     TextPart,
+     ToolCallPart,
+-    ToolReturn,
++    ToolReturnImpl,
+     ToolReturnPart,
+     UserPromptPart,
+ )
+@@ -1440,9 +1440,9 @@ def test_parallel_tool_return_with_deferred():
+     agent = Agent(FunctionModel(llm), output_type=[str, DeferredToolRequests])
+ 
+     @agent.tool_plain
+-    def get_price(fruit: str) -> ToolReturn:
++    def get_price(fruit: str) -> ToolReturnImpl:
+         if fruit in ['apple', 'pear']:
+-            return ToolReturn(
++            return ToolReturnImpl(
+                 return_value=10.0,
+                 content=f'The price of {fruit} is 10.0.',
+                 metadata={'fruit': fruit, 'price': 10.0},
+@@ -1534,7 +1534,7 @@ def test_parallel_tool_return_with_deferred():
+         deferred_tool_results=DeferredToolResults(
+             calls={
+                 'buy_apple': ModelRetry('Apples are not available'),
+-                'buy_banana': ToolReturn(
++                'buy_banana': ToolReturnImpl(
+                     return_value=True,
+                     content='I bought a banana',
+                     metadata={'fruit': 'banana', 'price': 100.0},
+@@ -1802,7 +1802,7 @@ async def test_approval_required_toolset():
+ def test_deferred_tool_results_serializable():
+     results = DeferredToolResults(
+         calls={
+-            'tool-return': ToolReturn(
++            'tool-return': ToolReturnImpl(
+                 return_value=1,
+                 content='The tool call was approved.',
+                 metadata={'foo': 'bar'},

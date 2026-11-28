@@ -255,9 +255,12 @@ def test_end_to_end_tracer_and_reconciler_resolve_a_decorator_wrapped_dispatch(t
         "        return Service().process(1)\n"
     )
     builder, tag_matrix = build_pipeline(str(repo))
-    # The static resolver never finds this edge - `process` was replaced by
-    # `wrapper` at class-definition time.
-    assert not builder.graph.has_edge("svc.Caller.run", "svc.Service.process")
+    # Statically, return-type inference types the `Service()` receiver and
+    # links the decorated method itself (a best-effort edge); the executed
+    # frame is still the `wrapper` closure, which only the runtime trace
+    # plus fuzzy anchoring can attribute.
+    assert builder.graph.edges["svc.Caller.run", "svc.Service.process"]["kind"] == "TENTATIVE_CALL"
+    assert not builder.graph.has_edge("svc.Caller.run", "svc.wrapper")
 
     output = tmp_path / "trace.jsonl"
     with Tracer(str(repo), output):

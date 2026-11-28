@@ -1,0 +1,139 @@
+diff --git a/sqlglot/generator.py b/sqlglot/generator.py
+index 54877b43..b187a8b8 100644
+--- a/sqlglot/generator.py
++++ b/sqlglot/generator.py
+@@ -11,7 +11,8 @@ from sqlglot import exp
+ from sqlglot.errors import ErrorLevel, UnsupportedError, concat_messages
+ from sqlglot.expressions import apply_index_offset
+ from sqlglot.expressions.core import maybe_parse
+-from sqlglot.helper import csv, name_sequence, seq_get
++from sqlglot.helper import csv, seq_get
++from sqlglot.helper_name_sequence import name_sequence
+ from sqlglot.jsonpath import ALL_JSON_PATH_PARTS, JSON_PATH_PART_TRANSFORMS
+ from sqlglot.time import format_time
+ from sqlglot.tokens import TokenType
+diff --git a/sqlglot/helper.py b/sqlglot/helper.py
+index 3976bde2..a95249cd 100644
+--- a/sqlglot/helper.py
++++ b/sqlglot/helper.py
+@@ -274,12 +274,6 @@ def is_type(text: str, target_type: Type) -> bool:
+         return False
+ 
+ 
+-def name_sequence(prefix: str) -> t.Callable[[], str]:
+-    """Returns a name generator given a prefix (e.g. a0, a1, a2, ... if the prefix is "a")."""
+-    sequence = count()
+-    return lambda: f"{prefix}{next(sequence)}"
+-
+-
+ def object_to_dict(obj: t.Any, **kwargs) -> dict:
+     """Returns a dictionary created from an object's attributes."""
+     return {
+diff --git a/sqlglot/helper_name_sequence.py b/sqlglot/helper_name_sequence.py
+new file mode 100644
+index 00000000..6e3553a0
+--- /dev/null
++++ b/sqlglot/helper_name_sequence.py
+@@ -0,0 +1,9 @@
++from __future__ import annotations
++import typing as t
++from itertools import count
++
++
++def name_sequence(prefix: str) -> t.Callable[[], str]:
++    """Returns a name generator given a prefix (e.g. a0, a1, a2, ... if the prefix is "a")."""
++    sequence = count()
++    return lambda: f"{prefix}{next(sequence)}"
+diff --git a/sqlglot/optimizer/canonicalize_internal_names.py b/sqlglot/optimizer/canonicalize_internal_names.py
+index 087390b8..75890906 100644
+--- a/sqlglot/optimizer/canonicalize_internal_names.py
++++ b/sqlglot/optimizer/canonicalize_internal_names.py
+@@ -3,7 +3,8 @@ from __future__ import annotations
+ import typing as t
+ 
+ from sqlglot import exp
+-from sqlglot.helper import name_sequence, seq_get
++from sqlglot.helper import seq_get
++from sqlglot.helper_name_sequence import name_sequence
+ from sqlglot.optimizer.scope import Scope, find_all_in_scope, traverse_scope
+ 
+ if t.TYPE_CHECKING:
+diff --git a/sqlglot/optimizer/qualify_tables.py b/sqlglot/optimizer/qualify_tables.py
+index fbee764b..01b77058 100644
+--- a/sqlglot/optimizer/qualify_tables.py
++++ b/sqlglot/optimizer/qualify_tables.py
+@@ -4,7 +4,8 @@ import typing as t
+ 
+ from sqlglot import exp
+ from sqlglot.dialects.dialect import Dialect, DialectType
+-from sqlglot.helper import name_sequence, seq_get, ensure_list
++from sqlglot.helper import seq_get, ensure_list
++from sqlglot.helper_name_sequence import name_sequence
+ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+ from sqlglot.optimizer.scope import Scope, traverse_scope
+ 
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 17024fed..aea974de 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -1,6 +1,6 @@
+ from __future__ import annotations
+ from sqlglot import exp
+-from sqlglot.helper import name_sequence
++from sqlglot.helper_name_sequence import name_sequence
+ from sqlglot.optimizer.scope import ScopeType, find_in_scope, traverse_scope
+ from sqlglot.optimizer.helpers import projection_has_aggregate
+ from sqlglot._typing import E
+diff --git a/sqlglot/planner.py b/sqlglot/planner.py
+index cdf8bbda..c6b932ba 100644
+--- a/sqlglot/planner.py
++++ b/sqlglot/planner.py
+@@ -4,7 +4,7 @@ import math
+ import typing as t
+ 
+ from sqlglot import alias, exp
+-from sqlglot.helper import name_sequence
++from sqlglot.helper_name_sequence import name_sequence
+ from sqlglot.optimizer.eliminate_joins import join_condition
+ from sqlglot.optimizer.scope import find_all_in_scope, find_in_scope
+ from collections.abc import Iterator, Sequence, Iterable
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 535c1543..2db89a6c 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -4,7 +4,8 @@ import typing as t
+ 
+ from sqlglot import expressions as exp
+ from sqlglot.errors import UnsupportedError
+-from sqlglot.helper import find_new_name, name_sequence, seq_get
++from sqlglot.helper import find_new_name, seq_get
++from sqlglot.helper_name_sequence import name_sequence
+ 
+ 
+ if t.TYPE_CHECKING:
+diff --git a/tests/test_helper.py b/tests/test_helper.py
+index abd7cb32..3ed93f55 100644
+--- a/tests/test_helper.py
++++ b/tests/test_helper.py
+@@ -1,7 +1,8 @@
+ import unittest
+ from decimal import Decimal
+ 
+-from sqlglot.helper import merge_ranges, name_sequence, to_int, tsort
++from sqlglot.helper import merge_ranges, to_int, tsort
++from sqlglot.helper_name_sequence import name_sequence
+ 
+ 
+ class TestHelper(unittest.TestCase):
+diff --git a/tests/test_phase2_move_name_sequence.py b/tests/test_phase2_move_name_sequence.py
+new file mode 100644
+index 00000000..42751388
+--- /dev/null
++++ b/tests/test_phase2_move_name_sequence.py
+@@ -0,0 +1,6 @@
++import importlib
++
++
++def test_phase2_moved_name_sequence():
++    new = importlib.import_module('sqlglot.helper_name_sequence')
++    assert getattr(new, 'name_sequence').__module__ == 'sqlglot.helper_name_sequence'

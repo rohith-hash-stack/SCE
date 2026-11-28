@@ -1,0 +1,298 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "fastapi_t5_001_dependant_tree_construction",
+  "items": [
+   {
+    "source_id": "fastapi/dependencies/utils.py:265-314",
+    "content": "# fastapi/dependencies/utils.py:265-314  (fastapi.dependencies.utils.get_dependant)\ndef get_dependant(\n    *,\n    path: str,\n    call: Callable[..., Any],\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n    use_cache: bool = True,\n) -> Dependant:\n    path_param_names = get_path_param_names(path)\n    endpoint_signature = get_typed_signature(call)\n    signature_params = endpoint_signature.parameters\n    dependant = Dependant(\n        call=call,\n        name=name,\n        path=path,\n        security_scopes=security_scopes,\n        use_cache=use_cache,\n    )\n    for param_name, param in signature_params.items():\n        is_path_param = param_name in path_param_names\n        param_details = analyze_param(\n            param_name=param_name,\n            annotation=param.annotation,\n            value=param.default,\n            is_path_param=is_path_param,\n        )\n        if param_details.depends is not None:\n            sub_dependant = get_param_sub_dependant(\n                param_name=param_name,\n                depends=param_details.depends,\n                path=path,\n                security_scopes=security_scopes,\n            )\n            dependant.dependencies.append(sub_dependant)\n            continue\n        if add_non_field_param_to_dependency(\n            param_name=param_name,\n            type_annotation=param_details.type_annotation,\n            dependant=dependant,\n        ):\n            assert param_details.field is None, (\n                f\"Cannot specify multiple FastAPI annotations for {param_name!r}\"\n            )\n            continue\n        assert param_details.field is not None\n        if isinstance(param_details.field.field_info, params.Body):\n            dependant.body_params.append(param_details.field)\n        else:\n            add_param_to_fields(field=param_details.field, dependant=dependant)\n    return dependant",
+    "token_count": 386,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_dependant"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 361,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:231-244",
+    "content": "# fastapi/dependencies/utils.py:231-244  (fastapi.dependencies.utils.get_typed_signature)\ndef get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:\n    signature = inspect.signature(call)\n    globalns = getattr(call, \"__globals__\", {})\n    typed_params = [\n        inspect.Parameter(\n            name=param.name,\n            kind=param.kind,\n            default=param.default,\n            annotation=get_typed_annotation(param.annotation, globalns),\n        )\n        for param in signature.parameters.values()\n    ]\n    typed_signature = inspect.Signature(typed_params)\n    return typed_signature",
+    "token_count": 127,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_typed_signature"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 101,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:348-511",
+    "content": "# fastapi/dependencies/utils.py:348-511  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    field_info = None\n    depends = None\n    type_annotation: Any = Any\n    use_annotation: Any = Any\n    if annotation is not inspect.Signature.empty:\n        use_annotation = annotation\n        type_annotation = annotation\n    # Extract Annotated info\n    if get_origin(use_annotation) is Annotated:\n        annotated_args = get_args(annotation)\n        type_annotation = annotated_args[0]\n        fastapi_annotations = [\n            arg\n            for arg in annotated_args[1:]\n            if isinstance(arg, (FieldInfo, params.Depends))\n        ]\n        fastapi_specific_annotations = [\n            arg\n            for arg in fastapi_annotations\n            if isinstance(arg, (params.Param, params.Body, params.Depends))\n        ]\n        if fastapi_specific_annotations:\n            fastapi_annotation: Union[FieldInfo, params.Depends, None] = (\n                fastapi_specific_annotations[-1]\n            )\n        else:\n            fastapi_annotation = None\n        # Set default for Annotated FieldInfo\n        if isinstance(fastapi_annotation, FieldInfo):\n            # Copy `field_info` because we mutate `field_info.default` below.\n            field_info = copy_field_info(\n                field_info=fastapi_annotation, annotation=use_annotation\n            )\n            assert (\n                field_info.default is Undefined or field_info.default is RequiredParam\n            ), (\n                f\"`{field_info.__class__.__name__}` default value cannot be set in\"\n                f\" `Annotated` for {param_name!r}. Set the default value with `=` instead.\"\n            )\n            if value is not inspect.Signature.empty:\n                assert not is_path_param, \"Path parameters cannot have default values\"\n                field_info.default = value\n            else:\n                field_info.default = RequiredParam\n        # Get Annotated Depends\n        elif isinstance(fastapi_annotation, params.Depends):\n            depends = fastapi_annotation\n    # Get Depends from default value\n    if isinstance(value, params.Depends):\n        assert depends is None, (\n            \"Cannot specify `Depends` in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        assert field_info is None, (\n            \"Cannot specify a FastAPI annotation in `Annotated` and `Depends` as a\"\n            f\" default value together for {param_name!r}\"\n        )\n        depends = value\n    # Get FieldInfo from default value\n    elif isinstance(value, FieldInfo):\n        assert field_info is None, (\n            \"Cannot specify FastAPI annotations in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        field_info = value\n        if PYDANTIC_V2:\n            field_info.annotation = type_annotation\n\n    # Get Depends from type annotation\n    if depends is not None and depends.dependency is None:\n        # Copy `depends` before mutating it\n        depends = copy(depends)\n        depends.dependency = type_annotation\n\n    # Handle non-param type annotations like Request\n    if lenient_issubclass(\n        type_annotation,\n        (\n            Request,\n            WebSocket,\n            HTTPConnection,\n            Response,\n            StarletteBackgroundTasks,\n            SecurityScopes,\n        ),\n    ):\n        assert depends is None, f\"Cannot specify `Depends` for type {type_annotation!r}\"\n        assert field_info is None, (\n            f\"Cannot specify FastAPI annotation for type {type_annotation!r}\"\n        )\n    # Handle default assignations, neither field_info nor depends was not found in Annotated nor default value\n    elif field_info is None and depends is None:\n        default_value = value if value is not inspect.Signature.empty else RequiredParam\n        if is_path_param:\n            # We might check here that `default_value is RequiredParam`, but the fact is that the same\n            # parameter might sometimes be a path parameter and sometimes not. See\n            # `tests/test_infer_param_optionality.py` for an example.\n            field_info = params.Path(annotation=use_annotation)\n        elif is_uploadfile_or_nonable_uploadfile_annotation(\n            type_annotation\n        ) or is_uploadfile_sequence_annotation(type_annotation):\n            field_info = params.File(annotation=use_annotation, default=default_value)\n        elif not field_annotation_is_scalar(annotation=type_annotation):\n            field_info = params.Body(annotation=use_annotation, default=default_value)\n        else:\n            field_info = params.Query(annotation=use_annotation, default=default_value)\n\n    field = None\n    # It's a field_info, not a dependency\n    if field_info is not None:\n        # Handle field_info.in_\n        if is_path_param:\n            assert isinstance(field_info, params.Path), (\n                f\"Cannot use `{field_info.__class__.__name__}` for path param\"\n                f\" {param_name!r}\"\n            )\n        elif (\n            isinstance(field_info, params.Param)\n            and getattr(field_info, \"in_\", None) is None\n        ):\n            field_info.in_ = params.ParamTypes.query\n        use_annotation_from_field_info = get_annotation_from_field_info(\n            use_annotation,\n            field_info,\n            param_name,\n        )\n        if isinstance(field_info, params.Form):\n            ensure_multipart_is_installed()\n        if not field_info.alias and getattr(field_info, \"convert_underscores\", None):\n            alias = param_name.replace(\"_\", \"-\")\n        else:\n            alias = field_info.alias or param_name\n        field_info.alias = alias\n        field = create_model_field(\n            name=param_name,\n            type_=use_annotation_from_field_info,\n            default=field_info.default,\n            alias=alias,\n            required=field_info.default in (RequiredParam, Undefined),\n            field_info=field_info,\n        )\n        if is_path_param:\n            assert is_scalar_field(field=field), (\n                \"Path params must be of one of the supported types\"\n            )\n        elif isinstance(field_info, params.Query):\n            assert (\n                is_scalar_field(field)\n                or is_scalar_sequence_field(field)\n                or (\n                    lenient_issubclass(field.type_, BaseModel)\n                    # For Pydantic v1\n                    and getattr(field, \"shape\", 1) == 1\n                )\n            )\n\n    return ParamDetails(type_annotation=type_annotation, depends=depends, field=field)",
+    "token_count": 1366,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.analyze_param"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 1341,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:514-527",
+    "content": "# fastapi/dependencies/utils.py:514-527  (fastapi.dependencies.utils.add_param_to_fields)\ndef add_param_to_fields(*, field: ModelField, dependant: Dependant) -> None:\n    field_info = field.field_info\n    field_info_in = getattr(field_info, \"in_\", None)\n    if field_info_in == params.ParamTypes.path:\n        dependant.path_params.append(field)\n    elif field_info_in == params.ParamTypes.query:\n        dependant.query_params.append(field)\n    elif field_info_in == params.ParamTypes.header:\n        dependant.header_params.append(field)\n    else:\n        assert field_info_in == params.ParamTypes.cookie, (\n            f\"non-body parameters must be in path, query, header or cookie: {field.name}\"\n        )\n        dependant.cookie_params.append(field)",
+    "token_count": 172,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.add_param_to_fields"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 146,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:317-338",
+    "content": "# fastapi/dependencies/utils.py:317-338  (fastapi.dependencies.utils.add_non_field_param_to_dependency)\ndef add_non_field_param_to_dependency(\n    *, param_name: str, type_annotation: Any, dependant: Dependant\n) -> Optional[bool]:\n    if lenient_issubclass(type_annotation, Request):\n        dependant.request_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, WebSocket):\n        dependant.websocket_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, HTTPConnection):\n        dependant.http_connection_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, Response):\n        dependant.response_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, StarletteBackgroundTasks):\n        dependant.background_tasks_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, SecurityScopes):\n        dependant.security_scopes_param_name = param_name\n        return True\n    return None",
+    "token_count": 235,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.add_non_field_param_to_dependency"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 207,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:118-132",
+    "content": "# fastapi/dependencies/utils.py:118-132  (fastapi.dependencies.utils.get_param_sub_dependant)\ndef get_param_sub_dependant(\n    *,\n    param_name: str,\n    depends: params.Depends,\n    path: str,\n    security_scopes: Optional[List[str]] = None,\n) -> Dependant:\n    assert depends.dependency\n    return get_sub_dependant(\n        depends=depends,\n        dependency=depends.dependency,\n        path=path,\n        name=param_name,\n        security_scopes=security_scopes,\n    )",
+    "token_count": 117,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_param_sub_dependant"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 90,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:142-171",
+    "content": "# fastapi/dependencies/utils.py:142-171  (fastapi.dependencies.utils.get_sub_dependant)\ndef get_sub_dependant(\n    *,\n    depends: params.Depends,\n    dependency: Callable[..., Any],\n    path: str,\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n) -> Dependant:\n    security_requirement = None\n    security_scopes = security_scopes or []\n    if isinstance(depends, params.Security):\n        dependency_scopes = depends.scopes\n        security_scopes.extend(dependency_scopes)\n    if isinstance(dependency, SecurityBase):\n        use_scopes: List[str] = []\n        if isinstance(dependency, (OAuth2, OpenIdConnect)):\n            use_scopes = security_scopes\n        security_requirement = SecurityRequirement(\n            security_scheme=dependency, scopes=use_scopes\n        )\n    sub_dependant = get_dependant(\n        path=path,\n        call=dependency,\n        name=name,\n        security_scopes=security_scopes,\n        use_cache=depends.use_cache,\n    )\n    if security_requirement:\n        sub_dependant.security_requirements.append(security_requirement)\n    return sub_dependant",
+    "token_count": 252,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_sub_dependant"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 226,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/models.py:14-37",
+    "content": "# fastapi/dependencies/models.py:14-37  (fastapi.dependencies.models.Dependant)\n@dataclass\nclass Dependant:\n    path_params: List[ModelField] = field(default_factory=list)\n    query_params: List[ModelField] = field(default_factory=list)\n    header_params: List[ModelField] = field(default_factory=list)\n    cookie_params: List[ModelField] = field(default_factory=list)\n    body_params: List[ModelField] = field(default_factory=list)\n    dependencies: List[\"Dependant\"] = field(default_factory=list)\n    security_requirements: List[SecurityRequirement] = field(default_factory=list)\n    name: Optional[str] = None\n    call: Optional[Callable[..., Any]] = None\n    request_param_name: Optional[str] = None\n    websocket_param_name: Optional[str] = None\n    http_connection_param_name: Optional[str] = None\n    response_param_name: Optional[str] = None\n    background_tasks_param_name: Optional[str] = None\n    security_scopes_param_name: Optional[str] = None\n    security_scopes: Optional[List[str]] = None\n    use_cache: bool = True\n    path: Optional[str] = None\n    cache_key: Tuple[Optional[Callable[..., Any]], Tuple[str, ...]] = field(init=False)\n\n    def __post_init__(self) -> None:\n        self.cache_key = (self.call, tuple(sorted(set(self.security_scopes or []))))",
+    "token_count": 307,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.models.Dependant"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 284,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/models.py:8-11",
+    "content": "# fastapi/dependencies/models.py:8-11  (fastapi.dependencies.models.SecurityRequirement)\n@dataclass\nclass SecurityRequirement:\n    security_scheme: SecurityBase\n    scopes: Optional[Sequence[str]] = None",
+    "token_count": 46,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.models.SecurityRequirement"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 25,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:177-209",
+    "content": "# fastapi/dependencies/utils.py:177-209  (fastapi.dependencies.utils.get_flat_dependant)\ndef get_flat_dependant(\n    dependant: Dependant,\n    *,\n    skip_repeats: bool = False,\n    visited: Optional[List[CacheKey]] = None,\n) -> Dependant:\n    if visited is None:\n        visited = []\n    visited.append(dependant.cache_key)\n\n    flat_dependant = Dependant(\n        path_params=dependant.path_params.copy(),\n        query_params=dependant.query_params.copy(),\n        header_params=dependant.header_params.copy(),\n        cookie_params=dependant.cookie_params.copy(),\n        body_params=dependant.body_params.copy(),\n        security_requirements=dependant.security_requirements.copy(),\n        use_cache=dependant.use_cache,\n        path=dependant.path,\n    )\n    for sub_dependant in dependant.dependencies:\n        if skip_repeats and sub_dependant.cache_key in visited:\n            continue\n        flat_sub = get_flat_dependant(\n            sub_dependant, skip_repeats=skip_repeats, visited=visited\n        )\n        flat_dependant.path_params.extend(flat_sub.path_params)\n        flat_dependant.query_params.extend(flat_sub.query_params)\n        flat_dependant.header_params.extend(flat_sub.header_params)\n        flat_dependant.cookie_params.extend(flat_sub.cookie_params)\n        flat_dependant.body_params.extend(flat_sub.body_params)\n        flat_dependant.security_requirements.extend(flat_sub.security_requirements)\n    return flat_dependant\n\n# Referenced module constants:\nCacheKey = Tuple[Optional[Callable[..., Any]], Tuple[str, ...]]",
+    "token_count": 332,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_flat_dependant"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 299,
+     "distance": 0.8163265306122448
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/routing.py:389-426",
+    "content": "# fastapi/routing.py:389-426  (fastapi.routing.APIWebSocketRoute)\nclass APIWebSocketRoute(routing.WebSocketRoute):\n    def __init__(\n        self,\n        path: str,\n        endpoint: Callable[..., Any],\n        *,\n        name: Optional[str] = None,\n        dependencies: Optional[Sequence[params.Depends]] = None,\n        dependency_overrides_provider: Optional[Any] = None,\n    ) -> None:\n        self.path = path\n        self.endpoint = endpoint\n        self.name = get_name(endpoint) if name is None else name\n        self.dependencies = list(dependencies or [])\n        self.path_regex, self.path_format, self.param_convertors = compile_path(path)\n        self.dependant = get_dependant(path=self.path_format, call=self.endpoint)\n        for depends in self.dependencies[::-1]:\n            self.dependant.dependencies.insert(\n                0,\n                get_parameterless_sub_dependant(depends=depends, path=self.path_format),\n            )\n        self._flat_dependant = get_flat_dependant(self.dependant)\n        self._embed_body_fields = _should_embed_body_fields(\n            self._flat_dependant.body_params\n        )\n        self.app = websocket_session(\n            get_websocket_app(\n                dependant=self.dependant,\n                dependency_overrides_provider=dependency_overrides_provider,\n                embed_body_fields=self._embed_body_fields,\n            )\n        )\n\n    def matches(self, scope: Scope) -> Tuple[Match, Scope]:\n        match, child_scope = super().matches(scope)\n        if match != Match.NONE:\n            child_scope[\"route\"] = self\n        return match, child_scope",
+    "token_count": 338,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.routing.APIWebSocketRoute"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 315,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/routing.py:390-420",
+    "content": "# fastapi/routing.py:390-420  (fastapi.routing.APIWebSocketRoute.__init__)\n    def __init__(\n        self,\n        path: str,\n        endpoint: Callable[..., Any],\n        *,\n        name: Optional[str] = None,\n        dependencies: Optional[Sequence[params.Depends]] = None,\n        dependency_overrides_provider: Optional[Any] = None,\n    ) -> None:\n        self.path = path\n        self.endpoint = endpoint\n        self.name = get_name(endpoint) if name is None else name\n        self.dependencies = list(dependencies or [])\n        self.path_regex, self.path_format, self.param_convertors = compile_path(path)\n        self.dependant = get_dependant(path=self.path_format, call=self.endpoint)\n        for depends in self.dependencies[::-1]:\n            self.dependant.dependencies.insert(\n                0,\n                get_parameterless_sub_dependant(depends=depends, path=self.path_format),\n            )\n        self._flat_dependant = get_flat_dependant(self.dependant)\n        self._embed_body_fields = _should_embed_body_fields(\n            self._flat_dependant.body_params\n        )\n        self.app = websocket_session(\n            get_websocket_app(\n                dependant=self.dependant,\n                dependency_overrides_provider=dependency_overrides_provider,\n                embed_body_fields=self._embed_body_fields,\n            )\n        )",
+    "token_count": 281,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.routing.APIWebSocketRoute.__init__"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 256,
+     "distance": 0.6666666666666666
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:59-60",
+    "content": "# fastapi/utils.py:59-60  (fastapi.utils.get_path_param_names)\ndef get_path_param_names(path: str) -> Set[str]:\n    return set(re.findall(\"{(.*?)}\", path))",
+    "token_count": 47,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.utils.get_path_param_names"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 26,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 4006,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `fastapi.dependencies.utils.get_dependant` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "fastapi.dependencies.utils.get_dependant",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 34,
+   "manifest_candidates_unfiltered": 34,
+   "requested_symbols": [
+    "fastapi.dependencies.utils.get_dependant",
+    "fastapi.dependencies.utils.get_typed_signature",
+    "fastapi.dependencies.utils.analyze_param",
+    "fastapi.dependencies.utils.add_param_to_fields",
+    "fastapi.dependencies.utils.add_non_field_param_to_dependency",
+    "fastapi.dependencies.utils.get_param_sub_dependant",
+    "fastapi.dependencies.utils.get_sub_dependant",
+    "fastapi.dependencies.models.Dependant",
+    "fastapi.dependencies.models.SecurityRequirement",
+    "fastapi.dependencies.utils.get_flat_dependant",
+    "fastapi.routing.APIWebSocketRoute.__init__"
+   ],
+   "turn1_requested_count": 11,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"If `fastapi.dependencies.utils.get_dependant` changes, it could break the dependency resolution process in FastAPI, as it is a central function that analyzes parameters and creates dependent objects. This change might affect how dependencies are parsed and injected into route handlers, leading to potential runtime errors or incorrect behavior.\",\n  \"requested_symbols\": [\n    \"fastapi.dependencies.utils.get_dependant\",\n    \"fastapi.dependencies.utils.get_typed_signature\",\n    \"fastapi.dependencies.utils.analyze_param\",\n    \"fastapi.dependencies.utils.add_param_to_fields\",\n    \"fastapi.dependencies.utils.add_non_field_param_to_dependency\",\n    \"fastapi.dependencies.utils.get_param_sub_dependant\",\n    \"fastapi.dependencies.utils.get_sub_dependant\",\n    \"fastapi.dependencies.models.Dependant\",\n    \"fastapi.dependencies.models.SecurityRequirement\",\n    \"fastapi.dependencies.utils.get_flat_dependant\",\n    \"fastapi.routing.APIWebSocketRoute.__init__\"\n  ]\n}\n```",
+     "prompt_tokens": 2111,
+     "completion_tokens": 201,
+     "latency_seconds": 15.758789579000222,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     69.358699
+    ],
+    "L_turn2_hydrate": [
+     216.345085
+    ],
+    "L_retrieve": [
+     16059.304779
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 4006,
+   "prompt_tokens": 4150,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 4163,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/dependencies/utils.py:265-314  (fastapi.dependencies.utils.get_dependant)\ndef get_dependant(\n    *,\n    path: str,\n    call: Callable[..., Any],\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n    use_cache: bool = True,\n) -> Dependant:\n    path_param_names = get_path_param_names(path)\n    endpoint_signature = get_typed_signature(call)\n    signature_params = endpoint_signature.parameters\n    dependant = Dependant(\n        call=call,\n        name=name,\n        path=path,\n        security_scopes=security_scopes,\n        use_cache=use_cache,\n    )\n    for param_name, param in signature_params.items():\n        is_path_param = param_name in path_param_names\n        param_details = analyze_param(\n            param_name=param_name,\n            annotation=param.annotation,\n            value=param.default,\n            is_path_param=is_path_param,\n        )\n        if param_details.depends is not None:\n            sub_dependant = get_param_sub_dependant(\n                param_name=param_name,\n                depends=param_details.depends,\n                path=path,\n                security_scopes=security_scopes,\n            )\n            dependant.dependencies.append(sub_dependant)\n            continue\n        if add_non_field_param_to_dependency(\n            param_name=param_name,\n            type_annotation=param_details.type_annotation,\n            dependant=dependant,\n        ):\n            assert param_details.field is None, (\n                f\"Cannot specify multiple FastAPI annotations for {param_name!r}\"\n            )\n            continue\n        assert param_details.field is not None\n        if isinstance(param_details.field.field_info, params.Body):\n            dependant.body_params.append(param_details.field)\n        else:\n            add_param_to_fields(field=param_details.field, dependant=dependant)\n    return dependant\n\n# fastapi/dependencies/utils.py:231-244  (fastapi.dependencies.utils.get_typed_signature)\ndef get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:\n    signature = inspect.signature(call)\n    globalns = getattr(call, \"__globals__\", {})\n    typed_params = [\n        inspect.Parameter(\n            name=param.name,\n            kind=param.kind,\n            default=param.default,\n            annotation=get_typed_annotation(param.annotation, globalns),\n        )\n        for param in signature.parameters.values()\n    ]\n    typed_signature = inspect.Signature(typed_params)\n    return typed_signature\n\n# fastapi/dependencies/utils.py:348-511  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    field_info = None\n    depends = None\n    type_annotation: Any = Any\n    use_annotation: Any = Any\n    if annotation is not inspect.Signature.empty:\n        use_annotation = annotation\n        type_annotation = annotation\n    # Extract Annotated info\n    if get_origin(use_annotation) is Annotated:\n        annotated_args = get_args(annotation)\n        type_annotation = annotated_args[0]\n        fastapi_annotations = [\n            arg\n            for arg in annotated_args[1:]\n            if isinstance(arg, (FieldInfo, params.Depends))\n        ]\n        fastapi_specific_annotations = [\n            arg\n            for arg in fastapi_annotations\n            if isinstance(arg, (params.Param, params.Body, params.Depends))\n        ]\n        if fastapi_specific_annotations:\n            fastapi_annotation: Union[FieldInfo, params.Depends, None] = (\n                fastapi_specific_annotations[-1]\n            )\n        else:\n            fastapi_annotation = None\n        # Set default for Annotated FieldInfo\n        if isinstance(fastapi_annotation, FieldInfo):\n            # Copy `field_info` because we mutate `field_info.default` below.\n            field_info = copy_field_info(\n                field_info=fastapi_annotation, annotation=use_annotation\n            )\n            assert (\n                field_info.default is Undefined or field_info.default is RequiredParam\n            ), (\n                f\"`{field_info.__class__.__name__}` default value cannot be set in\"\n                f\" `Annotated` for {param_name!r}. Set the default value with `=` instead.\"\n            )\n            if value is not inspect.Signature.empty:\n                assert not is_path_param, \"Path parameters cannot have default values\"\n                field_info.default = value\n            else:\n                field_info.default = RequiredParam\n        # Get Annotated Depends\n        elif isinstance(fastapi_annotation, params.Depends):\n            depends = fastapi_annotation\n    # Get Depends from default value\n    if isinstance(value, params.Depends):\n        assert depends is None, (\n            \"Cannot specify `Depends` in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        assert field_info is None, (\n            \"Cannot specify a FastAPI annotation in `Annotated` and `Depends` as a\"\n            f\" default value together for {param_name!r}\"\n        )\n        depends = value\n    # Get FieldInfo from default value\n    elif isinstance(value, FieldInfo):\n        assert field_info is None, (\n            \"Cannot specify FastAPI annotations in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        field_info = value\n        if PYDANTIC_V2:\n            field_info.annotation = type_annotation\n\n    # Get Depends from type annotation\n    if depends is not None and depends.dependency is None:\n        # Copy `depends` before mutating it\n        depends = copy(depends)\n        depends.dependency = type_annotation\n\n    # Handle non-param type annotations like Request\n    if lenient_issubclass(\n        type_annotation,\n        (\n            Request,\n            WebSocket,\n            HTTPConnection,\n            Response,\n            StarletteBackgroundTasks,\n            SecurityScopes,\n        ),\n    ):\n        assert depends is None, f\"Cannot specify `Depends` for type {type_annotation!r}\"\n        assert field_info is None, (\n            f\"Cannot specify FastAPI annotation for type {type_annotation!r}\"\n        )\n    # Handle default assignations, neither field_info nor depends was not found in Annotated nor default value\n    elif field_info is None and depends is None:\n        default_value = value if value is not inspect.Signature.empty else RequiredParam\n        if is_path_param:\n            # We might check here that `default_value is RequiredParam`, but the fact is that the same\n            # parameter might sometimes be a path parameter and sometimes not. See\n            # `tests/test_infer_param_optionality.py` for an example.\n            field_info = params.Path(annotation=use_annotation)\n        elif is_uploadfile_or_nonable_uploadfile_annotation(\n            type_annotation\n        ) or is_uploadfile_sequence_annotation(type_annotation):\n            field_info = params.File(annotation=use_annotation, default=default_value)\n        elif not field_annotation_is_scalar(annotation=type_annotation):\n            field_info = params.Body(annotation=use_annotation, default=default_value)\n        else:\n            field_info = params.Query(annotation=use_annotation, default=default_value)\n\n    field = None\n    # It's a field_info, not a dependency\n    if field_info is not None:\n        # Handle field_info.in_\n        if is_path_param:\n            assert isinstance(field_info, params.Path), (\n                f\"Cannot use `{field_info.__class__.__name__}` for path param\"\n                f\" {param_name!r}\"\n            )\n        elif (\n            isinstance(field_info, params.Param)\n            and getattr(field_info, \"in_\", None) is None\n        ):\n            field_info.in_ = params.ParamTypes.query\n        use_annotation_from_field_info = get_annotation_from_field_info(\n            use_annotation,\n            field_info,\n            param_name,\n        )\n        if isinstance(field_info, params.Form):\n            ensure_multipart_is_installed()\n        if not field_info.alias and getattr(field_info, \"convert_underscores\", None):\n            alias = param_name.replace(\"_\", \"-\")\n        else:\n            alias = field_info.alias or param_name\n        field_info.alias = alias\n        field = create_model_field(\n            name=param_name,\n            type_=use_annotation_from_field_info,\n            default=field_info.default,\n            alias=alias,\n            required=field_info.default in (RequiredParam, Undefined),\n            field_info=field_info,\n        )\n        if is_path_param:\n            assert is_scalar_field(field=field), (\n                \"Path params must be of one of the supported types\"\n            )\n        elif isinstance(field_info, params.Query):\n            assert (\n                is_scalar_field(field)\n                or is_scalar_sequence_field(field)\n                or (\n                    lenient_issubclass(field.type_, BaseModel)\n                    # For Pydantic v1\n                    and getattr(field, \"shape\", 1) == 1\n                )\n            )\n\n    return ParamDetails(type_annotation=type_annotation, depends=depends, field=field)\n\n# fastapi/dependencies/utils.py:514-527  (fastapi.dependencies.utils.add_param_to_fields)\ndef add_param_to_fields(*, field: ModelField, dependant: Dependant) -> None:\n    field_info = field.field_info\n    field_info_in = getattr(field_info, \"in_\", None)\n    if field_info_in == params.ParamTypes.path:\n        dependant.path_params.append(field)\n    elif field_info_in == params.ParamTypes.query:\n        dependant.query_params.append(field)\n    elif field_info_in == params.ParamTypes.header:\n        dependant.header_params.append(field)\n    else:\n        assert field_info_in == params.ParamTypes.cookie, (\n            f\"non-body parameters must be in path, query, header or cookie: {field.name}\"\n        )\n        dependant.cookie_params.append(field)\n\n# fastapi/dependencies/utils.py:317-338  (fastapi.dependencies.utils.add_non_field_param_to_dependency)\ndef add_non_field_param_to_dependency(\n    *, param_name: str, type_annotation: Any, dependant: Dependant\n) -> Optional[bool]:\n    if lenient_issubclass(type_annotation, Request):\n        dependant.request_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, WebSocket):\n        dependant.websocket_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, HTTPConnection):\n        dependant.http_connection_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, Response):\n        dependant.response_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, StarletteBackgroundTasks):\n        dependant.background_tasks_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, SecurityScopes):\n        dependant.security_scopes_param_name = param_name\n        return True\n    return None\n\n# fastapi/dependencies/utils.py:118-132  (fastapi.dependencies.utils.get_param_sub_dependant)\ndef get_param_sub_dependant(\n    *,\n    param_name: str,\n    depends: params.Depends,\n    path: str,\n    security_scopes: Optional[List[str]] = None,\n) -> Dependant:\n    assert depends.dependency\n    return get_sub_dependant(\n        depends=depends,\n        dependency=depends.dependency,\n        path=path,\n        name=param_name,\n        security_scopes=security_scopes,\n    )\n\n# fastapi/dependencies/utils.py:142-171  (fastapi.dependencies.utils.get_sub_dependant)\ndef get_sub_dependant(\n    *,\n    depends: params.Depends,\n    dependency: Callable[..., Any],\n    path: str,\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n) -> Dependant:\n    security_requirement = None\n    security_scopes = security_scopes or []\n    if isinstance(depends, params.Security):\n        dependency_scopes = depends.scopes\n        security_scopes.extend(dependency_scopes)\n    if isinstance(dependency, SecurityBase):\n        use_scopes: List[str] = []\n        if isinstance(dependency, (OAuth2, OpenIdConnect)):\n            use_scopes = security_scopes\n        security_requirement = SecurityRequirement(\n            security_scheme=dependency, scopes=use_scopes\n        )\n    sub_dependant = get_dependant(\n        path=path,\n        call=dependency,\n        name=name,\n        security_scopes=security_scopes,\n        use_cache=depends.use_cache,\n    )\n    if security_requirement:\n        sub_dependant.security_requirements.append(security_requirement)\n    return sub_dependant\n\n# fastapi/dependencies/models.py:14-37  (fastapi.dependencies.models.Dependant)\n@dataclass\nclass Dependant:\n    path_params: List[ModelField] = field(default_factory=list)\n    query_params: List[ModelField] = field(default_factory=list)\n    header_params: List[ModelField] = field(default_factory=list)\n    cookie_params: List[ModelField] = field(default_factory=list)\n    body_params: List[ModelField] = field(default_factory=list)\n    dependencies: List[\"Dependant\"] = field(default_factory=list)\n    security_requirements: List[SecurityRequirement] = field(default_factory=list)\n    name: Optional[str] = None\n    call: Optional[Callable[..., Any]] = None\n    request_param_name: Optional[str] = None\n    websocket_param_name: Optional[str] = None\n    http_connection_param_name: Optional[str] = None\n    response_param_name: Optional[str] = None\n    background_tasks_param_name: Optional[str] = None\n    security_scopes_param_name: Optional[str] = None\n    security_scopes: Optional[List[str]] = None\n    use_cache: bool = True\n    path: Optional[str] = None\n    cache_key: Tuple[Optional[Callable[..., Any]], Tuple[str, ...]] = field(init=False)\n\n    def __post_init__(self) -> None:\n        self.cache_key = (self.call, tuple(sorted(set(self.security_scopes or []))))\n\n# fastapi/dependencies/models.py:8-11  (fastapi.dependencies.models.SecurityRequirement)\n@dataclass\nclass SecurityRequirement:\n    security_scheme: SecurityBase\n    scopes: Optional[Sequence[str]] = None\n\n# fastapi/dependencies/utils.py:177-209  (fastapi.dependencies.utils.get_flat_dependant)\ndef get_flat_dependant(\n    dependant: Dependant,\n    *,\n    skip_repeats: bool = False,\n    visited: Optional[List[CacheKey]] = None,\n) -> Dependant:\n    if visited is None:\n        visited = []\n    visited.append(dependant.cache_key)\n\n    flat_dependant = Dependant(\n        path_params=dependant.path_params.copy(),\n        query_params=dependant.query_params.copy(),\n        header_params=dependant.header_params.copy(),\n        cookie_params=dependant.cookie_params.copy(),\n        body_params=dependant.body_params.copy(),\n        security_requirements=dependant.security_requirements.copy(),\n        use_cache=dependant.use_cache,\n        path=dependant.path,\n    )\n    for sub_dependant in dependant.dependencies:\n        if skip_repeats and sub_dependant.cache_key in visited:\n            continue\n        flat_sub = get_flat_dependant(\n            sub_dependant, skip_repeats=skip_repeats, visited=visited\n        )\n        flat_dependant.path_params.extend(flat_sub.path_params)\n        flat_dependant.query_params.extend(flat_sub.query_params)\n        flat_dependant.header_params.extend(flat_sub.header_params)\n        flat_dependant.cookie_params.extend(flat_sub.cookie_params)\n        flat_dependant.body_params.extend(flat_sub.body_params)\n        flat_dependant.security_requirements.extend(flat_sub.security_requirements)\n    return flat_dependant\n\n# Referenced module constants:\nCacheKey = Tuple[Optional[Callable[..., Any]], Tuple[str, ...]]\n\n# fastapi/routing.py:389-426  (fastapi.routing.APIWebSocketRoute)\nclass APIWebSocketRoute(routing.WebSocketRoute):\n    def __init__(\n        self,\n        path: str,\n        endpoint: Callable[..., Any],\n        *,\n        name: Optional[str] = None,\n        dependencies: Optional[Sequence[params.Depends]] = None,\n        dependency_overrides_provider: Optional[Any] = None,\n    ) -> None:\n        self.path = path\n        self.endpoint = endpoint\n        self.name = get_name(endpoint) if name is None else name\n        self.dependencies = list(dependencies or [])\n        self.path_regex, self.path_format, self.param_convertors = compile_path(path)\n        self.dependant = get_dependant(path=self.path_format, call=self.endpoint)\n        for depends in self.dependencies[::-1]:\n            self.dependant.dependencies.insert(\n                0,\n                get_parameterless_sub_dependant(depends=depends, path=self.path_format),\n            )\n        self._flat_dependant = get_flat_dependant(self.dependant)\n        self._embed_body_fields = _should_embed_body_fields(\n            self._flat_dependant.body_params\n        )\n        self.app = websocket_session(\n            get_websocket_app(\n                dependant=self.dependant,\n                dependency_overrides_provider=dependency_overrides_provider,\n                embed_body_fields=self._embed_body_fields,\n            )\n        )\n\n    def matches(self, scope: Scope) -> Tuple[Match, Scope]:\n        match, child_scope = super().matches(scope)\n        if match != Match.NONE:\n            child_scope[\"route\"] = self\n        return match, child_scope\n\n# fastapi/routing.py:390-420  (fastapi.routing.APIWebSocketRoute.__init__)\n    def __init__(\n        self,\n        path: str,\n        endpoint: Callable[..., Any],\n        *,\n        name: Optional[str] = None,\n        dependencies: Optional[Sequence[params.Depends]] = None,\n        dependency_overrides_provider: Optional[Any] = None,\n    ) -> None:\n        self.path = path\n        self.endpoint = endpoint\n        self.name = get_name(endpoint) if name is None else name\n        self.dependencies = list(dependencies or [])\n        self.path_regex, self.path_format, self.param_convertors = compile_path(path)\n        self.dependant = get_dependant(path=self.path_format, call=self.endpoint)\n        for depends in self.dependencies[::-1]:\n            self.dependant.dependencies.insert(\n                0,\n                get_parameterless_sub_dependant(depends=depends, path=self.path_format),\n            )\n        self._flat_dependant = get_flat_dependant(self.dependant)\n        self._embed_body_fields = _should_embed_body_fields(\n            self._flat_dependant.body_params\n        )\n        self.app = websocket_session(\n            get_websocket_app(\n                dependant=self.dependant,\n                dependency_overrides_provider=dependency_overrides_provider,\n                embed_body_fields=self._embed_body_fields,\n            )\n        )\n\n# fastapi/utils.py:59-60  (fastapi.utils.get_path_param_names)\ndef get_path_param_names(path: str) -> Set[str]:\n    return set(re.findall(\"{(.*?)}\", path))\n\n## Task\n\nWhat breaks if `fastapi.dependencies.utils.get_dependant` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

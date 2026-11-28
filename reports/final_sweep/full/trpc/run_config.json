@@ -1,0 +1,137 @@
+{
+  "harness_version": "final-sweep-8arms/1.1",
+  "repo": "trpc",
+  "arms": [
+    "baseline_bfs_bidirectional",
+    "pragmatic_oracle",
+    "scaffolded_oracle",
+    "prism_full",
+    "ablation_lexical_anchors",
+    "ablation_signature_only",
+    "ablation_no_purity",
+    "prism_plus_distractors"
+  ],
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51
+  ],
+  "tasks": [
+    "trpc_t02_001_init_bootstrap",
+    "trpc_t02_002_error_shape_http_status",
+    "trpc_t02_003_procedure_caller_error_normalization",
+    "trpc_t02_004_merge_routers",
+    "trpc_t02_005_router_caller_dispatch",
+    "trpc_t02_006_router_factory_path_registration",
+    "trpc_t02_007_procedure_builder_new_builder",
+    "trpc_t02_008_procedure_builder_input_validation",
+    "trpc_t02_009_procedure_builder_output_validation",
+    "trpc_t02_010_procedure_builder_use_middleware",
+    "trpc_t02_011_input_middleware_error_handling",
+    "trpc_t02_012_output_middleware_error_handling",
+    "trpc_t02_013_http_response_context_pipeline",
+    "trpc_t02_014_http_response_status_code",
+    "trpc_t02_015_input_to_procedure_call",
+    "trpc_t02_016_caught_error_to_data",
+    "trpc_t02_017_shared_error_shape",
+    "trpc_t02_018_trpc_error_cause_normalization",
+    "trpc_t02_019_procedure_builder_query_resolution",
+    "trpc_t02_020_procedure_resolver_finalization",
+    "trpc_t02_021_response_serialization",
+    "trpc_t02_022_deprecated_router_migration",
+    "trpc_t02_023_deprecated_procedure_migration",
+    "trpc_t02_024_subscription_pull_factory",
+    "trpc_t02_025_client_message_validation"
+  ],
+  "model": "gpt-4o-mini-2024-07-18",
+  "temperature": 0.4,
+  "budget": 8000,
+  "token_ceiling": 8800,
+  "max_tokens": 2048,
+  "base_url": "https://api.openai.com/v1",
+  "api_key_env": "OPENAI_API_KEY",
+  "dry_run": false,
+  "max_cost_usd": 25.0,
+  "tpm_limit": 150000,
+  "arm_specs": {
+    "baseline_bfs_bidirectional": {
+      "engine_id": "baseline_bfs_bidirectional",
+      "kind": "bfs",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Unpruned bidirectional AST call-graph BFS, greedy-filled to budget (floor)."
+    },
+    "pragmatic_oracle": {
+      "engine_id": "pragmatic_oracle",
+      "kind": "oracle",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Exactly the adjudicated pipeline_symbols - the strict minimal ground truth."
+    },
+    "scaffolded_oracle": {
+      "engine_id": "scaffolded_oracle",
+      "kind": "oracle",
+      "scaffolded": true,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "pipeline_symbols + annotated required_context + deterministic AST scaffold (referenced type declarations, validators, factory/builder initializers)."
+    },
+    "prism_full": {
+      "engine_id": "prism_full",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Two-pass: taxonomy anchor (task seed), 4-axis annotated manifest, k-hop expansion."
+    },
+    "ablation_lexical_anchors": {
+      "engine_id": "ablation_lexical_anchors",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "lexical",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Two-pass with the anchor picked by BM25 over the task prompt; 4-axis metadata kept."
+    },
+    "ablation_signature_only": {
+      "engine_id": "ablation_signature_only",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "none",
+      "distractor_k": 0,
+      "description": "Two-pass with taxonomy anchor; manifest and context carry raw signatures, no 4-axis annotations."
+    },
+    "ablation_no_purity": {
+      "engine_id": "ablation_no_purity",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "no_substance",
+      "distractor_k": 0,
+      "description": "prism_full with the purity/side-effect axis (Substance) suppressed everywhere."
+    },
+    "prism_plus_distractors": {
+      "engine_id": "prism_plus_distractors",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 8,
+      "description": "prism_full's context plus 8 fixed, unrelated repository functions."
+    }
+  }
+}

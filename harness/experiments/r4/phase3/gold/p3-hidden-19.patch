@@ -1,0 +1,235 @@
+diff --git a/instructor/core/__init__.py b/instructor/core/__init__.py
+index d8ba044..5888ab4 100644
+--- a/instructor/core/__init__.py
++++ b/instructor/core/__init__.py
+@@ -12,7 +12,7 @@ from .exceptions import (
+     ClientError,
+     AsyncValidationError,
+     ResponseParsingError,
+-    MultimodalError,
++    MultimodalErrorImpl,
+     FailedAttempt,
+     TokenBudgetError,
+     TokenBudgetExceeded,
+@@ -36,7 +36,7 @@ __all__ = [
+     "ClientError",
+     "AsyncValidationError",
+     "ResponseParsingError",
+-    "MultimodalError",
++    "MultimodalErrorImpl",
+     "FailedAttempt",
+     "TokenBudgetError",
+     "TokenBudgetExceeded",
+diff --git a/instructor/exceptions.py b/instructor/exceptions.py
+index 10674a8..2c5c559 100644
+--- a/instructor/exceptions.py
++++ b/instructor/exceptions.py
+@@ -26,7 +26,7 @@ from .core.exceptions import (
+     InstructorError,
+     InstructorRetryException,
+     ModeError,
+-    MultimodalError,
++    MultimodalErrorImpl,
+     ProviderError,
+     ResponseParsingError,
+     TokenBudgetError,
+@@ -44,7 +44,7 @@ __all__ = [
+     "InstructorError",
+     "InstructorRetryException",
+     "ModeError",
+-    "MultimodalError",
++    "MultimodalErrorImpl",
+     "ProviderError",
+     "ResponseParsingError",
+     "TokenBudgetError",
+diff --git a/instructor/v2/core/errors.py b/instructor/v2/core/errors.py
+index 1fe165b..3f0f436 100644
+--- a/instructor/v2/core/errors.py
++++ b/instructor/v2/core/errors.py
+@@ -555,7 +555,7 @@ class ResponseParsingError(ValueError, InstructorError):
+         super().__init__(f"{message}{context}", *args, **kwargs)
+ 
+ 
+-class MultimodalError(ValueError, InstructorError):
++class MultimodalErrorImpl(ValueError, InstructorError):
+     """Exception raised for multimodal content processing errors.
+ 
+     This exception is raised when there are issues processing multimodal
+diff --git a/instructor/v2/core/multimodal.py b/instructor/v2/core/multimodal.py
+index a350530..90572e2 100644
+--- a/instructor/v2/core/multimodal.py
++++ b/instructor/v2/core/multimodal.py
+@@ -19,7 +19,7 @@ import mimetypes
+ import requests
+ from pydantic import BaseModel, Field
+ 
+-from instructor.v2.core.errors import MultimodalError
++from instructor.v2.core.errors import MultimodalErrorImpl
+ from instructor.v2.core.mode import Mode
+ from instructor.v2.core.remote import (
+     MAX_AUDIO_BYTES,
+@@ -137,7 +137,7 @@ class Image(BaseModel):
+         header, encoded = data_uri.split(",", 1)
+         media_type = header.split(":")[1].split(";")[0]
+         if media_type not in VALID_MIME_TYPES:
+-            raise MultimodalError(
++            raise MultimodalErrorImpl(
+                 f"Unsupported image format: {media_type}. Supported formats: {', '.join(VALID_MIME_TYPES)}",
+                 content_type="image",
+             )
+@@ -479,19 +479,19 @@ class PDF(BaseModel):
+                 if Path(source).is_file():
+                     return cls.from_path(source)
+             except FileNotFoundError as err:
+-                raise MultimodalError(
++                raise MultimodalErrorImpl(
+                     "PDF file not found",
+                     content_type="pdf",
+                     file_path=str(source),
+                 ) from err
+             except OSError as e:
+                 if e.errno == 63:  # File name too long
+-                    raise MultimodalError(
++                    raise MultimodalErrorImpl(
+                         "PDF file name too long",
+                         content_type="pdf",
+                         file_path=str(source),
+                     ) from e
+-                raise MultimodalError(
++                raise MultimodalErrorImpl(
+                     "Unable to read PDF file",
+                     content_type="pdf",
+                     file_path=str(source),
+diff --git a/tests/core/test_exception_backwards_compat.py b/tests/core/test_exception_backwards_compat.py
+index 35bb7dc..8eeb0e8 100644
+--- a/tests/core/test_exception_backwards_compat.py
++++ b/tests/core/test_exception_backwards_compat.py
+@@ -4,7 +4,7 @@ import pytest
+ from instructor.core.exceptions import (
+     InstructorError,
+     ResponseParsingError,
+-    MultimodalError,
++    MultimodalErrorImpl,
+     AsyncValidationError,
+ )
+ 
+@@ -26,15 +26,15 @@ def test_response_parsing_error_is_value_error():
+ def test_multimodal_error_is_value_error():
+     """Test that MultimodalError can be caught as ValueError."""
+     with pytest.raises(ValueError):
+-        raise MultimodalError("Test error", content_type="image")
++        raise MultimodalErrorImpl("Test error", content_type="image")
+ 
+     # Should also be catchable as InstructorError
+     with pytest.raises(InstructorError):
+-        raise MultimodalError("Test error", content_type="image")
++        raise MultimodalErrorImpl("Test error", content_type="image")
+ 
+     # And as the specific type
+-    with pytest.raises(MultimodalError):
+-        raise MultimodalError("Test error", content_type="image")
++    with pytest.raises(MultimodalErrorImpl):
++        raise MultimodalErrorImpl("Test error", content_type="image")
+ 
+ 
+ def test_async_validation_error_is_value_error():
+@@ -55,9 +55,9 @@ def test_exception_inheritance_chain():
+     assert issubclass(ResponseParsingError, Exception)
+ 
+     # MultimodalError
+-    assert issubclass(MultimodalError, ValueError)
+-    assert issubclass(MultimodalError, InstructorError)
+-    assert issubclass(MultimodalError, Exception)
++    assert issubclass(MultimodalErrorImpl, ValueError)
++    assert issubclass(MultimodalErrorImpl, InstructorError)
++    assert issubclass(MultimodalErrorImpl, Exception)
+ 
+     # AsyncValidationError
+     assert issubclass(AsyncValidationError, ValueError)
+@@ -72,7 +72,7 @@ def test_mixed_exception_catching():
+         raise ResponseParsingError("Parsing failed", mode="JSON")
+ 
+     def raise_multimodal_error():
+-        raise MultimodalError(
++        raise MultimodalErrorImpl(
+             "File not found", content_type="image", file_path="/test.jpg"
+         )
+ 
+@@ -104,9 +104,9 @@ def test_exception_attributes_preserved():
+         assert e.raw_response == {"test": "data"}
+ 
+     try:
+-        raise MultimodalError("File error", content_type="pdf", file_path="/test.pdf")
++        raise MultimodalErrorImpl("File error", content_type="pdf", file_path="/test.pdf")
+     except ValueError as e:
+         # Should still be able to access MultimodalError attributes
+-        assert isinstance(e, MultimodalError)
++        assert isinstance(e, MultimodalErrorImpl)
+         assert e.content_type == "pdf"
+         assert e.file_path == "/test.pdf"
+diff --git a/tests/core/test_phase3_rename_MultimodalError.py b/tests/core/test_phase3_rename_MultimodalError.py
+new file mode 100644
+index 0000000..954cd5e
+--- /dev/null
++++ b/tests/core/test_phase3_rename_MultimodalError.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_MultimodalErrorImpl():
++    owner = importlib.import_module('instructor.v2.core.errors')
++    assert hasattr(owner, 'MultimodalErrorImpl')
++    assert not hasattr(owner, 'MultimodalError')
+diff --git a/tests/coverage/test_core_multimodal_coverage.py b/tests/coverage/test_core_multimodal_coverage.py
+index 44b5318..f5ebdc3 100644
+--- a/tests/coverage/test_core_multimodal_coverage.py
++++ b/tests/coverage/test_core_multimodal_coverage.py
+@@ -10,7 +10,7 @@ import requests
+ 
+ from instructor import Mode
+ import instructor.v2.core.multimodal as multimodal_module
+-from instructor.v2.core.errors import MultimodalError
++from instructor.v2.core.errors import MultimodalErrorImpl
+ from instructor.v2.core.multimodal import (
+     Audio,
+     Image,
+@@ -113,7 +113,7 @@ def test_image_url_errors_missing_path_and_unsupported_data_uri(
+     with pytest.raises(FileNotFoundError, match="Image file not found"):
+         Image.from_path(tmp_path / "missing.png")
+ 
+-    with pytest.raises(MultimodalError, match="Unsupported image format: image/tiff"):
++    with pytest.raises(MultimodalErrorImpl, match="Unsupported image format: image/tiff"):
+         Image.from_base64("data:image/tiff;base64,aW1hZ2U=")
+ 
+ 
+@@ -340,7 +340,7 @@ def test_pdf_autodetect_reports_path_probe_errors(
+ ) -> None:
+     monkeypatch.setattr(Path, "is_file", lambda _self: (_ for _ in ()).throw(error))
+ 
+-    with pytest.raises(MultimodalError, match=message) as exc_info:
++    with pytest.raises(MultimodalErrorImpl, match=message) as exc_info:
+         PDF.autodetect("report.pdf")
+ 
+     assert exc_info.value.content_type == "pdf"
+diff --git a/tests/coverage/test_core_schema_coverage.py b/tests/coverage/test_core_schema_coverage.py
+index 41bbe12..012b7ba 100644
+--- a/tests/coverage/test_core_schema_coverage.py
++++ b/tests/coverage/test_core_schema_coverage.py
+@@ -13,7 +13,7 @@ from openai.types.responses import ResponseFunctionToolCall
+ from pydantic import BaseModel, ValidationError, ValidationInfo, field_validator
+ from typing_extensions import TypedDict
+ 
+-from instructor.v2.core.errors import IncompleteOutputException, MultimodalError
++from instructor.v2.core.errors import IncompleteOutputException, MultimodalErrorImpl
+ from instructor.v2.core.exceptions import (
+     RegistryError,
+     RegistryValidationMixin,
+@@ -196,7 +196,7 @@ def test_registry_parser_without_warning_validates_response_and_context() -> Non
+ 
+ 
+ def test_multimodal_error_with_only_file_path_preserves_context() -> None:
+-    error = MultimodalError("Unable to read file", file_path="/tmp/report.pdf")
++    error = MultimodalErrorImpl("Unable to read file", file_path="/tmp/report.pdf")
+ 
+     assert error.content_type is None
+     assert error.file_path == "/tmp/report.pdf"

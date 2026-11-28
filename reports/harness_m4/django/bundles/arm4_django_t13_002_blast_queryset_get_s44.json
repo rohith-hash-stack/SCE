@@ -1,0 +1,289 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t13_002_blast_queryset_get",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"django/db/models/query.py\", \"pattern\": \"get\\\\(\"})\n39:# The maximum number of results to fetch in a get() query.:\n173:            fields = [self.queryset.model_fields.get(c) for c in self.queryset.columns]:\n357:        pickled_version = state.get(DJANGO_VERSION_PICKLE_KEY):\n547:        use_chunked_fetch = not connections[self.db].settings_dict.get(:\n563:        use_chunked_fetch = not connections[self.db].settings_dict.get(:\n615:    def get(self, *args, **kwargs):\n622:                \"Calling QuerySet.get(...) with filters after %s() is not \":\n643:            \"get() returned more than one %s -- it returned %s!\":\n650:    async def aget(self, *args, **kwargs):\n914:        # The get() needs to be targeted at the write database in order:\n918:            return self.get(**kwargs), False:\n928:                    return self.get(**kwargs), False:\n1030:        return obj.get():\n1195:            if annotation := query.annotations.get(col):\n2361:                        new_obj = list(obj._prefetched_objects_cache.get(through_attr)):\n2511:        vals = rel_obj_cache.get(instance_attr_val, []):\n2632:    related_klass_infos = klass_info.get(\"related_klass_infos\", []):",
+    "token_count": 331,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "get\\(",
+      "path": "django/db/models/query.py"
+     },
+     "engine_token_count": 331
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"path\": \"django/db/models/query_utils.py\", \"pattern\": \"get\\\\(\"})\n218:        return self.get_lookups().get(lookup_name, None):\n223:            parent.__dict__.get(\"class_lookups\", {}) for parent in inspect.getmro(cls):\n366:        if annotations.get(level_n_lookup):",
+    "token_count": 82,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "get\\(",
+      "path": "django/db/models/query_utils.py"
+     },
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.3",
+    "content": "# r1.3  (grep {\"path\": \"django/db/models/sql/query.py\", \"pattern\": \"get\\\\(\"})\n503:                    if not (col_ref := col_refs.get(col)):\n754:            if filtered_relation := self._filtered_relations.get(field_name):\n828:        alias_list = self.table_map.get(table_name):\n917:            unref_amount = cur_refcount - to_counts.get(alias, 0):\n961:            change_map.get(alias, alias): (aliased or alias in change_map)\n1440:            k for k, v in self.alias_refcount.items() if v > pre_joins.get(k, 0):\n1957:        annotation = self.annotations.get(name):\n1980:            annotation = self.annotations.get(field_list[0]):",
+    "token_count": 176,
+    "rank": 3,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.3",
+     "tool": "grep",
+     "args": {
+      "pattern": "get\\(",
+      "path": "django/db/models/sql/query.py"
+     },
+     "engine_token_count": 176
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.4",
+    "content": "# r1.4  (grep {\"path\": \"django/db/models/sql/subqueries.py\", \"pattern\": \"get\\\\(\"})\nno matches",
+    "token_count": 30,
+    "rank": 4,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.4",
+     "tool": "grep",
+     "args": {
+      "pattern": "get\\(",
+      "path": "django/db/models/sql/subqueries.py"
+     },
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.5",
+    "content": "# r1.5  (grep {\"path\": \"django/db/models/sql/where.py\", \"pattern\": \"get\\\\(\"})\n223:        if replacement := replacements.get(self):",
+    "token_count": 40,
+    "rank": 5,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.5",
+     "tool": "grep",
+     "args": {
+      "pattern": "get\\(",
+      "path": "django/db/models/sql/where.py"
+     },
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 659,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 2,
+   "tool_calls": 5,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 1,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"get\\\\(\", \"path\": \"django/db/models/query.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"get\\\\(\", \"path\": \"django/db/models/query_utils.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"get\\\\(\", \"path\": \"django/db/models/sql/query.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"get\\\\(\", \"path\": \"django/db/models/sql/subqueries.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"get\\\\(\", \"path\": \"django/db/models/sql/where.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "get\\(",
+        "path": "django/db/models/query.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "get\\(",
+        "path": "django/db/models/query_utils.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "get\\(",
+        "path": "django/db/models/sql/query.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "get\\(",
+        "path": "django/db/models/sql/subqueries.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "get\\(",
+        "path": "django/db/models/sql/where.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 5,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "get\\(",
+        "path": "django/db/models/query.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "get\\(",
+        "path": "django/db/models/query_utils.py"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "get\\(",
+        "path": "django/db/models/sql/query.py"
+       },
+       "msg_id": "r1.3",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "get\\(",
+        "path": "django/db/models/sql/subqueries.py"
+       },
+       "msg_id": "r1.4",
+       "is_error": false,
+       "outcome": "grep_empty"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "get\\(",
+        "path": "django/db/models/sql/where.py"
+       },
+       "msg_id": "r1.5",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 162,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The provided context does not contain any direct or indirect calls to QuerySet.get() that bind or unpack its return value. The grep results only show definitions and uses of the get() method within the Django ORM codebase, but do not indicate where the return value is bound or unpacked.\\\", \\\"symbols\\\": []}\\n```\"}}",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The provided context does not contain any direct or indirect calls to QuerySet.get() that bind or unpack its return value. The grep results only show definitions and uses of the get() method within the Django ORM codebase, but do not indicate where the return value is bound or unpacked.\", \"symbols\": []}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 91,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     11821.768979,
+     6966.591577
+    ],
+    "L_tool_exec": [
+     3.637896,
+     2.822576,
+     2.737307,
+     2.657901,
+     2.555244
+    ],
+    "L_retrieve": [
+     18827.161519
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1573,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The provided context does not contain any direct or indirect calls to QuerySet.get() that bind or unpack its return value. The grep results only show definitions and uses of the get() method within the Django ORM codebase, but do not indicate where the return value is bound or unpacked.\", \"symbols\": []}\n```",
+    "generation_tokens": 91,
+    "latency_seconds": 6.966412179001054,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1596,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 659,
+   "prompt_tokens": 1573,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1596,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

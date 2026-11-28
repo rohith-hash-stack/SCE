@@ -1,0 +1,280 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t02_018_response_init_headers_cookies",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"django/http/response.py\", \"pattern\": \"def __init__\"})\n37:    def __init__(self, data):\n116:    def __init__(:\n377:    def __init__(self, content=b\"\", *args, **kwargs):\n447:    def __init__(self, streaming_content=(), *args, **kwargs):\n542:    def __init__(self, *args, as_attachment=False, filename=\"\", **kwargs):\n618:    def __init__(self, redirect_to, *args, **kwargs):\n657:    def __init__(self, *args, **kwargs):\n685:    def __init__(self, permitted_methods, *args, **kwargs):\n724:    def __init__(:",
+    "token_count": 179,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def __init__",
+      "path": "django/http/response.py"
+     },
+     "engine_token_count": 179
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"path\": \"django/http/response.py\", \"pattern\": \"def set_cookie\"})\n217:    def set_cookie(:",
+    "token_count": 34,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "def set_cookie",
+      "path": "django/http/response.py"
+     },
+     "engine_token_count": 34
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.3",
+    "content": "# r1.3  (grep {\"path\": \"django/http/response.py\", \"pattern\": \"def add_cookie\"})\nno matches",
+    "token_count": 27,
+    "rank": 3,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.3",
+     "tool": "grep",
+     "args": {
+      "pattern": "def add_cookie",
+      "path": "django/http/response.py"
+     },
+     "engine_token_count": 27
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 724, \"path\": \"django/http/response.py\", \"start_line\": 37})\n37:     def __init__(self, data):\n38:         \"\"\"\n39:         Populate the initial data using __setitem__ to ensure values are\n40:         correctly encoded.\n41:         \"\"\"\n42:         self._store = {}\n43:         if data:\n44:             for header, value in self._unpack_items(data):\n45:                 self[header] = value\n46: \n47:     def _convert_to_charset(self, value, charset, mime_encode=False):\n48:         \"\"\"\n49:         Convert headers key/value to ascii/latin-1 native strings.\n50:         `charset` must be 'ascii' or 'latin-1'. If `mime_encode` is True and\n51:         `value` can't be represented in the given charset, apply MIME-encoding.\n52:         \"\"\"\n53:         try:\n54:             if isinstance(value, str):\n55:                 # Ensure string is valid in given charset\n56:                 value.encode(charset)\n57:             elif isinstance(value, bytes):\n58:                 # Convert bytestring using given charset\n59:                 value = value.decode(charset)\n60:             else:\n61:                 value = str(value)\n62:                 # Ensure string is valid in given charset.\n63:                 value.encode(charset)\n64:             if \"\\n\" in value or \"\\r\" in value:\n65:                 raise BadHeaderError(\n66:                     f\"Header values can't contain newlines (got {value!r})\"\n67:                 )\n68:         except UnicodeError as e:\n69:             # Encoding to a string of the specified charset failed, but we\n70:             # don't know what type that value was, or if it contains newlines,\n71:             # which we may need to check for before sending it to be\n72:             # encoded for multiple character sets.\n73:             if (isinstance(value, bytes) and (b\"\\n\" in value or b\"\\r\" in value)) or (\n74:                 isinstance(value, str) and (\"\\n\" in value or \"\\r\" in value)\n75:             ):\n76:                 raise BadHeaderError(\n77:                     f\"Header values can't contain newlines (got {value!r})\"\n78:                 ) from e\n79:             if mime_encode:\n80:                 value = Header(value, \"utf-8\", maxlinelen=sys.maxsize).encode()\n81:             else:\n82:                 e.reason += \", HTTP response headers must be in %s format\" % charset\n83:                 raise\n84:         return value\n85: \n86:     def __delitem__(self, key):\n87:         self.pop(key)\n88: \n89:     def __setitem__(self, key, value):\n90:         key = self._convert_to_charset(key, \"ascii\")\n91:         value = self._convert_to_charset(value, \"latin-1\", mime_encode=True)\n92:         self._store[key.lower()] = (key, value)\n93: \n94:     def pop(self, key, default=None):\n95:         return self._store.pop(key.lower(), default)\n96: \n97:     def setdefault(self, key, value):\n98:         if key not in self:\n99:             self[key] = value\n100: \n101: \n102: class BadHeaderError(ValueError):\n103:     pass\n104: \n105: \n106: class HttpResponseBase:\n107:     \"\"\"\n108:     An HTTP response base class with dictionary-accessed headers.\n109: \n110:     This class doesn't handle content. It should not be used directly.\n111:     Use the HttpResponse and StreamingHttpResponse subclasses instead.\n112:     \"\"\"\n113: \n114:     status_code = 200\n115: \n116:     def __init__(\n117:         self, content_type=None, status=None, reason=None, charset=None, headers=None\n118:     ):\n119:         self.headers = ResponseHeaders(headers)\n120:         self._charset = charset\n121:         if \"Content-Type\" not in self.headers:\n122:             if content_type is None:\n123:                 content_type = f\"text/html; charset={self.charset}\"\n124:             self.headers[\"Content-Type\"] = content_type\n125:         elif content_type:\n126:             raise ValueError(\n127:                 \"'headers' must not contain 'Content-Type' when the \"\n128:                 \"'content_type' parameter is provided.\"\n129:             )\n130:         self._resource_closers = []\n131:         # This parameter is set by the handler. It's necessary to preserve the\n132:         # historical behavior of request_finished.\n133:         self._handler_class = None\n134:         self.cookies = SimpleCookie()\n135:         self.closed = False\n136:         if status is not None:\n137:             try:\n138:                 self.status_code = int(status)\n139:             except (ValueError, TypeError):\n140:                 raise TypeError(\"HTTP status code must be an integer.\")\n141: \n142:             if not 100 <= self.status_code <= 599:\n143:                 raise ValueError(\"HTTP status code must be an integer from 100 to 599.\")\n144:         self._reason_phrase = reason\n145: \n146:     @property\n147:     def reason_phrase(self):\n148:         if self._reason_phrase is not None:\n149:             return self._reason_phrase\n150:         # Leave self._reason_phrase unset in order to use the default\n151:         # reason phrase for status code.\n152:         return responses.get(self.status_code, \"Unknown Status Code\")\n153: \n154:     @reason_phrase.setter\n155:     def reason_phrase(self, value):\n156:         self._reason_phrase = value\n157: \n158:     @property\n159:     def charset(self):\n160:         if self._charset is not None:\n161:             return self._charset\n162:         # The Content-Type header may not yet be set, because the charset is\n163:         # being inserted *into* it.\n164:         if content_type := self.headers.get(\"Content-Type\"):\n165:             if matched := _charset_from_content_type_re.search(content_type):\n166:                 # Extract the charset and strip its double quotes.\n167:                 # Note that having parsed it from the Content-Type, we don't\n168:                 # store it back into the _charset for later intentionally, to\n169:                 # allow for the Content-Type to be switched again later.\n170:                 return matched[\"charset\"].replace('\"', \"\")\n171:         return settings.DEFAULT_CHARSET\n172: \n173:     @charset.setter\n174:     def charset(self, value):\n175:         self._charset = value\n176: \n177:     def serialize_headers(self):\n178:         \"\"\"HTTP headers as a bytestring.\"\"\"\n179:         return b\"\\r\\n\".join(\n180:             [\n181:                 key.encode(\"ascii\") + b\": \" + value.encode(\"latin-1\")\n182:                 for key, value in self.headers.items()\n183:             ]\n184:         )\n185: \n186:     __bytes__ = serialize_headers\n[lines 37-186 of 742]",
+    "token_count": 1805,
+    "rank": 4,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.http.response.ResponseHeaders",
+     "django.http.response.ResponseHeaders.__init__",
+     "django.http.response.ResponseHeaders._convert_to_charset",
+     "django.http.response.ResponseHeaders.__delitem__",
+     "django.http.response.ResponseHeaders.__setitem__",
+     "django.http.response.ResponseHeaders.pop",
+     "django.http.response.ResponseHeaders.setdefault",
+     "django.http.response.BadHeaderError",
+     "django.http.response.HttpResponseBase",
+     "django.http.response.HttpResponseBase.__init__",
+     "django.http.response.HttpResponseBase.reason_phrase",
+     "django.http.response.HttpResponseBase.reason_phrase",
+     "django.http.response.HttpResponseBase.charset",
+     "django.http.response.HttpResponseBase.charset",
+     "django.http.response.HttpResponseBase.serialize_headers"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "django/http/response.py",
+      "start_line": 37,
+      "end_line": 724
+     },
+     "engine_token_count": 1805
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2045,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are debugging how a Django HttpResponse sets up its headers and\ncookie jar during construction, in django/http/response.py. Starting\nfrom `HttpResponse.__init__`, trace the real causal pipeline that\nsets these up, in the order each stage is actually reached, up to\nand including the call that creates the response's cookie jar.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.http.response.HttpResponse.__init__\", \"django.http.response.HttpResponseBase.__init__\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 4,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 1,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def __init__\", \"path\": \"django/http/response.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def set_cookie\", \"path\": \"django/http/response.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def add_cookie\", \"path\": \"django/http/response.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def __init__",
+        "path": "django/http/response.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def set_cookie",
+        "path": "django/http/response.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def add_cookie",
+        "path": "django/http/response.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 3,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def __init__",
+        "path": "django/http/response.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def set_cookie",
+        "path": "django/http/response.py"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def add_cookie",
+        "path": "django/http/response.py"
+       },
+       "msg_id": "r1.3",
+       "is_error": false,
+       "outcome": "grep_empty"
+      }
+     ],
+     "completion_tokens": 95,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/http/response.py\", \"start_line\": 37, \"end_line\": 724}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/http/response.py",
+        "start_line": 37,
+        "end_line": 724
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/http/response.py",
+        "start_line": 37,
+        "end_line": 724
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 40,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "```json\n{\n  \"reasoning\": \"The pipeline starts with HttpResponse.__init__, which initializes the response's headers and cookies. It sets the content type and status code, and initializes the cookie jar.\",\n  \"symbols\": [\n    \"django.http.response.HttpResponse.__init__\",\n    \"django.http.response.HttpResponseBase.__init__\",\n    \"django.http.response.HttpResponseBase.headers\",\n    \"django.http.response.HttpResponseBase.charset\",\n    \"django.http.response.HttpResponseBase.cookies\"\n  ]\n}\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 105,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     7242.994604,
+     3000.026089,
+     9090.370071
+    ],
+    "L_tool_exec": [
+     3.633196,
+     2.78309,
+     2.852798,
+     0.48899
+    ],
+    "L_retrieve": [
+     19392.311585
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 2964,
+   "agent_answer": {
+    "text": "```json\n{\n  \"reasoning\": \"The pipeline starts with HttpResponse.__init__, which initializes the response's headers and cookies. It sets the content type and status code, and initializes the cookie jar.\",\n  \"symbols\": [\n    \"django.http.response.HttpResponse.__init__\",\n    \"django.http.response.HttpResponseBase.__init__\",\n    \"django.http.response.HttpResponseBase.headers\",\n    \"django.http.response.HttpResponseBase.charset\",\n    \"django.http.response.HttpResponseBase.cookies\"\n  ]\n}\n```",
+    "generation_tokens": 105,
+    "latency_seconds": 9.090169418999722,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2997,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2045,
+   "prompt_tokens": 2964,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2997,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

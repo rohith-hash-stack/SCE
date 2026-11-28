@@ -1,0 +1,259 @@
+diff --git a/pydantic/_internal/_generate_schema.py b/pydantic/_internal/_generate_schema.py
+index a446559b8..befb20ae0 100644
+--- a/pydantic/_internal/_generate_schema.py
++++ b/pydantic/_internal/_generate_schema.py
+@@ -110,7 +110,7 @@ from ._fields import (
+ from ._forward_ref import PydanticRecursiveRef
+ from ._generics import get_standard_typevars_map, replace_types
+ from ._import_utils import import_cached_base_model, import_cached_field_info
+-from ._mock_val_ser import MockCoreSchema
++from ._mock_val_ser import MockCoreSchemaImpl
+ from ._namespace_utils import NamespacesTuple, NsResolver
+ from ._schema_gather import MissingDefinitionError, gather_schemas_for_cleaning
+ from ._schema_generation_shared import CallbackGetCoreSchemaHandler
+@@ -814,7 +814,7 @@ class GenerateSchema:
+                 return maybe_schema
+ 
+             schema = cls.__dict__.get('__pydantic_core_schema__')
+-            if schema is not None and not isinstance(schema, MockCoreSchema):
++            if schema is not None and not isinstance(schema, MockCoreSchemaImpl):
+                 if schema['type'] == 'definitions':
+                     schema = self.defs.unpack_definitions(schema)
+                 ref = get_ref(schema)
+@@ -1873,7 +1873,7 @@ class GenerateSchema:
+                 return maybe_schema
+ 
+             schema = dataclass.__dict__.get('__pydantic_core_schema__')
+-            if schema is not None and not isinstance(schema, MockCoreSchema):
++            if schema is not None and not isinstance(schema, MockCoreSchemaImpl):
+                 if schema['type'] == 'definitions':
+                     schema = self.defs.unpack_definitions(schema)
+                 ref = get_ref(schema)
+diff --git a/pydantic/_internal/_mock_val_ser.py b/pydantic/_internal/_mock_val_ser.py
+index b0344ac06..e782a1f72 100644
+--- a/pydantic/_internal/_mock_val_ser.py
++++ b/pydantic/_internal/_mock_val_ser.py
+@@ -23,7 +23,7 @@ class AttemptRebuild(Protocol[T_co]):
+     def __call__(self, *, parent_namespace_depth: int = ...) -> T_co | None: ...
+ 
+ 
+-class MockCoreSchema(Mapping[str, Any]):
++class MockCoreSchemaImpl(Mapping[str, Any]):
+     """Mocker for `pydantic_core.CoreSchema` which optionally attempts to
+     rebuild the thing it's mocking when one of its methods is accessed and raises an error if that fails.
+     """
+@@ -134,7 +134,7 @@ def set_type_adapter_mocks(adapter: TypeAdapter) -> None:
+ 
+         return handler
+ 
+-    adapter.core_schema = MockCoreSchema(  # pyright: ignore[reportAttributeAccessIssue]
++    adapter.core_schema = MockCoreSchemaImpl(  # pyright: ignore[reportAttributeAccessIssue]
+         undefined_type_error_message,
+         code='class-not-fully-defined',
+         attempt_rebuild=attempt_rebuild_fn(lambda ta: ta.core_schema),
+@@ -175,7 +175,7 @@ def set_model_mocks(cls: type[BaseModel], undefined_name: str | None = None) ->
+ 
+         return handler
+ 
+-    cls.__pydantic_core_schema__ = MockCoreSchema(  # pyright: ignore[reportAttributeAccessIssue]
++    cls.__pydantic_core_schema__ = MockCoreSchemaImpl(  # pyright: ignore[reportAttributeAccessIssue]
+         undefined_type_error_message,
+         code='class-not-fully-defined',
+         attempt_rebuild=attempt_rebuild_fn(lambda c: c.__pydantic_core_schema__),
+@@ -218,7 +218,7 @@ def set_dataclass_mocks(cls: type[PydanticDataclass], undefined_name: str | None
+ 
+         return handler
+ 
+-    cls.__pydantic_core_schema__ = MockCoreSchema(  # pyright: ignore[reportAttributeAccessIssue]
++    cls.__pydantic_core_schema__ = MockCoreSchemaImpl(  # pyright: ignore[reportAttributeAccessIssue]
+         undefined_type_error_message,
+         code='class-not-fully-defined',
+         attempt_rebuild=attempt_rebuild_fn(lambda c: c.__pydantic_core_schema__),
+diff --git a/pydantic/dataclasses.py b/pydantic/dataclasses.py
+index 01bcf8f9f..db0974027 100644
+--- a/pydantic/dataclasses.py
++++ b/pydantic/dataclasses.py
+@@ -336,7 +336,7 @@ def rebuild_dataclass(
+ 
+     for attr in ('__pydantic_core_schema__', '__pydantic_validator__', '__pydantic_serializer__'):
+         if attr in cls.__dict__ and not isinstance(
+-            getattr(cls, attr), (_mock_val_ser.MockCoreSchema, _mock_val_ser.MockValSer)
++            getattr(cls, attr), (_mock_val_ser.MockCoreSchemaImpl, _mock_val_ser.MockValSer)
+         ):
+             # Deleting the validator/serializer is necessary as otherwise they can get reused in
+             # pydantic-core. Same applies for the core schema that can be reused in schema generation.
+diff --git a/pydantic/json_schema.py b/pydantic/json_schema.py
+index 1a9728c6b..ad89706ef 100644
+--- a/pydantic/json_schema.py
++++ b/pydantic/json_schema.py
+@@ -2768,13 +2768,13 @@ def model_json_schema(
+         by_alias=by_alias, ref_template=ref_template, union_format=union_format
+     )
+ 
+-    if isinstance(cls.__pydantic_core_schema__, _mock_val_ser.MockCoreSchema):
++    if isinstance(cls.__pydantic_core_schema__, _mock_val_ser.MockCoreSchemaImpl):
+         cls.__pydantic_core_schema__.rebuild()
+ 
+     if cls is BaseModel:
+         raise AttributeError('model_json_schema() must be called on a subclass of BaseModel, not BaseModel itself.')
+ 
+-    assert not isinstance(cls.__pydantic_core_schema__, _mock_val_ser.MockCoreSchema), 'this is a bug! please report it'
++    assert not isinstance(cls.__pydantic_core_schema__, _mock_val_ser.MockCoreSchemaImpl), 'this is a bug! please report it'
+     return schema_generator_instance.generate(cls.__pydantic_core_schema__, mode=mode)
+ 
+ 
+@@ -2815,7 +2815,7 @@ def models_json_schema(
+                     element, along with the optional title and description keys.
+     """
+     for cls, _ in models:
+-        if isinstance(cls.__pydantic_core_schema__, _mock_val_ser.MockCoreSchema):
++        if isinstance(cls.__pydantic_core_schema__, _mock_val_ser.MockCoreSchemaImpl):
+             cls.__pydantic_core_schema__.rebuild()
+ 
+     instance = schema_generator(by_alias=by_alias, ref_template=ref_template, union_format=union_format)
+diff --git a/pydantic/main.py b/pydantic/main.py
+index 5527adcb3..2e6cbb7b0 100644
+--- a/pydantic/main.py
++++ b/pydantic/main.py
+@@ -250,7 +250,7 @@ class BaseModel(metaclass=_model_construction.ModelMetaclass):
+     if not TYPE_CHECKING:
+         # Prevent `BaseModel` from being instantiated directly
+         # (defined in an `if not TYPE_CHECKING` block for clarity and to avoid type checking errors):
+-        __pydantic_core_schema__ = _mock_val_ser.MockCoreSchema(
++        __pydantic_core_schema__ = _mock_val_ser.MockCoreSchemaImpl(
+             'Pydantic models should inherit from BaseModel, BaseModel cannot be instantiated directly',
+             code='base-model-instantiated',
+         )
+@@ -899,7 +899,7 @@ class BaseModel(metaclass=_model_construction.ModelMetaclass):
+         )
+         # Logic copied over from `GenerateSchema._model_schema`:
+         schema = cls.__dict__.get('__pydantic_core_schema__')
+-        if schema is not None and not isinstance(schema, _mock_val_ser.MockCoreSchema):
++        if schema is not None and not isinstance(schema, _mock_val_ser.MockCoreSchemaImpl):
+             return cls.__pydantic_core_schema__
+ 
+         return handler(source)
+diff --git a/pydantic/type_adapter.py b/pydantic/type_adapter.py
+index 426a6cae4..5717e9501 100644
+--- a/pydantic/type_adapter.py
++++ b/pydantic/type_adapter.py
+@@ -256,7 +256,7 @@ class TypeAdapter(Generic[T]):
+             # to repeat all of the namespace fetching logic that we've already done
+             # so we simply skip to the block below that does the actual schema generation
+             if (
+-                isinstance(self.core_schema, _mock_val_ser.MockCoreSchema)
++                isinstance(self.core_schema, _mock_val_ser.MockCoreSchemaImpl)
+                 or isinstance(self.validator, _mock_val_ser.MockValSer)
+                 or isinstance(self.serializer, _mock_val_ser.MockValSer)
+             ):
+@@ -699,9 +699,9 @@ class TypeAdapter(Generic[T]):
+         schema_generator_instance = schema_generator(
+             by_alias=by_alias, ref_template=ref_template, union_format=union_format
+         )
+-        if isinstance(self.core_schema, _mock_val_ser.MockCoreSchema):
++        if isinstance(self.core_schema, _mock_val_ser.MockCoreSchemaImpl):
+             self.core_schema.rebuild()
+-            assert not isinstance(self.core_schema, _mock_val_ser.MockCoreSchema), 'this is a bug! please report it'
++            assert not isinstance(self.core_schema, _mock_val_ser.MockCoreSchemaImpl), 'this is a bug! please report it'
+         # The configuration provided to the type adapter (if any) is not part of the core schema,
+         # so we need to explicitly make it available to the JSON Schema generator:
+         with schema_generator_instance._config_wrapper_stack.push(self._config):
+@@ -756,9 +756,9 @@ class TypeAdapter(Generic[T]):
+         inputs_ = []
+         for key, mode, adapter in inputs:
+             # This is the same pattern we follow for model json schemas - we attempt a core schema rebuild if we detect a mock
+-            if isinstance(adapter.core_schema, _mock_val_ser.MockCoreSchema):
++            if isinstance(adapter.core_schema, _mock_val_ser.MockCoreSchemaImpl):
+                 adapter.core_schema.rebuild()
+-                assert not isinstance(adapter.core_schema, _mock_val_ser.MockCoreSchema), (
++                assert not isinstance(adapter.core_schema, _mock_val_ser.MockCoreSchemaImpl), (
+                     'this is a bug! please report it'
+                 )
+             # The configuration provided to the type adapter (if any) is not part of the core schema,
+diff --git a/tests/test_main.py b/tests/test_main.py
+index f0e402aca..16dc70b36 100644
+--- a/tests/test_main.py
++++ b/tests/test_main.py
+@@ -50,7 +50,7 @@ from pydantic import (
+     field_validator,
+ )
+ from pydantic._internal._generate_schema import GenerateSchema
+-from pydantic._internal._mock_val_ser import MockCoreSchema
++from pydantic._internal._mock_val_ser import MockCoreSchemaImpl
+ from pydantic.dataclasses import dataclass as pydantic_dataclass
+ from pydantic.v1 import BaseModel as BaseModelV1
+ 
+@@ -3662,7 +3662,7 @@ def test_deferred_core_schema(is_dataclass: bool) -> None:
+         class Foo(BaseModel):
+             x: 'Bar'
+ 
+-    assert isinstance(Foo.__pydantic_core_schema__, MockCoreSchema)
++    assert isinstance(Foo.__pydantic_core_schema__, MockCoreSchemaImpl)
+     with pytest.raises(PydanticUserError, match='`Foo` is not fully defined'):
+         Foo.__pydantic_core_schema__['type']
+ 
+diff --git a/tests/test_phase3_rename_MockCoreSchema.py b/tests/test_phase3_rename_MockCoreSchema.py
+new file mode 100644
+index 000000000..db964f950
+--- /dev/null
++++ b/tests/test_phase3_rename_MockCoreSchema.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_MockCoreSchemaImpl():
++    owner = importlib.import_module('pydantic._internal._mock_val_ser')
++    assert hasattr(owner, 'MockCoreSchemaImpl')
++    assert not hasattr(owner, 'MockCoreSchema')
+diff --git a/tests/test_type_adapter.py b/tests/test_type_adapter.py
+index 9bd3ca362..e82647c42 100644
+--- a/tests/test_type_adapter.py
++++ b/tests/test_type_adapter.py
+@@ -633,13 +633,13 @@ def test_core_schema_respects_defer_build(model: Any, config: ConfigDict, method
+ 
+     if config.get('defer_build'):
+         assert generate_schema_calls.count == 0, 'Should be built deferred'
+-        assert isinstance(type_adapter.core_schema, _mock_val_ser.MockCoreSchema), 'Should be initialized deferred'
++        assert isinstance(type_adapter.core_schema, _mock_val_ser.MockCoreSchemaImpl), 'Should be initialized deferred'
+         assert isinstance(type_adapter.validator, _mock_val_ser.MockValSer), 'Should be initialized deferred'
+         assert isinstance(type_adapter.serializer, _mock_val_ser.MockValSer), 'Should be initialized deferred'
+     else:
+         built_inside_type_adapter = 'dict' in str(model).lower() or 'Annotated' in str(model)
+         assert generate_schema_calls.count == (1 if built_inside_type_adapter else 0), f'Should be built ({model})'
+-        assert not isinstance(type_adapter.core_schema, _mock_val_ser.MockCoreSchema), (
++        assert not isinstance(type_adapter.core_schema, _mock_val_ser.MockCoreSchemaImpl), (
+             'Should be initialized before usage'
+         )
+         assert not isinstance(type_adapter.validator, _mock_val_ser.MockValSer), 'Should be initialized before usage'
+@@ -660,7 +660,7 @@ def test_core_schema_respects_defer_build(model: Any, config: ConfigDict, method
+         assert json.loads(raw.decode())['x'] == 1  # Sanity check
+         assert generate_schema_calls.count < 2, 'Should not build duplicates'
+ 
+-    assert not isinstance(type_adapter.core_schema, _mock_val_ser.MockCoreSchema), (
++    assert not isinstance(type_adapter.core_schema, _mock_val_ser.MockCoreSchemaImpl), (
+         'Should be initialized after the usage'
+     )
+     assert not isinstance(type_adapter.validator, _mock_val_ser.MockValSer), 'Should be initialized after the usage'
+@@ -669,19 +669,19 @@ def test_core_schema_respects_defer_build(model: Any, config: ConfigDict, method
+ 
+ def test_defer_build_raise_errors() -> None:
+     ta = TypeAdapter('MyInt', config=ConfigDict(defer_build=True))  # pyright: ignore[reportUndefinedVariable]
+-    assert isinstance(ta.core_schema, _mock_val_ser.MockCoreSchema)
++    assert isinstance(ta.core_schema, _mock_val_ser.MockCoreSchemaImpl)
+ 
+     with pytest.raises(PydanticUndefinedAnnotation):
+         # `True` is the `raise_errors` default for the `rebuild` method, but we include here for clarity
+         ta.rebuild(raise_errors=True)
+ 
+     ta.rebuild(raise_errors=False)
+-    assert isinstance(ta.core_schema, _mock_val_ser.MockCoreSchema)
++    assert isinstance(ta.core_schema, _mock_val_ser.MockCoreSchemaImpl)
+ 
+     MyInt = int  # noqa: F841
+ 
+     ta.rebuild(raise_errors=True)
+-    assert not isinstance(ta.core_schema, _mock_val_ser.MockCoreSchema)
++    assert not isinstance(ta.core_schema, _mock_val_ser.MockCoreSchemaImpl)
+ 
+ 
+ @dataclass

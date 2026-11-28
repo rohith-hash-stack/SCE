@@ -13,7 +13,7 @@ function.
 from __future__ import annotations
 
 from prism.traversal import causal_weights, continuous_dijkstra
-from prism.traversal._cache_keys import graph_cache_key
+from prism.traversal._cache_keys import graph_cache_key_for
 
 from benchmarks.engines.prism_engine import PrismEngine
 
@@ -46,12 +46,12 @@ def _clear_all_traversal_caches():
     causal_weights._CAUSAL_EDGES_CACHE.clear()
 
 
-def _repo_keyed_cache_state(repo_root: str) -> dict[str, bool]:
-    """Whether the current repo-content-addressed key is already
-    present in each of the four repo-keyed caches - checked via the
-    exact same key-computation the production code itself uses, not a
-    mock or a proxy."""
-    key = graph_cache_key(repo_root).digest()
+def _repo_keyed_cache_state(builder) -> dict[str, bool]:
+    """Whether `builder`'s snapshot key is already present in each of the
+    four repo-keyed caches - checked via the exact same key-computation the
+    production code itself uses (`graph_cache_key_for`), not a mock or a
+    proxy."""
+    key = graph_cache_key_for(builder).digest()
     return {
         "build_causal_graph": key in continuous_dijkstra._GRAPH_CACHE,
         "compute_causal_edges": key in causal_weights._CAUSAL_EDGES_CACHE,
@@ -72,7 +72,7 @@ def test_session_cache_across_three_retrieves_two_seeds_two_budgets(tmp_path):
     seed_a, seed_b = "x.parse_order", "x.validate_order"
 
     # retrieve #1: everything must be a real miss beforehand.
-    state_before_1 = _repo_keyed_cache_state(str(repo))
+    state_before_1 = _repo_keyed_cache_state(engine._builder)
     assert not any(state_before_1.values()), state_before_1
     dist_key_a = continuous_dijkstra._distance_cache_key(engine._builder, seed_a, d_max=DEFAULT_MAX_HOPS).digest()
     assert dist_key_a not in continuous_dijkstra._DISTANCE_CACHE
@@ -80,7 +80,7 @@ def test_session_cache_across_three_retrieves_two_seeds_two_budgets(tmp_path):
     pkg1 = engine.retrieve(seed_a, 4000)
     assert pkg1.nodes
 
-    state_after_1 = _repo_keyed_cache_state(str(repo))
+    state_after_1 = _repo_keyed_cache_state(engine._builder)
     assert all(state_after_1.values()), state_after_1  # retrieve #1 populated all four repo-keyed caches
     assert dist_key_a in continuous_dijkstra._DISTANCE_CACHE  # and seed_a's own distances
 
@@ -90,7 +90,7 @@ def test_session_cache_across_three_retrieves_two_seeds_two_budgets(tmp_path):
     # unchanged (same repo, same seed).
     pkg2 = engine.retrieve(seed_a, 8000)
     assert pkg2.nodes
-    state_after_2 = _repo_keyed_cache_state(str(repo))
+    state_after_2 = _repo_keyed_cache_state(engine._builder)
     assert all(state_after_2.values())
     assert dist_key_a in continuous_dijkstra._DISTANCE_CACHE
 
@@ -103,7 +103,7 @@ def test_session_cache_across_three_retrieves_two_seeds_two_budgets(tmp_path):
 
     pkg3 = engine.retrieve(seed_b, 4000)
     assert pkg3.nodes
-    state_after_3 = _repo_keyed_cache_state(str(repo))
+    state_after_3 = _repo_keyed_cache_state(engine._builder)
     assert all(state_after_3.values())  # repo-keyed caches: still hits
     assert dist_key_b in continuous_dijkstra._DISTANCE_CACHE  # seed_b now has its OWN entry
     assert dist_key_a in continuous_dijkstra._DISTANCE_CACHE  # seed_a's own entry is untouched
@@ -123,7 +123,7 @@ def test_repo_keyed_caches_invalidate_on_file_change(tmp_path):
     engine.index(str(repo))
     engine.retrieve("x.parse_order", 4000)
 
-    state_before_touch = _repo_keyed_cache_state(str(repo))
+    state_before_touch = _repo_keyed_cache_state(engine._builder)
     assert all(state_before_touch.values())
     dist_key_before = continuous_dijkstra._distance_cache_key(engine._builder, "x.parse_order", d_max=DEFAULT_MAX_HOPS).digest()
     assert dist_key_before in continuous_dijkstra._DISTANCE_CACHE
@@ -136,7 +136,7 @@ def test_repo_keyed_caches_invalidate_on_file_change(tmp_path):
     # A file change means a new file_hash_set, hence a new key - the
     # OLD key's cache rows are simply never looked up again (not
     # explicitly evicted); the NEW key must be a real miss.
-    state_after_touch = _repo_keyed_cache_state(str(repo))
+    state_after_touch = _repo_keyed_cache_state(engine_after_touch._builder)
     assert not any(state_after_touch.values()), "a changed file must produce a new key, not reuse the stale one"
     dist_key_after = continuous_dijkstra._distance_cache_key(engine_after_touch._builder, "x.parse_order", d_max=DEFAULT_MAX_HOPS).digest()
     assert dist_key_after not in continuous_dijkstra._DISTANCE_CACHE
@@ -169,7 +169,7 @@ def test_fresh_engine_after_clearing_caches_recomputes_correctly(tmp_path):
 
     engine_2 = PrismEngine()
     engine_2.index(str(repo))
-    state = _repo_keyed_cache_state(str(repo))
+    state = _repo_keyed_cache_state(engine_2._builder)
     assert not any(state.values()), "caches were cleared - a fresh engine must start from a real miss"
 
     pkg_2 = engine_2.retrieve("x.parse_order", 4000)

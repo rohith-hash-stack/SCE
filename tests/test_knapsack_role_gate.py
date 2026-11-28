@@ -29,7 +29,12 @@ _SOURCE = (
     "def seed():\n"
     "    return helper()\n\n\n"
     "def helper():\n"
-    "    return 1\n\n\n"
+    "    return 1\n"
+)
+#: The test lives in a test file, as pytest requires: `test_*` naming
+#: marks test code only there (`_classify_symbol_role`).
+_TEST_SOURCE = (
+    "from mod import seed\n\n\n"
     "def test_seed_returns_one():\n"
     "    assert seed() == 1\n"
 )
@@ -39,6 +44,7 @@ def _build(tmp_path, subdir="repo"):
     repo = tmp_path / subdir
     repo.mkdir()
     (repo / "mod.py").write_text(_SOURCE)
+    (repo / "test_mod.py").write_text(_TEST_SOURCE)
     builder, _tags = build_pipeline(str(repo))
     return builder
 
@@ -55,7 +61,7 @@ def test_verification_upstream_caller_is_excluded_at_every_budget(tmp_path):
     for budget in (500, 1000, 2000, 4000):
         result = pack_symbol_context(builder, "mod.seed", budget)
         assert "mod.helper" in result.selected, f"budget={budget}: real pipeline symbol missing"
-        assert "mod.test_seed_returns_one" not in result.selected, (
+        assert "test_mod.test_seed_returns_one" not in result.selected, (
             f"budget={budget}: VERIFICATION-role caller was admitted - "
             f"selected={sorted(result.selected)}"
         )
@@ -72,7 +78,7 @@ def test_gate_is_unconditional_on_novelty_not_gated_behind_delta_feat_zero(tmp_p
     """
     builder = _build(tmp_path)
     result = pack_symbol_context(builder, "mod.seed", 4000)
-    assert "mod.test_seed_returns_one" not in result.selected
+    assert "test_mod.test_seed_returns_one" not in result.selected
 
 
 def test_seed_itself_being_verification_role_does_not_exclude_its_own_callees(tmp_path):

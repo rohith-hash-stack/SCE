@@ -1,0 +1,166 @@
+diff --git a/src/cattrs/cols.py b/src/cattrs/cols.py
+index bd1e963..d2b9d5c 100644
+--- a/src/cattrs/cols.py
++++ b/src/cattrs/cols.py
+@@ -36,6 +36,7 @@ from .gen import (
+     mapping_unstructure_factory,
+ )
+ from .gen import make_iterable_unstructure_fn as iterable_unstructure_factory
++from .cols_is_namedtuple import is_namedtuple
+ 
+ if TYPE_CHECKING:
+     from .converters import BaseConverter
+@@ -73,17 +74,6 @@ def is_abstract_set(type) -> bool:
+     return type is AbcSet or (getattr(type, "__origin__", None) is AbcSet)
+ 
+ 
+-def is_namedtuple(type: Any) -> bool:
+-    """A predicate function for named tuples."""
+-
+-    if is_subclass(type, tuple):
+-        for cl in type.mro():
+-            orig_bases = cl.__dict__.get("__orig_bases__", ())
+-            if NamedTuple in orig_bases:
+-                return True
+-    return False
+-
+-
+ def _is_passthrough(type: type[tuple], converter: BaseConverter) -> bool:
+     """If all fields would be passed through, this class should not be processed
+     either.
+diff --git a/src/cattrs/cols_is_namedtuple.py b/src/cattrs/cols_is_namedtuple.py
+new file mode 100644
+index 0000000..df0cc11
+--- /dev/null
++++ b/src/cattrs/cols_is_namedtuple.py
+@@ -0,0 +1,14 @@
++from __future__ import annotations
++from typing import Any, NamedTuple
++from ._compat import is_subclass
++
++
++def is_namedtuple(type: Any) -> bool:
++    """A predicate function for named tuples."""
++
++    if is_subclass(type, tuple):
++        for cl in type.mro():
++            orig_bases = cl.__dict__.get("__orig_bases__", ())
++            if NamedTuple in orig_bases:
++                return True
++    return False
+diff --git a/src/cattrs/converters.py b/src/cattrs/converters.py
+index 70c19b4..0f752ad 100644
+--- a/src/cattrs/converters.py
++++ b/src/cattrs/converters.py
+@@ -60,20 +60,8 @@ from ._compat import (
+     sentinel,
+     signature,
+ )
+-from .cols import (
+-    defaultdict_structure_factory,
+-    homogenous_tuple_structure_factory,
+-    is_abstract_set,
+-    is_defaultdict,
+-    is_namedtuple,
+-    is_sequence,
+-    iterable_unstructure_factory,
+-    list_structure_factory,
+-    mapping_structure_factory,
+-    mapping_unstructure_factory,
+-    namedtuple_structure_factory,
+-    namedtuple_unstructure_factory,
+-)
++from .cols import defaultdict_structure_factory, homogenous_tuple_structure_factory, is_abstract_set, is_defaultdict, is_sequence, iterable_unstructure_factory, list_structure_factory, mapping_structure_factory, mapping_unstructure_factory, namedtuple_structure_factory, namedtuple_unstructure_factory
++from .cols_is_namedtuple import is_namedtuple
+ from .disambiguators import create_default_dis_func, is_supported_union
+ from .dispatch import (
+     HookFactory,
+diff --git a/src/cattrs/preconf/msgspec.py b/src/cattrs/preconf/msgspec.py
+index 0623fda..6b8d25e 100644
+--- a/src/cattrs/preconf/msgspec.py
++++ b/src/cattrs/preconf/msgspec.py
+@@ -27,7 +27,7 @@ from .._compat import (
+     is_sequence,
+     is_subclass,
+ )
+-from ..cols import is_namedtuple
++from ..cols_is_namedtuple import is_namedtuple
+ from ..converters import BaseConverter, Converter
+ from ..dispatch import UnstructureHook
+ from ..fns import identity
+diff --git a/src/cattrs/preconf/orjson.py b/src/cattrs/preconf/orjson.py
+index 27b0bc4..ba83005 100644
+--- a/src/cattrs/preconf/orjson.py
++++ b/src/cattrs/preconf/orjson.py
+@@ -11,7 +11,8 @@ from orjson import dumps, loads
+ from typing_extensions import TypeForm
+ 
+ from .._compat import is_subclass
+-from ..cols import is_mapping, is_namedtuple, namedtuple_unstructure_factory
++from ..cols import is_mapping, namedtuple_unstructure_factory
++from ..cols_is_namedtuple import is_namedtuple
+ from ..converters import Converter
+ from ..fns import identity
+ from ..literals import is_literal_containing_enums
+diff --git a/src/cattrs/preconf/pyyaml.py b/src/cattrs/preconf/pyyaml.py
+index 9d8f76e..4b18d48 100644
+--- a/src/cattrs/preconf/pyyaml.py
++++ b/src/cattrs/preconf/pyyaml.py
+@@ -8,7 +8,8 @@ from typing_extensions import TypeForm
+ from yaml import safe_dump, safe_load
+ 
+ from .._compat import FrozenSetSubscriptable
+-from ..cols import is_namedtuple, namedtuple_unstructure_factory
++from ..cols import namedtuple_unstructure_factory
++from ..cols_is_namedtuple import is_namedtuple
+ from ..converters import BaseConverter, Converter
+ from ..strategies import configure_union_passthrough
+ from . import validate_datetime, wrap
+diff --git a/tests/test_annotated_overrides.py b/tests/test_annotated_overrides.py
+index eb537e9..1ba6565 100644
+--- a/tests/test_annotated_overrides.py
++++ b/tests/test_annotated_overrides.py
+@@ -5,11 +5,8 @@ from attrs import define
+ 
+ from cattrs import Converter
+ from cattrs._compat import NotRequired
+-from cattrs.cols import (
+-    is_namedtuple,
+-    namedtuple_dict_structure_factory,
+-    namedtuple_dict_unstructure_factory,
+-)
++from cattrs.cols import namedtuple_dict_structure_factory, namedtuple_dict_unstructure_factory
++from cattrs.cols_is_namedtuple import is_namedtuple
+ from cattrs.gen import make_dict_structure_fn, make_dict_unstructure_fn, override
+ from cattrs.gen.typeddicts import make_dict_structure_fn as make_td_structure_fn
+ from cattrs.gen.typeddicts import make_dict_unstructure_fn as make_td_unstructure_fn
+diff --git a/tests/test_phase2_move_is_namedtuple.py b/tests/test_phase2_move_is_namedtuple.py
+new file mode 100644
+index 0000000..08bd6a5
+--- /dev/null
++++ b/tests/test_phase2_move_is_namedtuple.py
+@@ -0,0 +1,6 @@
++import importlib
++
++
++def test_phase2_moved_is_namedtuple():
++    new = importlib.import_module('cattrs.cols_is_namedtuple')
++    assert getattr(new, 'is_namedtuple').__module__ == 'cattrs.cols_is_namedtuple'
+diff --git a/tests/test_tuples.py b/tests/test_tuples.py
+index fcd5730..7f73967 100644
+--- a/tests/test_tuples.py
++++ b/tests/test_tuples.py
+@@ -6,11 +6,8 @@ from attrs import Factory, define
+ from pytest import raises
+ 
+ from cattrs import Converter
+-from cattrs.cols import (
+-    is_namedtuple,
+-    namedtuple_dict_structure_factory,
+-    namedtuple_dict_unstructure_factory,
+-)
++from cattrs.cols import namedtuple_dict_structure_factory, namedtuple_dict_unstructure_factory
++from cattrs.cols_is_namedtuple import is_namedtuple
+ from cattrs.converters import BaseConverter
+ from cattrs.errors import (
+     ClassValidationError,

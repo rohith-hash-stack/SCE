@@ -1,0 +1,256 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t13_002_blast_queryset_get",
+  "items": [
+   {
+    "source_id": "django/db/models/query.py:293-1981",
+    "content": "# django/db/models/query.py:293-1981  (django.db.models.query.QuerySet)\nclass QuerySet(AltersData):\n    ...",
+    "token_count": 34,
+    "rank": 1,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.query.QuerySet"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 10,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:615-648",
+    "content": "# django/db/models/query.py:615-648  (django.db.models.query.QuerySet.get)\n    def get(self, *args, **kwargs):\n        \"\"\"\n        Perform the query and return a single object matching the given\n        keyword arguments.\n        \"\"\"\n        if self.query.combinator and (args or kwargs):\n            raise NotSupportedError(\n                \"Calling QuerySet.get(...) with filters after %s() is not \"\n                \"supported.\" % self.query.combinator\n            )\n        clone = self._chain() if self.query.combinator else self.filter(*args, **kwargs)\n        if self.query.can_filter() and not self.query.distinct_fields:\n            clone = clone.order_by()\n        limit = None\n        if (\n            not clone.query.select_for_update\n            or connections[clone.db].features.supports_select_for_update_with_limit\n        ):\n            limit = MAX_GET_RESULTS\n            clone.query.set_limits(high=limit)\n        num = len(clone)\n        if num == 1:\n            return clone._result_cache[0]\n        if not num:\n            raise self.model.DoesNotExist(\n                \"%s matching query does not exist.\" % self.model._meta.object_name\n            )\n        raise self.model.MultipleObjectsReturned(\n            \"get() returned more than one %s -- it returned %s!\"\n            % (\n                self.model._meta.object_name,\n                num if not limit or num < limit else \"more than %s\" % (limit - 1),\n            )\n        )\n\n# Referenced module constants:\nMAX_GET_RESULTS = 21",
+    "token_count": 326,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.get"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 295,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:615-2285",
+    "content": "# django/contrib/admin/options.py:615-2285  (django.contrib.admin.options.ModelAdmin)\nclass ModelAdmin(BaseModelAdmin):\n    ...",
+    "token_count": 33,
+    "rank": 3,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 9,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:854-869",
+    "content": "# django/contrib/admin/options.py:854-869  (django.contrib.admin.options.ModelAdmin.get_object)\n    def get_object(self, request, object_id, from_field=None):\n        \"\"\"\n        Return an instance matching the field and value provided, the primary\n        key is used if no field is provided. Return ``None`` if no match is\n        found or the object_id fails validation.\n        \"\"\"\n        queryset = self.get_queryset(request)\n        model = queryset.model\n        field = (\n            model._meta.pk if from_field is None else model._meta.get_field(from_field)\n        )\n        try:\n            object_id = field.to_python(object_id)\n            return queryset.get(**{field.name: object_id})\n        except (model.DoesNotExist, ValidationError, ValueError):\n            return None",
+    "token_count": 163,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.get_object"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 138,
+     "distance": 1.3888888888888888
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1854-1863",
+    "content": "# django/db/models/query.py:1854-1863  (django.db.models.query.QuerySet._chain)\n    def _chain(self):\n        \"\"\"\n        Return a copy of the current QuerySet that's ready for another\n        operation.\n        \"\"\"\n        obj = self._clone()\n        if obj._sticky_filter:\n            obj.query.filter_is_sticky = True\n            obj._sticky_filter = False\n        return obj",
+    "token_count": 90,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet._chain"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 63,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1432-1438",
+    "content": "# django/db/models/query.py:1432-1438  (django.db.models.query.QuerySet.filter)\n    def filter(self, *args, **kwargs):\n        \"\"\"\n        Return a new QuerySet instance with the args ANDed to the existing\n        set.\n        \"\"\"\n        self._not_support_combined_queries(\"filter\")\n        return self._filter_or_exclude(False, args, kwargs)",
+    "token_count": 83,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.filter"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 57,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1658-1665",
+    "content": "# django/db/models/query.py:1658-1665  (django.db.models.query.QuerySet.order_by)\n    def order_by(self, *field_names):\n        \"\"\"Return a new QuerySet instance with the ordering changed.\"\"\"\n        if self.query.is_sliced:\n            raise TypeError(\"Cannot reorder a query once a slice has been taken.\")\n        obj = self._chain()\n        obj.query.clear_ordering(force=True, clear_default=False)\n        obj.query.add_ordering(*field_names)\n        return obj",
+    "token_count": 106,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.order_by"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 79,
+     "distance": 1.6666666666666667
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:160-2600",
+    "content": "# django/db/models/sql/query.py:160-2600  (django.db.models.sql.query.Query)\nclass Query(BaseExpression):\n    ...",
+    "token_count": 32,
+    "rank": 8,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.sql.query.Query"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 7,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:2117-2123",
+    "content": "# django/db/models/sql/query.py:2117-2123  (django.db.models.sql.query.Query.can_filter)\n    def can_filter(self):\n        \"\"\"\n        Return True if adding filters to this instance is still possible.\n\n        Typically, this means no limits or offsets have been put on the results.\n        \"\"\"\n        return not self.is_sliced",
+    "token_count": 74,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.can_filter"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 46,
+     "distance": 1.6666666666666667
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:2083-2104",
+    "content": "# django/db/models/sql/query.py:2083-2104  (django.db.models.sql.query.Query.set_limits)\n    def set_limits(self, low=None, high=None):\n        \"\"\"\n        Adjust the limits on the rows retrieved. Use low/high to set these,\n        as it makes it more Pythonic to read and write. When the SQL query is\n        created, convert them to the appropriate offset and limit values.\n\n        Apply any limits passed in here to the existing constraints. Add low\n        to the current low value and clamp both to any existing high value.\n        \"\"\"\n        if high is not None:\n            if self.high_mark is not None:\n                self.high_mark = min(self.high_mark, self.low_mark + high)\n            else:\n                self.high_mark = self.low_mark + high\n        if low is not None:\n            if self.high_mark is not None:\n                self.low_mark = min(self.high_mark, self.low_mark + low)\n            else:\n                self.low_mark = self.low_mark + low\n\n        if self.low_mark == self.high_mark:\n            self.set_empty()",
+    "token_count": 229,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.set_limits"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 201,
+     "distance": 1.6666666666666667
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/utils.py:49-50",
+    "content": "# django/db/utils.py:49-50  (django.db.utils.NotSupportedError)\nclass NotSupportedError(DatabaseError):\n    pass",
+    "token_count": 29,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.utils.NotSupportedError"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 9,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1199,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "anchor": "django.db.models.query.QuerySet.get",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "prism_blast_mode": true,
+   "manifest_candidates": 67,
+   "manifest_candidates_unfiltered": 67,
+   "requested_symbols": [
+    "django.db.models.query.QuerySet.get",
+    "django.contrib.admin.options.ModelAdmin.get_object"
+   ],
+   "turn1_requested_count": 2,
+   "turn1_parsed_ok": false,
+   "turn1_degenerate": true,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The task is to identify all callers of `QuerySet.get` that bind or unpack its return value. We need to trace the call graph from the seed function `QuerySet.get` and identify all functions that directly or indirectly bind its return value. The identified symbols should be listed in the order of their execution, starting from the seed function.\",\n  \"requested_symbols\": [\n    \"django.db.models.query.QuerySet.get\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin.options.ModelAdmin.get_object\",\n    \"django.contrib.admin.options.BaseModelAdmin.get_queryset\",\n    \"django.contrib.admin",
+     "prompt_tokens": 4962,
+     "completion_tokens": 1024,
+     "latency_seconds": 75.41127415899996,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "length",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     381.533545
+    ],
+    "L_turn2_hydrate": [
+     978.416063
+    ],
+    "L_retrieve": [
+     76777.481478
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1199,
+   "prompt_tokens": 1461,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1474,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/db/models/query.py:293-1981  (django.db.models.query.QuerySet)\nclass QuerySet(AltersData):\n    ...\n\n# django/db/models/query.py:615-648  (django.db.models.query.QuerySet.get)\n    def get(self, *args, **kwargs):\n        \"\"\"\n        Perform the query and return a single object matching the given\n        keyword arguments.\n        \"\"\"\n        if self.query.combinator and (args or kwargs):\n            raise NotSupportedError(\n                \"Calling QuerySet.get(...) with filters after %s() is not \"\n                \"supported.\" % self.query.combinator\n            )\n        clone = self._chain() if self.query.combinator else self.filter(*args, **kwargs)\n        if self.query.can_filter() and not self.query.distinct_fields:\n            clone = clone.order_by()\n        limit = None\n        if (\n            not clone.query.select_for_update\n            or connections[clone.db].features.supports_select_for_update_with_limit\n        ):\n            limit = MAX_GET_RESULTS\n            clone.query.set_limits(high=limit)\n        num = len(clone)\n        if num == 1:\n            return clone._result_cache[0]\n        if not num:\n            raise self.model.DoesNotExist(\n                \"%s matching query does not exist.\" % self.model._meta.object_name\n            )\n        raise self.model.MultipleObjectsReturned(\n            \"get() returned more than one %s -- it returned %s!\"\n            % (\n                self.model._meta.object_name,\n                num if not limit or num < limit else \"more than %s\" % (limit - 1),\n            )\n        )\n\n# Referenced module constants:\nMAX_GET_RESULTS = 21\n\n# django/contrib/admin/options.py:615-2285  (django.contrib.admin.options.ModelAdmin)\nclass ModelAdmin(BaseModelAdmin):\n    ...\n\n# django/contrib/admin/options.py:854-869  (django.contrib.admin.options.ModelAdmin.get_object)\n    def get_object(self, request, object_id, from_field=None):\n        \"\"\"\n        Return an instance matching the field and value provided, the primary\n        key is used if no field is provided. Return ``None`` if no match is\n        found or the object_id fails validation.\n        \"\"\"\n        queryset = self.get_queryset(request)\n        model = queryset.model\n        field = (\n            model._meta.pk if from_field is None else model._meta.get_field(from_field)\n        )\n        try:\n            object_id = field.to_python(object_id)\n            return queryset.get(**{field.name: object_id})\n        except (model.DoesNotExist, ValidationError, ValueError):\n            return None\n\n# django/db/models/query.py:1854-1863  (django.db.models.query.QuerySet._chain)\n    def _chain(self):\n        \"\"\"\n        Return a copy of the current QuerySet that's ready for another\n        operation.\n        \"\"\"\n        obj = self._clone()\n        if obj._sticky_filter:\n            obj.query.filter_is_sticky = True\n            obj._sticky_filter = False\n        return obj\n\n# django/db/models/query.py:1432-1438  (django.db.models.query.QuerySet.filter)\n    def filter(self, *args, **kwargs):\n        \"\"\"\n        Return a new QuerySet instance with the args ANDed to the existing\n        set.\n        \"\"\"\n        self._not_support_combined_queries(\"filter\")\n        return self._filter_or_exclude(False, args, kwargs)\n\n# django/db/models/query.py:1658-1665  (django.db.models.query.QuerySet.order_by)\n    def order_by(self, *field_names):\n        \"\"\"Return a new QuerySet instance with the ordering changed.\"\"\"\n        if self.query.is_sliced:\n            raise TypeError(\"Cannot reorder a query once a slice has been taken.\")\n        obj = self._chain()\n        obj.query.clear_ordering(force=True, clear_default=False)\n        obj.query.add_ordering(*field_names)\n        return obj\n\n# django/db/models/sql/query.py:160-2600  (django.db.models.sql.query.Query)\nclass Query(BaseExpression):\n    ...\n\n# django/db/models/sql/query.py:2117-2123  (django.db.models.sql.query.Query.can_filter)\n    def can_filter(self):\n        \"\"\"\n        Return True if adding filters to this instance is still possible.\n\n        Typically, this means no limits or offsets have been put on the results.\n        \"\"\"\n        return not self.is_sliced\n\n# django/db/models/sql/query.py:2083-2104  (django.db.models.sql.query.Query.set_limits)\n    def set_limits(self, low=None, high=None):\n        \"\"\"\n        Adjust the limits on the rows retrieved. Use low/high to set these,\n        as it makes it more Pythonic to read and write. When the SQL query is\n        created, convert them to the appropriate offset and limit values.\n\n        Apply any limits passed in here to the existing constraints. Add low\n        to the current low value and clamp both to any existing high value.\n        \"\"\"\n        if high is not None:\n            if self.high_mark is not None:\n                self.high_mark = min(self.high_mark, self.low_mark + high)\n            else:\n                self.high_mark = self.low_mark + high\n        if low is not None:\n            if self.high_mark is not None:\n                self.low_mark = min(self.high_mark, self.low_mark + low)\n            else:\n                self.low_mark = self.low_mark + low\n\n        if self.low_mark == self.high_mark:\n            self.set_empty()\n\n# django/db/utils.py:49-50  (django.db.utils.NotSupportedError)\nclass NotSupportedError(DatabaseError):\n    pass\n\n## Task\n\nYou are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

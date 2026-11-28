@@ -5,8 +5,43 @@ import pytest
 
 from prism.cli import build_pipeline
 
+#: Breadcrumb invariant violations raise in tests instead of being dropped
+#: (`prism.graph.render_breadcrumbs`).
+os.environ.setdefault("PRISM_BREADCRUMB_STRICT", "1")
+
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+
+#: The golden fixture repositories carry their own test suites (PRISM reads them as test code); they are fixture
+#: data for SCE's suite, never SCE's tests.
+collect_ignore_glob = ["fixtures/golden/*"]
 PYTHON_REPO = os.path.join(FIXTURES_DIR, "python_repo")
+
+
+def pytest_addoption(parser):
+    parser.addoption("--update-golden", action="store_true", default=False,
+                     help="rewrite tests/golden's saved tool outputs instead of comparing with them")
+
+
+def _clear_fixture_caches() -> None:
+    """Remove the `.prism/` state PRISM writes into the shared fixture repositories (index and feature caches)."""
+    import shutil
+
+    for state in Path(FIXTURES_DIR).glob("*/.prism"):
+        shutil.rmtree(state, ignore_errors=True)
+
+
+def pytest_sessionstart(session):
+    """Suite hygiene (harness/experiments/GOLDEN_TESTS_PLAN.md §5): every session starts with no PRISM caches in
+    `tests/fixtures/*/.prism`, so a result never depends on an earlier run's cache, and none is left behind (below).
+    Tests within one session still share the fixtures; new tests (the golden tests) index a temporary copy instead.
+    Under pytest-xdist only the controller clears, never a worker, so one worker cannot delete another's cache."""
+    if not hasattr(session.config, "workerinput"):
+        _clear_fixture_caches()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if not hasattr(session.config, "workerinput"):
+        _clear_fixture_caches()
 
 
 @pytest.fixture(scope="session")
@@ -57,3 +92,22 @@ def _guard_default_pilot_checkpoint_path():
     mp.setattr(runner_module, "save_checkpoint", _guarded_save_checkpoint)
     yield
     mp.undo()
+
+
+class _FallbackTokenizerState:
+    """PRISM's regex fallback tokenizer as the resolved backend (`prism.slicer.tokenizer._STATE`)."""
+    encoding = None
+    backend_name = "fallback-regex (pinned by the test)"
+
+    def resolve(self) -> None:
+        pass
+
+
+@pytest.fixture
+def fallback_tokenizer(monkeypatch):
+    """Pin PRISM's token counting to the regex fallback. Tests whose tight budgets were calibrated with the
+    fallback's (deliberately over-counting) costs use it, so they behave the same on a machine where tiktoken's
+    exact cl100k_base encoding loads (counts there are lower: the same budget then admits more items)."""
+    from prism.slicer import tokenizer
+    monkeypatch.setattr(tokenizer, "_STATE", _FallbackTokenizerState())
+    yield

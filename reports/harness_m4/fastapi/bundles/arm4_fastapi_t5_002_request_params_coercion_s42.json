@@ -1,0 +1,267 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "fastapi_t5_002_request_params_coercion",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"glob\": \"**/*.py\", \"pattern\": \"request_params_to_args\"})\nfastapi/dependencies/utils.py:645:    path_values, path_errors = request_params_to_args(\nfastapi/dependencies/utils.py:648:    query_values, query_errors = request_params_to_args(\nfastapi/dependencies/utils.py:651:    header_values, header_errors = request_params_to_args(\nfastapi/dependencies/utils.py:654:    cookie_values, cookie_errors = request_params_to_args(\nfastapi/dependencies/utils.py:740:def request_params_to_args(",
+    "token_count": 132,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [
+     "fastapi.dependencies.utils.solve_dependencies",
+     "fastapi.dependencies.utils.request_params_to_args"
+    ],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "request_params_to_args",
+      "glob": "**/*.py"
+     },
+     "engine_token_count": 132
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (grep {\"exclude\": \"fastapi/dependencies/utils.py\", \"glob\": \"**/*.py\", \"path\": \".\", \"pattern\": \"request_params_to_args\"})\nfastapi/dependencies/utils.py:645:    path_values, path_errors = request_params_to_args(\nfastapi/dependencies/utils.py:648:    query_values, query_errors = request_params_to_args(\nfastapi/dependencies/utils.py:651:    header_values, header_errors = request_params_to_args(\nfastapi/dependencies/utils.py:654:    cookie_values, cookie_errors = request_params_to_args(\nfastapi/dependencies/utils.py:740:def request_params_to_args(",
+    "token_count": 147,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [
+     "fastapi.dependencies.utils.solve_dependencies",
+     "fastapi.dependencies.utils.request_params_to_args"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "request_params_to_args",
+      "path": ".",
+      "glob": "**/*.py",
+      "exclude": "fastapi/dependencies/utils.py"
+     },
+     "engine_token_count": 147
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (read {\"end_line\": 750, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 640})\n640:             solved = await run_in_threadpool(call, **solved_result.values)\n641:         if sub_dependant.name is not None:\n642:             values[sub_dependant.name] = solved\n643:         if sub_dependant.cache_key not in dependency_cache:\n644:             dependency_cache[sub_dependant.cache_key] = solved\n645:     path_values, path_errors = request_params_to_args(\n646:         dependant.path_params, request.path_params\n647:     )\n648:     query_values, query_errors = request_params_to_args(\n649:         dependant.query_params, request.query_params\n650:     )\n651:     header_values, header_errors = request_params_to_args(\n652:         dependant.header_params, request.headers\n653:     )\n654:     cookie_values, cookie_errors = request_params_to_args(\n655:         dependant.cookie_params, request.cookies\n656:     )\n657:     values.update(path_values)\n658:     values.update(query_values)\n659:     values.update(header_values)\n660:     values.update(cookie_values)\n661:     errors += path_errors + query_errors + header_errors + cookie_errors\n662:     if dependant.body_params:\n663:         (\n664:             body_values,\n665:             body_errors,\n666:         ) = await request_body_to_args(  # body_params checked above\n667:             body_fields=dependant.body_params,\n668:             received_body=body,\n669:             embed_body_fields=embed_body_fields,\n670:         )\n671:         values.update(body_values)\n672:         errors.extend(body_errors)\n673:     if dependant.http_connection_param_name:\n674:         values[dependant.http_connection_param_name] = request\n675:     if dependant.request_param_name and isinstance(request, Request):\n676:         values[dependant.request_param_name] = request\n677:     elif dependant.websocket_param_name and isinstance(request, WebSocket):\n678:         values[dependant.websocket_param_name] = request\n679:     if dependant.background_tasks_param_name:\n680:         if background_tasks is None:\n681:             background_tasks = BackgroundTasks()\n682:         values[dependant.background_tasks_param_name] = background_tasks\n683:     if dependant.response_param_name:\n684:         values[dependant.response_param_name] = response\n685:     if dependant.security_scopes_param_name:\n686:         values[dependant.security_scopes_param_name] = SecurityScopes(\n687:             scopes=dependant.security_scopes\n688:         )\n689:     return SolvedDependency(\n690:         values=values,\n691:         errors=errors,\n692:         background_tasks=background_tasks,\n693:         response=response,\n694:         dependency_cache=dependency_cache,\n695:     )\n696: \n697: \n698: def _validate_value_with_model_field(\n699:     *, field: ModelField, value: Any, values: Dict[str, Any], loc: Tuple[str, ...]\n700: ) -> Tuple[Any, List[Any]]:\n701:     if value is None:\n702:         if field.required:\n703:             return None, [get_missing_field_error(loc=loc)]\n704:         else:\n705:             return deepcopy(field.default), []\n706:     v_, errors_ = field.validate(value, values, loc=loc)\n707:     if isinstance(errors_, ErrorWrapper):\n708:         return None, [errors_]\n709:     elif isinstance(errors_, list):\n710:         new_errors = _regenerate_error_with_loc(errors=errors_, loc_prefix=())\n711:         return None, new_errors\n712:     else:\n713:         return v_, []\n714: \n715: \n716: def _get_multidict_value(\n717:     field: ModelField, values: Mapping[str, Any], alias: Union[str, None] = None\n718: ) -> Any:\n719:     alias = alias or field.alias\n720:     if is_sequence_field(field) and isinstance(values, (ImmutableMultiDict, Headers)):\n721:         value = values.getlist(alias)\n722:     else:\n723:         value = values.get(alias, None)\n724:     if (\n725:         value is None\n726:         or (\n727:             isinstance(field.field_info, params.Form)\n728:             and isinstance(value, str)  # For type checks\n729:             and value == \"\"\n730:         )\n731:         or (is_sequence_field(field) and len(value) == 0)\n732:     ):\n733:         if field.required:\n734:             return\n735:         else:\n736:             return deepcopy(field.default)\n737:     return value\n738: \n739: \n740: def request_params_to_args(\n741:     fields: Sequence[ModelField],\n742:     received_params: Union[Mapping[str, Any], QueryParams, Headers],\n743: ) -> Tuple[Dict[str, Any], List[Any]]:\n744:     values: Dict[str, Any] = {}\n745:     errors: List[Dict[str, Any]] = []\n746: \n747:     if not fields:\n748:         return values, errors\n749: \n750:     first_field = fields[0]\n[lines 640-750 of 1002]",
+    "token_count": 1362,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.dependencies.utils.solve_dependencies",
+     "fastapi.dependencies.utils._validate_value_with_model_field",
+     "fastapi.dependencies.utils._get_multidict_value",
+     "fastapi.dependencies.utils.request_params_to_args"
+    ],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/dependencies/utils.py",
+      "start_line": 640,
+      "end_line": 750
+     },
+     "engine_token_count": 1362
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1641,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "What breaks if `fastapi.dependencies.utils.request_params_to_args` changes?",
+   "task_type": "T5_blast_radius",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 4,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "Let's start by searching for the function `fastapi.dependencies.utils.request_params_to_args` to see where it is used in the repository.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"request_params_to_args\", \"glob\": \"**/*.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "request_params_to_args",
+        "glob": "**/*.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "request_params_to_args",
+        "glob": "**/*.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 59,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The function `fastapi.dependencies.utils.request_params_to_args` is defined in `fastapi/dependencies/utils.py` and is also called within the same file. This indicates that the function is recursive or used in a loop within its own module.\n\nTo understand what breaks if this function changes, we need to look at where it is used outside of its own module.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"request_params_to_args\", \"path\": \".\", \"glob\": \"**/*.py\", \"exclude\": \"fastapi/dependencies/utils.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "request_params_to_args",
+        "path": ".",
+        "glob": "**/*.py",
+        "exclude": "fastapi/dependencies/utils.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "request_params_to_args",
+        "path": ".",
+        "glob": "**/*.py",
+        "exclude": "fastapi/dependencies/utils.py"
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 119,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "It seems that the `grep` command returned the same results, indicating that the function `request_params_to_args` is only used within its own module and not in any other part of the repository.\n\nSince the function is not used outside of `fastapi/dependencies/utils.py`, changes to this function should not break any other parts of the repository. However, changes to the function itself could potentially break the functionality within its module.\n\nTo ensure a complete understanding, let's read the relevant part of the code where `request_params_to_args` is defined and used.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 640, \"end_line\": 750}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 640,
+        "end_line": 750
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 640,
+        "end_line": 750
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 156,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "raw_text": "Based on the code, the function `fastapi.dependencies.utils.request_params_to_args` is used to extract and validate parameters from the request (path, query, header, and cookie parameters) and map them to the corresponding fields in the dependency model.\n\nSince this function is only used within its own module and is not imported or used in any other part of the repository, changes to this function should not break any other parts of the repository. However, changes to the function itself could potentially break the functionality within its module.\n\nTo summarize, changes to `fastapi.dependencies.utils.request_params_to_args` will only affect the functionality within the `fastapi/dependencies/utils.py` module. If the function is changed in a way that alters its behavior or signature, it could potentially break the dependency resolution process within this module.\n\n<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The function fastapi.dependencies.utils.request_params_to_args is only used within its own module and is not imported or used in any other part of the repository. Changes to this function will only affect the functionality within the fastapi/dependencies/utils.py module. If the function is changed in a way that alters its behavior or signature, it could potentially break the dependency resolution process within this module.\\\", \\\"symbols\\\": [\\\"fastapi.dependencies.utils.request_params_to_args\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The function fastapi.dependencies.utils.request_params_to_args is only used within its own module and is not imported or used in any other part of the repository. Changes to this function will only affect the functionality within the fastapi/dependencies/utils.py module. If the function is changed in a way that alters its behavior or signature, it could potentially break the dependency resolution process within this module.\", \"symbols\": [\"fastapi.dependencies.utils.request_params_to_args\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 286,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     4878.618298,
+     7757.893387,
+     10132.265828,
+     20455.069188
+    ],
+    "L_tool_exec": [
+     22.450887,
+     22.967382,
+     0.552701
+    ],
+    "L_retrieve": [
+     43331.434319
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 2601,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The function fastapi.dependencies.utils.request_params_to_args is only used within its own module and is not imported or used in any other part of the repository. Changes to this function will only affect the functionality within the fastapi/dependencies/utils.py module. If the function is changed in a way that alters its behavior or signature, it could potentially break the dependency resolution process within this module.\", \"symbols\": [\"fastapi.dependencies.utils.request_params_to_args\"]}\n```",
+    "generation_tokens": 286,
+    "latency_seconds": 20.454842475999612,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2644,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1641,
+   "prompt_tokens": 2601,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2644,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

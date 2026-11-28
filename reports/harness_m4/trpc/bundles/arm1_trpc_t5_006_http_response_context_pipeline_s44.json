@@ -1,0 +1,997 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "trpc_t5_006_http_response_context_pipeline",
+  "items": [
+   {
+    "source_id": "http/resolveHTTPResponse.ts:265-289#part1of2",
+    "content": "# http/resolveHTTPResponse.ts:265-289#part1of2  (http.resolveHTTPResponse.resolveHTTPResponse)\n// implementation\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  opts: PartialBy<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'unstable_onChunk' | 'unstable_onHead'\n  >,\n): Promise<HTTPResponse | void> {\n  const { router, req, unstable_onHead, unstable_onChunk } = opts;\n\n  if (req.method === 'HEAD') {\n    // can be used for lambda warmup\n    const headResponse: HTTPResponse = {\n      status: 204,\n    };\n    unstable_onHead?.(headResponse, false);\n    unstable_onChunk?.([-1, '']);\n    return headResponse;\n  }\n  const contentTypeHandler =\n    opts.contentTypeHandler ?? fallbackContentTypeHandler;\n  const batchingEnabled = opts.batching?.enabled ?? true;\n  const type =\n    HTTP_METHOD_PROCEDURE_TYPE_MAP[req.method] ?? ('unknown' as const);\n  let ctx: inferRouterContext<TRouter> | undefined = undefined;\n  let paths: string[] | undefined;\n\n  const isBatchCall = !!req.query.get('batch');\n  const isStreamCall =\n    isBatchCall &&\n    unstable_onHead &&\n    unstable_onChunk &&\n    req.headers['trpc-batch-mode'] === 'stream';\n}",
+    "token_count": 306,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.resolveHTTPResponse"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 2,
+     "rerank_score": 1.730952262878418,
+     "bm25_rank": 2,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 306
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:225-254",
+    "content": "# http/resolveHTTPResponse.ts:225-254  (http.resolveHTTPResponse)\n/**\n * Since `resolveHTTPResponse` is a public API (community adapters),\n * let's give it a strong type signature to increase discoverability.\n */\n\n/**\n * Non-streaming signature for `resolveHTTPResponse`:\n * @param opts.unstable_onHead `undefined`\n * @param opts.unstable_onChunk `undefined`\n * @returns `Promise<HTTPResponse>`\n */\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  opts: Omit<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'unstable_onChunk' | 'unstable_onHead'\n  >,\n): Promise<HTTPResponse>;\n/**\n * Streaming signature for `resolveHTTPResponse`:\n * @param opts.unstable_onHead called as soon as the response head is known\n * @param opts.unstable_onChunk called for every procedure with `[index, result]`\n * @returns `Promise<void>` since the response is streamed\n */\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(opts: ResolveHTTPRequestOptions<TRouter, TRequest>): Promise<void>;",
+    "token_count": 259,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": 1.5352773666381836,
+     "bm25_rank": 1,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 259
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/fetch/fetchRequestHandler.ts:22-127",
+    "content": "# adapters/fetch/fetchRequestHandler.ts:22-127  (adapters.fetch.fetchRequestHandler.fetchRequestHandler)\nexport async function fetchRequestHandler<TRouter extends AnyRouter>(\n  opts: FetchHandlerRequestOptions<TRouter>,\n): Promise<Response> {\n  const resHeaders = new Headers();\n\n  const createContext = async () => {\n    return opts.createContext?.({ req: opts.req, resHeaders });\n  };\n\n  const url = toURL(opts.req.url);\n\n  const pathname = trimSlashes(url.pathname);\n  const endpoint = trimSlashes(opts.endpoint);\n  const path = trimSlashes(pathname.slice(endpoint.length));\n\n  const req: HTTPRequest = {\n    query: url.searchParams,\n    method: opts.req.method,\n    headers: Object.fromEntries(opts.req.headers),\n    body: opts.req.headers.get('content-type')?.startsWith('application/json')\n      ? await opts.req.text()\n      : '',\n  };\n\n  let resolve: (value: Response) => void;\n  const promise = new Promise<Response>((r) => (resolve = r));\n  let status = 200;\n\n  let isStream = false;\n  let controller: ReadableStreamController<any>;\n  let encoder: TextEncoder;\n  let formatter: ReturnType<typeof getBatchStreamFormatter>;\n  const unstable_onHead = (head: HTTPResponse, isStreaming: boolean) => {\n    for (const [key, value] of Object.entries(head.headers ?? {})) {\n      /* istanbul ignore if -- @preserve */\n      if (typeof value === 'undefined') {\n        continue;\n      }\n      if (typeof value === 'string') {\n        resHeaders.set(key, value);\n        continue;\n      }\n      for (const v of value) {\n        resHeaders.append(key, v);\n      }\n    }\n    status = head.status;\n    if (isStreaming) {\n      resHeaders.set('Transfer-Encoding', 'chunked');\n      resHeaders.append('Vary', 'trpc-batch-mode');\n      const stream = new ReadableStream({\n        start(c) {\n          controller = c;\n        },\n      });\n      const response = new Response(stream, {\n        status,\n        headers: resHeaders,\n      });\n      resolve(response);\n      encoder = new TextEncoder();\n      formatter = getBatchStreamFormatter();\n      isStream = true;\n    }\n  };\n\n  const unstable_onChunk = ([index, string]: ResponseChunk) => {\n    if (index === -1) {\n      // full response, no streaming\n      const response = new Response(string || null, {\n        status,\n        headers: resHeaders,\n      });\n      resolve(response);\n    } else {\n      controller.enqueue(encoder.encode(formatter(index, string)));\n    }\n  };\n\n  resolveHTTPResponse({\n    req,\n    createContext,\n    path,\n    router: opts.router,\n    batching: opts.batching,\n    responseMeta: opts.responseMeta,\n    onError(o) {\n      opts?.onError?.({ ...o, req: opts.req });\n    },\n    unstable_onHead,\n    unstable_onChunk,\n  })\n    .then(() => {\n      if (isStream) {\n        controller.enqueue(encoder.encode(formatter.end()));\n        controller.close();\n      }\n    })\n    .catch(() => {\n      if (isStream) {\n        controller.close();\n      }\n    });\n\n  return promise;\n}",
+    "token_count": 686,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.fetch.fetchRequestHandler.fetchRequestHandler",
+     "adapters.fetch.fetchRequestHandler.fetchRequestHandler.createContext",
+     "adapters.fetch.fetchRequestHandler.fetchRequestHandler.unstable_onHead",
+     "adapters.fetch.fetchRequestHandler.fetchRequestHandler.unstable_onHead.start",
+     "adapters.fetch.fetchRequestHandler.fetchRequestHandler.unstable_onChunk",
+     "adapters.fetch.fetchRequestHandler.fetchRequestHandler.onError"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 5,
+     "rerank_score": 1.2623252868652344,
+     "bm25_rank": 8,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 686
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/aws-lambda/index.ts:88-122",
+    "content": "# adapters/aws-lambda/index.ts:88-122  (adapters.aws-lambda.awsLambdaRequestHandler)\nexport function awsLambdaRequestHandler<\n  TRouter extends AnyRouter,\n  TEvent extends APIGatewayEvent,\n  TResult extends inferAPIGWReturn<TEvent>,\n>(\n  opts: AWSLambdaOptions<TRouter, TEvent>,\n): (event: TEvent, context: APIGWContext) => Promise<TResult> {\n  return async (event, context) => {\n    const req = lambdaEventToHTTPRequest(event);\n    const path = getPath(event);\n    const createContext = async function _createContext(): Promise<\n      inferRouterContext<TRouter>\n    > {\n      return await opts.createContext?.({ event, context });\n    };\n\n    const response = await resolveHTTPResponse({\n      router: opts.router,\n      batching: opts.batching,\n      responseMeta: opts?.responseMeta,\n      createContext,\n      req,\n      path,\n      error: null,\n      onError(o) {\n        opts?.onError?.({\n          ...o,\n          req: event,\n        });\n      },\n    });\n\n    return tRPCOutputToAPIGatewayOutput<TEvent, TResult>(event, response);\n  };\n}",
+    "token_count": 247,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.aws-lambda.awsLambdaRequestHandler",
+     "adapters.aws-lambda.awsLambdaRequestHandler.createContext",
+     "adapters.aws-lambda.awsLambdaRequestHandler.onError"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 30,
+     "rerank_score": 0.513621985912323,
+     "bm25_rank": 14,
+     "dense_rank": 84,
+     "oversized_chunk": false,
+     "engine_token_count": 247
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/fastify/fastifyRequestHandler.ts:1-25",
+    "content": "# adapters/fastify/fastifyRequestHandler.ts:1-25  (adapters.fastify.fastifyRequestHandler)\nimport { Readable } from 'node:stream';\nimport type { FastifyReply, FastifyRequest } from 'fastify';\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPBaseHandlerOptions, HTTPRequest } from '../../http';\nimport { getBatchStreamFormatter } from '../../http';\nimport type { HTTPResponse, ResponseChunk } from '../../http/internals/types';\nimport { resolveHTTPResponse } from '../../http/resolveHTTPResponse';\nimport type { NodeHTTPCreateContextOption } from '../node-http';\n\nexport type FastifyHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends FastifyRequest,\n  TResponse extends FastifyReply,\n> = HTTPBaseHandlerOptions<TRouter, TRequest> &\n  NodeHTTPCreateContextOption<TRouter, TRequest, TResponse>;\n\ntype FastifyRequestHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends FastifyRequest,\n  TResponse extends FastifyReply,\n> = FastifyHandlerOptions<TRouter, TRequest, TResponse> & {\n  req: TRequest;\n  res: TResponse;\n  path: string;\n};",
+    "token_count": 262,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": 0.5112244486808777,
+     "bm25_rank": 6,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 262
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:291-456#part2of2",
+    "content": "# http/resolveHTTPResponse.ts:291-456#part2of2  (http.resolveHTTPResponse.resolveHTTPResponse)\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  opts: PartialBy<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'unstable_onChunk' | 'unstable_onHead'\n  >,\n): Promise<HTTPResponse | void> {\n  try {\n    // we create context first so that (unless `createContext()` throws)\n    // error handler may access context information\n    //\n    // this way even if the client sends malformed input that might cause an exception:\n    //  - `opts.error` has value,\n    //  - batching is not enabled,\n    //  - `type` is unknown,\n    //  - `getInputs` throws because of malformed JSON,\n    // context value is still available to the error handler\n    ctx = await opts.createContext();\n\n    if (opts.error) {\n      throw opts.error;\n    }\n    if (isBatchCall && !batchingEnabled) {\n      throw new Error(`Batching is not enabled on the server`);\n    }\n    /* istanbul ignore if -- @preserve */\n    if (type === 'subscription') {\n      throw new TRPCError({\n        message: 'Subscriptions should use wsLink',\n        code: 'METHOD_NOT_SUPPORTED',\n      });\n    }\n    if (type === 'unknown') {\n      throw new TRPCError({\n        message: `Unexpected request method ${req.method}`,\n        code: 'METHOD_NOT_SUPPORTED',\n      });\n    }\n\n    const inputs = await contentTypeHandler.getInputs({\n      isBatchCall,\n      req,\n      router,\n      preprocessedBody: opts.preprocessedBody ?? false,\n    });\n\n    paths = isBatchCall\n      ? decodeURIComponent(opts.path).split(',')\n      : [opts.path];\n    const promises = paths.map((path, index) =>\n      inputToProcedureCall({ opts, ctx, type, input: inputs[index], path }),\n    );\n\n    if (!isStreamCall) {\n      /**\n       * Non-streaming response:\n       * - await all responses in parallel, blocking on the slowest one\n       * - create headers with known response body\n       * - return a complete HTTPResponse\n       */\n\n      const untransformedJSON = await Promise.all(promises);\n      const errors = untransformedJSON.flatMap((response) =>\n        'error' in response ? [response.error] : [],\n      );\n\n      const headResponse = initResponse({\n        ctx,\n        paths,\n        type,\n        responseMeta: opts.responseMeta,\n        untransformedJSON,\n        errors,\n      });\n      unstable_onHead?.(headResponse, false);\n\n      // return body stuff\n      const result = isBatchCall ? untransformedJSON : untransformedJSON[0]!; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- `untransformedJSON` should be the length of `paths` which should be at least 1 otherwise there wouldn't be a request at all\n      const transformedJSON = transformTRPCResponse(\n        router._def._config,\n        result,\n      );\n      const body = JSON.stringify(transformedJSON);\n      unstable_onChunk?.([-1, body]);\n\n      return {\n        status: headResponse.status,\n        headers: headResponse.headers,\n        body,\n      };\n    }\n\n    /**\n     * Streaming response:\n     * - block on none, call `onChunk` as soon as each response is ready\n     * - create headers with minimal data (cannot know the response body in advance)\n     * - return void\n     */\n    const headResponse = initResponse({\n      ctx,\n      paths,\n      type,\n      responseMeta: opts.responseMeta,\n    });\n    unstable_onHead(headResponse, true);\n\n    const indexedPromises = new Map(\n      promises.map((promise, index) => [\n        index,\n        promise.then((r) => [index, r] as const),\n      ]),\n    );\n    for (const _ of paths) {\n      const [index, untransformedJSON] = await Promise.race(\n        indexedPromises.values(),\n      );\n      indexedPromises.delete(index);\n\n      try {\n        const transformedJSON = transformTRPCResponse(\n          router._def._config,\n          untransformedJSON,\n        );\n        const body = JSON.stringify(transformedJSON);\n\n        unstable_onChunk([index, body]);\n      } catch (cause) {\n        const path = paths[index];\n        const input = inputs[index];\n        const { body } = caughtErrorToData(cause, {\n          opts,\n          ctx,\n          type,\n          path,\n          input,\n        });\n\n        unstable_onChunk([index, body]);\n      }\n    }\n    return;\n  } catch (cause) {\n    // we get here if\n    // - batching is called when it's not enabled\n    // - `createContext()` throws\n    // - `router._def._config.transformer.output.serialize()` throws\n    // - post body is too large\n    // - input deserialization fails\n    // - `errorFormatter` return value is malformed\n    const { error, untransformedJSON, body } = caughtErrorToData(cause, {\n      opts,\n      ctx,\n      type,\n    });\n\n    const headResponse = initResponse({\n      ctx,\n      paths,\n      type,\n      responseMeta: opts.responseMeta,\n      untransformedJSON,\n      errors: [error],\n    });\n    unstable_onHead?.(headResponse, false);\n\n    unstable_onChunk?.([-1, body]);\n\n    return {\n      status: headResponse.status,\n      headers: headResponse.headers,\n      body,\n    };\n  }\n}",
+    "token_count": 1190,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.resolveHTTPResponse"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 3,
+     "rerank_score": 0.37344080209732056,
+     "bm25_rank": 7,
+     "dense_rank": 3,
+     "oversized_chunk": true,
+     "engine_token_count": 1190
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/fastify/fastifyRequestHandler.ts:27-117",
+    "content": "# adapters/fastify/fastifyRequestHandler.ts:27-117  (adapters.fastify.fastifyRequestHandler.fastifyRequestHandler)\nexport async function fastifyRequestHandler<\n  TRouter extends AnyRouter,\n  TRequest extends FastifyRequest,\n  TResponse extends FastifyReply,\n>(opts: FastifyRequestHandlerOptions<TRouter, TRequest, TResponse>) {\n  const createContext = async function _createContext(): Promise<\n    inferRouterContext<TRouter>\n  > {\n    return opts.createContext?.(opts);\n  };\n\n  const query = opts.req.query\n    ? new URLSearchParams(opts.req.query as any)\n    : new URLSearchParams(opts.req.url.split('?')[1]);\n\n  const req: HTTPRequest = {\n    query,\n    method: opts.req.method,\n    headers: opts.req.headers,\n    body: opts.req.body ?? 'null',\n  };\n\n  let resolve: (value: FastifyReply) => void;\n  const promise = new Promise<FastifyReply>((r) => (resolve = r));\n\n  let isStream = false;\n  let stream: Readable;\n  let formatter: ReturnType<typeof getBatchStreamFormatter>;\n  const unstable_onHead = (head: HTTPResponse, isStreaming: boolean) => {\n    if (!opts.res.statusCode || opts.res.statusCode === 200) {\n      opts.res.statusCode = head.status;\n    }\n    for (const [key, value] of Object.entries(head.headers ?? {})) {\n      /* istanbul ignore if -- @preserve */\n      if (typeof value === 'undefined') {\n        continue;\n      }\n      void opts.res.header(key, value);\n    }\n    if (isStreaming) {\n      void opts.res.header('Transfer-Encoding', 'chunked');\n      void opts.res.header(\n        'Vary',\n        opts.res.hasHeader('Vary')\n          ? 'trpc-batch-mode, ' + opts.res.getHeader('Vary')\n          : 'trpc-batch-mode',\n      );\n      stream = new Readable();\n      stream._read = () => {}; // eslint-disable-line @typescript-eslint/no-empty-function -- https://github.com/fastify/fastify/issues/805#issuecomment-369172154\n      resolve(opts.res.send(stream));\n      isStream = true;\n      formatter = getBatchStreamFormatter();\n    }\n  };\n\n  const unstable_onChunk = ([index, string]: ResponseChunk) => {\n    if (index === -1) {\n      // full response, no streaming\n      resolve(opts.res.send(string));\n    } else {\n      stream.push(formatter(index, string));\n    }\n  };\n\n  resolveHTTPResponse({\n    req,\n    createContext,\n    path: opts.path,\n    router: opts.router,\n    batching: opts.batching,\n    responseMeta: opts.responseMeta,\n    onError(o) {\n      opts?.onError?.({ ...o, req: opts.req });\n    },\n    unstable_onHead,\n    unstable_onChunk,\n  })\n    .then(() => {\n      if (isStream) {\n        stream.push(formatter.end());\n        stream.push(null); // https://github.com/fastify/fastify/issues/805#issuecomment-369172154\n      }\n    })\n    .catch(() => {\n      if (isStream) {\n        stream.push(null);\n      }\n    });\n\n  return promise;\n}",
+    "token_count": 701,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.fastify.fastifyRequestHandler.fastifyRequestHandler",
+     "adapters.fastify.fastifyRequestHandler.fastifyRequestHandler.createContext",
+     "adapters.fastify.fastifyRequestHandler.fastifyRequestHandler.unstable_onHead",
+     "adapters.fastify.fastifyRequestHandler.fastifyRequestHandler.unstable_onChunk",
+     "adapters.fastify.fastifyRequestHandler.fastifyRequestHandler.onError"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 15,
+     "rerank_score": 0.19586360454559326,
+     "bm25_rank": 12,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 701
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:1-72",
+    "content": "# http/resolveHTTPResponse.ts:1-72  (http.resolveHTTPResponse)\nimport type {\n  AnyRouter,\n  inferRouterContext,\n  inferRouterError,\n  ProcedureType,\n} from '../core';\nimport { callProcedure } from '../core';\nimport { getTRPCErrorFromUnknown, TRPCError } from '../error/TRPCError';\nimport type { TRPCResponse } from '../rpc';\nimport { getErrorShape } from '../shared/getErrorShape';\nimport { transformTRPCResponse } from '../shared/transformTRPCResponse';\nimport type { Maybe } from '../types';\nimport type { BaseContentTypeHandler } from './contentType';\nimport { getJsonContentTypeInputs } from './contentType';\nimport { getHTTPStatusCode } from './getHTTPStatusCode';\nimport type {\n  HTTPHeaders,\n  HTTPResponse,\n  ResponseChunk,\n} from './internals/types';\nimport type { HTTPBaseHandlerOptions, HTTPRequest } from './types';\n\nconst HTTP_METHOD_PROCEDURE_TYPE_MAP: Record<\n  string,\n  ProcedureType | undefined\n> = {\n  GET: 'query',\n  POST: 'mutation',\n};\n\nconst fallbackContentTypeHandler = {\n  getInputs: getJsonContentTypeInputs,\n};\n\ntype PartialBy<TBaseType, TKey extends keyof TBaseType> = Omit<\n  TBaseType,\n  TKey\n> &\n  Partial<Pick<TBaseType, TKey>>;\n\ninterface ResolveHTTPRequestOptions<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n> extends HTTPBaseHandlerOptions<TRouter, TRequest> {\n  createContext: () => Promise<inferRouterContext<TRouter>>;\n  req: TRequest;\n  path: string;\n  error?: Maybe<TRPCError>;\n  contentTypeHandler?: BaseContentTypeHandler<any>;\n  preprocessedBody?: boolean;\n  /**\n   * Called as soon as the response head is known.\n   * When streaming, headers will have been generated\n   * **without** knowing the response body.\n   *\n   * Without this callback, streaming is disabled.\n   */\n  unstable_onHead: (\n    headResponse: Omit<HTTPResponse, 'body'>,\n    isStreaming: boolean,\n  ) => void;\n  /**\n   * Called for every procedure with `[index, result]`.\n   *\n   * Will be called a single time with `index = -1` if\n   * - response is an error\n   * - response is empty (HEAD request)\n   *\n   * Without this callback, streaming is disabled.\n   */\n  unstable_onChunk: (chunk: ResponseChunk) => void;\n}",
+    "token_count": 528,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 7,
+     "rerank_score": 0.07887563109397888,
+     "bm25_rank": 15,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 528
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/nodeHTTPRequestHandler.ts:1-16",
+    "content": "# adapters/node-http/nodeHTTPRequestHandler.ts:1-16  (adapters.node-http.nodeHTTPRequestHandler)\n/* eslint-disable @typescript-eslint/no-non-null-assertion */\nimport type { AnyRouter } from '../../core';\nimport type { inferRouterContext } from '../../core/types';\nimport type { HTTPRequest } from '../../http';\nimport { getBatchStreamFormatter } from '../../http';\nimport type { HTTPResponse, ResponseChunk } from '../../http/internals/types';\nimport { resolveHTTPResponse } from '../../http/resolveHTTPResponse';\nimport { nodeHTTPJSONContentTypeHandler } from './content-type/json';\nimport type { NodeHTTPContentTypeHandler } from './internals/contentType';\nimport type {\n  NodeHTTPRequest,\n  NodeHTTPRequestHandlerOptions,\n  NodeHTTPResponse,\n} from './types';\n\nconst defaultJSONContentTypeHandler = nodeHTTPJSONContentTypeHandler();",
+    "token_count": 173,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 4,
+     "rerank_score": -0.3005201816558838,
+     "bm25_rank": 4,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 173
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:177-223",
+    "content": "# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData)\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  const { router, req, onError } = errorOpts.opts;\n  const error = getTRPCErrorFromUnknown(cause);\n  onError?.({\n    error,\n    path: errorOpts.path,\n    input: errorOpts.input,\n    ctx: errorOpts.ctx,\n    type: errorOpts.type,\n    req,\n  });\n  const untransformedJSON = {\n    error: getErrorShape({\n      config: router._def._config,\n      error,\n      type: errorOpts.type,\n      path: errorOpts.path,\n      input: errorOpts.input,\n      ctx: errorOpts.ctx,\n    }),\n  };\n  const transformedJSON = transformTRPCResponse(\n    router._def._config,\n    untransformedJSON,\n  );\n  const body = JSON.stringify(transformedJSON);\n  return {\n    error,\n    untransformedJSON,\n    body,\n  };\n}",
+    "token_count": 305,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.caughtErrorToData"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 25,
+     "rerank_score": -0.48374006152153015,
+     "bm25_rank": 13,
+     "dense_rank": 57,
+     "oversized_chunk": false,
+     "engine_token_count": 305
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/aws-lambda/index.ts:1-27",
+    "content": "# adapters/aws-lambda/index.ts:1-27  (adapters.aws-lambda)\nimport type {\n  APIGatewayProxyEvent,\n  APIGatewayProxyEventV2,\n  APIGatewayProxyResult,\n  APIGatewayProxyStructuredResultV2,\n  Context as APIGWContext,\n} from 'aws-lambda';\nimport { TRPCError } from '../..';\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPRequest } from '../../http';\nimport { resolveHTTPResponse } from '../../http';\nimport type { HTTPResponse } from '../../http/internals/types';\nimport type {\n  APIGatewayEvent,\n  APIGatewayResult,\n  AWSLambdaOptions,\n} from './utils';\nimport {\n  getHTTPMethod,\n  getPath,\n  isPayloadV1,\n  isPayloadV2,\n  transformHeaders,\n  UNKNOWN_PAYLOAD_FORMAT_VERSION_ERROR_MESSAGE,\n} from './utils';\n\nexport * from './utils';",
+    "token_count": 191,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": -0.7044776082038879,
+     "bm25_rank": 11,
+     "dense_rank": 58,
+     "oversized_chunk": false,
+     "engine_token_count": 191
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/types.ts:1-103",
+    "content": "# adapters/node-http/types.ts:1-103  (adapters.node-http.types)\nimport type { IncomingMessage, ServerResponse } from 'http';\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPBaseHandlerOptions } from '../../http';\nimport type { MaybePromise } from '../../types';\nimport type { NodeHTTPContentTypeHandler } from './internals/contentType';\n\ninterface ParsedQs {\n  [key: string]: ParsedQs | ParsedQs[] | string[] | string | undefined;\n}\n\nexport type NodeHTTPRequest = IncomingMessage & {\n  query?: ParsedQs;\n  body?: unknown;\n};\nexport type NodeHTTPResponse = ServerResponse & {\n  /**\n   * Force the partially-compressed response to be flushed to the client.\n   *\n   * Added by compression middleware\n   * (depending on the environment,\n   * e.g. Next <= 12,\n   * e.g. Express w/ `compression()`)\n   */\n  flush?: () => void;\n};\n\nexport type NodeHTTPCreateContextOption<\n  TRouter extends AnyRouter,\n  TRequest,\n  TResponse,\n> = object extends inferRouterContext<TRouter>\n  ? {\n      /**\n       * @link https://trpc.io/docs/context\n       **/\n      createContext?: NodeHTTPCreateContextFn<TRouter, TRequest, TResponse>;\n    }\n  : {\n      /**\n       * @link https://trpc.io/docs/context\n       **/\n      createContext: NodeHTTPCreateContextFn<TRouter, TRequest, TResponse>;\n    };\n\n/**\n * @internal\n */\ntype ConnectMiddleware<\n  TRequest extends NodeHTTPRequest = NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse = NodeHTTPResponse,\n> = (req: TRequest, res: TResponse, next: (err?: any) => any) => void;\n\nexport type NodeHTTPHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> = HTTPBaseHandlerOptions<TRouter, TRequest> &\n  NodeHTTPCreateContextOption<TRouter, TRequest, TResponse> & {\n    /**\n     * By default, http `OPTIONS` requests are not handled, and CORS headers are not returned.\n     *\n     * This can be used to handle them manually or via the `cors` npm package: https://www.npmjs.com/package/cors\n     *\n     * ```ts\n     * import cors from 'cors'\n     *\n     * nodeHTTPRequestHandler({\n     *   cors: cors()\n     * })\n     * ```\n     *\n     * You can also use it for other needs which a connect/node.js compatible middleware can solve,\n     *  though you might wish to consider an alternative solution like the Express adapter if your needs are complex.\n     */\n    middleware?: ConnectMiddleware;\n    maxBodySize?: number;\n    experimental_contentTypeHandlers?: NodeHTTPContentTypeHandler<\n      TRequest,\n      TResponse\n    >[];\n  };\n\nexport type NodeHTTPRequestHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> = {\n  req: TRequest;\n  res: TResponse;\n  path: string;\n} & NodeHTTPHandlerOptions<TRouter, TRequest, TResponse>;\n\nexport type NodeHTTPCreateContextFnOptions<TRequest, TResponse> = {\n  req: TRequest;\n  res: TResponse;\n};\nexport type NodeHTTPCreateContextFn<\n  TRouter extends AnyRouter,\n  TRequest,\n  TResponse,\n> = (\n  opts: NodeHTTPCreateContextFnOptions<TRequest, TResponse>,\n) => MaybePromise<inferRouterContext<TRouter>>;",
+    "token_count": 768,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 14,
+     "rerank_score": -0.7978910207748413,
+     "bm25_rank": 18,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 768
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/resolveHTTPResponse.ts:74-130",
+    "content": "# http/resolveHTTPResponse.ts:74-130  (http.resolveHTTPResponse.initResponse)\nfunction initResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(initOpts: {\n  ctx: inferRouterContext<TRouter> | undefined;\n  paths: string[] | undefined;\n  type: ProcedureType | 'unknown';\n  responseMeta?: HTTPBaseHandlerOptions<TRouter, TRequest>['responseMeta'];\n  untransformedJSON?:\n    | TRPCResponse<unknown, inferRouterError<TRouter>>\n    | TRPCResponse<unknown, inferRouterError<TRouter>>[]\n    | undefined;\n  errors?: TRPCError[];\n}): HTTPResponse {\n  const {\n    ctx,\n    paths,\n    type,\n    responseMeta,\n    untransformedJSON,\n    errors = [],\n  } = initOpts;\n\n  let status = untransformedJSON ? getHTTPStatusCode(untransformedJSON) : 200;\n  const headers: HTTPHeaders = {\n    'Content-Type': 'application/json',\n  };\n\n  const eagerGeneration = !untransformedJSON;\n  const data = eagerGeneration\n    ? []\n    : Array.isArray(untransformedJSON)\n    ? untransformedJSON\n    : [untransformedJSON];\n\n  const meta =\n    responseMeta?.({\n      ctx,\n      paths,\n      type,\n      data,\n      errors,\n      eagerGeneration,\n    }) ?? {};\n\n  for (const [key, value] of Object.entries(meta.headers ?? {})) {\n    headers[key] = value;\n  }\n  if (meta.status) {\n    status = meta.status;\n  }\n\n  return {\n    status,\n    headers,\n  };\n}",
+    "token_count": 353,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.initResponse"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 8,
+     "rerank_score": -0.8862634301185608,
+     "bm25_rank": 9,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 353
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/fetch/fetchRequestHandler.ts:1-13",
+    "content": "# adapters/fetch/fetchRequestHandler.ts:1-13  (adapters.fetch.fetchRequestHandler)\nimport type { AnyRouter } from '../../core';\nimport type { HTTPRequest } from '../../http';\nimport { getBatchStreamFormatter } from '../../http';\nimport type { HTTPResponse, ResponseChunk } from '../../http/internals/types';\nimport { resolveHTTPResponse } from '../../http/resolveHTTPResponse';\nimport { toURL } from '../../http/toURL';\nimport type { FetchHandlerOptions } from './types';\n\nexport type FetchHandlerRequestOptions<TRouter extends AnyRouter> =\n  FetchHandlerOptions<TRouter> & {\n    req: Request;\n    endpoint: string;\n  };",
+    "token_count": 142,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 9,
+     "rerank_score": -0.9773297309875488,
+     "bm25_rank": 3,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 142
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "rpc/envelopes.ts:1-137#part1of2",
+    "content": "# rpc/envelopes.ts:1-137#part1of2  (rpc.envelopes)\n/* eslint-disable @typescript-eslint/no-namespace */\nimport type { ProcedureType } from '../deprecated/router';\nimport type { TRPC_ERROR_CODE_NUMBER } from './codes';\n\n/**\n * Error response\n */\nexport interface TRPCErrorShape<\n  TCode extends number = TRPC_ERROR_CODE_NUMBER,\n  TData extends Record<string, unknown> = Record<string, unknown>,\n> {\n  code: TCode;\n  message: string;\n  data: TData;\n}\n\n/**\n * JSON-RPC 2.0 Specification\n */\nexport namespace JSONRPC2 {\n  export type RequestId = number | string | null;\n\n  /**\n   * All requests/responses extends this shape\n   */\n  export interface BaseEnvelope {\n    id?: RequestId;\n    jsonrpc?: '2.0';\n  }\n\n  export interface BaseRequest<TMethod extends string = string>\n    extends BaseEnvelope {\n    method: TMethod;\n  }\n\n  export interface Request<TMethod extends string = string, TParams = unknown>\n    extends BaseRequest<TMethod> {\n    params: TParams;\n  }\n\n  export interface ResultResponse<TResult = unknown> extends BaseEnvelope {\n    result: TResult;\n  }\n\n  export interface ErrorResponse<TError extends TRPCErrorShape = TRPCErrorShape>\n    extends BaseEnvelope {\n    error: TError;\n  }\n}\n\n/////////////////////////// HTTP envelopes ///////////////////////\n\nexport interface TRPCRequest\n  extends JSONRPC2.Request<ProcedureType, { path: string; input: unknown }> {}\n\nexport interface TRPCResult<TData = unknown> {\n  data: TData;\n}\n\nexport interface TRPCSuccessResponse<TData>\n  extends JSONRPC2.ResultResponse<\n    TRPCResult<TData> & {\n      type?: 'data';\n    }\n  > {}\n\n/**\n * @deprecated use `TRPCSuccessResponse` instead\n */\nexport type TRPCResultResponse<TData = unknown> = TRPCSuccessResponse<TData>;\n\nexport interface TRPCErrorResponse<\n  TError extends TRPCErrorShape = TRPCErrorShape,\n> extends JSONRPC2.ErrorResponse<TError> {}\n\nexport type TRPCResponse<\n  TData = unknown,\n  TError extends TRPCErrorShape = TRPCErrorShape,\n> = TRPCErrorResponse<TError> | TRPCSuccessResponse<TData>;\n\n/////////////////////////// WebSocket envelopes ///////////////////////\n\nexport type TRPCRequestMessage = TRPCRequest & {\n  id: JSONRPC2.RequestId;\n};\n\n/**\n * The client asked the server to unsubscribe\n */\nexport interface TRPCSubscriptionStopNotification\n  extends JSONRPC2.BaseRequest<'subscription.stop'> {\n  id: null;\n}\n\n/**\n * The client's outgoing request types\n */\nexport type TRPCClientOutgoingRequest = TRPCSubscriptionStopNotification;\n\n/**\n * The client's sent messages shape\n */\nexport type TRPCClientOutgoingMessage =\n  | TRPCRequestMessage\n  | (JSONRPC2.BaseRequest<'subscription.stop'> & { id: JSONRPC2.RequestId });\n\nexport interface TRPCResultMessage<TData>\n  extends JSONRPC2.ResultResponse<\n    | { type: 'started' }\n    | { type: 'stopped' }\n    | (TRPCResult<TData> & { type: 'data' })\n  > {}\n\nexport type TRPCResponseMessage<\n  TData = unknown,\n  TError extends TRPCErrorShape = TRPCErrorShape,\n> = { id: JSONRPC2.RequestId } & (\n  | TRPCErrorResponse<TError>\n  | TRPCResultMessage<TData>\n);\n\n/**\n * The server asked the client to reconnect - useful when restarting/redeploying service\n */\nexport interface TRPCReconnectNotification\n  extends JSONRPC2.BaseRequest<'reconnect'> {\n  id: JSONRPC2.RequestId;\n}\n\n/**\n * The client's incoming request types\n */\nexport type TRPCClientIncomingRequest = TRPCReconnectNotification;\n\n/**\n * The client's received messages shape\n */",
+    "token_count": 824,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -1.536939024925232,
+     "bm25_rank": 37,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 824
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/internals/types.ts:1-40",
+    "content": "# http/internals/types.ts:1-40  (http.internals.types)\nimport type {\n  AnyRouter,\n  inferRouterContext,\n  inferRouterError,\n  ProcedureType,\n} from '../../core';\nimport type { TRPCError } from '../../error/TRPCError';\nimport type { TRPCResponse } from '../../rpc';\nimport type { Dict } from '../../types';\nimport type { ResponseMeta } from '../types';\n\nexport type HTTPHeaders = Dict<string[] | string>;\n\nexport interface HTTPResponse {\n  status: number;\n  headers?: HTTPHeaders;\n  body?: string;\n}\n\nexport type ResponseChunk = [procedureIndex: number, responseBody: string];\n\n/**\n * @internal\n */\nexport type ResponseMetaFn<TRouter extends AnyRouter> = (opts: {\n  data: TRPCResponse<unknown, inferRouterError<TRouter>>[];\n  ctx?: inferRouterContext<TRouter>;\n  /**\n   * The different tRPC paths requested\n   **/\n  paths?: string[];\n  type: ProcedureType | 'unknown';\n  errors: TRPCError[];\n  /**\n   * `true` if the `ResponseMeta` are being\n   * generated without knowing the response data\n   * (e.g. for streaming requests).\n   */\n  eagerGeneration?: boolean;\n}) => ResponseMeta;",
+    "token_count": 268,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 10,
+     "rerank_score": -1.8610050678253174,
+     "bm25_rank": 19,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 268
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/standalone.ts:1-17",
+    "content": "# adapters/standalone.ts:1-17  (adapters.standalone)\n/* eslint-disable @typescript-eslint/no-non-null-assertion */\nimport http from 'http';\nimport type { AnyRouter } from '../core';\nimport { toURL } from '../http/toURL';\nimport type {\n  NodeHTTPCreateContextFnOptions,\n  NodeHTTPHandlerOptions,\n} from './node-http';\nimport { nodeHTTPRequestHandler } from './node-http';\n\nexport type CreateHTTPHandlerOptions<TRouter extends AnyRouter> =\n  NodeHTTPHandlerOptions<TRouter, http.IncomingMessage, http.ServerResponse>;\n\nexport type CreateHTTPContextOptions = NodeHTTPCreateContextFnOptions<\n  http.IncomingMessage,\n  http.ServerResponse\n>;",
+    "token_count": 150,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 17,
+     "rerank_score": -2.2240681648254395,
+     "bm25_rank": 27,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 150
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/nodeHTTPRequestHandler.ts:18-138",
+    "content": "# adapters/node-http/nodeHTTPRequestHandler.ts:18-138  (adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler)\nexport async function nodeHTTPRequestHandler<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n>(opts: NodeHTTPRequestHandlerOptions<TRouter, TRequest, TResponse>) {\n  const handleViaMiddleware = opts.middleware ?? ((_req, _res, next) => next());\n\n  return handleViaMiddleware(opts.req, opts.res, async (err) => {\n    if (err) throw err;\n\n    const createContext = async (): Promise<inferRouterContext<TRouter>> => {\n      return await opts.createContext?.(opts);\n    };\n\n    const query = opts.req.query\n      ? new URLSearchParams(opts.req.query as any)\n      : new URLSearchParams(opts.req.url!.split('?')[1]);\n\n    const jsonContentTypeHandler =\n      defaultJSONContentTypeHandler as unknown as NodeHTTPContentTypeHandler<\n        TRequest,\n        TResponse\n      >;\n\n    const contentTypeHandlers = opts.experimental_contentTypeHandlers ?? [\n      jsonContentTypeHandler,\n    ];\n\n    const contentTypeHandler =\n      contentTypeHandlers.find((handler) =>\n        handler.isMatch({\n          ...opts,\n          query,\n        }),\n      ) ??\n      // fallback to json\n      jsonContentTypeHandler;\n\n    const bodyResult = await contentTypeHandler.getBody({\n      ...opts,\n      query,\n    });\n\n    const req: HTTPRequest = {\n      method: opts.req.method!,\n      headers: opts.req.headers,\n      query,\n      body: bodyResult.ok ? bodyResult.data : undefined,\n    };\n\n    let isStream = false;\n    let formatter: ReturnType<typeof getBatchStreamFormatter>;\n    const unstable_onHead = (head: HTTPResponse, isStreaming: boolean) => {\n      if (\n        'status' in head &&\n        (!opts.res.statusCode || opts.res.statusCode === 200)\n      ) {\n        opts.res.statusCode = head.status;\n      }\n      for (const [key, value] of Object.entries(head.headers ?? {})) {\n        /* istanbul ignore if -- @preserve */\n        if (typeof value === 'undefined') {\n          continue;\n        }\n        opts.res.setHeader(key, value);\n      }\n      if (isStreaming) {\n        opts.res.setHeader('Transfer-Encoding', 'chunked');\n        const vary = opts.res.getHeader('Vary');\n        opts.res.setHeader(\n          'Vary',\n          vary ? 'trpc-batch-mode, ' + vary : 'trpc-batch-mode',\n        );\n        isStream = true;\n        formatter = getBatchStreamFormatter();\n        opts.res.flushHeaders();\n      }\n    };\n\n    const unstable_onChunk = ([index, string]: ResponseChunk) => {\n      if (index === -1) {\n        /**\n         * Full response, no streaming. This can happen\n         * - if the response is an error\n         * - if response is empty (HEAD request)\n         */\n        opts.res.end(string);\n      } else {\n        opts.res.write(formatter!(index, string));\n        opts.res.flush?.();\n      }\n    };\n\n    await resolveHTTPResponse({\n      batching: opts.batching,\n      responseMeta: opts.responseMeta,\n      path: opts.path,\n      createContext,\n      router: opts.router,\n      req,\n      error: bodyResult.ok ? null : bodyResult.error,\n      preprocessedBody: bodyResult.ok ? bodyResult.preprocessed : false,\n      onError(o) {\n        opts?.onError?.({\n          ...o,\n          req: opts.req,\n        });\n      },\n      contentTypeHandler,\n      unstable_onHead,\n      unstable_onChunk,\n    });\n\n    if (isStream) {\n      opts.res.write(formatter!.end());\n      opts.res.end();\n    }\n\n    return opts.res;\n  });\n}",
+    "token_count": 780,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler",
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler.createContext",
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler.unstable_onHead",
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler.unstable_onChunk",
+     "adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler.onError"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 13,
+     "rerank_score": -2.3241584300994873,
+     "bm25_rank": 16,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 780
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/internals/contentType.ts:1-16",
+    "content": "# adapters/node-http/internals/contentType.ts:1-16  (adapters.node-http.internals.contentType)\nimport type { AnyRouter } from '../../../core';\nimport type { BaseContentTypeHandler } from '../../../http/contentType';\nimport type {\n  NodeHTTPRequest,\n  NodeHTTPRequestHandlerOptions,\n  NodeHTTPResponse,\n} from '../types';\n\nexport interface NodeHTTPContentTypeHandler<\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> extends BaseContentTypeHandler<\n    NodeHTTPRequestHandlerOptions<AnyRouter, TRequest, TResponse> & {\n      query: URLSearchParams;\n    }\n  > {}",
+    "token_count": 125,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 23,
+     "rerank_score": -2.364982843399048,
+     "bm25_rank": 21,
+     "dense_rank": 39,
+     "oversized_chunk": false,
+     "engine_token_count": 125
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/aws-lambda/index.ts:54-78",
+    "content": "# adapters/aws-lambda/index.ts:54-78  (adapters.aws-lambda.tRPCOutputToAPIGatewayOutput)\nfunction tRPCOutputToAPIGatewayOutput<\n  TEvent extends APIGatewayEvent,\n  TResult extends APIGatewayResult,\n>(event: TEvent, response: HTTPResponse): TResult {\n  if (isPayloadV1(event)) {\n    const resp: APIGatewayProxyResult = {\n      statusCode: response.status,\n      body: response.body ?? '',\n      headers: transformHeaders(response.headers ?? {}),\n    };\n    return resp as TResult;\n  } else if (isPayloadV2(event)) {\n    const resp: APIGatewayProxyStructuredResultV2 = {\n      statusCode: response.status,\n      body: response.body ?? undefined,\n      headers: transformHeaders(response.headers ?? {}),\n    };\n    return resp as TResult;\n  } else {\n    throw new TRPCError({\n      code: 'INTERNAL_SERVER_ERROR',\n      message: UNKNOWN_PAYLOAD_FORMAT_VERSION_ERROR_MESSAGE,\n    });\n  }\n}",
+    "token_count": 205,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.aws-lambda.tRPCOutputToAPIGatewayOutput"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 21,
+     "rerank_score": -2.5980968475341797,
+     "bm25_rank": 24,
+     "dense_rank": 29,
+     "oversized_chunk": false,
+     "engine_token_count": 205
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/index.ts:1-4",
+    "content": "# http/index.ts:1-4  (http)\nexport * from './getHTTPStatusCode';\nexport * from './resolveHTTPResponse';\nexport * from './types';\nexport * from './batchStreamFormatter';",
+    "token_count": 42,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 6,
+     "rerank_score": -2.6233437061309814,
+     "bm25_rank": 5,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:35-58",
+    "content": "# http/getHTTPStatusCode.ts:35-58  (http.getHTTPStatusCode.getHTTPStatusCode)\nexport function getHTTPStatusCode(json: TRPCResponse | TRPCResponse[]) {\n  const arr = Array.isArray(json) ? json : [json];\n  const httpStatuses = new Set(\n    arr.map((res) => {\n      if ('error' in res) {\n        const data = res.error.data;\n        if (typeof data.httpStatus === 'number') {\n          return data.httpStatus;\n        }\n        const code = TRPC_ERROR_CODES_BY_NUMBER[res.error.code];\n        return getStatusCodeFromKey(code);\n      }\n      return 200;\n    }),\n  );\n\n  if (httpStatuses.size !== 1) {\n    return 207;\n  }\n\n  const httpStatus = httpStatuses.values().next().value;\n\n  return httpStatus;\n}",
+    "token_count": 182,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.getHTTPStatusCode.getHTTPStatusCode"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 16,
+     "rerank_score": -3.439688205718994,
+     "bm25_rank": 22,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 182
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/next.ts:1-18",
+    "content": "# adapters/next.ts:1-18  (adapters.next)\nimport type {\n  NextApiHandler,\n  NextApiRequest,\n  NextApiResponse,\n} from 'next/types';\nimport type { AnyRouter } from '../core';\nimport { TRPCError } from '../error/TRPCError';\nimport { getErrorShape } from '../shared/getErrorShape';\nimport type {\n  NodeHTTPCreateContextFnOptions,\n  NodeHTTPHandlerOptions,\n} from './node-http';\nimport { nodeHTTPRequestHandler } from './node-http';\n\nexport type CreateNextContextOptions = NodeHTTPCreateContextFnOptions<\n  NextApiRequest,\n  NextApiResponse\n>;",
+    "token_count": 133,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 36,
+     "rerank_score": -3.68949031829834,
+     "bm25_rank": 29,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 133
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/internals/contentType.ts:18-29",
+    "content": "# adapters/node-http/internals/contentType.ts:18-29  (adapters.node-http.internals.contentType.createNodeHTTPContentTypeHandler)\nexport function createNodeHTTPContentTypeHandler(\n  contentTypeHandler: NodeHTTPContentTypeHandler<\n    NodeHTTPRequest,\n    NodeHTTPResponse\n  >,\n) {\n  return <\n    TRequest extends NodeHTTPRequest,\n    TResponse extends NodeHTTPResponse,\n  >(): NodeHTTPContentTypeHandler<TRequest, TResponse> =>\n    contentTypeHandler as any;\n}",
+    "token_count": 100,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.node-http.internals.contentType.createNodeHTTPContentTypeHandler"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 35,
+     "rerank_score": -3.7763752937316895,
+     "bm25_rank": 20,
+     "dense_rank": 86,
+     "oversized_chunk": false,
+     "engine_token_count": 100
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/types.ts:1-28",
+    "content": "# http/types.ts:1-28  (http.types)\nimport type { AnyRouter } from '../core';\nimport type { BaseHandlerOptions } from '../internals/types';\nimport type { HTTPHeaders, ResponseMetaFn } from './internals/types';\n\nexport interface HTTPRequest {\n  method: string;\n  query: URLSearchParams;\n  headers: HTTPHeaders;\n  body: unknown;\n}\n\n/**\n * Base interface for anything using HTTP\n */\nexport interface HTTPBaseHandlerOptions<TRouter extends AnyRouter, TRequest>\n  extends BaseHandlerOptions<TRouter, TRequest> {\n  /**\n   * Add handler to be called before response is sent to the user\n   * Useful for setting cache headers\n   * @link https://trpc.io/docs/caching\n   */\n  responseMeta?: ResponseMetaFn<TRouter>;\n}\n\nexport interface ResponseMeta {\n  status?: number;\n  headers?: HTTPHeaders;\n}",
+    "token_count": 189,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 12,
+     "rerank_score": -3.7933883666992188,
+     "bm25_rank": 23,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 189
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/express.ts:1-12",
+    "content": "# adapters/express.ts:1-12  (adapters.express)\nimport type * as express from 'express';\nimport type { AnyRouter } from '../core';\nimport type {\n  NodeHTTPCreateContextFnOptions,\n  NodeHTTPHandlerOptions,\n} from './node-http';\nimport { nodeHTTPRequestHandler } from './node-http';\n\nexport type CreateExpressContextOptions = NodeHTTPCreateContextFnOptions<\n  express.Request,\n  express.Response\n>;",
+    "token_count": 93,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 40,
+     "rerank_score": -3.873706817626953,
+     "bm25_rank": 32,
+     "dense_rank": 71,
+     "oversized_chunk": false,
+     "engine_token_count": 93
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/ws.ts:1-38",
+    "content": "# adapters/ws.ts:1-38  (adapters.ws)\nimport type { IncomingMessage } from 'http';\nimport type { WebSocket, WebSocketServer } from 'ws';\nimport type { AnyRouter, inferRouterContext } from '../core';\nimport { callProcedure } from '../core';\nimport { getTRPCErrorFromUnknown, TRPCError } from '../error/TRPCError';\nimport type { BaseHandlerOptions } from '../internals/types';\nimport type { Unsubscribable } from '../observable';\nimport { isObservable } from '../observable';\nimport type {\n  JSONRPC2,\n  TRPCClientOutgoingMessage,\n  TRPCReconnectNotification,\n  TRPCResponseMessage,\n} from '../rpc';\nimport { parseTRPCMessage } from '../rpc';\nimport { getErrorShape } from '../shared/getErrorShape';\nimport { transformTRPCResponse } from '../shared/transformTRPCResponse';\nimport type {\n  NodeHTTPCreateContextFnOptions,\n  NodeHTTPCreateContextOption,\n} from './node-http';\n\n/**\n * Web socket server handler\n */\nexport type WSSHandlerOptions<TRouter extends AnyRouter> = BaseHandlerOptions<\n  TRouter,\n  IncomingMessage\n> &\n  NodeHTTPCreateContextOption<TRouter, IncomingMessage, WebSocket> & {\n    wss: WebSocketServer;\n    process?: NodeJS.Process;\n  };\n\nexport type CreateWSSContextFnOptions = NodeHTTPCreateContextFnOptions<\n  IncomingMessage,\n  WebSocket\n>;",
+    "token_count": 305,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 27,
+     "rerank_score": -4.0864434242248535,
+     "bm25_rank": 33,
+     "dense_rank": 30,
+     "oversized_chunk": false,
+     "engine_token_count": 305
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/next.ts:20-68",
+    "content": "# adapters/next.ts:20-68  (adapters.next.createNextApiHandler)\nexport function createNextApiHandler<TRouter extends AnyRouter>(\n  opts: NodeHTTPHandlerOptions<TRouter, NextApiRequest, NextApiResponse>,\n): NextApiHandler {\n  return async (req, res) => {\n    function getPath(): string | null {\n      if (typeof req.query.trpc === 'string') {\n        return req.query.trpc;\n      }\n      if (Array.isArray(req.query.trpc)) {\n        return req.query.trpc.join('/');\n      }\n      return null;\n    }\n    const path = getPath();\n\n    if (path === null) {\n      const error = getErrorShape({\n        config: opts.router._def._config,\n        error: new TRPCError({\n          message:\n            'Query \"trpc\" not found - is the file named `[trpc]`.ts or `[...trpc].ts`?',\n          code: 'INTERNAL_SERVER_ERROR',\n        }),\n        type: 'unknown',\n        ctx: undefined,\n        path: undefined,\n        input: undefined,\n      });\n      res.statusCode = 500;\n      res.json({\n        id: -1,\n        error,\n      });\n      return;\n    }\n\n    await nodeHTTPRequestHandler({\n      // FIXME: no typecasting should be needed here\n      ...(opts as NodeHTTPHandlerOptions<\n        AnyRouter,\n        NextApiRequest,\n        NextApiResponse\n      >),\n      req,\n      res,\n      path,\n    });\n  };\n}",
+    "token_count": 315,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.next.createNextApiHandler",
+     "adapters.next.createNextApiHandler.getPath"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 45,
+     "rerank_score": -4.734423637390137,
+     "bm25_rank": 31,
+     "dense_rank": 89,
+     "oversized_chunk": false,
+     "engine_token_count": 315
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/contentType.ts:1-30",
+    "content": "# http/contentType.ts:1-30  (http.contentType)\n/* eslint-disable @typescript-eslint/no-non-null-assertion */\nimport type { AnyRouter } from '../core';\nimport { TRPCError } from '../error/TRPCError';\nimport type { CombinedDataTransformer } from '../transformer';\nimport type { MaybePromise } from '../types';\nimport type { HTTPRequest } from './types';\n\ntype GetInputs = (opts: {\n  req: HTTPRequest;\n  isBatchCall: boolean;\n  router: AnyRouter;\n  preprocessedBody: boolean;\n}) => MaybePromise<Record<number, unknown>>;\n\nexport type BodyResult =\n  | {\n      ok: true;\n      data: unknown;\n      /**\n       * If the HTTP handler has already parsed the body\n       */\n      preprocessed: boolean;\n    }\n  | { ok: false; error: TRPCError };\n\nexport type BaseContentTypeHandler<TOptions> = {\n  isMatch(opts: TOptions): boolean;\n  getBody: (opts: TOptions) => MaybePromise<BodyResult>;\n  getInputs: GetInputs;\n};",
+    "token_count": 228,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": -5.005867958068848,
+     "bm25_rank": 58,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 228
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/standalone.ts:19-37",
+    "content": "# adapters/standalone.ts:19-37  (adapters.standalone.createHTTPHandler)\nexport function createHTTPHandler<TRouter extends AnyRouter>(\n  opts: CreateHTTPHandlerOptions<TRouter>,\n) {\n  return async (req: http.IncomingMessage, res: http.ServerResponse) => {\n    const url = toURL(req.url!);\n\n    // get procedure path and remove the leading slash\n    // /procedure -> procedure\n    const path = url.pathname.slice(1);\n\n    await nodeHTTPRequestHandler({\n      // FIXME: no typecasting should be needed here\n      ...(opts as CreateHTTPHandlerOptions<AnyRouter>),\n      req,\n      res,\n      path,\n    });\n  };\n}",
+    "token_count": 148,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.standalone.createHTTPHandler"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 44,
+     "rerank_score": -5.10655403137207,
+     "bm25_rank": 36,
+     "dense_rank": 72,
+     "oversized_chunk": false,
+     "engine_token_count": 148
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/fetch/types.ts:1-29",
+    "content": "# adapters/fetch/types.ts:1-29  (adapters.fetch.types)\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPBaseHandlerOptions } from '../../http';\n\nexport type FetchCreateContextFnOptions = {\n  req: Request;\n  resHeaders: Headers;\n};\n\nexport type FetchCreateContextFn<TRouter extends AnyRouter> = (\n  opts: FetchCreateContextFnOptions,\n) => inferRouterContext<TRouter> | Promise<inferRouterContext<TRouter>>;\n\nexport type FetchCreateContextOption<TRouter extends AnyRouter> =\n  unknown extends inferRouterContext<TRouter>\n    ? {\n        /**\n         * @link https://trpc.io/docs/context\n         **/\n        createContext?: FetchCreateContextFn<TRouter>;\n      }\n    : {\n        /**\n         * @link https://trpc.io/docs/context\n         **/\n        createContext: FetchCreateContextFn<TRouter>;\n      };\n\nexport type FetchHandlerOptions<TRouter extends AnyRouter> =\n  FetchCreateContextOption<TRouter> & HTTPBaseHandlerOptions<TRouter, Request>;",
+    "token_count": 230,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 39,
+     "rerank_score": -5.406744956970215,
+     "bm25_rank": 88,
+     "dense_rank": 25,
+     "oversized_chunk": false,
+     "engine_token_count": 230
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/createProxy/index.ts:41-59",
+    "content": "# shared/createProxy/index.ts:41-59  (shared.createProxy.createFlatProxy)\n/**\n * Used in place of `new Proxy` where each handler will map 1 level deep to another value.\n *\n * @internal\n */\nexport const createFlatProxy = <TFaux>(\n  callback: (path: string & keyof TFaux) => any,\n): TFaux => {\n  return new Proxy(noop, {\n    get(_obj, name) {\n      if (typeof name !== 'string' || name === 'then') {\n        // special case for if the proxy is accidentally treated\n        // like a PromiseLike (like in `Promise.resolve(proxy)`)\n        return undefined;\n      }\n      return callback(name as any);\n    },\n  }) as TFaux;\n};",
+    "token_count": 161,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.createProxy.createFlatProxy",
+     "shared.createProxy.createFlatProxy.get"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 28,
+     "rerank_score": -5.5096330642700195,
+     "bm25_rank": 45,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 161
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/createProxy/index.ts:11-31",
+    "content": "# shared/createProxy/index.ts:11-31  (shared.createProxy.createInnerProxy)\nfunction createInnerProxy(callback: ProxyCallback, path: string[]) {\n  const proxy: unknown = new Proxy(noop, {\n    get(_obj, key) {\n      if (typeof key !== 'string' || key === 'then') {\n        // special case for if the proxy is accidentally treated\n        // like a PromiseLike (like in `Promise.resolve(proxy)`)\n        return undefined;\n      }\n      return createInnerProxy(callback, [...path, key]);\n    },\n    apply(_1, _2, args) {\n      const isApply = path[path.length - 1] === 'apply';\n      return callback({\n        args: isApply ? (args.length >= 2 ? args[1] : []) : args,\n        path: isApply ? path.slice(0, -1) : path,\n      });\n    },\n  });\n\n  return proxy;\n}",
+    "token_count": 199,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.createProxy.createInnerProxy",
+     "shared.createProxy.createInnerProxy.get",
+     "shared.createProxy.createInnerProxy.apply"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 31,
+     "rerank_score": -5.831110954284668,
+     "bm25_rank": 46,
+     "dense_rank": 34,
+     "oversized_chunk": false,
+     "engine_token_count": 199
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/transformTRPCResponse.ts:27-40",
+    "content": "# shared/transformTRPCResponse.ts:27-40  (shared.transformTRPCResponse.transformTRPCResponse)\n/**\n * Takes a unserialized `TRPCResponse` and serializes it with the router's transformers\n **/\nexport function transformTRPCResponse<\n  TResponse extends\n    | TRPCResponse\n    | TRPCResponse[]\n    | TRPCResponseMessage\n    | TRPCResponseMessage[],\n>(config: AnyRootConfig, itemOrItems: TResponse) {\n  return Array.isArray(itemOrItems)\n    ? itemOrItems.map((item) => transformTRPCResponseItem(config, item))\n    : transformTRPCResponseItem(config, itemOrItems);\n}",
+    "token_count": 142,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.transformTRPCResponse.transformTRPCResponse"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 19,
+     "rerank_score": -5.88023042678833,
+     "bm25_rank": 34,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 142
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:1-29",
+    "content": "# http/getHTTPStatusCode.ts:1-29  (http.getHTTPStatusCode)\nimport type { TRPCError } from '../error/TRPCError';\nimport { invert } from '../internals/invert';\nimport type { TRPCResponse } from '../rpc';\nimport { TRPC_ERROR_CODES_BY_KEY } from '../rpc';\n\nexport const TRPC_ERROR_CODES_BY_NUMBER = invert(TRPC_ERROR_CODES_BY_KEY);\ntype ValueOf<TType> = TType[keyof TType];\n\nexport type TRPC_ERROR_CODE_NUMBER = ValueOf<typeof TRPC_ERROR_CODES_BY_KEY>;\nconst JSONRPC2_TO_HTTP_CODE: Record<\n  keyof typeof TRPC_ERROR_CODES_BY_KEY,\n  number\n> = {\n  PARSE_ERROR: 400,\n  BAD_REQUEST: 400,\n  UNAUTHORIZED: 401,\n  NOT_FOUND: 404,\n  FORBIDDEN: 403,\n  METHOD_NOT_SUPPORTED: 405,\n  TIMEOUT: 408,\n  CONFLICT: 409,\n  PRECONDITION_FAILED: 412,\n  PAYLOAD_TOO_LARGE: 413,\n  UNPROCESSABLE_CONTENT: 422,\n  TOO_MANY_REQUESTS: 429,\n  CLIENT_CLOSED_REQUEST: 499,\n  INTERNAL_SERVER_ERROR: 500,\n  NOT_IMPLEMENTED: 501,\n};",
+    "token_count": 290,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 24,
+     "rerank_score": -6.002749919891357,
+     "bm25_rank": 47,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 290
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/transformTRPCResponse.ts:1-2",
+    "content": "# shared/transformTRPCResponse.ts:1-2  (shared.transformTRPCResponse)\nimport type { AnyRootConfig } from '../internals';\nimport type { TRPCResponse, TRPCResponseMessage } from '../rpc';",
+    "token_count": 48,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -6.034483432769775,
+     "bm25_rank": 38,
+     "dense_rank": 85,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/content-type/json/getPostBody.ts:5-41",
+    "content": "# adapters/node-http/content-type/json/getPostBody.ts:5-41  (adapters.node-http.content-type.json.getPostBody.getPostBody)\nexport async function getPostBody(opts: {\n  req: NodeHTTPRequest;\n  maxBodySize?: number;\n}): Promise<BodyResult> {\n  const { req, maxBodySize = Infinity } = opts;\n  return new Promise((resolve) => {\n    if ('body' in req) {\n      resolve({\n        ok: true,\n        data: req.body,\n        // If the request headers specifies a content-type, we assume that the body has been preprocessed\n        preprocessed:\n          !!req.headers['content-type']?.startsWith('application/json'),\n      });\n      return;\n    }\n    let body = '';\n    let hasBody = false;\n    req.on('data', function (data) {\n      body += data;\n      hasBody = true;\n      if (body.length > maxBodySize) {\n        resolve({\n          ok: false,\n          error: new TRPCError({ code: 'PAYLOAD_TOO_LARGE' }),\n        });\n      }\n    });\n    req.on('end', () => {\n      resolve({\n        ok: true,\n        data: hasBody ? body : undefined,\n        preprocessed: false,\n      });\n    });\n  });\n}",
+    "token_count": 269,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.node-http.content-type.json.getPostBody.getPostBody"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 34,
+     "rerank_score": -6.229409217834473,
+     "bm25_rank": 17,
+     "dense_rank": 92,
+     "oversized_chunk": false,
+     "engine_token_count": 269
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/standalone.ts:39-57",
+    "content": "# adapters/standalone.ts:39-57  (adapters.standalone.createHTTPServer)\nexport function createHTTPServer<TRouter extends AnyRouter>(\n  opts: CreateHTTPHandlerOptions<TRouter>,\n) {\n  const handler = createHTTPHandler(opts);\n  const server = http.createServer((req, res) => handler(req, res));\n\n  return {\n    server,\n    listen: (port?: number, hostname?: string) => {\n      server.listen(port, hostname);\n      const actualPort =\n        port === 0 ? ((server.address() as any).port as number) : port;\n\n      return {\n        port: actualPort,\n      };\n    },\n  };\n}",
+    "token_count": 141,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.standalone.createHTTPServer",
+     "adapters.standalone.createHTTPServer.listen"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 50,
+     "rerank_score": -6.540624618530273,
+     "bm25_rank": 62,
+     "dense_rank": 59,
+     "oversized_chunk": false,
+     "engine_token_count": 141
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/content-type/json/getPostBody.ts:1-3",
+    "content": "# adapters/node-http/content-type/json/getPostBody.ts:1-3  (adapters.node-http.content-type.json.getPostBody)\nimport { TRPCError } from '../../../../error/TRPCError';\nimport type { BodyResult } from '../../../../http/contentType';\nimport type { NodeHTTPRequest } from '../../types';",
+    "token_count": 63,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -6.616396903991699,
+     "bm25_rank": 65,
+     "dense_rank": 55,
+     "oversized_chunk": false,
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/batchStreamFormatter.ts:1-29",
+    "content": "# http/batchStreamFormatter.ts:1-29  (http.batchStreamFormatter.getBatchStreamFormatter)\n/**\n * Format a batch response as a line-delimited JSON stream\n * that the `unstable_httpBatchStreamLink` can parse:\n *\n * @example\n * ```ts\n * const formatter = getBatchStreamFormatter();\n * res.send(formatter(1, 'response #2'));\n * res.send(formatter(0, 'response #1'));\n * res.send(formatter.end());\n * ```\n *\n * Expected format:\n * ```json\n * {\"1\":\"response #2\"\n * ,\"0\":\"response #1\"\n * }\n * ```\n */\nexport function getBatchStreamFormatter() {\n  let first = true;\n  function format(index: number, string: string) {\n    const prefix = first ? '{' : ',';\n    first = false;\n    return `${prefix}\"${index}\":${string}\\n`;\n  }\n  format.end = () => '}';\n  return format;\n}",
+    "token_count": 201,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.batchStreamFormatter.getBatchStreamFormatter",
+     "http.batchStreamFormatter.getBatchStreamFormatter.format"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 26,
+     "rerank_score": -6.630192756652832,
+     "bm25_rank": 26,
+     "dense_rank": 35,
+     "oversized_chunk": false,
+     "engine_token_count": 201
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:284-304",
+    "content": "# core/internals/procedureBuilder.ts:284-304  (core.internals.procedureBuilder.createResolver)\nfunction createResolver(\n  _def: AnyProcedureBuilderDef,\n  resolver: (opts: ResolveOptions<any>) => MaybePromise<any>,\n) {\n  const finalBuilder = createNewBuilder(_def, {\n    resolver,\n    middlewares: [\n      async function resolveMiddleware(opts) {\n        const data = await resolver(opts);\n        return {\n          marker: middlewareMarker,\n          ok: true,\n          data,\n          ctx: opts.ctx,\n        } as const;\n      },\n    ],\n  });\n\n  return createProcedureCaller(finalBuilder._def);\n}",
+    "token_count": 138,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createResolver"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 43,
+     "rerank_score": -6.9545440673828125,
+     "bm25_rank": 39,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 138
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/index.ts:1-9",
+    "content": "# shared/index.ts:1-9  (shared)\nexport * from './createProxy';\nexport * from './jsonify';\nexport * from './transformTRPCResponse';\n\n// For `.d.ts` files https://github.com/trpc/trpc/issues/3943\nexport type { SerializeObject, Serialize } from './internal/serialize';\n\nexport { getErrorShape } from './getErrorShape';\nexport { getCauseFromUnknown } from './getCauseFromUnknown';",
+    "token_count": 96,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -6.972118377685547,
+     "bm25_rank": 52,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:60-62",
+    "content": "# http/getHTTPStatusCode.ts:60-62  (http.getHTTPStatusCode.getHTTPStatusCodeFromError)\nexport function getHTTPStatusCodeFromError(error: TRPCError) {\n  return getStatusCodeFromKey(error.code);\n}",
+    "token_count": 48,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.getHTTPStatusCode.getHTTPStatusCodeFromError"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 29,
+     "rerank_score": -7.406680583953857,
+     "bm25_rank": 61,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "internals/types.ts:1-27",
+    "content": "# internals/types.ts:1-27  (internals.types)\nimport type { inferRouterContext, ProcedureType } from '../core';\nimport type { AnyRouter } from '../core/router';\nimport type { TRPCError } from '../error/TRPCError';\n\n/**\n * Base interface for any response handler\n * @internal\n */\nexport interface BaseHandlerOptions<TRouter extends AnyRouter, TRequest> {\n  onError?: OnErrorFunction<TRouter, TRequest>;\n  batching?: {\n    enabled: boolean;\n  };\n  router: TRouter;\n}\n\n/**\n * @internal\n */\nexport type OnErrorFunction<TRouter extends AnyRouter, TRequest> = (opts: {\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  req: TRequest;\n  input: unknown;\n  ctx: inferRouterContext<TRouter> | undefined;\n}) => void;",
+    "token_count": 192,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 32,
+     "rerank_score": -7.412141799926758,
+     "bm25_rank": 55,
+     "dense_rank": 31,
+     "oversized_chunk": false,
+     "engine_token_count": 192
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "observable/internals/observableToPromise.ts:11-49",
+    "content": "# observable/internals/observableToPromise.ts:11-49  (observable.internals.observableToPromise.observableToPromise)\n/** @internal */\nexport function observableToPromise<TValue>(\n  observable: Observable<TValue, unknown>,\n) {\n  let abort: () => void;\n  const promise = new Promise<TValue>((resolve, reject) => {\n    let isDone = false;\n    function onDone() {\n      if (isDone) {\n        return;\n      }\n      isDone = true;\n      reject(new ObservableAbortError('This operation was aborted.'));\n      obs$.unsubscribe();\n    }\n    const obs$ = observable.subscribe({\n      next(data) {\n        isDone = true;\n        resolve(data);\n        onDone();\n      },\n      error(data) {\n        isDone = true;\n        reject(data);\n        onDone();\n      },\n      complete() {\n        isDone = true;\n        onDone();\n      },\n    });\n    abort = onDone;\n  });\n  return {\n    promise,\n    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n    abort: abort!,\n  };\n}",
+    "token_count": 229,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "observable.internals.observableToPromise.observableToPromise",
+     "observable.internals.observableToPromise.observableToPromise.onDone",
+     "observable.internals.observableToPromise.observableToPromise.next",
+     "observable.internals.observableToPromise.observableToPromise.error",
+     "observable.internals.observableToPromise.observableToPromise.complete"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 37,
+     "rerank_score": -7.5985493659973145,
+     "bm25_rank": 40,
+     "dense_rank": 48,
+     "oversized_chunk": false,
+     "engine_token_count": 229
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/node-http/content-type/json/index.ts:1-11",
+    "content": "# adapters/node-http/content-type/json/index.ts:1-11  (adapters.node-http.content-type.json)\nimport { getJsonContentTypeInputs } from '../../../../http/contentType';\nimport { createNodeHTTPContentTypeHandler } from '../../internals/contentType';\nimport { getPostBody } from './getPostBody';\n\nexport const nodeHTTPJSONContentTypeHandler = createNodeHTTPContentTypeHandler({\n  isMatch(opts) {\n    return !!opts.req.headers['content-type']?.startsWith('application/json');\n  },\n  getBody: getPostBody,\n  getInputs: getJsonContentTypeInputs,\n});",
+    "token_count": 119,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -8.470061302185059,
+     "bm25_rank": 70,
+     "dense_rank": 49,
+     "oversized_chunk": false,
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "rpc/envelopes.ts:138-141#part2of2",
+    "content": "# rpc/envelopes.ts:138-141#part2of2  (rpc.envelopes)\nexport type TRPCClientIncomingMessage<\n  TResult = unknown,\n  TError extends TRPCErrorShape = TRPCErrorShape,\n> = TRPCClientIncomingRequest | TRPCResponseMessage<TResult, TError>;",
+    "token_count": 70,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 41,
+     "rerank_score": -8.80903434753418,
+     "bm25_rank": 50,
+     "dense_rank": 51,
+     "oversized_chunk": false,
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/transformTRPCResponse.ts:4-25",
+    "content": "# shared/transformTRPCResponse.ts:4-25  (shared.transformTRPCResponse.transformTRPCResponseItem)\nfunction transformTRPCResponseItem<\n  TResponseItem extends TRPCResponse | TRPCResponseMessage,\n>(config: AnyRootConfig, item: TResponseItem): TResponseItem {\n  if ('error' in item) {\n    return {\n      ...item,\n      error: config.transformer.output.serialize(item.error),\n    };\n  }\n\n  if ('data' in item.result) {\n    return {\n      ...item,\n      result: {\n        ...item.result,\n        data: config.transformer.output.serialize(item.result.data),\n      },\n    };\n  }\n\n  return item;\n}",
+    "token_count": 144,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.transformTRPCResponse.transformTRPCResponseItem"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 33,
+     "rerank_score": -9.037087440490723,
+     "bm25_rank": 28,
+     "dense_rank": 61,
+     "oversized_chunk": false,
+     "engine_token_count": 144
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12978,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "What breaks if `http.resolveHTTPResponse.resolveHTTPResponse` changes?",
+   "task_type": "T5_blast_radius",
+   "n_chunks_indexed": 250,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "adapters/ws.ts:46-289#part2of3",
+    "core/internals/procedureBuilder.ts:322-407"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "typescript",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1.632551
+    ],
+    "L_embed_query": [
+     92.530553
+    ],
+    "L_dense": [
+     0.278107
+    ],
+    "L_rrf": [
+     0.110376
+    ],
+    "L_rerank": [
+     27565.42402
+    ],
+    "L_retrieve": [
+     27717.74121
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12978,
+   "prompt_tokens": 13116,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13129,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# http/resolveHTTPResponse.ts:265-289#part1of2  (http.resolveHTTPResponse.resolveHTTPResponse)\n// implementation\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  opts: PartialBy<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'unstable_onChunk' | 'unstable_onHead'\n  >,\n): Promise<HTTPResponse | void> {\n  const { router, req, unstable_onHead, unstable_onChunk } = opts;\n\n  if (req.method === 'HEAD') {\n    // can be used for lambda warmup\n    const headResponse: HTTPResponse = {\n      status: 204,\n    };\n    unstable_onHead?.(headResponse, false);\n    unstable_onChunk?.([-1, '']);\n    return headResponse;\n  }\n  const contentTypeHandler =\n    opts.contentTypeHandler ?? fallbackContentTypeHandler;\n  const batchingEnabled = opts.batching?.enabled ?? true;\n  const type =\n    HTTP_METHOD_PROCEDURE_TYPE_MAP[req.method] ?? ('unknown' as const);\n  let ctx: inferRouterContext<TRouter> | undefined = undefined;\n  let paths: string[] | undefined;\n\n  const isBatchCall = !!req.query.get('batch');\n  const isStreamCall =\n    isBatchCall &&\n    unstable_onHead &&\n    unstable_onChunk &&\n    req.headers['trpc-batch-mode'] === 'stream';\n}\n\n# http/resolveHTTPResponse.ts:225-254  (http.resolveHTTPResponse)\n/**\n * Since `resolveHTTPResponse` is a public API (community adapters),\n * let's give it a strong type signature to increase discoverability.\n */\n\n/**\n * Non-streaming signature for `resolveHTTPResponse`:\n * @param opts.unstable_onHead `undefined`\n * @param opts.unstable_onChunk `undefined`\n * @returns `Promise<HTTPResponse>`\n */\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  opts: Omit<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'unstable_onChunk' | 'unstable_onHead'\n  >,\n): Promise<HTTPResponse>;\n/**\n * Streaming signature for `resolveHTTPResponse`:\n * @param opts.unstable_onHead called as soon as the response head is known\n * @param opts.unstable_onChunk called for every procedure with `[index, result]`\n * @returns `Promise<void>` since the response is streamed\n */\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(opts: ResolveHTTPRequestOptions<TRouter, TRequest>): Promise<void>;\n\n# adapters/fetch/fetchRequestHandler.ts:22-127  (adapters.fetch.fetchRequestHandler.fetchRequestHandler)\nexport async function fetchRequestHandler<TRouter extends AnyRouter>(\n  opts: FetchHandlerRequestOptions<TRouter>,\n): Promise<Response> {\n  const resHeaders = new Headers();\n\n  const createContext = async () => {\n    return opts.createContext?.({ req: opts.req, resHeaders });\n  };\n\n  const url = toURL(opts.req.url);\n\n  const pathname = trimSlashes(url.pathname);\n  const endpoint = trimSlashes(opts.endpoint);\n  const path = trimSlashes(pathname.slice(endpoint.length));\n\n  const req: HTTPRequest = {\n    query: url.searchParams,\n    method: opts.req.method,\n    headers: Object.fromEntries(opts.req.headers),\n    body: opts.req.headers.get('content-type')?.startsWith('application/json')\n      ? await opts.req.text()\n      : '',\n  };\n\n  let resolve: (value: Response) => void;\n  const promise = new Promise<Response>((r) => (resolve = r));\n  let status = 200;\n\n  let isStream = false;\n  let controller: ReadableStreamController<any>;\n  let encoder: TextEncoder;\n  let formatter: ReturnType<typeof getBatchStreamFormatter>;\n  const unstable_onHead = (head: HTTPResponse, isStreaming: boolean) => {\n    for (const [key, value] of Object.entries(head.headers ?? {})) {\n      /* istanbul ignore if -- @preserve */\n      if (typeof value === 'undefined') {\n        continue;\n      }\n      if (typeof value === 'string') {\n        resHeaders.set(key, value);\n        continue;\n      }\n      for (const v of value) {\n        resHeaders.append(key, v);\n      }\n    }\n    status = head.status;\n    if (isStreaming) {\n      resHeaders.set('Transfer-Encoding', 'chunked');\n      resHeaders.append('Vary', 'trpc-batch-mode');\n      const stream = new ReadableStream({\n        start(c) {\n          controller = c;\n        },\n      });\n      const response = new Response(stream, {\n        status,\n        headers: resHeaders,\n      });\n      resolve(response);\n      encoder = new TextEncoder();\n      formatter = getBatchStreamFormatter();\n      isStream = true;\n    }\n  };\n\n  const unstable_onChunk = ([index, string]: ResponseChunk) => {\n    if (index === -1) {\n      // full response, no streaming\n      const response = new Response(string || null, {\n        status,\n        headers: resHeaders,\n      });\n      resolve(response);\n    } else {\n      controller.enqueue(encoder.encode(formatter(index, string)));\n    }\n  };\n\n  resolveHTTPResponse({\n    req,\n    createContext,\n    path,\n    router: opts.router,\n    batching: opts.batching,\n    responseMeta: opts.responseMeta,\n    onError(o) {\n      opts?.onError?.({ ...o, req: opts.req });\n    },\n    unstable_onHead,\n    unstable_onChunk,\n  })\n    .then(() => {\n      if (isStream) {\n        controller.enqueue(encoder.encode(formatter.end()));\n        controller.close();\n      }\n    })\n    .catch(() => {\n      if (isStream) {\n        controller.close();\n      }\n    });\n\n  return promise;\n}\n\n# adapters/aws-lambda/index.ts:88-122  (adapters.aws-lambda.awsLambdaRequestHandler)\nexport function awsLambdaRequestHandler<\n  TRouter extends AnyRouter,\n  TEvent extends APIGatewayEvent,\n  TResult extends inferAPIGWReturn<TEvent>,\n>(\n  opts: AWSLambdaOptions<TRouter, TEvent>,\n): (event: TEvent, context: APIGWContext) => Promise<TResult> {\n  return async (event, context) => {\n    const req = lambdaEventToHTTPRequest(event);\n    const path = getPath(event);\n    const createContext = async function _createContext(): Promise<\n      inferRouterContext<TRouter>\n    > {\n      return await opts.createContext?.({ event, context });\n    };\n\n    const response = await resolveHTTPResponse({\n      router: opts.router,\n      batching: opts.batching,\n      responseMeta: opts?.responseMeta,\n      createContext,\n      req,\n      path,\n      error: null,\n      onError(o) {\n        opts?.onError?.({\n          ...o,\n          req: event,\n        });\n      },\n    });\n\n    return tRPCOutputToAPIGatewayOutput<TEvent, TResult>(event, response);\n  };\n}\n\n# adapters/fastify/fastifyRequestHandler.ts:1-25  (adapters.fastify.fastifyRequestHandler)\nimport { Readable } from 'node:stream';\nimport type { FastifyReply, FastifyRequest } from 'fastify';\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPBaseHandlerOptions, HTTPRequest } from '../../http';\nimport { getBatchStreamFormatter } from '../../http';\nimport type { HTTPResponse, ResponseChunk } from '../../http/internals/types';\nimport { resolveHTTPResponse } from '../../http/resolveHTTPResponse';\nimport type { NodeHTTPCreateContextOption } from '../node-http';\n\nexport type FastifyHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends FastifyRequest,\n  TResponse extends FastifyReply,\n> = HTTPBaseHandlerOptions<TRouter, TRequest> &\n  NodeHTTPCreateContextOption<TRouter, TRequest, TResponse>;\n\ntype FastifyRequestHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends FastifyRequest,\n  TResponse extends FastifyReply,\n> = FastifyHandlerOptions<TRouter, TRequest, TResponse> & {\n  req: TRequest;\n  res: TResponse;\n  path: string;\n};\n\n# http/resolveHTTPResponse.ts:291-456#part2of2  (http.resolveHTTPResponse.resolveHTTPResponse)\nexport async function resolveHTTPResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  opts: PartialBy<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'unstable_onChunk' | 'unstable_onHead'\n  >,\n): Promise<HTTPResponse | void> {\n  try {\n    // we create context first so that (unless `createContext()` throws)\n    // error handler may access context information\n    //\n    // this way even if the client sends malformed input that might cause an exception:\n    //  - `opts.error` has value,\n    //  - batching is not enabled,\n    //  - `type` is unknown,\n    //  - `getInputs` throws because of malformed JSON,\n    // context value is still available to the error handler\n    ctx = await opts.createContext();\n\n    if (opts.error) {\n      throw opts.error;\n    }\n    if (isBatchCall && !batchingEnabled) {\n      throw new Error(`Batching is not enabled on the server`);\n    }\n    /* istanbul ignore if -- @preserve */\n    if (type === 'subscription') {\n      throw new TRPCError({\n        message: 'Subscriptions should use wsLink',\n        code: 'METHOD_NOT_SUPPORTED',\n      });\n    }\n    if (type === 'unknown') {\n      throw new TRPCError({\n        message: `Unexpected request method ${req.method}`,\n        code: 'METHOD_NOT_SUPPORTED',\n      });\n    }\n\n    const inputs = await contentTypeHandler.getInputs({\n      isBatchCall,\n      req,\n      router,\n      preprocessedBody: opts.preprocessedBody ?? false,\n    });\n\n    paths = isBatchCall\n      ? decodeURIComponent(opts.path).split(',')\n      : [opts.path];\n    const promises = paths.map((path, index) =>\n      inputToProcedureCall({ opts, ctx, type, input: inputs[index], path }),\n    );\n\n    if (!isStreamCall) {\n      /**\n       * Non-streaming response:\n       * - await all responses in parallel, blocking on the slowest one\n       * - create headers with known response body\n       * - return a complete HTTPResponse\n       */\n\n      const untransformedJSON = await Promise.all(promises);\n      const errors = untransformedJSON.flatMap((response) =>\n        'error' in response ? [response.error] : [],\n      );\n\n      const headResponse = initResponse({\n        ctx,\n        paths,\n        type,\n        responseMeta: opts.responseMeta,\n        untransformedJSON,\n        errors,\n      });\n      unstable_onHead?.(headResponse, false);\n\n      // return body stuff\n      const result = isBatchCall ? untransformedJSON : untransformedJSON[0]!; // eslint-disable-line @typescript-eslint/no-non-null-assertion -- `untransformedJSON` should be the length of `paths` which should be at least 1 otherwise there wouldn't be a request at all\n      const transformedJSON = transformTRPCResponse(\n        router._def._config,\n        result,\n      );\n      const body = JSON.stringify(transformedJSON);\n      unstable_onChunk?.([-1, body]);\n\n      return {\n        status: headResponse.status,\n        headers: headResponse.headers,\n        body,\n      };\n    }\n\n    /**\n     * Streaming response:\n     * - block on none, call `onChunk` as soon as each response is ready\n     * - create headers with minimal data (cannot know the response body in advance)\n     * - return void\n     */\n    const headResponse = initResponse({\n      ctx,\n      paths,\n      type,\n      responseMeta: opts.responseMeta,\n    });\n    unstable_onHead(headResponse, true);\n\n    const indexedPromises = new Map(\n      promises.map((promise, index) => [\n        index,\n        promise.then((r) => [index, r] as const),\n      ]),\n    );\n    for (const _ of paths) {\n      const [index, untransformedJSON] = await Promise.race(\n        indexedPromises.values(),\n      );\n      indexedPromises.delete(index);\n\n      try {\n        const transformedJSON = transformTRPCResponse(\n          router._def._config,\n          untransformedJSON,\n        );\n        const body = JSON.stringify(transformedJSON);\n\n        unstable_onChunk([index, body]);\n      } catch (cause) {\n        const path = paths[index];\n        const input = inputs[index];\n        const { body } = caughtErrorToData(cause, {\n          opts,\n          ctx,\n          type,\n          path,\n          input,\n        });\n\n        unstable_onChunk([index, body]);\n      }\n    }\n    return;\n  } catch (cause) {\n    // we get here if\n    // - batching is called when it's not enabled\n    // - `createContext()` throws\n    // - `router._def._config.transformer.output.serialize()` throws\n    // - post body is too large\n    // - input deserialization fails\n    // - `errorFormatter` return value is malformed\n    const { error, untransformedJSON, body } = caughtErrorToData(cause, {\n      opts,\n      ctx,\n      type,\n    });\n\n    const headResponse = initResponse({\n      ctx,\n      paths,\n      type,\n      responseMeta: opts.responseMeta,\n      untransformedJSON,\n      errors: [error],\n    });\n    unstable_onHead?.(headResponse, false);\n\n    unstable_onChunk?.([-1, body]);\n\n    return {\n      status: headResponse.status,\n      headers: headResponse.headers,\n      body,\n    };\n  }\n}\n\n# adapters/fastify/fastifyRequestHandler.ts:27-117  (adapters.fastify.fastifyRequestHandler.fastifyRequestHandler)\nexport async function fastifyRequestHandler<\n  TRouter extends AnyRouter,\n  TRequest extends FastifyRequest,\n  TResponse extends FastifyReply,\n>(opts: FastifyRequestHandlerOptions<TRouter, TRequest, TResponse>) {\n  const createContext = async function _createContext(): Promise<\n    inferRouterContext<TRouter>\n  > {\n    return opts.createContext?.(opts);\n  };\n\n  const query = opts.req.query\n    ? new URLSearchParams(opts.req.query as any)\n    : new URLSearchParams(opts.req.url.split('?')[1]);\n\n  const req: HTTPRequest = {\n    query,\n    method: opts.req.method,\n    headers: opts.req.headers,\n    body: opts.req.body ?? 'null',\n  };\n\n  let resolve: (value: FastifyReply) => void;\n  const promise = new Promise<FastifyReply>((r) => (resolve = r));\n\n  let isStream = false;\n  let stream: Readable;\n  let formatter: ReturnType<typeof getBatchStreamFormatter>;\n  const unstable_onHead = (head: HTTPResponse, isStreaming: boolean) => {\n    if (!opts.res.statusCode || opts.res.statusCode === 200) {\n      opts.res.statusCode = head.status;\n    }\n    for (const [key, value] of Object.entries(head.headers ?? {})) {\n      /* istanbul ignore if -- @preserve */\n      if (typeof value === 'undefined') {\n        continue;\n      }\n      void opts.res.header(key, value);\n    }\n    if (isStreaming) {\n      void opts.res.header('Transfer-Encoding', 'chunked');\n      void opts.res.header(\n        'Vary',\n        opts.res.hasHeader('Vary')\n          ? 'trpc-batch-mode, ' + opts.res.getHeader('Vary')\n          : 'trpc-batch-mode',\n      );\n      stream = new Readable();\n      stream._read = () => {}; // eslint-disable-line @typescript-eslint/no-empty-function -- https://github.com/fastify/fastify/issues/805#issuecomment-369172154\n      resolve(opts.res.send(stream));\n      isStream = true;\n      formatter = getBatchStreamFormatter();\n    }\n  };\n\n  const unstable_onChunk = ([index, string]: ResponseChunk) => {\n    if (index === -1) {\n      // full response, no streaming\n      resolve(opts.res.send(string));\n    } else {\n      stream.push(formatter(index, string));\n    }\n  };\n\n  resolveHTTPResponse({\n    req,\n    createContext,\n    path: opts.path,\n    router: opts.router,\n    batching: opts.batching,\n    responseMeta: opts.responseMeta,\n    onError(o) {\n      opts?.onError?.({ ...o, req: opts.req });\n    },\n    unstable_onHead,\n    unstable_onChunk,\n  })\n    .then(() => {\n      if (isStream) {\n        stream.push(formatter.end());\n        stream.push(null); // https://github.com/fastify/fastify/issues/805#issuecomment-369172154\n      }\n    })\n    .catch(() => {\n      if (isStream) {\n        stream.push(null);\n      }\n    });\n\n  return promise;\n}\n\n# http/resolveHTTPResponse.ts:1-72  (http.resolveHTTPResponse)\nimport type {\n  AnyRouter,\n  inferRouterContext,\n  inferRouterError,\n  ProcedureType,\n} from '../core';\nimport { callProcedure } from '../core';\nimport { getTRPCErrorFromUnknown, TRPCError } from '../error/TRPCError';\nimport type { TRPCResponse } from '../rpc';\nimport { getErrorShape } from '../shared/getErrorShape';\nimport { transformTRPCResponse } from '../shared/transformTRPCResponse';\nimport type { Maybe } from '../types';\nimport type { BaseContentTypeHandler } from './contentType';\nimport { getJsonContentTypeInputs } from './contentType';\nimport { getHTTPStatusCode } from './getHTTPStatusCode';\nimport type {\n  HTTPHeaders,\n  HTTPResponse,\n  ResponseChunk,\n} from './internals/types';\nimport type { HTTPBaseHandlerOptions, HTTPRequest } from './types';\n\nconst HTTP_METHOD_PROCEDURE_TYPE_MAP: Record<\n  string,\n  ProcedureType | undefined\n> = {\n  GET: 'query',\n  POST: 'mutation',\n};\n\nconst fallbackContentTypeHandler = {\n  getInputs: getJsonContentTypeInputs,\n};\n\ntype PartialBy<TBaseType, TKey extends keyof TBaseType> = Omit<\n  TBaseType,\n  TKey\n> &\n  Partial<Pick<TBaseType, TKey>>;\n\ninterface ResolveHTTPRequestOptions<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n> extends HTTPBaseHandlerOptions<TRouter, TRequest> {\n  createContext: () => Promise<inferRouterContext<TRouter>>;\n  req: TRequest;\n  path: string;\n  error?: Maybe<TRPCError>;\n  contentTypeHandler?: BaseContentTypeHandler<any>;\n  preprocessedBody?: boolean;\n  /**\n   * Called as soon as the response head is known.\n   * When streaming, headers will have been generated\n   * **without** knowing the response body.\n   *\n   * Without this callback, streaming is disabled.\n   */\n  unstable_onHead: (\n    headResponse: Omit<HTTPResponse, 'body'>,\n    isStreaming: boolean,\n  ) => void;\n  /**\n   * Called for every procedure with `[index, result]`.\n   *\n   * Will be called a single time with `index = -1` if\n   * - response is an error\n   * - response is empty (HEAD request)\n   *\n   * Without this callback, streaming is disabled.\n   */\n  unstable_onChunk: (chunk: ResponseChunk) => void;\n}\n\n# adapters/node-http/nodeHTTPRequestHandler.ts:1-16  (adapters.node-http.nodeHTTPRequestHandler)\n/* eslint-disable @typescript-eslint/no-non-null-assertion */\nimport type { AnyRouter } from '../../core';\nimport type { inferRouterContext } from '../../core/types';\nimport type { HTTPRequest } from '../../http';\nimport { getBatchStreamFormatter } from '../../http';\nimport type { HTTPResponse, ResponseChunk } from '../../http/internals/types';\nimport { resolveHTTPResponse } from '../../http/resolveHTTPResponse';\nimport { nodeHTTPJSONContentTypeHandler } from './content-type/json';\nimport type { NodeHTTPContentTypeHandler } from './internals/contentType';\nimport type {\n  NodeHTTPRequest,\n  NodeHTTPRequestHandlerOptions,\n  NodeHTTPResponse,\n} from './types';\n\nconst defaultJSONContentTypeHandler = nodeHTTPJSONContentTypeHandler();\n\n# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData)\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  const { router, req, onError } = errorOpts.opts;\n  const error = getTRPCErrorFromUnknown(cause);\n  onError?.({\n    error,\n    path: errorOpts.path,\n    input: errorOpts.input,\n    ctx: errorOpts.ctx,\n    type: errorOpts.type,\n    req,\n  });\n  const untransformedJSON = {\n    error: getErrorShape({\n      config: router._def._config,\n      error,\n      type: errorOpts.type,\n      path: errorOpts.path,\n      input: errorOpts.input,\n      ctx: errorOpts.ctx,\n    }),\n  };\n  const transformedJSON = transformTRPCResponse(\n    router._def._config,\n    untransformedJSON,\n  );\n  const body = JSON.stringify(transformedJSON);\n  return {\n    error,\n    untransformedJSON,\n    body,\n  };\n}\n\n# adapters/aws-lambda/index.ts:1-27  (adapters.aws-lambda)\nimport type {\n  APIGatewayProxyEvent,\n  APIGatewayProxyEventV2,\n  APIGatewayProxyResult,\n  APIGatewayProxyStructuredResultV2,\n  Context as APIGWContext,\n} from 'aws-lambda';\nimport { TRPCError } from '../..';\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPRequest } from '../../http';\nimport { resolveHTTPResponse } from '../../http';\nimport type { HTTPResponse } from '../../http/internals/types';\nimport type {\n  APIGatewayEvent,\n  APIGatewayResult,\n  AWSLambdaOptions,\n} from './utils';\nimport {\n  getHTTPMethod,\n  getPath,\n  isPayloadV1,\n  isPayloadV2,\n  transformHeaders,\n  UNKNOWN_PAYLOAD_FORMAT_VERSION_ERROR_MESSAGE,\n} from './utils';\n\nexport * from './utils';\n\n# adapters/node-http/types.ts:1-103  (adapters.node-http.types)\nimport type { IncomingMessage, ServerResponse } from 'http';\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPBaseHandlerOptions } from '../../http';\nimport type { MaybePromise } from '../../types';\nimport type { NodeHTTPContentTypeHandler } from './internals/contentType';\n\ninterface ParsedQs {\n  [key: string]: ParsedQs | ParsedQs[] | string[] | string | undefined;\n}\n\nexport type NodeHTTPRequest = IncomingMessage & {\n  query?: ParsedQs;\n  body?: unknown;\n};\nexport type NodeHTTPResponse = ServerResponse & {\n  /**\n   * Force the partially-compressed response to be flushed to the client.\n   *\n   * Added by compression middleware\n   * (depending on the environment,\n   * e.g. Next <= 12,\n   * e.g. Express w/ `compression()`)\n   */\n  flush?: () => void;\n};\n\nexport type NodeHTTPCreateContextOption<\n  TRouter extends AnyRouter,\n  TRequest,\n  TResponse,\n> = object extends inferRouterContext<TRouter>\n  ? {\n      /**\n       * @link https://trpc.io/docs/context\n       **/\n      createContext?: NodeHTTPCreateContextFn<TRouter, TRequest, TResponse>;\n    }\n  : {\n      /**\n       * @link https://trpc.io/docs/context\n       **/\n      createContext: NodeHTTPCreateContextFn<TRouter, TRequest, TResponse>;\n    };\n\n/**\n * @internal\n */\ntype ConnectMiddleware<\n  TRequest extends NodeHTTPRequest = NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse = NodeHTTPResponse,\n> = (req: TRequest, res: TResponse, next: (err?: any) => any) => void;\n\nexport type NodeHTTPHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> = HTTPBaseHandlerOptions<TRouter, TRequest> &\n  NodeHTTPCreateContextOption<TRouter, TRequest, TResponse> & {\n    /**\n     * By default, http `OPTIONS` requests are not handled, and CORS headers are not returned.\n     *\n     * This can be used to handle them manually or via the `cors` npm package: https://www.npmjs.com/package/cors\n     *\n     * ```ts\n     * import cors from 'cors'\n     *\n     * nodeHTTPRequestHandler({\n     *   cors: cors()\n     * })\n     * ```\n     *\n     * You can also use it for other needs which a connect/node.js compatible middleware can solve,\n     *  though you might wish to consider an alternative solution like the Express adapter if your needs are complex.\n     */\n    middleware?: ConnectMiddleware;\n    maxBodySize?: number;\n    experimental_contentTypeHandlers?: NodeHTTPContentTypeHandler<\n      TRequest,\n      TResponse\n    >[];\n  };\n\nexport type NodeHTTPRequestHandlerOptions<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> = {\n  req: TRequest;\n  res: TResponse;\n  path: string;\n} & NodeHTTPHandlerOptions<TRouter, TRequest, TResponse>;\n\nexport type NodeHTTPCreateContextFnOptions<TRequest, TResponse> = {\n  req: TRequest;\n  res: TResponse;\n};\nexport type NodeHTTPCreateContextFn<\n  TRouter extends AnyRouter,\n  TRequest,\n  TResponse,\n> = (\n  opts: NodeHTTPCreateContextFnOptions<TRequest, TResponse>,\n) => MaybePromise<inferRouterContext<TRouter>>;\n\n# http/resolveHTTPResponse.ts:74-130  (http.resolveHTTPResponse.initResponse)\nfunction initResponse<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(initOpts: {\n  ctx: inferRouterContext<TRouter> | undefined;\n  paths: string[] | undefined;\n  type: ProcedureType | 'unknown';\n  responseMeta?: HTTPBaseHandlerOptions<TRouter, TRequest>['responseMeta'];\n  untransformedJSON?:\n    | TRPCResponse<unknown, inferRouterError<TRouter>>\n    | TRPCResponse<unknown, inferRouterError<TRouter>>[]\n    | undefined;\n  errors?: TRPCError[];\n}): HTTPResponse {\n  const {\n    ctx,\n    paths,\n    type,\n    responseMeta,\n    untransformedJSON,\n    errors = [],\n  } = initOpts;\n\n  let status = untransformedJSON ? getHTTPStatusCode(untransformedJSON) : 200;\n  const headers: HTTPHeaders = {\n    'Content-Type': 'application/json',\n  };\n\n  const eagerGeneration = !untransformedJSON;\n  const data = eagerGeneration\n    ? []\n    : Array.isArray(untransformedJSON)\n    ? untransformedJSON\n    : [untransformedJSON];\n\n  const meta =\n    responseMeta?.({\n      ctx,\n      paths,\n      type,\n      data,\n      errors,\n      eagerGeneration,\n    }) ?? {};\n\n  for (const [key, value] of Object.entries(meta.headers ?? {})) {\n    headers[key] = value;\n  }\n  if (meta.status) {\n    status = meta.status;\n  }\n\n  return {\n    status,\n    headers,\n  };\n}\n\n# adapters/fetch/fetchRequestHandler.ts:1-13  (adapters.fetch.fetchRequestHandler)\nimport type { AnyRouter } from '../../core';\nimport type { HTTPRequest } from '../../http';\nimport { getBatchStreamFormatter } from '../../http';\nimport type { HTTPResponse, ResponseChunk } from '../../http/internals/types';\nimport { resolveHTTPResponse } from '../../http/resolveHTTPResponse';\nimport { toURL } from '../../http/toURL';\nimport type { FetchHandlerOptions } from './types';\n\nexport type FetchHandlerRequestOptions<TRouter extends AnyRouter> =\n  FetchHandlerOptions<TRouter> & {\n    req: Request;\n    endpoint: string;\n  };\n\n# rpc/envelopes.ts:1-137#part1of2  (rpc.envelopes)\n/* eslint-disable @typescript-eslint/no-namespace */\nimport type { ProcedureType } from '../deprecated/router';\nimport type { TRPC_ERROR_CODE_NUMBER } from './codes';\n\n/**\n * Error response\n */\nexport interface TRPCErrorShape<\n  TCode extends number = TRPC_ERROR_CODE_NUMBER,\n  TData extends Record<string, unknown> = Record<string, unknown>,\n> {\n  code: TCode;\n  message: string;\n  data: TData;\n}\n\n/**\n * JSON-RPC 2.0 Specification\n */\nexport namespace JSONRPC2 {\n  export type RequestId = number | string | null;\n\n  /**\n   * All requests/responses extends this shape\n   */\n  export interface BaseEnvelope {\n    id?: RequestId;\n    jsonrpc?: '2.0';\n  }\n\n  export interface BaseRequest<TMethod extends string = string>\n    extends BaseEnvelope {\n    method: TMethod;\n  }\n\n  export interface Request<TMethod extends string = string, TParams = unknown>\n    extends BaseRequest<TMethod> {\n    params: TParams;\n  }\n\n  export interface ResultResponse<TResult = unknown> extends BaseEnvelope {\n    result: TResult;\n  }\n\n  export interface ErrorResponse<TError extends TRPCErrorShape = TRPCErrorShape>\n    extends BaseEnvelope {\n    error: TError;\n  }\n}\n\n/////////////////////////// HTTP envelopes ///////////////////////\n\nexport interface TRPCRequest\n  extends JSONRPC2.Request<ProcedureType, { path: string; input: unknown }> {}\n\nexport interface TRPCResult<TData = unknown> {\n  data: TData;\n}\n\nexport interface TRPCSuccessResponse<TData>\n  extends JSONRPC2.ResultResponse<\n    TRPCResult<TData> & {\n      type?: 'data';\n    }\n  > {}\n\n/**\n * @deprecated use `TRPCSuccessResponse` instead\n */\nexport type TRPCResultResponse<TData = unknown> = TRPCSuccessResponse<TData>;\n\nexport interface TRPCErrorResponse<\n  TError extends TRPCErrorShape = TRPCErrorShape,\n> extends JSONRPC2.ErrorResponse<TError> {}\n\nexport type TRPCResponse<\n  TData = unknown,\n  TError extends TRPCErrorShape = TRPCErrorShape,\n> = TRPCErrorResponse<TError> | TRPCSuccessResponse<TData>;\n\n/////////////////////////// WebSocket envelopes ///////////////////////\n\nexport type TRPCRequestMessage = TRPCRequest & {\n  id: JSONRPC2.RequestId;\n};\n\n/**\n * The client asked the server to unsubscribe\n */\nexport interface TRPCSubscriptionStopNotification\n  extends JSONRPC2.BaseRequest<'subscription.stop'> {\n  id: null;\n}\n\n/**\n * The client's outgoing request types\n */\nexport type TRPCClientOutgoingRequest = TRPCSubscriptionStopNotification;\n\n/**\n * The client's sent messages shape\n */\nexport type TRPCClientOutgoingMessage =\n  | TRPCRequestMessage\n  | (JSONRPC2.BaseRequest<'subscription.stop'> & { id: JSONRPC2.RequestId });\n\nexport interface TRPCResultMessage<TData>\n  extends JSONRPC2.ResultResponse<\n    | { type: 'started' }\n    | { type: 'stopped' }\n    | (TRPCResult<TData> & { type: 'data' })\n  > {}\n\nexport type TRPCResponseMessage<\n  TData = unknown,\n  TError extends TRPCErrorShape = TRPCErrorShape,\n> = { id: JSONRPC2.RequestId } & (\n  | TRPCErrorResponse<TError>\n  | TRPCResultMessage<TData>\n);\n\n/**\n * The server asked the client to reconnect - useful when restarting/redeploying service\n */\nexport interface TRPCReconnectNotification\n  extends JSONRPC2.BaseRequest<'reconnect'> {\n  id: JSONRPC2.RequestId;\n}\n\n/**\n * The client's incoming request types\n */\nexport type TRPCClientIncomingRequest = TRPCReconnectNotification;\n\n/**\n * The client's received messages shape\n */\n\n# http/internals/types.ts:1-40  (http.internals.types)\nimport type {\n  AnyRouter,\n  inferRouterContext,\n  inferRouterError,\n  ProcedureType,\n} from '../../core';\nimport type { TRPCError } from '../../error/TRPCError';\nimport type { TRPCResponse } from '../../rpc';\nimport type { Dict } from '../../types';\nimport type { ResponseMeta } from '../types';\n\nexport type HTTPHeaders = Dict<string[] | string>;\n\nexport interface HTTPResponse {\n  status: number;\n  headers?: HTTPHeaders;\n  body?: string;\n}\n\nexport type ResponseChunk = [procedureIndex: number, responseBody: string];\n\n/**\n * @internal\n */\nexport type ResponseMetaFn<TRouter extends AnyRouter> = (opts: {\n  data: TRPCResponse<unknown, inferRouterError<TRouter>>[];\n  ctx?: inferRouterContext<TRouter>;\n  /**\n   * The different tRPC paths requested\n   **/\n  paths?: string[];\n  type: ProcedureType | 'unknown';\n  errors: TRPCError[];\n  /**\n   * `true` if the `ResponseMeta` are being\n   * generated without knowing the response data\n   * (e.g. for streaming requests).\n   */\n  eagerGeneration?: boolean;\n}) => ResponseMeta;\n\n# adapters/standalone.ts:1-17  (adapters.standalone)\n/* eslint-disable @typescript-eslint/no-non-null-assertion */\nimport http from 'http';\nimport type { AnyRouter } from '../core';\nimport { toURL } from '../http/toURL';\nimport type {\n  NodeHTTPCreateContextFnOptions,\n  NodeHTTPHandlerOptions,\n} from './node-http';\nimport { nodeHTTPRequestHandler } from './node-http';\n\nexport type CreateHTTPHandlerOptions<TRouter extends AnyRouter> =\n  NodeHTTPHandlerOptions<TRouter, http.IncomingMessage, http.ServerResponse>;\n\nexport type CreateHTTPContextOptions = NodeHTTPCreateContextFnOptions<\n  http.IncomingMessage,\n  http.ServerResponse\n>;\n\n# adapters/node-http/nodeHTTPRequestHandler.ts:18-138  (adapters.node-http.nodeHTTPRequestHandler.nodeHTTPRequestHandler)\nexport async function nodeHTTPRequestHandler<\n  TRouter extends AnyRouter,\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n>(opts: NodeHTTPRequestHandlerOptions<TRouter, TRequest, TResponse>) {\n  const handleViaMiddleware = opts.middleware ?? ((_req, _res, next) => next());\n\n  return handleViaMiddleware(opts.req, opts.res, async (err) => {\n    if (err) throw err;\n\n    const createContext = async (): Promise<inferRouterContext<TRouter>> => {\n      return await opts.createContext?.(opts);\n    };\n\n    const query = opts.req.query\n      ? new URLSearchParams(opts.req.query as any)\n      : new URLSearchParams(opts.req.url!.split('?')[1]);\n\n    const jsonContentTypeHandler =\n      defaultJSONContentTypeHandler as unknown as NodeHTTPContentTypeHandler<\n        TRequest,\n        TResponse\n      >;\n\n    const contentTypeHandlers = opts.experimental_contentTypeHandlers ?? [\n      jsonContentTypeHandler,\n    ];\n\n    const contentTypeHandler =\n      contentTypeHandlers.find((handler) =>\n        handler.isMatch({\n          ...opts,\n          query,\n        }),\n      ) ??\n      // fallback to json\n      jsonContentTypeHandler;\n\n    const bodyResult = await contentTypeHandler.getBody({\n      ...opts,\n      query,\n    });\n\n    const req: HTTPRequest = {\n      method: opts.req.method!,\n      headers: opts.req.headers,\n      query,\n      body: bodyResult.ok ? bodyResult.data : undefined,\n    };\n\n    let isStream = false;\n    let formatter: ReturnType<typeof getBatchStreamFormatter>;\n    const unstable_onHead = (head: HTTPResponse, isStreaming: boolean) => {\n      if (\n        'status' in head &&\n        (!opts.res.statusCode || opts.res.statusCode === 200)\n      ) {\n        opts.res.statusCode = head.status;\n      }\n      for (const [key, value] of Object.entries(head.headers ?? {})) {\n        /* istanbul ignore if -- @preserve */\n        if (typeof value === 'undefined') {\n          continue;\n        }\n        opts.res.setHeader(key, value);\n      }\n      if (isStreaming) {\n        opts.res.setHeader('Transfer-Encoding', 'chunked');\n        const vary = opts.res.getHeader('Vary');\n        opts.res.setHeader(\n          'Vary',\n          vary ? 'trpc-batch-mode, ' + vary : 'trpc-batch-mode',\n        );\n        isStream = true;\n        formatter = getBatchStreamFormatter();\n        opts.res.flushHeaders();\n      }\n    };\n\n    const unstable_onChunk = ([index, string]: ResponseChunk) => {\n      if (index === -1) {\n        /**\n         * Full response, no streaming. This can happen\n         * - if the response is an error\n         * - if response is empty (HEAD request)\n         */\n        opts.res.end(string);\n      } else {\n        opts.res.write(formatter!(index, string));\n        opts.res.flush?.();\n      }\n    };\n\n    await resolveHTTPResponse({\n      batching: opts.batching,\n      responseMeta: opts.responseMeta,\n      path: opts.path,\n      createContext,\n      router: opts.router,\n      req,\n      error: bodyResult.ok ? null : bodyResult.error,\n      preprocessedBody: bodyResult.ok ? bodyResult.preprocessed : false,\n      onError(o) {\n        opts?.onError?.({\n          ...o,\n          req: opts.req,\n        });\n      },\n      contentTypeHandler,\n      unstable_onHead,\n      unstable_onChunk,\n    });\n\n    if (isStream) {\n      opts.res.write(formatter!.end());\n      opts.res.end();\n    }\n\n    return opts.res;\n  });\n}\n\n# adapters/node-http/internals/contentType.ts:1-16  (adapters.node-http.internals.contentType)\nimport type { AnyRouter } from '../../../core';\nimport type { BaseContentTypeHandler } from '../../../http/contentType';\nimport type {\n  NodeHTTPRequest,\n  NodeHTTPRequestHandlerOptions,\n  NodeHTTPResponse,\n} from '../types';\n\nexport interface NodeHTTPContentTypeHandler<\n  TRequest extends NodeHTTPRequest,\n  TResponse extends NodeHTTPResponse,\n> extends BaseContentTypeHandler<\n    NodeHTTPRequestHandlerOptions<AnyRouter, TRequest, TResponse> & {\n      query: URLSearchParams;\n    }\n  > {}\n\n# adapters/aws-lambda/index.ts:54-78  (adapters.aws-lambda.tRPCOutputToAPIGatewayOutput)\nfunction tRPCOutputToAPIGatewayOutput<\n  TEvent extends APIGatewayEvent,\n  TResult extends APIGatewayResult,\n>(event: TEvent, response: HTTPResponse): TResult {\n  if (isPayloadV1(event)) {\n    const resp: APIGatewayProxyResult = {\n      statusCode: response.status,\n      body: response.body ?? '',\n      headers: transformHeaders(response.headers ?? {}),\n    };\n    return resp as TResult;\n  } else if (isPayloadV2(event)) {\n    const resp: APIGatewayProxyStructuredResultV2 = {\n      statusCode: response.status,\n      body: response.body ?? undefined,\n      headers: transformHeaders(response.headers ?? {}),\n    };\n    return resp as TResult;\n  } else {\n    throw new TRPCError({\n      code: 'INTERNAL_SERVER_ERROR',\n      message: UNKNOWN_PAYLOAD_FORMAT_VERSION_ERROR_MESSAGE,\n    });\n  }\n}\n\n# http/index.ts:1-4  (http)\nexport * from './getHTTPStatusCode';\nexport * from './resolveHTTPResponse';\nexport * from './types';\nexport * from './batchStreamFormatter';\n\n# http/getHTTPStatusCode.ts:35-58  (http.getHTTPStatusCode.getHTTPStatusCode)\nexport function getHTTPStatusCode(json: TRPCResponse | TRPCResponse[]) {\n  const arr = Array.isArray(json) ? json : [json];\n  const httpStatuses = new Set(\n    arr.map((res) => {\n      if ('error' in res) {\n        const data = res.error.data;\n        if (typeof data.httpStatus === 'number') {\n          return data.httpStatus;\n        }\n        const code = TRPC_ERROR_CODES_BY_NUMBER[res.error.code];\n        return getStatusCodeFromKey(code);\n      }\n      return 200;\n    }),\n  );\n\n  if (httpStatuses.size !== 1) {\n    return 207;\n  }\n\n  const httpStatus = httpStatuses.values().next().value;\n\n  return httpStatus;\n}\n\n# adapters/next.ts:1-18  (adapters.next)\nimport type {\n  NextApiHandler,\n  NextApiRequest,\n  NextApiResponse,\n} from 'next/types';\nimport type { AnyRouter } from '../core';\nimport { TRPCError } from '../error/TRPCError';\nimport { getErrorShape } from '../shared/getErrorShape';\nimport type {\n  NodeHTTPCreateContextFnOptions,\n  NodeHTTPHandlerOptions,\n} from './node-http';\nimport { nodeHTTPRequestHandler } from './node-http';\n\nexport type CreateNextContextOptions = NodeHTTPCreateContextFnOptions<\n  NextApiRequest,\n  NextApiResponse\n>;\n\n# adapters/node-http/internals/contentType.ts:18-29  (adapters.node-http.internals.contentType.createNodeHTTPContentTypeHandler)\nexport function createNodeHTTPContentTypeHandler(\n  contentTypeHandler: NodeHTTPContentTypeHandler<\n    NodeHTTPRequest,\n    NodeHTTPResponse\n  >,\n) {\n  return <\n    TRequest extends NodeHTTPRequest,\n    TResponse extends NodeHTTPResponse,\n  >(): NodeHTTPContentTypeHandler<TRequest, TResponse> =>\n    contentTypeHandler as any;\n}\n\n# http/types.ts:1-28  (http.types)\nimport type { AnyRouter } from '../core';\nimport type { BaseHandlerOptions } from '../internals/types';\nimport type { HTTPHeaders, ResponseMetaFn } from './internals/types';\n\nexport interface HTTPRequest {\n  method: string;\n  query: URLSearchParams;\n  headers: HTTPHeaders;\n  body: unknown;\n}\n\n/**\n * Base interface for anything using HTTP\n */\nexport interface HTTPBaseHandlerOptions<TRouter extends AnyRouter, TRequest>\n  extends BaseHandlerOptions<TRouter, TRequest> {\n  /**\n   * Add handler to be called before response is sent to the user\n   * Useful for setting cache headers\n   * @link https://trpc.io/docs/caching\n   */\n  responseMeta?: ResponseMetaFn<TRouter>;\n}\n\nexport interface ResponseMeta {\n  status?: number;\n  headers?: HTTPHeaders;\n}\n\n# adapters/express.ts:1-12  (adapters.express)\nimport type * as express from 'express';\nimport type { AnyRouter } from '../core';\nimport type {\n  NodeHTTPCreateContextFnOptions,\n  NodeHTTPHandlerOptions,\n} from './node-http';\nimport { nodeHTTPRequestHandler } from './node-http';\n\nexport type CreateExpressContextOptions = NodeHTTPCreateContextFnOptions<\n  express.Request,\n  express.Response\n>;\n\n# adapters/ws.ts:1-38  (adapters.ws)\nimport type { IncomingMessage } from 'http';\nimport type { WebSocket, WebSocketServer } from 'ws';\nimport type { AnyRouter, inferRouterContext } from '../core';\nimport { callProcedure } from '../core';\nimport { getTRPCErrorFromUnknown, TRPCError } from '../error/TRPCError';\nimport type { BaseHandlerOptions } from '../internals/types';\nimport type { Unsubscribable } from '../observable';\nimport { isObservable } from '../observable';\nimport type {\n  JSONRPC2,\n  TRPCClientOutgoingMessage,\n  TRPCReconnectNotification,\n  TRPCResponseMessage,\n} from '../rpc';\nimport { parseTRPCMessage } from '../rpc';\nimport { getErrorShape } from '../shared/getErrorShape';\nimport { transformTRPCResponse } from '../shared/transformTRPCResponse';\nimport type {\n  NodeHTTPCreateContextFnOptions,\n  NodeHTTPCreateContextOption,\n} from './node-http';\n\n/**\n * Web socket server handler\n */\nexport type WSSHandlerOptions<TRouter extends AnyRouter> = BaseHandlerOptions<\n  TRouter,\n  IncomingMessage\n> &\n  NodeHTTPCreateContextOption<TRouter, IncomingMessage, WebSocket> & {\n    wss: WebSocketServer;\n    process?: NodeJS.Process;\n  };\n\nexport type CreateWSSContextFnOptions = NodeHTTPCreateContextFnOptions<\n  IncomingMessage,\n  WebSocket\n>;\n\n# adapters/next.ts:20-68  (adapters.next.createNextApiHandler)\nexport function createNextApiHandler<TRouter extends AnyRouter>(\n  opts: NodeHTTPHandlerOptions<TRouter, NextApiRequest, NextApiResponse>,\n): NextApiHandler {\n  return async (req, res) => {\n    function getPath(): string | null {\n      if (typeof req.query.trpc === 'string') {\n        return req.query.trpc;\n      }\n      if (Array.isArray(req.query.trpc)) {\n        return req.query.trpc.join('/');\n      }\n      return null;\n    }\n    const path = getPath();\n\n    if (path === null) {\n      const error = getErrorShape({\n        config: opts.router._def._config,\n        error: new TRPCError({\n          message:\n            'Query \"trpc\" not found - is the file named `[trpc]`.ts or `[...trpc].ts`?',\n          code: 'INTERNAL_SERVER_ERROR',\n        }),\n        type: 'unknown',\n        ctx: undefined,\n        path: undefined,\n        input: undefined,\n      });\n      res.statusCode = 500;\n      res.json({\n        id: -1,\n        error,\n      });\n      return;\n    }\n\n    await nodeHTTPRequestHandler({\n      // FIXME: no typecasting should be needed here\n      ...(opts as NodeHTTPHandlerOptions<\n        AnyRouter,\n        NextApiRequest,\n        NextApiResponse\n      >),\n      req,\n      res,\n      path,\n    });\n  };\n}\n\n# http/contentType.ts:1-30  (http.contentType)\n/* eslint-disable @typescript-eslint/no-non-null-assertion */\nimport type { AnyRouter } from '../core';\nimport { TRPCError } from '../error/TRPCError';\nimport type { CombinedDataTransformer } from '../transformer';\nimport type { MaybePromise } from '../types';\nimport type { HTTPRequest } from './types';\n\ntype GetInputs = (opts: {\n  req: HTTPRequest;\n  isBatchCall: boolean;\n  router: AnyRouter;\n  preprocessedBody: boolean;\n}) => MaybePromise<Record<number, unknown>>;\n\nexport type BodyResult =\n  | {\n      ok: true;\n      data: unknown;\n      /**\n       * If the HTTP handler has already parsed the body\n       */\n      preprocessed: boolean;\n    }\n  | { ok: false; error: TRPCError };\n\nexport type BaseContentTypeHandler<TOptions> = {\n  isMatch(opts: TOptions): boolean;\n  getBody: (opts: TOptions) => MaybePromise<BodyResult>;\n  getInputs: GetInputs;\n};\n\n# adapters/standalone.ts:19-37  (adapters.standalone.createHTTPHandler)\nexport function createHTTPHandler<TRouter extends AnyRouter>(\n  opts: CreateHTTPHandlerOptions<TRouter>,\n) {\n  return async (req: http.IncomingMessage, res: http.ServerResponse) => {\n    const url = toURL(req.url!);\n\n    // get procedure path and remove the leading slash\n    // /procedure -> procedure\n    const path = url.pathname.slice(1);\n\n    await nodeHTTPRequestHandler({\n      // FIXME: no typecasting should be needed here\n      ...(opts as CreateHTTPHandlerOptions<AnyRouter>),\n      req,\n      res,\n      path,\n    });\n  };\n}\n\n# adapters/fetch/types.ts:1-29  (adapters.fetch.types)\nimport type { AnyRouter, inferRouterContext } from '../../core';\nimport type { HTTPBaseHandlerOptions } from '../../http';\n\nexport type FetchCreateContextFnOptions = {\n  req: Request;\n  resHeaders: Headers;\n};\n\nexport type FetchCreateContextFn<TRouter extends AnyRouter> = (\n  opts: FetchCreateContextFnOptions,\n) => inferRouterContext<TRouter> | Promise<inferRouterContext<TRouter>>;\n\nexport type FetchCreateContextOption<TRouter extends AnyRouter> =\n  unknown extends inferRouterContext<TRouter>\n    ? {\n        /**\n         * @link https://trpc.io/docs/context\n         **/\n        createContext?: FetchCreateContextFn<TRouter>;\n      }\n    : {\n        /**\n         * @link https://trpc.io/docs/context\n         **/\n        createContext: FetchCreateContextFn<TRouter>;\n      };\n\nexport type FetchHandlerOptions<TRouter extends AnyRouter> =\n  FetchCreateContextOption<TRouter> & HTTPBaseHandlerOptions<TRouter, Request>;\n\n# shared/createProxy/index.ts:41-59  (shared.createProxy.createFlatProxy)\n/**\n * Used in place of `new Proxy` where each handler will map 1 level deep to another value.\n *\n * @internal\n */\nexport const createFlatProxy = <TFaux>(\n  callback: (path: string & keyof TFaux) => any,\n): TFaux => {\n  return new Proxy(noop, {\n    get(_obj, name) {\n      if (typeof name !== 'string' || name === 'then') {\n        // special case for if the proxy is accidentally treated\n        // like a PromiseLike (like in `Promise.resolve(proxy)`)\n        return undefined;\n      }\n      return callback(name as any);\n    },\n  }) as TFaux;\n};\n\n# shared/createProxy/index.ts:11-31  (shared.createProxy.createInnerProxy)\nfunction createInnerProxy(callback: ProxyCallback, path: string[]) {\n  const proxy: unknown = new Proxy(noop, {\n    get(_obj, key) {\n      if (typeof key !== 'string' || key === 'then') {\n        // special case for if the proxy is accidentally treated\n        // like a PromiseLike (like in `Promise.resolve(proxy)`)\n        return undefined;\n      }\n      return createInnerProxy(callback, [...path, key]);\n    },\n    apply(_1, _2, args) {\n      const isApply = path[path.length - 1] === 'apply';\n      return callback({\n        args: isApply ? (args.length >= 2 ? args[1] : []) : args,\n        path: isApply ? path.slice(0, -1) : path,\n      });\n    },\n  });\n\n  return proxy;\n}\n\n# shared/transformTRPCResponse.ts:27-40  (shared.transformTRPCResponse.transformTRPCResponse)\n/**\n * Takes a unserialized `TRPCResponse` and serializes it with the router's transformers\n **/\nexport function transformTRPCResponse<\n  TResponse extends\n    | TRPCResponse\n    | TRPCResponse[]\n    | TRPCResponseMessage\n    | TRPCResponseMessage[],\n>(config: AnyRootConfig, itemOrItems: TResponse) {\n  return Array.isArray(itemOrItems)\n    ? itemOrItems.map((item) => transformTRPCResponseItem(config, item))\n    : transformTRPCResponseItem(config, itemOrItems);\n}\n\n# http/getHTTPStatusCode.ts:1-29  (http.getHTTPStatusCode)\nimport type { TRPCError } from '../error/TRPCError';\nimport { invert } from '../internals/invert';\nimport type { TRPCResponse } from '../rpc';\nimport { TRPC_ERROR_CODES_BY_KEY } from '../rpc';\n\nexport const TRPC_ERROR_CODES_BY_NUMBER = invert(TRPC_ERROR_CODES_BY_KEY);\ntype ValueOf<TType> = TType[keyof TType];\n\nexport type TRPC_ERROR_CODE_NUMBER = ValueOf<typeof TRPC_ERROR_CODES_BY_KEY>;\nconst JSONRPC2_TO_HTTP_CODE: Record<\n  keyof typeof TRPC_ERROR_CODES_BY_KEY,\n  number\n> = {\n  PARSE_ERROR: 400,\n  BAD_REQUEST: 400,\n  UNAUTHORIZED: 401,\n  NOT_FOUND: 404,\n  FORBIDDEN: 403,\n  METHOD_NOT_SUPPORTED: 405,\n  TIMEOUT: 408,\n  CONFLICT: 409,\n  PRECONDITION_FAILED: 412,\n  PAYLOAD_TOO_LARGE: 413,\n  UNPROCESSABLE_CONTENT: 422,\n  TOO_MANY_REQUESTS: 429,\n  CLIENT_CLOSED_REQUEST: 499,\n  INTERNAL_SERVER_ERROR: 500,\n  NOT_IMPLEMENTED: 501,\n};\n\n# shared/transformTRPCResponse.ts:1-2  (shared.transformTRPCResponse)\nimport type { AnyRootConfig } from '../internals';\nimport type { TRPCResponse, TRPCResponseMessage } from '../rpc';\n\n# adapters/node-http/content-type/json/getPostBody.ts:5-41  (adapters.node-http.content-type.json.getPostBody.getPostBody)\nexport async function getPostBody(opts: {\n  req: NodeHTTPRequest;\n  maxBodySize?: number;\n}): Promise<BodyResult> {\n  const { req, maxBodySize = Infinity } = opts;\n  return new Promise((resolve) => {\n    if ('body' in req) {\n      resolve({\n        ok: true,\n        data: req.body,\n        // If the request headers specifies a content-type, we assume that the body has been preprocessed\n        preprocessed:\n          !!req.headers['content-type']?.startsWith('application/json'),\n      });\n      return;\n    }\n    let body = '';\n    let hasBody = false;\n    req.on('data', function (data) {\n      body += data;\n      hasBody = true;\n      if (body.length > maxBodySize) {\n        resolve({\n          ok: false,\n          error: new TRPCError({ code: 'PAYLOAD_TOO_LARGE' }),\n        });\n      }\n    });\n    req.on('end', () => {\n      resolve({\n        ok: true,\n        data: hasBody ? body : undefined,\n        preprocessed: false,\n      });\n    });\n  });\n}\n\n# adapters/standalone.ts:39-57  (adapters.standalone.createHTTPServer)\nexport function createHTTPServer<TRouter extends AnyRouter>(\n  opts: CreateHTTPHandlerOptions<TRouter>,\n) {\n  const handler = createHTTPHandler(opts);\n  const server = http.createServer((req, res) => handler(req, res));\n\n  return {\n    server,\n    listen: (port?: number, hostname?: string) => {\n      server.listen(port, hostname);\n      const actualPort =\n        port === 0 ? ((server.address() as any).port as number) : port;\n\n      return {\n        port: actualPort,\n      };\n    },\n  };\n}\n\n# adapters/node-http/content-type/json/getPostBody.ts:1-3  (adapters.node-http.content-type.json.getPostBody)\nimport { TRPCError } from '../../../../error/TRPCError';\nimport type { BodyResult } from '../../../../http/contentType';\nimport type { NodeHTTPRequest } from '../../types';\n\n# http/batchStreamFormatter.ts:1-29  (http.batchStreamFormatter.getBatchStreamFormatter)\n/**\n * Format a batch response as a line-delimited JSON stream\n * that the `unstable_httpBatchStreamLink` can parse:\n *\n * @example\n * ```ts\n * const formatter = getBatchStreamFormatter();\n * res.send(formatter(1, 'response #2'));\n * res.send(formatter(0, 'response #1'));\n * res.send(formatter.end());\n * ```\n *\n * Expected format:\n * ```json\n * {\"1\":\"response #2\"\n * ,\"0\":\"response #1\"\n * }\n * ```\n */\nexport function getBatchStreamFormatter() {\n  let first = true;\n  function format(index: number, string: string) {\n    const prefix = first ? '{' : ',';\n    first = false;\n    return `${prefix}\"${index}\":${string}\\n`;\n  }\n  format.end = () => '}';\n  return format;\n}\n\n# core/internals/procedureBuilder.ts:284-304  (core.internals.procedureBuilder.createResolver)\nfunction createResolver(\n  _def: AnyProcedureBuilderDef,\n  resolver: (opts: ResolveOptions<any>) => MaybePromise<any>,\n) {\n  const finalBuilder = createNewBuilder(_def, {\n    resolver,\n    middlewares: [\n      async function resolveMiddleware(opts) {\n        const data = await resolver(opts);\n        return {\n          marker: middlewareMarker,\n          ok: true,\n          data,\n          ctx: opts.ctx,\n        } as const;\n      },\n    ],\n  });\n\n  return createProcedureCaller(finalBuilder._def);\n}\n\n# shared/index.ts:1-9  (shared)\nexport * from './createProxy';\nexport * from './jsonify';\nexport * from './transformTRPCResponse';\n\n// For `.d.ts` files https://github.com/trpc/trpc/issues/3943\nexport type { SerializeObject, Serialize } from './internal/serialize';\n\nexport { getErrorShape } from './getErrorShape';\nexport { getCauseFromUnknown } from './getCauseFromUnknown';\n\n# http/getHTTPStatusCode.ts:60-62  (http.getHTTPStatusCode.getHTTPStatusCodeFromError)\nexport function getHTTPStatusCodeFromError(error: TRPCError) {\n  return getStatusCodeFromKey(error.code);\n}\n\n# internals/types.ts:1-27  (internals.types)\nimport type { inferRouterContext, ProcedureType } from '../core';\nimport type { AnyRouter } from '../core/router';\nimport type { TRPCError } from '../error/TRPCError';\n\n/**\n * Base interface for any response handler\n * @internal\n */\nexport interface BaseHandlerOptions<TRouter extends AnyRouter, TRequest> {\n  onError?: OnErrorFunction<TRouter, TRequest>;\n  batching?: {\n    enabled: boolean;\n  };\n  router: TRouter;\n}\n\n/**\n * @internal\n */\nexport type OnErrorFunction<TRouter extends AnyRouter, TRequest> = (opts: {\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  req: TRequest;\n  input: unknown;\n  ctx: inferRouterContext<TRouter> | undefined;\n}) => void;\n\n# observable/internals/observableToPromise.ts:11-49  (observable.internals.observableToPromise.observableToPromise)\n/** @internal */\nexport function observableToPromise<TValue>(\n  observable: Observable<TValue, unknown>,\n) {\n  let abort: () => void;\n  const promise = new Promise<TValue>((resolve, reject) => {\n    let isDone = false;\n    function onDone() {\n      if (isDone) {\n        return;\n      }\n      isDone = true;\n      reject(new ObservableAbortError('This operation was aborted.'));\n      obs$.unsubscribe();\n    }\n    const obs$ = observable.subscribe({\n      next(data) {\n        isDone = true;\n        resolve(data);\n        onDone();\n      },\n      error(data) {\n        isDone = true;\n        reject(data);\n        onDone();\n      },\n      complete() {\n        isDone = true;\n        onDone();\n      },\n    });\n    abort = onDone;\n  });\n  return {\n    promise,\n    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n    abort: abort!,\n  };\n}\n\n# adapters/node-http/content-type/json/index.ts:1-11  (adapters.node-http.content-type.json)\nimport { getJsonContentTypeInputs } from '../../../../http/contentType';\nimport { createNodeHTTPContentTypeHandler } from '../../internals/contentType';\nimport { getPostBody } from './getPostBody';\n\nexport const nodeHTTPJSONContentTypeHandler = createNodeHTTPContentTypeHandler({\n  isMatch(opts) {\n    return !!opts.req.headers['content-type']?.startsWith('application/json');\n  },\n  getBody: getPostBody,\n  getInputs: getJsonContentTypeInputs,\n});\n\n# rpc/envelopes.ts:138-141#part2of2  (rpc.envelopes)\nexport type TRPCClientIncomingMessage<\n  TResult = unknown,\n  TError extends TRPCErrorShape = TRPCErrorShape,\n> = TRPCClientIncomingRequest | TRPCResponseMessage<TResult, TError>;\n\n# shared/transformTRPCResponse.ts:4-25  (shared.transformTRPCResponse.transformTRPCResponseItem)\nfunction transformTRPCResponseItem<\n  TResponseItem extends TRPCResponse | TRPCResponseMessage,\n>(config: AnyRootConfig, item: TResponseItem): TResponseItem {\n  if ('error' in item) {\n    return {\n      ...item,\n      error: config.transformer.output.serialize(item.error),\n    };\n  }\n\n  if ('data' in item.result) {\n    return {\n      ...item,\n      result: {\n        ...item.result,\n        data: config.transformer.output.serialize(item.result.data),\n      },\n    };\n  }\n\n  return item;\n}\n\n## Task\n\nWhat breaks if `http.resolveHTTPResponse.resolveHTTPResponse` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

@@ -1,0 +1,248 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "fastapi_t02_001_dependant_tree_construction",
+  "items": [
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"def get_dependant\"})\n265:def get_dependant(:",
+    "token_count": 36,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def get_dependant",
+      "path": "fastapi/dependencies/utils.py"
+     },
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.2",
+    "content": "# r2.2  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"def get_typed_signature\"})\n231:def get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:",
+    "token_count": 48,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "def get_typed_signature",
+      "path": "fastapi/dependencies/utils.py"
+     },
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (read {\"end_line\": 300, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 265})\n265: def get_dependant(\n266:     *,\n267:     path: str,\n268:     call: Callable[..., Any],\n269:     name: Optional[str] = None,\n270:     security_scopes: Optional[List[str]] = None,\n271:     use_cache: bool = True,\n272: ) -> Dependant:\n273:     path_param_names = get_path_param_names(path)\n274:     endpoint_signature = get_typed_signature(call)\n275:     signature_params = endpoint_signature.parameters\n276:     dependant = Dependant(\n277:         call=call,\n278:         name=name,\n279:         path=path,\n280:         security_scopes=security_scopes,\n281:         use_cache=use_cache,\n282:     )\n283:     for param_name, param in signature_params.items():\n284:         is_path_param = param_name in path_param_names\n285:         param_details = analyze_param(\n286:             param_name=param_name,\n287:             annotation=param.annotation,\n288:             value=param.default,\n289:             is_path_param=is_path_param,\n290:         )\n291:         if param_details.depends is not None:\n292:             sub_dependant = get_param_sub_dependant(\n293:                 param_name=param_name,\n294:                 depends=param_details.depends,\n295:                 path=path,\n296:                 security_scopes=security_scopes,\n297:             )\n298:             dependant.dependencies.append(sub_dependant)\n299:             continue\n300:         if add_non_field_param_to_dependency(\n[lines 265-300 of 1002]",
+    "token_count": 449,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.dependencies.utils.get_dependant"
+    ],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/dependencies/utils.py",
+      "start_line": 265,
+      "end_line": 300
+     },
+     "engine_token_count": 449
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.2",
+    "content": "# r3.2  (read {\"end_line\": 250, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 231})\n231: def get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:\n232:     signature = inspect.signature(call)\n233:     globalns = getattr(call, \"__globals__\", {})\n234:     typed_params = [\n235:         inspect.Parameter(\n236:             name=param.name,\n237:             kind=param.kind,\n238:             default=param.default,\n239:             annotation=get_typed_annotation(param.annotation, globalns),\n240:         )\n241:         for param in signature.parameters.values()\n242:     ]\n243:     typed_signature = inspect.Signature(typed_params)\n244:     return typed_signature\n245: \n246: \n247: def get_typed_annotation(annotation: Any, globalns: Dict[str, Any]) -> Any:\n248:     if isinstance(annotation, str):\n249:         annotation = ForwardRef(annotation)\n250:         annotation = evaluate_forwardref(annotation, globalns, globalns)\n[lines 231-250 of 1002]",
+    "token_count": 286,
+    "rank": 4,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.dependencies.utils.get_typed_signature",
+     "fastapi.dependencies.utils.get_typed_annotation"
+    ],
+    "provenance": {
+     "msg_id": "r3.2",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/dependencies/utils.py",
+      "start_line": 231,
+      "end_line": 250
+     },
+     "engine_token_count": 286
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 819,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating FastAPI's dependency-injection machinery in fastapi/dependencies/utils.py. Starting from `get_dependant`, trace the exact causal pipeline that runs when FastAPI builds the dependency tree for a route's endpoint function: how the function's signature is introspected, how each parameter is classified, and what happens when a parameter is itself a `Depends()` - including the real recursive re-entry into dependant construction for that sub-dependency.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"fastapi.dependencies.utils.get_dependant\", \"fastapi.dependencies.utils.get_typed_signature\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 5,
+   "tool_calls": 4,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 2,
+   "executed_after_answer": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 115,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def get_dependant",
+        "path": "fastapi/dependencies/utils.py"
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def get_typed_signature",
+        "path": "fastapi/dependencies/utils.py"
+       },
+       "msg_id": "r2.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 70,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 265,
+        "end_line": 300
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 231,
+        "end_line": 250
+       },
+       "msg_id": "r3.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 85,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 143,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 5,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 153,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     8226.741718,
+     4533.451519,
+     5660.732784,
+     10574.552975,
+     10035.447714
+    ],
+    "L_tool_exec": [
+     3.529046,
+     2.75176,
+     0.43832,
+     0.250094
+    ],
+    "L_retrieve": [
+     39100.243268
+    ]
+   },
+   "agent_prompt_tokens": 2094,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The process starts with `get_dependant`, which introspects the function's signature using `get_typed_signature`. Each parameter is classified, and if a parameter is itself a `Depends()`, the process recursively re-enters dependant construction for that sub-dependency.\", \"symbols\": [\"fastapi.dependencies.utils.get_dependant\", \"fastapi.dependencies.utils.get_typed_signature\", \"fastapi.dependencies.utils.get_path_param_names\", \"fastapi.dependencies.utils.analyze_param\", \"fastapi.dependencies.utils.get_param_sub_dependant\", \"fastapi.dependencies.utils.add_non_field_param_to_dependency\"]}\n```",
+    "generation_tokens": 153,
+    "latency_seconds": 10.035307877000378,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2147,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 819,
+   "prompt_tokens": 2094,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2147,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

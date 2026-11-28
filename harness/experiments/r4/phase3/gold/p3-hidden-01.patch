@@ -1,0 +1,161 @@
+diff --git a/litestar/openapi/config.py b/litestar/openapi/config.py
+index b756f4f08..bff117b9b 100644
+--- a/litestar/openapi/config.py
++++ b/litestar/openapi/config.py
+@@ -16,7 +16,7 @@ from litestar.openapi.spec import (
+     PathItem,
+     Reference,
+     SecurityRequirement,
+-    Server,
++    ServerImpl,
+     Tag,
+ )
+ from litestar.utils.path import normalize_path
+@@ -73,7 +73,7 @@ class OpenAPIConfig:
+ 
+     Should be an instance of :class:`Components <litestar.openapi.spec.components.Components>` or a list thereof.
+     """
+-    servers: list[Server] = field(default_factory=lambda: [Server(url="/")])
++    servers: list[ServerImpl] = field(default_factory=lambda: [ServerImpl(url="/")])
+     """A list of :class:`Server <litestar.openapi.spec.server.Server>` instances."""
+     summary: str | None = field(default=None)
+     """A summary text."""
+diff --git a/litestar/openapi/spec/__init__.py b/litestar/openapi/spec/__init__.py
+index 1d7c9ed9a..b088ad914 100644
+--- a/litestar/openapi/spec/__init__.py
++++ b/litestar/openapi/spec/__init__.py
+@@ -26,7 +26,7 @@ from .responses import Responses
+ from .schema import Schema
+ from .security_requirement import SecurityRequirement
+ from .security_scheme import SecurityScheme
+-from .server import Server
++from .server import ServerImpl
+ from .server_variable import ServerVariable
+ from .tag import Tag
+ from .xml import XML
+@@ -62,7 +62,7 @@ __all__ = (
+     "Schema",
+     "SecurityRequirement",
+     "SecurityScheme",
+-    "Server",
++    "ServerImpl",
+     "ServerVariable",
+     "Tag",
+ )
+diff --git a/litestar/openapi/spec/link.py b/litestar/openapi/spec/link.py
+index 78c4f855f..60aa1ffab 100644
+--- a/litestar/openapi/spec/link.py
++++ b/litestar/openapi/spec/link.py
+@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
+ from litestar.openapi.spec.base import BaseSchemaObject
+ 
+ if TYPE_CHECKING:
+-    from litestar.openapi.spec.server import Server
++    from litestar.openapi.spec.server import ServerImpl
+ 
+ __all__ = ("Link",)
+ 
+@@ -62,5 +62,5 @@ class Link(BaseSchemaObject):
+     `CommonMark syntax <https://spec.commonmark.org/>`_ MAY be used for rich text representation.
+     """
+ 
+-    server: Server | None = None
++    server: ServerImpl | None = None
+     """A server object to be used by the target operation."""
+diff --git a/litestar/openapi/spec/open_api.py b/litestar/openapi/spec/open_api.py
+index 55465fa45..220865beb 100644
+--- a/litestar/openapi/spec/open_api.py
++++ b/litestar/openapi/spec/open_api.py
+@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
+ 
+ from litestar.openapi.spec.base import BaseSchemaObject
+ from litestar.openapi.spec.components import Components
+-from litestar.openapi.spec.server import Server
++from litestar.openapi.spec.server import ServerImpl
+ 
+ if TYPE_CHECKING:
+     from litestar.openapi.spec.external_documentation import ExternalDocumentation
+@@ -43,7 +43,7 @@ class OpenAPI(BaseSchemaObject):
+     This MUST be in the form of a URI.
+     """
+ 
+-    servers: list[Server] = field(default_factory=lambda x: [Server(url="/")])  # type: ignore[misc, arg-type]
++    servers: list[ServerImpl] = field(default_factory=lambda x: [ServerImpl(url="/")])  # type: ignore[misc, arg-type]
+     """An array of Server Objects, which provide connectivity information to a target server.
+ 
+     If the ``servers`` property is not provided, or is an empty array, the default value would be a
+diff --git a/litestar/openapi/spec/operation.py b/litestar/openapi/spec/operation.py
+index ab80181e2..197f14060 100644
+--- a/litestar/openapi/spec/operation.py
++++ b/litestar/openapi/spec/operation.py
+@@ -13,7 +13,7 @@ if TYPE_CHECKING:
+     from litestar.openapi.spec.request_body import RequestBody
+     from litestar.openapi.spec.responses import Responses
+     from litestar.openapi.spec.security_requirement import SecurityRequirement
+-    from litestar.openapi.spec.server import Server
++    from litestar.openapi.spec.server import ServerImpl
+ 
+ __all__ = ("Operation",)
+ 
+@@ -97,7 +97,7 @@ class Operation(BaseSchemaObject):
+     array can be used.
+     """
+ 
+-    servers: list[Server] | None = None
++    servers: list[ServerImpl] | None = None
+     """An alternative ``server`` array to service this operation.
+ 
+     If an alternative ``server`` object is specified at the Path Item Object or Root level, it will be overridden by
+diff --git a/litestar/openapi/spec/path_item.py b/litestar/openapi/spec/path_item.py
+index 17005c5ee..7b4ba4ec4 100644
+--- a/litestar/openapi/spec/path_item.py
++++ b/litestar/openapi/spec/path_item.py
+@@ -9,7 +9,7 @@ if TYPE_CHECKING:
+     from litestar.openapi.spec.operation import Operation
+     from litestar.openapi.spec.parameter import Parameter
+     from litestar.openapi.spec.reference import Reference
+-    from litestar.openapi.spec.server import Server
++    from litestar.openapi.spec.server import ServerImpl
+ 
+ __all__ = ("PathItem",)
+ 
+@@ -65,7 +65,7 @@ class PathItem(BaseSchemaObject):
+     trace: Operation | None = None
+     """A definition of a TRACE operation on this path."""
+ 
+-    servers: list[Server] | None = None
++    servers: list[ServerImpl] | None = None
+     """An alternative ``server`` array to service all operations in this path."""
+ 
+     parameters: list[Parameter | Reference] | None = None
+diff --git a/litestar/openapi/spec/server.py b/litestar/openapi/spec/server.py
+index 2c12fcfa0..8fbb98548 100644
+--- a/litestar/openapi/spec/server.py
++++ b/litestar/openapi/spec/server.py
+@@ -8,11 +8,11 @@ from litestar.openapi.spec.base import BaseSchemaObject
+ if TYPE_CHECKING:
+     from litestar.openapi.spec.server_variable import ServerVariable
+ 
+-__all__ = ("Server",)
++__all__ = ("ServerImpl",)
+ 
+ 
+ @dataclass
+-class Server(BaseSchemaObject):
++class ServerImpl(BaseSchemaObject):
+     """An object representing a Server."""
+ 
+     url: str
+diff --git a/tests/unit/test_datastructures/test_phase3_rename_Server.py b/tests/unit/test_datastructures/test_phase3_rename_Server.py
+new file mode 100644
+index 000000000..a9699320c
+--- /dev/null
++++ b/tests/unit/test_datastructures/test_phase3_rename_Server.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_ServerImpl():
++    owner = importlib.import_module('litestar.openapi.spec.server')
++    assert hasattr(owner, 'ServerImpl')
++    assert not hasattr(owner, 'Server')
