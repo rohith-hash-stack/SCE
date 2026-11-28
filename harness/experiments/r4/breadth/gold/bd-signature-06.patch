@@ -1,0 +1,100 @@
+diff --git a/src/marshmallow/fields.py b/src/marshmallow/fields.py
+index 52af41d..de87b17 100644
+--- a/src/marshmallow/fields.py
++++ b/src/marshmallow/fields.py
+@@ -631,7 +631,7 @@ class Nested(Field):
+ 
+     def _test_collection(self, value: typing.Any) -> None:
+         many = self.schema.many or self.many
+-        if many and not utils.is_collection(value):
++        if many and not utils.is_collection(obj=value):
+             raise self.make_error("type", input=value, type=value.__class__.__name__)
+ 
+     def _load(
+@@ -780,7 +780,7 @@ class List(Field[list[_InternalT | None]]):
+         return [self.inner._serialize(each, attr, obj, **kwargs) for each in value]
+ 
+     def _deserialize(self, value, attr, data, **kwargs) -> list[_InternalT | None]:
+-        if not utils.is_collection(value):
++        if not utils.is_collection(obj=value):
+             raise self.make_error("invalid")
+ 
+         result = []
+@@ -826,7 +826,7 @@ class Tuple(Field[tuple]):
+         **kwargs: Unpack[_BaseFieldKwargs],
+     ):
+         super().__init__(**kwargs)
+-        if not utils.is_collection(tuple_fields):
++        if not utils.is_collection(obj=tuple_fields):
+             raise ValueError(
+                 "tuple_fields must be an iterable of Field classes or instances."
+             )
+diff --git a/src/marshmallow/schema.py b/src/marshmallow/schema.py
+index f68da9d..d9a59b8 100644
+--- a/src/marshmallow/schema.py
++++ b/src/marshmallow/schema.py
+@@ -417,9 +417,9 @@ class Schema(metaclass=SchemaMeta):
+         unknown: types.UnknownOption | None = None,
+     ):
+         # Raise error if only or exclude is passed as string, not list of strings
+-        if only is not None and not is_collection(only):
++        if only is not None and not is_collection(obj=only):
+             raise StringNotCollectionError('"only" should be a list of strings')
+-        if not is_collection(exclude):
++        if not is_collection(obj=exclude):
+             raise StringNotCollectionError('"exclude" should be a list of strings')
+         # copy declared fields from metaclass
+         self.declared_fields = copy.deepcopy(self._declared_fields)
+@@ -643,7 +643,7 @@ class Schema(metaclass=SchemaMeta):
+         if not isinstance(data, Mapping):
+             error_store.store_error([self.error_messages["type"]], index=index)
+         else:
+-            partial_is_collection = is_collection(partial)
++            partial_is_collection = is_collection(obj=partial)
+             for attr_name, field_obj in self.load_fields.items():
+                 field_name = (
+                     field_obj.data_key if field_obj.data_key is not None else attr_name
+diff --git a/src/marshmallow/utils.py b/src/marshmallow/utils.py
+index 639dc65..e424290 100644
+--- a/src/marshmallow/utils.py
++++ b/src/marshmallow/utils.py
+@@ -25,7 +25,7 @@ def is_sequence_but_not_string(obj) -> typing.TypeGuard[Sequence]:
+     return isinstance(obj, Sequence) and not isinstance(obj, (str, bytes))
+ 
+ 
+-def is_collection(obj) -> typing.TypeGuard[typing.Iterable]:
++def is_collection(*, obj) -> typing.TypeGuard[typing.Iterable]:
+     """Return True if ``obj`` is a collection type, e.g. list, tuple, queryset."""
+     return is_iterable_but_not_string(obj) and not isinstance(obj, Mapping)
+ 
+diff --git a/tests/test_phase2_signature_is_collection.py b/tests/test_phase2_signature_is_collection.py
+new file mode 100644
+index 0000000..dd5bfd8
+--- /dev/null
++++ b/tests/test_phase2_signature_is_collection.py
+@@ -0,0 +1,8 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_obj():
++    owner = importlib.import_module('marshmallow.utils')
++    p = inspect.signature(getattr(owner, 'is_collection')).parameters['obj']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY
+diff --git a/tests/test_utils.py b/tests/test_utils.py
+index b85e76d..aa61d1e 100644
+--- a/tests/test_utils.py
++++ b/tests/test_utils.py
+@@ -88,9 +88,9 @@ def test_set_value():
+ 
+ 
+ def test_is_collection():
+-    assert utils.is_collection([1, "foo", {}]) is True
+-    assert utils.is_collection(("foo", 2.3)) is True
+-    assert utils.is_collection({"foo": "bar"}) is False
++    assert utils.is_collection(obj=[1, "foo", {}]) is True
++    assert utils.is_collection(obj=("foo", 2.3)) is True
++    assert utils.is_collection(obj={"foo": "bar"}) is False
+ 
+ 
+ @pytest.mark.parametrize(

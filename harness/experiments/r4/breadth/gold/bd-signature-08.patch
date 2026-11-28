@@ -1,0 +1,103 @@
+diff --git a/src/packaging/dependency_groups.py b/src/packaging/dependency_groups.py
+index ec8f2c4..78e5182 100644
+--- a/src/packaging/dependency_groups.py
++++ b/src/packaging/dependency_groups.py
+@@ -128,7 +128,7 @@ class DependencyGroupResolver:
+         # a cache of completed resolutions to Requirement lists
+         self._resolve_cache: dict[str, tuple[Requirement, ...]] = {}
+ 
+-        errors.finalize("[dependency-groups] data was invalid")
++        errors.finalize(msg="[dependency-groups] data was invalid")
+ 
+     def lookup(self, group: str) -> tuple[Requirement | DependencyGroupInclude, ...]:
+         """
+diff --git a/src/packaging/errors.py b/src/packaging/errors.py
+index 912da38..a577f4e 100644
+--- a/src/packaging/errors.py
++++ b/src/packaging/errors.py
+@@ -56,7 +56,7 @@ class _ErrorCollector:
+ 
+     errors: list[Exception] = dataclasses.field(default_factory=list, init=False)
+ 
+-    def finalize(self, msg: str) -> None:
++    def finalize(self, *, msg: str) -> None:
+         """Raise a group exception if there are any errors."""
+         if self.errors:
+             raise ExceptionGroup(msg, self.errors)
+@@ -69,7 +69,7 @@ class _ErrorCollector:
+         Uncollected errors are raised normally.
+         """
+         yield self
+-        self.finalize(msg)
++        self.finalize(msg=msg)
+ 
+     @contextlib.contextmanager
+     def collect(self, *err_cls: type[Exception]) -> typing.Generator[None]:
+diff --git a/src/packaging/metadata.py b/src/packaging/metadata.py
+index b94c2a2..f9efaf7 100644
+--- a/src/packaging/metadata.py
++++ b/src/packaging/metadata.py
+@@ -881,7 +881,7 @@ class Metadata:
+                 except InvalidMetadata as exc:
+                     collector.error(exc)
+ 
+-            collector.finalize("invalid metadata")
++            collector.finalize(msg="invalid metadata")
+ 
+         return ins
+ 
+diff --git a/tests/test_errors.py b/tests/test_errors.py
+index 7a543dd..c6c9bf9 100644
+--- a/tests/test_errors.py
++++ b/tests/test_errors.py
+@@ -15,7 +15,7 @@ def test_error_collector_collect() -> None:
+     collector.error(TypeError("third error"))
+ 
+     with pytest.raises(packaging.errors.ExceptionGroup) as exc_info:
+-        collector.finalize("collected errors")
++        collector.finalize(msg="collected errors")
+ 
+     exception_group = exc_info.value
+     assert exception_group.message == "collected errors"
+@@ -34,7 +34,7 @@ def test_error_collector_no_errors() -> None:
+     with collector.collect():
+         pass  # No error
+ 
+-    collector.finalize("no errors")  # Should not raise
++    collector.finalize(msg="no errors")  # Should not raise
+ 
+ 
+ def test_error_collector_exception_group() -> None:
+@@ -47,7 +47,7 @@ def test_error_collector_exception_group() -> None:
+         )
+ 
+     with pytest.raises(packaging.errors.ExceptionGroup) as exc_info:
+-        collector.finalize("outer group")
++        collector.finalize(msg="outer group")
+ 
+     exception_group = exc_info.value
+     assert exception_group.message == "outer group"
+@@ -88,7 +88,7 @@ def test_error_collector_collect_specific_exception() -> None:
+         raise KeyError("a key error")
+ 
+     with pytest.raises(packaging.errors.ExceptionGroup) as exc_info:
+-        collector.finalize("collected errors")
++        collector.finalize(msg="collected errors")
+ 
+     exception_group = exc_info.value
+     assert exception_group.message == "collected errors"
+diff --git a/tests/test_phase2_signature_finalize.py b/tests/test_phase2_signature_finalize.py
+new file mode 100644
+index 0000000..984b0ea
+--- /dev/null
++++ b/tests/test_phase2_signature_finalize.py
+@@ -0,0 +1,9 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_msg():
++    owner = importlib.import_module('packaging.errors')
++    owner = getattr(owner, '_ErrorCollector')
++    p = inspect.signature(getattr(owner, 'finalize')).parameters['msg']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY

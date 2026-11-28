@@ -1,0 +1,236 @@
+diff --git a/src/marshmallow/fields.py b/src/marshmallow/fields.py
+index 85261f1..9a154e2 100644
+--- a/src/marshmallow/fields.py
++++ b/src/marshmallow/fields.py
+@@ -507,7 +507,7 @@ class Nested(Field):
+         only: types.StrSequenceOrSet | None = None,
+         exclude: types.StrSequenceOrSet = (),
+         many: bool = False,
+-        unknown: str | None = None,
++        unknown: types.UnknownOption | None = None,
+         **kwargs: Unpack[_BaseFieldKwargs],
+     ):
+         # Raise error if only or exclude is passed as string, not list of strings
+@@ -657,7 +657,7 @@ class Pluck(Nested):
+         field_name: str,
+         *,
+         many: bool = False,
+-        unknown: str | None = None,
++        unknown: types.UnknownOption | None = None,
+         **kwargs: Unpack[_BaseFieldKwargs],
+     ):
+         super().__init__(
+diff --git a/src/marshmallow/schema.py b/src/marshmallow/schema.py
+index f1ed120..756bbaf 100644
+--- a/src/marshmallow/schema.py
++++ b/src/marshmallow/schema.py
+@@ -35,7 +35,6 @@ from marshmallow.utils import (
+     is_collection,
+     missing,
+     set_value,
+-    validate_unknown_parameter_value,
+ )
+ 
+ 
+@@ -207,7 +206,7 @@ class SchemaOpts:
+         self.include = getattr(meta, "include", {})
+         self.load_only = getattr(meta, "load_only", ())
+         self.dump_only = getattr(meta, "dump_only", ())
+-        self.unknown = validate_unknown_parameter_value(getattr(meta, "unknown", RAISE))
++        self.unknown = getattr(meta, "unknown", RAISE)
+         self.register = getattr(meta, "register", True)
+         self.many = getattr(meta, "many", False)
+ 
+@@ -377,7 +376,7 @@ class Schema(metaclass=SchemaMeta):
+         """Fields to exclude from serialized results"""
+         dump_only: typing.ClassVar[tuple[Field] | list[Field]]
+         """Fields to exclude from serialized results"""
+-        unknown: typing.ClassVar[str]
++        unknown: typing.ClassVar[types.UnknownOption]
+         """Whether to exclude, include, or raise an error for unknown fields in the data.
+         Use `EXCLUDE`, `INCLUDE` or `RAISE`.
+         """
+@@ -397,7 +396,7 @@ class Schema(metaclass=SchemaMeta):
+         load_only: types.StrSequenceOrSet = (),
+         dump_only: types.StrSequenceOrSet = (),
+         partial: bool | types.StrSequenceOrSet | None = None,
+-        unknown: str | None = None,
++        unknown: types.UnknownOption | None = None,
+     ):
+         # Raise error if only or exclude is passed as string, not list of strings
+         if only is not None and not is_collection(only):
+@@ -414,10 +413,8 @@ class Schema(metaclass=SchemaMeta):
+         self.load_only = set(load_only) or set(self.opts.load_only)
+         self.dump_only = set(dump_only) or set(self.opts.dump_only)
+         self.partial = partial
+-        self.unknown = (
+-            self.opts.unknown
+-            if unknown is None
+-            else validate_unknown_parameter_value(unknown)
++        self.unknown: types.UnknownOption = (
++            self.opts.unknown if unknown is None else unknown
+         )
+         self._normalize_nested_options()
+         #: Dictionary mapping field_names -> :class:`Field` objects
+@@ -591,7 +588,7 @@ class Schema(metaclass=SchemaMeta):
+         error_store: ErrorStore,
+         many: bool = False,
+         partial=None,
+-        unknown=RAISE,
++        unknown: types.UnknownOption = RAISE,
+         index=None,
+     ) -> typing.Any | list[typing.Any]:
+         """Deserialize ``data``.
+@@ -704,7 +701,7 @@ class Schema(metaclass=SchemaMeta):
+         *,
+         many: bool | None = None,
+         partial: bool | types.StrSequenceOrSet | None = None,
+-        unknown: str | None = None,
++        unknown: types.UnknownOption | None = None,
+     ):
+         """Deserialize a data structure to an object defined by this Schema's fields.
+ 
+@@ -736,7 +733,7 @@ class Schema(metaclass=SchemaMeta):
+         *,
+         many: bool | None = None,
+         partial: bool | types.StrSequenceOrSet | None = None,
+-        unknown: str | None = None,
++        unknown: types.UnknownOption | None = None,
+         **kwargs,
+     ):
+         """Same as :meth:`load`, except it uses `marshmallow.Schema.Meta.render_module` to deserialize
+@@ -826,7 +823,7 @@ class Schema(metaclass=SchemaMeta):
+         *,
+         many: bool | None = None,
+         partial: bool | types.StrSequenceOrSet | None = None,
+-        unknown: str | None = None,
++        unknown: types.UnknownOption | None = None,
+         postprocess: bool = True,
+     ):
+         """Deserialize `data`, returning the deserialized result.
+@@ -848,11 +845,7 @@ class Schema(metaclass=SchemaMeta):
+         error_store = ErrorStore()
+         errors: dict[str, list[str]] = {}
+         many = self.many if many is None else bool(many)
+-        unknown = (
+-            self.unknown
+-            if unknown is None
+-            else validate_unknown_parameter_value(unknown)
+-        )
++        unknown = self.unknown if unknown is None else unknown
+         if partial is None:
+             partial = self.partial
+         # Run preprocessors
+@@ -1084,7 +1077,7 @@ class Schema(metaclass=SchemaMeta):
+         many: bool,
+         original_data,
+         partial: bool | types.StrSequenceOrSet | None,
+-        unknown: str,
++        unknown: types.UnknownOption | None,
+     ):
+         # This has to invert the order of the dump processors, so run the pass_collection
+         # processors first.
+@@ -1164,7 +1157,7 @@ class Schema(metaclass=SchemaMeta):
+         many: bool,
+         partial: bool | types.StrSequenceOrSet | None,
+         field_errors: bool = False,
+-        unknown: str,
++        unknown: types.UnknownOption | None,
+     ):
+         for attr_name, hook_many, validator_kwargs in self._hooks[VALIDATES_SCHEMA]:
+             if hook_many != pass_collection:
+diff --git a/src/marshmallow/types.py b/src/marshmallow/types.py
+index 8d1fe79..7a60bef 100644
+--- a/src/marshmallow/types.py
++++ b/src/marshmallow/types.py
+@@ -7,13 +7,23 @@
+ 
+ from __future__ import annotations
+ 
++try:
++    from typing import TypeAlias
++except ImportError:  # Remove when dropping Python 3.9
++    from typing_extensions import TypeAlias
++
+ import typing
+ 
+ #: A type that can be either a sequence of strings or a set of strings
+-StrSequenceOrSet = typing.Union[typing.Sequence[str], typing.AbstractSet[str]]
++StrSequenceOrSet: TypeAlias = typing.Union[
++    typing.Sequence[str], typing.AbstractSet[str]
++]
+ 
+ #: Type for validator functions
+-Validator = typing.Callable[[typing.Any], typing.Any]
++Validator: TypeAlias = typing.Callable[[typing.Any], typing.Any]
++
++#: A valid option for the ``unknown`` schema option and argument
++UnknownOption: TypeAlias = typing.Literal["exclude", "include", "raise"]
+ 
+ 
+ class RenderModule(typing.Protocol):
+diff --git a/src/marshmallow/utils.py b/src/marshmallow/utils.py
+index 34fa517..ebf99a6 100644
+--- a/src/marshmallow/utils.py
++++ b/src/marshmallow/utils.py
+@@ -7,10 +7,9 @@ import inspect
+ import typing
+ from collections.abc import Mapping
+ 
+-EXCLUDE = "exclude"
+-INCLUDE = "include"
+-RAISE = "raise"
+-_UNKNOWN_VALUES = {EXCLUDE, INCLUDE, RAISE}
++EXCLUDE: typing.Final = "exclude"
++INCLUDE: typing.Final = "include"
++RAISE: typing.Final = "raise"
+ 
+ 
+ class _Missing:
+@@ -182,11 +181,3 @@ def timedelta_to_microseconds(value: dt.timedelta) -> int:
+     https://github.com/python/cpython/blob/v3.13.1/Lib/_pydatetime.py#L805-L807
+     """
+     return (value.days * (24 * 3600) + value.seconds) * 1000000 + value.microseconds
+-
+-
+-def validate_unknown_parameter_value(obj: typing.Any) -> str:
+-    if obj not in _UNKNOWN_VALUES:
+-        raise ValueError(
+-            f"Object {obj!r} is not a valid value for the 'unknown' parameter"
+-        )
+-    return obj
+diff --git a/tests/test_schema.py b/tests/test_schema.py
+index 8b896a4..674b1a6 100644
+--- a/tests/test_schema.py
++++ b/tests/test_schema.py
+@@ -2492,30 +2492,6 @@ def test_class_registry_returns_schema_type():
+     assert SchemaClass is DefinitelyUniqueSchema
+ 
+ 
+-@pytest.mark.parametrize("usage_location", ["meta", "init", "load"])
+-def test_unknown_parameter_value_is_validated(usage_location):
+-    class MySchema(Schema):
+-        foo = fields.String()
+-
+-    with pytest.raises(
+-        ValueError,
+-        match="Object 'badval' is not a valid value for the 'unknown' parameter",
+-    ):
+-        # Meta.unknown setting gets caught at class creation time, since that's when
+-        # metaclass __new__ runs
+-        if usage_location == "meta":
+-
+-            class SubSchema(MySchema):
+-                class Meta:
+-                    unknown = "badval"
+-
+-        # usages in init and load are caught at call time, as expected
+-        elif usage_location == "init":
+-            MySchema(unknown="badval")
+-        else:
+-            MySchema().load({"foo": "bar"}, unknown="badval")
+-
+-
+ @pytest.mark.parametrize("dict_cls", (dict, OrderedDict))
+ def test_set_dict_class(dict_cls):
+     """Demonstrate how to specify dict_class as class attribute"""

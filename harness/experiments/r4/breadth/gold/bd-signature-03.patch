@@ -1,0 +1,129 @@
+diff --git a/arrow/arrow.py b/arrow/arrow.py
+index eecf232..011d892 100644
+--- a/arrow/arrow.py
++++ b/arrow/arrow.py
+@@ -1086,7 +1086,7 @@ class Arrow:
+         if not isinstance(tz, dt_tzinfo):
+             tz = parser.TzinfoParser.parse(tz)
+ 
+-        dt = self._datetime.astimezone(tz)
++        dt = self._datetime.astimezone(tz=tz)
+ 
+         return self.__class__(
+             dt.year,
+@@ -1163,7 +1163,7 @@ class Arrow:
+ 
+         if other is None:
+             utc = dt_datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+-            dt = utc.astimezone(self._datetime.tzinfo)
++            dt = utc.astimezone(tz=self._datetime.tzinfo)
+ 
+         elif isinstance(other, Arrow):
+             dt = other._datetime
+@@ -1172,7 +1172,7 @@ class Arrow:
+             if other.tzinfo is None:
+                 dt = other.replace(tzinfo=self._datetime.tzinfo)
+             else:
+-                dt = other.astimezone(self._datetime.tzinfo)
++                dt = other.astimezone(tz=self._datetime.tzinfo)
+ 
+         else:
+             raise TypeError(
+@@ -1579,7 +1579,7 @@ class Arrow:
+ 
+         return self._datetime.timetz()
+ 
+-    def astimezone(self, tz: Optional[dt_tzinfo]) -> dt_datetime:
++    def astimezone(self, *, tz: Optional[dt_tzinfo]) -> dt_datetime:
+         """Returns a ``datetime`` object, converted to the specified timezone.
+ 
+         :param tz: a ``tzinfo`` object.
+@@ -1593,7 +1593,7 @@ class Arrow:
+ 
+         """
+ 
+-        return self._datetime.astimezone(tz)
++        return self._datetime.astimezone(tz=tz)
+ 
+     def utcoffset(self) -> Optional[timedelta]:
+         """Returns a ``timedelta`` object representing the whole number of minutes difference from
+diff --git a/tests/test_arrow.py b/tests/test_arrow.py
+index b595e4e..5398222 100644
+--- a/tests/test_arrow.py
++++ b/tests/test_arrow.py
+@@ -440,9 +440,9 @@ class TestArrowDatetimeInterface:
+     def test_astimezone(self):
+         other_tz = ZoneInfo("US/Pacific")
+ 
+-        result = self.arrow.astimezone(other_tz)
++        result = self.arrow.astimezone(tz=other_tz)
+ 
+-        assert result == self.arrow._datetime.astimezone(other_tz)
++        assert result == self.arrow._datetime.astimezone(tz=other_tz)
+ 
+     def test_utcoffset(self):
+         result = self.arrow.utcoffset()
+@@ -571,7 +571,7 @@ class TestArrowConversion:
+         arrow_from = arrow.Arrow.fromdatetime(dt_from, ZoneInfo("US/Pacific"))
+ 
+         self.expected = dt_from.replace(tzinfo=ZoneInfo("US/Pacific")).astimezone(
+-            tz.tzutc()
++            tz=tz.tzutc()
+         )
+ 
+         assert arrow_from.to("UTC").datetime == self.expected
+diff --git a/tests/test_factory.py b/tests/test_factory.py
+index 056cee4..b47365c 100644
+--- a/tests/test_factory.py
++++ b/tests/test_factory.py
+@@ -81,7 +81,7 @@ class TestGet:
+     def test_one_arg_timestamp_with_tzinfo(self):
+         timestamp = time.time()
+         timestamp_dt = datetime.fromtimestamp(timestamp, tz=tz.tzutc()).astimezone(
+-            ZoneInfo("US/Pacific")
++            tz=ZoneInfo("US/Pacific")
+         )
+         timezone = ZoneInfo("US/Pacific")
+ 
+@@ -110,7 +110,7 @@ class TestGet:
+         self.expected = (
+             datetime.now(timezone.utc)
+             .replace(tzinfo=tz.tzutc())
+-            .astimezone(ZoneInfo("US/Pacific"))
++            .astimezone(tz=ZoneInfo("US/Pacific"))
+         )
+ 
+         assert_datetime_equality(
+@@ -130,7 +130,7 @@ class TestGet:
+         self.expected = (
+             datetime.now(timezone.utc)
+             .replace(tzinfo=tz.tzutc())
+-            .astimezone(ZoneInfo("US/Pacific"))
++            .astimezone(tz=ZoneInfo("US/Pacific"))
+         )
+ 
+         assert_datetime_equality(
+@@ -141,7 +141,7 @@ class TestGet:
+         self.expected = (
+             datetime.now(timezone.utc)
+             .replace(tzinfo=tz.tzutc())
+-            .astimezone(ZoneInfo("US/Pacific"))
++            .astimezone(tz=ZoneInfo("US/Pacific"))
+         )
+ 
+         assert_datetime_equality(self.factory.get(tzinfo="US/Pacific"), self.expected)
+diff --git a/tests/test_phase2_signature_astimezone.py b/tests/test_phase2_signature_astimezone.py
+new file mode 100644
+index 0000000..d7fd8d4
+--- /dev/null
++++ b/tests/test_phase2_signature_astimezone.py
+@@ -0,0 +1,9 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_tz():
++    owner = importlib.import_module('arrow.arrow')
++    owner = getattr(owner, 'Arrow')
++    p = inspect.signature(getattr(owner, 'astimezone')).parameters['tz']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY

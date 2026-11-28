@@ -1,0 +1,308 @@
+diff --git a/instructor/v2/core/handler.py b/instructor/v2/core/handler.py
+index 430097ab..8d33dd36 100644
+--- a/instructor/v2/core/handler.py
++++ b/instructor/v2/core/handler.py
+@@ -6,10 +6,13 @@ Provides the common interface and default implementations for mode handlers.
+ from __future__ import annotations
+ 
+ from abc import ABC, abstractmethod
+-from typing import Any
++from typing import TYPE_CHECKING, Any
+ 
+ from pydantic import BaseModel
+ 
++if TYPE_CHECKING:
++    from instructor.v2.dsl.parallel import ParallelBase
++
+ 
+ class ModeHandler(ABC):
+     """Base class for mode handlers.
+@@ -96,3 +99,24 @@ class ModeHandler(ABC):
+     def __repr__(self) -> str:
+         """String representation of handler."""
+         return f"<{self.__class__.__name__}>"
++
++    def _finalize_parsed_result(
++        self,
++        response_model: type[BaseModel] | ParallelBase,
++        response: Any,
++        parsed: Any,
++    ) -> Any:
++        """Normalize common DSL results without interpreting provider payloads."""
++        from instructor.v2.dsl.iterable import IterableBase
++        from instructor.v2.dsl.parallel import ParallelBase
++        from instructor.v2.dsl.simple_type import AdapterBase
++
++        if isinstance(parsed, IterableBase):
++            return [task for task in parsed.tasks]
++        if isinstance(response_model, ParallelBase):
++            return parsed
++        if isinstance(parsed, AdapterBase):
++            return parsed.content
++        if isinstance(parsed, BaseModel):
++            parsed._raw_response = response  # type: ignore[attr-defined]
++        return parsed
+diff --git a/instructor/v2/providers/anthropic/handlers.py b/instructor/v2/providers/anthropic/handlers.py
+index b76b5ca9..e96a2292 100644
+--- a/instructor/v2/providers/anthropic/handlers.py
++++ b/instructor/v2/providers/anthropic/handlers.py
+@@ -25,13 +25,13 @@ from instructor.v2.core.providers import Provider
+ from instructor.v2.core.errors import ConfigurationError, IncompleteOutputException
+ from instructor.v2.dsl.iterable import IterableBase
+ from instructor.v2.dsl.parallel import (
+-    ParallelBase,
++    ParallelBase as ParallelBase,
+ )
+ from instructor.v2.providers.anthropic.parallel import (
+     AnthropicParallelModel,
+     handle_parallel_model as handle_anthropic_parallel_model,
+ )
+-from instructor.v2.dsl.simple_type import AdapterBase
++from instructor.v2.dsl.simple_type import AdapterBase as AdapterBase
+ from instructor.v2.core.multimodal import Audio, Image, PDF
+ from instructor.v2.core.multimodal import convert_messages as convert_messages_v1
+ from instructor.v2.core.json import extract_json_from_codeblock
+@@ -256,22 +256,6 @@ class AnthropicHandlerBase(StreamingModelState, ModeHandler):
+             return generator
+         return list(generator)
+ 
+-    def _finalize_parsed_result(
+-        self,
+-        response_model: type[BaseModel] | ParallelBase,
+-        response: Any,
+-        parsed: Any,
+-    ) -> Any:
+-        if isinstance(parsed, IterableBase):
+-            return [task for task in parsed.tasks]
+-        if isinstance(response_model, ParallelBase):
+-            return parsed
+-        if isinstance(parsed, AdapterBase):
+-            return parsed.content
+-        if isinstance(parsed, BaseModel):
+-            parsed._raw_response = response  # type: ignore[attr-defined]
+-        return parsed
+-
+     def _parse_with_callback(
+         self,
+         response: Any,
+diff --git a/instructor/v2/providers/mistral/handlers.py b/instructor/v2/providers/mistral/handlers.py
+index 44a5fb5c..2022e02a 100644
+--- a/instructor/v2/providers/mistral/handlers.py
++++ b/instructor/v2/providers/mistral/handlers.py
+@@ -33,11 +33,11 @@ from instructor.v2.core.errors import (
+ )
+ from instructor.v2.dsl.iterable import IterableBase
+ from instructor.v2.dsl.parallel import (
+-    ParallelBase,
++    ParallelBase as ParallelBase,
+     get_types_array,
+     model_for_tool_name,
+ )
+-from instructor.v2.dsl.simple_type import AdapterBase
++from instructor.v2.dsl.simple_type import AdapterBase as AdapterBase
+ from instructor.v2.core.multimodal import convert_messages as convert_messages_v1
+ from instructor.v2.core.json import (
+     extract_json_from_codeblock,
+@@ -171,23 +171,6 @@ class MistralHandlerBase(StreamingModelState, ModeHandler):
+             return generator
+         return list(generator)
+ 
+-    def _finalize_parsed_result(
+-        self,
+-        response_model: type[BaseModel] | ParallelBase,
+-        response: Any,
+-        parsed: Any,
+-    ) -> Any:
+-        """Finalize parsed result, handling DSL types."""
+-        if isinstance(parsed, IterableBase):
+-            return [task for task in parsed.tasks]
+-        if isinstance(response_model, ParallelBase):
+-            return parsed
+-        if isinstance(parsed, AdapterBase):
+-            return parsed.content
+-        if isinstance(parsed, BaseModel):
+-            parsed._raw_response = response  # type: ignore[attr-defined]
+-        return parsed
+-
+     def _extract_tool_call_json(self, response: Any) -> str:
+         """Extract JSON from tool call response.
+ 
+diff --git a/instructor/v2/providers/openai/handlers.py b/instructor/v2/providers/openai/handlers.py
+index 1611c5d6..5fb3453b 100644
+--- a/instructor/v2/providers/openai/handlers.py
++++ b/instructor/v2/providers/openai/handlers.py
+@@ -32,12 +32,12 @@ from instructor.v2.core.errors import (
+ )
+ from instructor.v2.dsl.iterable import IterableBase
+ from instructor.v2.dsl.parallel import (
+-    ParallelBase,
++    ParallelBase as ParallelBase,
+     ParallelModel,
+     get_types_array,
+     model_for_tool_name,
+ )
+-from instructor.v2.dsl.simple_type import AdapterBase
++from instructor.v2.dsl.simple_type import AdapterBase as AdapterBase
+ from instructor.v2.core.multimodal import convert_messages as convert_messages_v1
+ from instructor.v2.core.json import (
+     extract_json_from_codeblock,
+@@ -529,23 +529,6 @@ class OpenAIHandlerBase(StreamingModelState, ModeHandler):
+             return generator
+         return list(generator)
+ 
+-    def _finalize_parsed_result(
+-        self,
+-        response_model: type[BaseModel] | ParallelBase,
+-        response: Any,
+-        parsed: Any,
+-    ) -> Any:
+-        """Finalize parsed result, handling DSL types."""
+-        if isinstance(parsed, IterableBase):
+-            return [task for task in parsed.tasks]  # type: ignore[attr-defined]
+-        if isinstance(response_model, ParallelBase):
+-            return parsed
+-        if isinstance(parsed, AdapterBase):
+-            return parsed.content  # type: ignore[attr-defined]
+-        if isinstance(parsed, BaseModel):
+-            parsed._raw_response = response  # type: ignore[attr-defined]
+-        return parsed
+-
+     def _extract_tool_call_json(self, response: Any) -> str:
+         """Extract JSON from tool call response."""
+         choices = getattr(response, "choices", None)
+diff --git a/instructor/v2/providers/xai/handlers.py b/instructor/v2/providers/xai/handlers.py
+index 3e6e6efa..52ecfcc2 100644
+--- a/instructor/v2/providers/xai/handlers.py
++++ b/instructor/v2/providers/xai/handlers.py
+@@ -37,13 +37,13 @@ from instructor.v2.core.mode import Mode
+ from instructor.v2.core.providers import Provider
+ from instructor.v2.dsl.iterable import IterableBase
+ from instructor.v2.dsl.parallel import (
+-    ParallelBase,
++    ParallelBase as ParallelBase,
+     ParallelModel,
+     get_types_array,
+     handle_parallel_model,
+     model_for_tool_name,
+ )
+-from instructor.v2.dsl.simple_type import AdapterBase
++from instructor.v2.dsl.simple_type import AdapterBase as AdapterBase
+ from instructor.v2.core.json import (
+     extract_json_from_codeblock,
+     extract_json_from_stream,
+@@ -331,23 +331,6 @@ class XAIHandlerBase(StreamingModelState, ModeHandler):
+             return generator
+         return list(generator)
+ 
+-    def _finalize_parsed_result(
+-        self,
+-        response_model: type[BaseModel] | ParallelBase,
+-        response: Any,
+-        parsed: Any,
+-    ) -> Any:
+-        """Finalize parsed result, handling DSL types."""
+-        if isinstance(parsed, IterableBase):
+-            return [task for task in parsed.tasks]
+-        if isinstance(response_model, ParallelBase):
+-            return parsed
+-        if isinstance(parsed, AdapterBase):
+-            return parsed.content
+-        if isinstance(parsed, BaseModel):
+-            parsed._raw_response = response  # type: ignore[attr-defined]
+-        return parsed
+-
+ 
+ @register_mode_handler(Provider.XAI, Mode.TOOLS)
+ class XAIToolsHandler(XAIHandlerBase):
+diff --git a/tests/v2/test_provider_result_finalization.py b/tests/v2/test_provider_result_finalization.py
+new file mode 100644
+index 00000000..dfc2cb34
+--- /dev/null
++++ b/tests/v2/test_provider_result_finalization.py
+@@ -0,0 +1,86 @@
++"""Shared handler finalization preserves result shapes and response identity."""
++
++from typing import Any, Callable, cast
++
++import pytest
++from pydantic import BaseModel
++
++from instructor.v2.core.handler import ModeHandler
++from instructor.v2.dsl.iterable import IterableModel
++from instructor.v2.dsl.parallel import ParallelBase
++from instructor.v2.dsl.simple_type import ModelAdapter
++from instructor.v2.providers.anthropic.handlers import AnthropicToolsHandler
++from instructor.v2.providers.mistral.handlers import MistralToolsHandler
++from instructor.v2.providers.openai.handlers import OpenAIToolsHandler
++from instructor.v2.providers.xai.handlers import XAIToolsHandler
++
++
++class Item(BaseModel):
++    value: int
++
++
++@pytest.fixture(
++    params=[
++        OpenAIToolsHandler,
++        AnthropicToolsHandler,
++        MistralToolsHandler,
++        XAIToolsHandler,
++    ],
++    ids=["openai", "anthropic", "mistral", "xai"],
++)
++def handler(request: pytest.FixtureRequest) -> ModeHandler:
++    return request.param()
++
++
++def test_model_keeps_original_raw_response(handler: ModeHandler) -> None:
++    raw = {"provider_metadata": {"opaque": "retained"}}
++    parsed = Item(value=1)
++
++    result = handler._finalize_parsed_result(Item, raw, parsed)
++
++    assert result is parsed
++    assert result._raw_response is raw
++
++
++def test_iterable_unwraps_tasks_without_changing_items(handler: ModeHandler) -> None:
++    model = IterableModel(Item)
++    item = Item(value=1)
++    parsed = model(tasks=[item])
++
++    result = handler._finalize_parsed_result(model, {}, parsed)
++
++    assert isinstance(result, list)
++    assert result == [item]
++    assert result[0] is item
++
++
++@pytest.mark.parametrize("value", [0, False, ""])
++def test_adapter_keeps_falsey_contents(handler: ModeHandler, value: Any) -> None:
++    adapter_factory = cast(
++        Callable[[type[Any]], type[BaseModel]], ModelAdapter.__class_getitem__
++    )
++    model = adapter_factory(type(value))
++    parsed = model(content=value)
++
++    assert handler._finalize_parsed_result(model, {}, parsed) == value
++
++
++def test_parallel_keeps_iterator_identity_and_laziness(handler: ModeHandler) -> None:
++    visited = []
++
++    def results():
++        visited.append(True)
++        yield Item(value=1)
++
++    parsed = results()
++    result = handler._finalize_parsed_result(ParallelBase(Item), {}, parsed)
++
++    assert result is parsed
++    assert not visited
++    assert list(result) == [Item(value=1)]
++    assert visited == [True]
++
++
++def test_non_model_result_is_unchanged(handler: ModeHandler) -> None:
++    parsed = {"unchanged": True}
++    assert handler._finalize_parsed_result(Item, {}, parsed) is parsed

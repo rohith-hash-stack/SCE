@@ -1,0 +1,121 @@
+diff --git a/src/cattrs/_compat.py b/src/cattrs/_compat.py
+index 45ed2e5..56cb30b 100644
+--- a/src/cattrs/_compat.py
++++ b/src/cattrs/_compat.py
+@@ -122,7 +122,7 @@ def has_with_generic(cls):
+     return has(cls) or has(get_origin(cls))
+ 
+ 
+-def fields(type):
++def fields(*, type):
+     try:
+         return type.__attrs_attrs__
+     except AttributeError:
+diff --git a/src/cattrs/converters.py b/src/cattrs/converters.py
+index 70c19b4..c75b267 100644
+--- a/src/cattrs/converters.py
++++ b/src/cattrs/converters.py
+@@ -665,7 +665,7 @@ class BaseConverter:
+     # Classes to Python primitives.
+     def unstructure_attrs_asdict(self, obj: Any) -> dict[str, Any]:
+         """Our version of `attrs.asdict`, so we can call back to us."""
+-        attrs = fields(obj.__class__)
++        attrs = fields(type=obj.__class__)
+         dispatch = self._unstructure_func.dispatch
+         rv = self._dict_factory()
+         for a in attrs:
+@@ -676,7 +676,7 @@ class BaseConverter:
+ 
+     def unstructure_attrs_astuple(self, obj: Any) -> tuple[Any, ...]:
+         """Our version of `attrs.astuple`, so we can call back to us."""
+-        attrs = fields(obj.__class__)
++        attrs = fields(type=obj.__class__)
+         dispatch = self._unstructure_func.dispatch
+         res = []
+         for a in attrs:
+@@ -786,7 +786,7 @@ class BaseConverter:
+     def structure_attrs_fromtuple(self, obj: tuple[Any, ...], cl: type[T]) -> T:
+         """Load an attrs class from a sequence (tuple)."""
+         conv_obj = []  # A list of converter parameters.
+-        for a, value in zip(fields(cl), obj):
++        for a, value in zip(fields(type=cl), obj):
+             # We detect the type by the metadata.
+             converted = self._structure_attribute(a, value)
+             conv_obj.append(converted)
+@@ -820,7 +820,7 @@ class BaseConverter:
+         # For public use.
+ 
+         conv_obj = {}  # Start with a fresh dict, to ignore extra keys.
+-        for a in fields(cl):
++        for a in fields(type=cl):
+             try:
+                 val = obj[a.name]
+             except KeyError:
+@@ -1342,7 +1342,7 @@ class Converter(BaseConverter):
+         self, cl: type[T]
+     ) -> Callable[[T], dict[str, Any]]:
+         origin = get_origin(cl)
+-        attribs = fields(origin or cl)
++        attribs = fields(type=origin or cl)
+         if attrs_has(cl) and any(isinstance(a.type, str) for a in attribs):
+             # PEP 563 annotations - need to be resolved.
+             resolve_types(origin or cl)
+@@ -1388,7 +1388,7 @@ class Converter(BaseConverter):
+         self, cl: type[T]
+     ) -> Callable[[Mapping[str, Any], Any], T]:
+         origin = get_origin(cl)
+-        attribs = fields(origin or cl if is_generic(cl) else cl)
++        attribs = fields(type=origin or cl if is_generic(cl) else cl)
+         if attrs_has(cl) and any(isinstance(a.type, str) for a in attribs):
+             # PEP 563 annotations - need to be resolved.
+             resolve_types(origin or cl)
+diff --git a/src/cattrs/preconf/msgspec.py b/src/cattrs/preconf/msgspec.py
+index 0623fda..977a60a 100644
+--- a/src/cattrs/preconf/msgspec.py
++++ b/src/cattrs/preconf/msgspec.py
+@@ -195,10 +195,10 @@ def msgspec_attrs_unstructure_factory(
+     """
+     origin = get_origin(type)
+     base = origin or type
+-    attribs = fields(base)
++    attribs = fields(type=base)
+     if attrs_has(type) and any(isinstance(a.type, str) for a in attribs):
+         resolve_types(type)
+-        attribs = fields(base)
++        attribs = fields(type=base)
+ 
+     if msgspec_skips_private and any(attr.name.startswith("_") for attr in attribs):
+         # Private attributes we have to do ourselves.
+diff --git a/tests/test_gen_dict.py b/tests/test_gen_dict.py
+index e7e1c43..ae897fd 100644
+--- a/tests/test_gen_dict.py
++++ b/tests/test_gen_dict.py
+@@ -274,7 +274,7 @@ def test_unmodified_generated_structuring(cl_and_vals, dv: bool):
+ def test_renaming(cl_and_vals, data):
+     converter = Converter()
+     cl, vals, kwargs = cl_and_vals
+-    attrs = fields(cl)
++    attrs = fields(type=cl)
+ 
+     to_replace = data.draw(sampled_from(attrs))
+ 
+@@ -793,4 +793,4 @@ def test_prefer_converters_from_converter(prefer: bool, dv: bool):
+ def test_fields_exception():
+     """fields() raises on a non-attrs, non-dataclass class."""
+     with pytest.raises(Exception):  # noqa: B017
+-        fields(int)
++        fields(type=int)
+diff --git a/tests/test_phase2_signature_fields.py b/tests/test_phase2_signature_fields.py
+new file mode 100644
+index 0000000..4455b24
+--- /dev/null
++++ b/tests/test_phase2_signature_fields.py
+@@ -0,0 +1,8 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_type():
++    owner = importlib.import_module('cattrs._compat')
++    p = inspect.signature(getattr(owner, 'fields')).parameters['type']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY

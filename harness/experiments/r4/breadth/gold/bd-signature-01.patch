@@ -1,0 +1,96 @@
+diff --git a/aiohttp/formdata.py b/aiohttp/formdata.py
+index 80e3d39e..5e1983c1 100644
+--- a/aiohttp/formdata.py
++++ b/aiohttp/formdata.py
+@@ -154,7 +154,7 @@ class FormData:
+                 assert part.headers is not None
+                 part.headers.popall(hdrs.CONTENT_LENGTH, None)
+ 
+-            self._writer.append_payload(part)
++            self._writer.append_payload(payload=part)
+ 
+         self._fields.clear()
+         return self._writer
+diff --git a/aiohttp/multipart.py b/aiohttp/multipart.py
+index 9b9d80ef..68ebd742 100644
+--- a/aiohttp/multipart.py
++++ b/aiohttp/multipart.py
+@@ -1102,16 +1102,16 @@ class MultipartWriter(Payload):
+ 
+         if isinstance(obj, Payload):
+             obj.headers.update(headers)
+-            return self.append_payload(obj)
++            return self.append_payload(payload=obj)
+         else:
+             try:
+                 payload = get_payload(obj, headers=headers)
+             except LookupError:
+                 raise TypeError("Cannot create payload from %r" % obj)
+             else:
+-                return self.append_payload(payload)
++                return self.append_payload(payload=payload)
+ 
+-    def append_payload(self, payload: Payload) -> Payload:
++    def append_payload(self, *, payload: Payload) -> Payload:
+         """Adds a new body part to multipart writer."""
+         encoding: str | None = None
+         te_encoding: str | None = None
+@@ -1156,7 +1156,7 @@ class MultipartWriter(Payload):
+         if headers is None:
+             headers = CIMultiDict()
+ 
+-        return self.append_payload(JsonPayload(obj, headers=headers))
++        return self.append_payload(payload=JsonPayload(obj, headers=headers))
+ 
+     def append_form(
+         self,
+@@ -1174,7 +1174,7 @@ class MultipartWriter(Payload):
+         data = urlencode(obj, doseq=True)
+ 
+         return self.append_payload(
+-            StringPayload(
++            payload=StringPayload(
+                 data, headers=headers, content_type="application/x-www-form-urlencoded"
+             )
+         )
+diff --git a/tests/test_multipart.py b/tests/test_multipart.py
+index 773c0fc6..5825b38a 100644
+--- a/tests/test_multipart.py
++++ b/tests/test_multipart.py
+@@ -1551,7 +1551,7 @@ class TestMultipartWriter:
+         writer.append_json(())
+         part = payload.StringPayload("foo")
+         part.set_content_disposition("form-data", name="second")
+-        writer.append_payload(part)
++        writer.append_payload(payload=part)
+         writer.append("foo")
+ 
+         disps = tuple(p[0].headers[CONTENT_DISPOSITION] for p in writer._parts)
+diff --git a/tests/test_phase2_signature_append_payload.py b/tests/test_phase2_signature_append_payload.py
+new file mode 100644
+index 00000000..73dd3df2
+--- /dev/null
++++ b/tests/test_phase2_signature_append_payload.py
+@@ -0,0 +1,9 @@
++import importlib
++import inspect
++
++
++def test_phase2_keyword_only_payload():
++    owner = importlib.import_module('aiohttp.multipart')
++    owner = getattr(owner, 'MultipartWriter')
++    p = inspect.signature(getattr(owner, 'append_payload')).parameters['payload']
++    assert p.kind is inspect.Parameter.KEYWORD_ONLY
+diff --git a/tests/test_web_response.py b/tests/test_web_response.py
+index 11e7d8f6..873df6f9 100644
+--- a/tests/test_web_response.py
++++ b/tests/test_web_response.py
+@@ -1175,7 +1175,7 @@ def test_assign_nonstr_text() -> None:
+ 
+ 
+ mpwriter = MultipartWriter(boundary="x")
+-mpwriter.append_payload(StringPayload("test"))
++mpwriter.append_payload(payload=StringPayload("test"))
+ 
+ 
+ async def async_iter() -> AsyncIterator[str]:

@@ -1,0 +1,244 @@
+diff --git a/instructor/processing/__init__.py b/instructor/processing/__init__.py
+index 92376b5..5964c9f 100644
+--- a/instructor/processing/__init__.py
++++ b/instructor/processing/__init__.py
+@@ -4,7 +4,7 @@ from .function_calls import ResponseSchema, response_schema, OpenAISchema, opena
+ from .multimodal import convert_messages
+ from .response import (
+     handle_response_model,
+-    process_response,
++    handle_response,
+     process_response_async,
+     handle_reask_kwargs,
+ )
+@@ -22,7 +22,7 @@ __all__ = [
+     "openai_schema",
+     "convert_messages",
+     "handle_response_model",
+-    "process_response",
++    "handle_response",
+     "process_response_async",
+     "handle_reask_kwargs",
+     "generate_openai_schema",
+diff --git a/instructor/v2/core/response.py b/instructor/v2/core/response.py
+index 9c12b65..4333838 100644
+--- a/instructor/v2/core/response.py
++++ b/instructor/v2/core/response.py
+@@ -252,7 +252,7 @@ async def process_response_async(
+     return _finalize_response(model, response_model, response)
+ 
+ 
+-def process_response(
++def handle_response(
+     response: T_Model,
+     *,
+     response_model: type[ResponseSchema | BaseModel] | None = None,
+diff --git a/tests/coverage/test_core_response_coverage.py b/tests/coverage/test_core_response_coverage.py
+index d0a64f2..e565f49 100644
+--- a/tests/coverage/test_core_response_coverage.py
++++ b/tests/coverage/test_core_response_coverage.py
+@@ -21,7 +21,7 @@ from instructor.v2.core.response import (
+     _redact_kwargs,
+     handle_response_model,
+     is_typed_dict,
+-    process_response,
++    handle_response,
+     process_response_async,
+ )
+ from instructor.v2.dsl.iterable import IterableBase, IterableModel
+@@ -166,7 +166,7 @@ def test_registry_load_failure_is_best_effort(
+ async def test_raw_response_is_returned_unchanged_sync_and_async() -> None:
+     raw = chat_completion(content='{"name": "Ada", "age": 36}')
+ 
+-    assert process_response(raw, response_model=None, stream=False) is raw
++    assert handle_response(raw, response_model=None, stream=False) is raw
+     assert await process_response_async(raw, response_model=None) is raw
+ 
+ 
+@@ -174,7 +174,7 @@ async def test_raw_response_is_returned_unchanged_sync_and_async() -> None:
+ async def test_standard_tool_response_attaches_raw_completion_sync_and_async() -> None:
+     raw = chat_completion(tool_calls=[tool_call("User", {"name": "Ada", "age": 36})])
+ 
+-    sync_result = process_response(
++    sync_result = handle_response(
+         raw, response_model=User, stream=False, mode=Mode.TOOLS
+     )
+     async_result = await process_response_async(
+@@ -192,7 +192,7 @@ async def test_invalid_tool_arguments_raise_validation_error_sync_and_async() ->
+     raw = chat_completion(tool_calls=[tool_call("User", '{"name": "Ada"}')])
+ 
+     with pytest.raises(ValidationError, match="age"):
+-        process_response(raw, response_model=User, stream=False, mode=Mode.TOOLS)
++        handle_response(raw, response_model=User, stream=False, mode=Mode.TOOLS)
+ 
+     with pytest.raises(ValidationError, match="age"):
+         await process_response_async(
+@@ -205,7 +205,7 @@ async def test_unsupported_provider_surfaces_registry_error_sync_and_async() ->
+     raw = chat_completion(content='{"name": "Ada", "age": 36}')
+ 
+     with pytest.raises(KeyError, match="not registered"):
+-        process_response(
++        handle_response(
+             raw,
+             response_model=User,
+             stream=False,
+@@ -233,7 +233,7 @@ async def test_non_choice_iterable_response_becomes_list_response_sync_and_async
+         ]
+     )
+ 
+-    sync_result = process_response(
++    sync_result = handle_response(
+         cast(Any, raw),
+         response_model=UsersEnvelope,
+         stream=False,
+@@ -268,7 +268,7 @@ async def test_iterable_completion_list_is_wrapped_sync_and_async() -> None:
+         ]
+     )
+ 
+-    sync_result = process_response(
++    sync_result = handle_response(
+         raw, response_model=response_model, stream=False, mode=Mode.TOOLS
+     )
+     async_result = await process_response_async(
+@@ -289,7 +289,7 @@ async def test_partial_sync_stream_is_preserved_by_sync_and_async_conversion() -
+     response_model = Partial[User]
+     chunks = tool_chunks('{"name": "Ad', 'a", "age": 36}')
+ 
+-    sync_result = process_response(
++    sync_result = handle_response(
+         cast(Any, chunks), response_model=response_model, stream=True, mode=Mode.TOOLS
+     )
+     async_result = await process_response_async(
+@@ -333,7 +333,7 @@ async def test_custom_iterable_parser_is_wrapped_sync_and_async(
+ 
+     _install_parser(monkeypatch, parser)
+ 
+-    sync_result = process_response(
++    sync_result = handle_response(
+         raw,
+         response_model=UsersEnvelope,
+         stream=False,
+@@ -376,7 +376,7 @@ async def test_custom_parallel_parser_preserves_results_and_raw_response(
+ 
+     _install_parser(monkeypatch, parser)
+ 
+-    sync_result = process_response(
++    sync_result = handle_response(
+         raw,
+         response_model=cast(Any, response_model),
+         stream=False,
+@@ -412,7 +412,7 @@ async def test_custom_adapter_parser_returns_simple_value_sync_and_async(
+     _install_parser(monkeypatch, parser)
+ 
+     assert (
+-        process_response(
++        handle_response(
+             raw,
+             response_model=IntegerAdapter,
+             stream=False,
+@@ -448,7 +448,7 @@ async def test_custom_parser_can_return_native_mapping_sync_and_async(
+ 
+     expected = {"name": "Ada", "age": 36}
+     assert (
+-        process_response(
++        handle_response(
+             raw,
+             response_model=User,
+             stream=False,
+diff --git a/tests/coverage/test_phase3_rename_process_response.py b/tests/coverage/test_phase3_rename_process_response.py
+new file mode 100644
+index 0000000..66c556c
+--- /dev/null
++++ b/tests/coverage/test_phase3_rename_process_response.py
+@@ -0,0 +1,7 @@
++import importlib
++
++
++def test_phase3_rename_handle_response():
++    owner = importlib.import_module('instructor.v2.core.response')
++    assert hasattr(owner, 'handle_response')
++    assert not hasattr(owner, 'process_response')
+diff --git a/tests/processing/test_anthropic_json.py b/tests/processing/test_anthropic_json.py
+index ca0283b..4d55667 100644
+--- a/tests/processing/test_anthropic_json.py
++++ b/tests/processing/test_anthropic_json.py
+@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
+ from typing import cast
+ 
+ from instructor.mode import Mode
+-from instructor.processing.response import process_response
++from instructor.processing.response import handle_response
+ from instructor.utils.providers import Provider
+ 
+ 
+@@ -38,7 +38,7 @@ def test_parse_anthropic_json_strict_control_characters() -> None:
+     message = _build_message(CONTROL_CHAR_JSON)
+ 
+     with pytest.raises(ValidationError):
+-        process_response(
++        handle_response(
+             response=message,
+             response_model=_AnthropicTestModel,
+             stream=False,
+@@ -53,7 +53,7 @@ def test_parse_anthropic_json_non_strict_preserves_control_characters() -> None:
+ 
+     model = cast(
+         _AnthropicTestModel,
+-        process_response(
++        handle_response(
+             response=message,
+             response_model=_AnthropicTestModel,
+             stream=False,
+diff --git a/tests/processing/test_list_response_wrapper.py b/tests/processing/test_list_response_wrapper.py
+index 73cbbe9..1f474d9 100644
+--- a/tests/processing/test_list_response_wrapper.py
++++ b/tests/processing/test_list_response_wrapper.py
+@@ -8,7 +8,7 @@ from pydantic import BaseModel
+ from instructor.dsl.iterable import IterableBase
+ from instructor.dsl.response_list import ListResponse
+ from instructor.mode import Mode
+-from instructor.processing.response import process_response, process_response_async
++from instructor.processing.response import handle_response, process_response_async
+ from instructor.utils.core import prepare_response_model
+ 
+ 
+@@ -47,7 +47,7 @@ class DummyCompletion(BaseModel):
+ def test_process_response_returns_list_response_for_iterable_model():
+     raw = DummyCompletion()
+ 
+-    result = process_response(
++    result = handle_response(
+         raw,
+         response_model=DummyIterableModel,
+         stream=False,
+@@ -62,7 +62,7 @@ def test_process_response_returns_list_response_for_iterable_model():
+ def test_process_response_streaming_returns_list_response_for_iterable_model():
+     raw = DummyCompletion()
+ 
+-    result = process_response(
++    result = handle_response(
+         raw,
+         response_model=DummyIterableModel,
+         stream=True,
+diff --git a/tests/v2/test_security_regressions.py b/tests/v2/test_security_regressions.py
+index 173aa57..cfcec3b 100644
+--- a/tests/v2/test_security_regressions.py
++++ b/tests/v2/test_security_regressions.py
+@@ -365,7 +365,7 @@ def test_named_alias_markers_rejected():
+ async def test_direct_response_parser_rejects_markers(async_parser):
+     from openai.types.chat import ChatCompletion, ChatCompletionMessage
+     from openai.types.chat.chat_completion import Choice
+-    from instructor.v2.core.response import process_response, process_response_async
++    from instructor.v2.core.response import handle_response, process_response_async
+ 
+     completion = ChatCompletion(
+         id="local",
+@@ -389,7 +389,7 @@ async def test_direct_response_parser_rejects_markers(async_parser):
+                 mode=instructor.Mode.JSON,
+             )
+         else:
+-            process_response(
++            handle_response(
+                 completion,
+                 response_model=Marked,
+                 stream=False,

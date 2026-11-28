@@ -1,0 +1,78 @@
+diff --git a/src/cattrs/converters.py b/src/cattrs/converters.py
+index 70c19b4..ac666a1 100644
+--- a/src/cattrs/converters.py
++++ b/src/cattrs/converters.py
+@@ -91,7 +91,8 @@ from .errors import (
+     IterableValidationNote,
+     StructureHandlerNotFoundError,
+ )
+-from .fns import Predicate, identity, raise_error
++from .fns import Predicate, identity
++from .fns_raise_error import raise_error
+ from .gen import (
+     AttributeOverride,
+     HeteroTupleStructureFn,
+diff --git a/src/cattrs/fns.py b/src/cattrs/fns.py
+index 984c05e..16f3e4a 100644
+--- a/src/cattrs/fns.py
++++ b/src/cattrs/fns.py
+@@ -16,7 +16,3 @@ def identity(obj: T) -> T:
+     return obj
+ 
+ 
+-def raise_error(_, cl: Any) -> NoReturn:
+-    """At the bottom of the condition stack, we explode if we can't handle it."""
+-    msg = f"Unsupported type: {cl!r}. Register a structure hook for it."
+-    raise StructureHandlerNotFoundError(msg, type_=cl)
+diff --git a/src/cattrs/fns_raise_error.py b/src/cattrs/fns_raise_error.py
+new file mode 100644
+index 0000000..2e2eb18
+--- /dev/null
++++ b/src/cattrs/fns_raise_error.py
+@@ -0,0 +1,8 @@
++from typing import Any, NoReturn
++from .errors import StructureHandlerNotFoundError
++
++
++def raise_error(_, cl: Any) -> NoReturn:
++    """At the bottom of the condition stack, we explode if we can't handle it."""
++    msg = f"Unsupported type: {cl!r}. Register a structure hook for it."
++    raise StructureHandlerNotFoundError(msg, type_=cl)
+diff --git a/src/cattrs/gen/_shared.py b/src/cattrs/gen/_shared.py
+index 967661e..99610de 100644
+--- a/src/cattrs/gen/_shared.py
++++ b/src/cattrs/gen/_shared.py
+@@ -7,7 +7,7 @@ from attrs import NOTHING, Attribute, Factory
+ from .._compat import get_args, is_annotated, is_bare_final
+ from ..dispatch import StructureHook
+ from ..errors import StructureHandlerNotFoundError
+-from ..fns import raise_error
++from ..fns_raise_error import raise_error
+ from ._consts import AttributeOverride
+ 
+ if TYPE_CHECKING:
+diff --git a/tests/test_converter.py b/tests/test_converter.py
+index ab86d55..2458525 100644
+--- a/tests/test_converter.py
++++ b/tests/test_converter.py
+@@ -29,7 +29,7 @@ from cattrs.errors import (
+     ForbiddenExtraKeysError,
+     StructureHandlerNotFoundError,
+ )
+-from cattrs.fns import raise_error
++from cattrs.fns_raise_error import raise_error
+ from cattrs.gen import make_dict_structure_fn, override
+ 
+ from ._compat import is_py310_plus
+diff --git a/tests/test_phase2_move_raise_error.py b/tests/test_phase2_move_raise_error.py
+new file mode 100644
+index 0000000..bc5c447
+--- /dev/null
++++ b/tests/test_phase2_move_raise_error.py
+@@ -0,0 +1,6 @@
++import importlib
++
++
++def test_phase2_moved_raise_error():
++    new = importlib.import_module('cattrs.fns_raise_error')
++    assert getattr(new, 'raise_error').__module__ == 'cattrs.fns_raise_error'

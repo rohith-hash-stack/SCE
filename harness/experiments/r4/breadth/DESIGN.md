@@ -6,7 +6,9 @@
 - This is the design, not the pre-registration. The frozen amendment, with the final task list and its hash, is
   written into `AMENDMENTS.md` after the tasks are mined and admitted, and before any run of this design.
 - **Done:** step 1, the edit-fix rule (section 3), is implemented and tested.
-- **Not yet:** nothing has been run, and no task has been chosen.
+- **Done:** step 2, the 32 tasks are mined and admitted (`TASKS.md`), not frozen. `TASKS.md` section 4 has two
+  findings for the user's decision before the freeze, among them that PRISM's gateway is active on renames only.
+- **Not yet:** no model has run any task.
 
 ## 1. Why this study
 
@@ -191,7 +193,7 @@ Each range is over sd_effect from 1.0 to 0.5.
 | Step | Content | Status |
 |---|---|---|
 | 1 | `--edit-fix` for both arms, with tests | **done** (this commit) |
-| 2 | Mine and admit the held-out tasks (section 5); write `breadth/TASKS.md` | **in progress** |
+| 2 | Mine and admit the held-out tasks (section 5); write `breadth/TASKS.md` | **done** (`TASKS.md`) |
 | 3 | A pilot on the development set: 6 tasks × 2 arms × 1 seed = 12 runs, with `--edit-fix`. It checks health, cost, `edit_fixes` and the variance assumptions. Results are not used for the primary claim. | needs the user's go-ahead for the Kaggle cell |
 | 4 | Write and freeze the amendment: the task list and sha256, the analysis, the thresholds, the sample size from the pilot | needs the user's approval |
 | 5 | The main study (192 runs) | needs the user's authorization |

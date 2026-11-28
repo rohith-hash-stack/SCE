@@ -1,0 +1,147 @@
+diff --git a/sqlglot/generators/hive.py b/sqlglot/generators/hive.py
+index 97160125..1cf6a074 100644
+--- a/sqlglot/generators/hive.py
++++ b/sqlglot/generators/hive.py
+@@ -32,12 +32,8 @@ from sqlglot.dialects.dialect import (
+     sequence_sql,
+     property_sql,
+ )
+-from sqlglot.transforms import (
+-    remove_unique_constraints,
+-    ctas_with_tmp_tables_to_create_tmp_view,
+-    preprocess,
+-    move_schema_columns_to_partitioned_by,
+-)
++from sqlglot.transforms import ctas_with_tmp_tables_to_create_tmp_view, preprocess, move_schema_columns_to_partitioned_by
++from sqlglot.transforms_remove_unique_constraints import remove_unique_constraints
+ from sqlglot.generator import unsupported_args
+ from sqlglot.time import format_time
+ 
+diff --git a/sqlglot/generators/materialize.py b/sqlglot/generators/materialize.py
+index 9b2ad4f9..a52d5424 100644
+--- a/sqlglot/generators/materialize.py
++++ b/sqlglot/generators/materialize.py
+@@ -4,11 +4,8 @@ from sqlglot import exp
+ from sqlglot.helper import seq_get
+ from sqlglot.generators.postgres import PostgresGenerator
+ 
+-from sqlglot.transforms import (
+-    remove_unique_constraints,
+-    ctas_with_tmp_tables_to_create_tmp_view,
+-    preprocess,
+-)
++from sqlglot.transforms import ctas_with_tmp_tables_to_create_tmp_view, preprocess
++from sqlglot.transforms_remove_unique_constraints import remove_unique_constraints
+ 
+ 
+ class MaterializeGenerator(PostgresGenerator):
+diff --git a/sqlglot/generators/spark.py b/sqlglot/generators/spark.py
+index 3cf98f7e..f05db56f 100644
+--- a/sqlglot/generators/spark.py
++++ b/sqlglot/generators/spark.py
+@@ -12,12 +12,8 @@ from sqlglot.dialects.dialect import (
+ )
+ from sqlglot.generators.spark2 import Spark2Generator, temporary_storage_provider
+ from sqlglot.helper import seq_get
+-from sqlglot.transforms import (
+-    ctas_with_tmp_tables_to_create_tmp_view,
+-    remove_unique_constraints,
+-    preprocess,
+-    move_partitioned_by_to_schema_columns,
+-)
++from sqlglot.transforms import ctas_with_tmp_tables_to_create_tmp_view, preprocess, move_partitioned_by_to_schema_columns
++from sqlglot.transforms_remove_unique_constraints import remove_unique_constraints
+ 
+ 
+ def _normalize_partition(e: exp.Expr) -> exp.Expr:
+diff --git a/sqlglot/generators/spark2.py b/sqlglot/generators/spark2.py
+index ceec4216..e0bd0c4d 100644
+--- a/sqlglot/generators/spark2.py
++++ b/sqlglot/generators/spark2.py
+@@ -13,12 +13,8 @@ from sqlglot.dialects.dialect import (
+     weekstart_unit_to_str,
+ )
+ from sqlglot.generators.hive import HIVE_DATE_FORMAT, HiveGenerator, HIVE_TS_OR_DS_EXPRESSIONS
+-from sqlglot.transforms import (
+-    preprocess,
+-    remove_unique_constraints,
+-    ctas_with_tmp_tables_to_create_tmp_view,
+-    move_schema_columns_to_partitioned_by,
+-)
++from sqlglot.transforms import preprocess, ctas_with_tmp_tables_to_create_tmp_view, move_schema_columns_to_partitioned_by
++from sqlglot.transforms_remove_unique_constraints import remove_unique_constraints
+ 
+ 
+ def _array_sort_sql(self: Spark2Generator, expression: exp.ArraySort) -> str:
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 535c1543..a2e6151f 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -812,15 +812,6 @@ def unqualify_pivot_fields(expression: exp.Expr) -> exp.Expr:
+     return expression
+ 
+ 
+-def remove_unique_constraints(expression: exp.Expr) -> exp.Expr:
+-    assert isinstance(expression, exp.Create)
+-    for constraint in expression.find_all(exp.UniqueColumnConstraint):
+-        parent = constraint.parent
+-        (parent if isinstance(parent, (exp.ColumnConstraint, exp.Constraint)) else constraint).pop()
+-
+-    return expression
+-
+-
+ def ctas_with_tmp_tables_to_create_tmp_view(
+     expression: exp.Expr,
+     tmp_storage_provider: t.Callable[[exp.Expr], exp.Expr] = lambda e: e,
+diff --git a/sqlglot/transforms_remove_unique_constraints.py b/sqlglot/transforms_remove_unique_constraints.py
+new file mode 100644
+index 00000000..e926dd0c
+--- /dev/null
++++ b/sqlglot/transforms_remove_unique_constraints.py
+@@ -0,0 +1,11 @@
++from __future__ import annotations
++from sqlglot import expressions as exp
++
++
++def remove_unique_constraints(expression: exp.Expr) -> exp.Expr:
++    assert isinstance(expression, exp.Create)
++    for constraint in expression.find_all(exp.UniqueColumnConstraint):
++        parent = constraint.parent
++        (parent if isinstance(parent, (exp.ColumnConstraint, exp.Constraint)) else constraint).pop()
++
++    return expression
+diff --git a/tests/test_phase2_move_remove_unique_constraints.py b/tests/test_phase2_move_remove_unique_constraints.py
+new file mode 100644
+index 00000000..b52c545d
+--- /dev/null
++++ b/tests/test_phase2_move_remove_unique_constraints.py
+@@ -0,0 +1,6 @@
++import importlib
++
++
++def test_phase2_moved_remove_unique_constraints():
++    new = importlib.import_module('sqlglot.transforms_remove_unique_constraints')
++    assert getattr(new, 'remove_unique_constraints').__module__ == 'sqlglot.transforms_remove_unique_constraints'
+diff --git a/tests/test_transforms.py b/tests/test_transforms.py
+index 67dca377..f27cee88 100644
+--- a/tests/test_transforms.py
++++ b/tests/test_transforms.py
+@@ -1,16 +1,8 @@
+ import unittest
+ 
+ from sqlglot import parse_one, expressions as exp
+-from sqlglot.transforms import (
+-    eliminate_distinct_on,
+-    eliminate_join_marks,
+-    eliminate_qualify,
+-    eliminate_semi_and_anti_joins,
+-    eliminate_window_clause,
+-    inherit_struct_field_names,
+-    remove_precision_parameterized_types,
+-    remove_unique_constraints,
+-)
++from sqlglot.transforms import eliminate_distinct_on, eliminate_join_marks, eliminate_qualify, eliminate_semi_and_anti_joins, eliminate_window_clause, inherit_struct_field_names, remove_precision_parameterized_types
++from sqlglot.transforms_remove_unique_constraints import remove_unique_constraints
+ 
+ 
+ class TestTransforms(unittest.TestCase):
